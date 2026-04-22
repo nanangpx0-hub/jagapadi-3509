@@ -1,0 +1,701 @@
+<?php 
+require_once ROOT_PATH . '/app/helpers/ErrorMessage.php';
+require_once ROOT_PATH . '/app/views/layouts/header.php'; 
+
+$successMsg = ErrorMessage::flashSuccess();
+$errorMsg = ErrorMessage::flash();
+?>
+
+<style>
+/* Rules Page Styles */
+.rule-card {
+    border: none;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    border-radius: 10px;
+    margin-bottom: 1rem;
+    transition: box-shadow 0.2s;
+}
+
+.rule-card:hover {
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12);
+}
+
+.rule-card .card-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    border-radius: 10px 10px 0 0;
+}
+
+.rule-status-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.rule-status-badge.active {
+    background: #d4edda;
+    color: #155724;
+}
+
+.rule-status-badge.inactive {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.condition-tag {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    background: #e3f2fd;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    margin: 0.125rem;
+}
+
+.action-tag {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    background: #fff3e0;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    margin: 0.125rem;
+}
+
+.template-card {
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.2s;
+}
+
+.template-card:hover {
+    border-color: #667eea;
+    transform: translateY(-2px);
+}
+
+.template-card.selected {
+    border-color: #667eea;
+    background: #f8f9ff;
+}
+
+.wizard-step {
+    padding: 1rem;
+    border-radius: 8px;
+    background: #f8f9fa;
+    margin-bottom: 1rem;
+}
+
+.wizard-step-number {
+    width: 30px;
+    height: 30px;
+    background: #667eea;
+    color: #fff;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    margin-right: 0.5rem;
+}
+
+.condition-builder {
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.condition-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.condition-row select, .condition-row input {
+    flex: 1;
+    min-width: 100px;
+}
+</style>
+
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <h1><i class="fas fa-cogs text-primary"></i> Konfigurasi Rule Otomasi</h1>
+            <p class="text-muted mb-0">Kelola aturan otomasi pengairan cerdas</p>
+        </div>
+        <div class="col-md-6 text-right">
+            <a href="<?= BASE_URL ?>irigasi/monitoring" class="btn btn-outline-info">
+                <i class="fas fa-tachometer-alt"></i> Monitoring
+            </a>
+            <a href="<?= BASE_URL ?>irigasi" class="btn btn-outline-primary">
+                <i class="fas fa-list"></i> Data Irigasi
+            </a>
+        </div>
+    </div>
+
+    <!-- Alert Messages -->
+    <?php if ($successMsg): ?>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="icon fas fa-check"></i> <?= htmlspecialchars($successMsg) ?>
+        <button type="button" class="close" data-dismiss="alert">&times;</button>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($errorMsg): ?>
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="icon fas fa-ban"></i> <?= htmlspecialchars($errorMsg) ?>
+        <button type="button" class="close" data-dismiss="alert">&times;</button>
+    </div>
+    <?php endif; ?>
+
+    <!-- Irigasi Selector -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row align-items-center">
+                <div class="col-md-4">
+                    <label class="mb-2 font-weight-bold">Pilih Irigasi:</label>
+                    <select class="form-control" id="irigasiSelector">
+                        <option value="">-- Pilih Irigasi --</option>
+                        <?php foreach ($irigasiList as $ir): ?>
+                        <option value="<?= $ir['id'] ?>" <?= ($irigasiId == $ir['id']) ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($ir['nama_saluran'] ?? $ir['nama_irigasi'] ?? 'Irigasi #' . $ir['id']) ?>
+                            (<?= $ir['nama_kecamatan'] ?? 'N/A' ?>)
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <div class="mt-4">
+                        <button type="button" class="btn btn-primary" id="btnAddRule" <?= !$irigasiId ? 'disabled' : '' ?>>
+                            <i class="fas fa-plus"></i> Tambah Rule Baru
+                        </button>
+                        <button type="button" class="btn btn-success" id="btnRunEngine" <?= !$irigasiId ? 'disabled' : '' ?>>
+                            <i class="fas fa-play"></i> Jalankan Engine
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <?php if ($selectedIrigasi): ?>
+                    <div class="bg-light p-3 rounded">
+                        <strong><?= htmlspecialchars($selectedIrigasi['nama_saluran'] ?? '') ?></strong><br>
+                        <small class="text-muted">
+                            Status: <?= $selectedIrigasi['status'] ?? 'N/A' ?><br>
+                            Luas: <?= number_format($selectedIrigasi['luas_layanan'] ?? 0, 2) ?> Ha
+                        </small>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Rules List -->
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-list-alt"></i> Daftar Rule</h5>
+                </div>
+                <div class="card-body" id="rulesList">
+                    <?php if (empty($rules)): ?>
+                    <div class="text-center py-5 text-muted">
+                        <i class="fas fa-robot fa-3x mb-3"></i>
+                        <p>Belum ada rule untuk irigasi ini.</p>
+                        <p>Pilih irigasi dan klik "Tambah Rule Baru" untuk memulai.</p>
+                    </div>
+                    <?php else: ?>
+                    <?php foreach ($rules as $rule): 
+                        $conditions = json_decode($rule['conditions'], true);
+                        $actions = json_decode($rule['actions'], true);
+                    ?>
+                    <div class="rule-card card" data-rule-id="<?= $rule['id'] ?>">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span>
+                                <strong><?= htmlspecialchars($rule['rule_name']) ?></strong>
+                                <span class="ml-2 rule-status-badge <?= $rule['is_active'] ? 'active' : 'inactive' ?>">
+                                    <?= $rule['is_active'] ? 'Aktif' : 'Nonaktif' ?>
+                                </span>
+                            </span>
+                            <span class="badge badge-light">Prioritas: <?= $rule['priority'] ?></span>
+                        </div>
+                        <div class="card-body">
+                            <?php if (!empty($rule['description'])): ?>
+                            <p class="text-muted small"><?= htmlspecialchars($rule['description']) ?></p>
+                            <?php endif; ?>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <strong class="small">Kondisi:</strong>
+                                    <div class="mt-1">
+                                        <?php if (!empty($conditions['conditions'])): ?>
+                                            <span class="condition-tag"><?= $conditions['operator'] ?? 'AND' ?></span>
+                                            <?php foreach ($conditions['conditions'] as $cond): ?>
+                                                <?php if (isset($cond['sensor'])): ?>
+                                                <span class="condition-tag">
+                                                    <?= $cond['sensor'] ?> <?= $cond['operator'] ?> <?= $cond['value'] ?>
+                                                </span>
+                                                <?php elseif (isset($cond['time'])): ?>
+                                                <span class="condition-tag">
+                                                    Waktu: <?= $cond['time']['start'] ?? '' ?> - <?= $cond['time']['end'] ?? '' ?>
+                                                </span>
+                                                <?php endif; ?>
+                                            <?php endforeach; ?>
+                                        <?php else: ?>
+                                            <span class="text-muted small">Tidak ada kondisi</span>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <strong class="small">Aksi:</strong>
+                                    <div class="mt-1">
+                                        <?php if (!empty($actions['actions'])): ?>
+                                            <?php foreach ($actions['actions'] as $action): ?>
+                                            <span class="action-tag">
+                                                <?= ucfirst(str_replace('_', ' ', $action['type'])) ?>
+                                                <?= isset($action['duration_minutes']) ? "({$action['duration_minutes']} menit)" : '' ?>
+                                            </span>
+                                            <?php endforeach; ?>
+                                        <?php else: ?>
+                                            <span class="text-muted small">Tidak ada aksi</span>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-3 pt-3 border-top d-flex justify-content-between align-items-center">
+                                <small class="text-muted">
+                                    Eksekusi: <?= $rule['execution_count'] ?? 0 ?> kali
+                                    <?php if ($rule['last_executed_at']): ?>
+                                    | Terakhir: <?= date('d/m/Y H:i', strtotime($rule['last_executed_at'])) ?>
+                                    <?php endif; ?>
+                                </small>
+                                <div>
+                                    <button class="btn btn-sm btn-outline-primary btn-edit-rule" 
+                                            data-id="<?= $rule['id'] ?>"
+                                            title="Edit">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-<?= $rule['is_active'] ? 'warning' : 'success' ?> btn-toggle-rule" 
+                                            data-id="<?= $rule['id'] ?>"
+                                            title="<?= $rule['is_active'] ? 'Nonaktifkan' : 'Aktifkan' ?>">
+                                        <i class="fas fa-<?= $rule['is_active'] ? 'pause' : 'play' ?>"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-info btn-test-rule" 
+                                            data-id="<?= $rule['id'] ?>"
+                                            title="Test">
+                                        <i class="fas fa-vial"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger btn-delete-rule" 
+                                            data-id="<?= $rule['id'] ?>"
+                                            title="Hapus">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+
+        <!-- Templates Sidebar -->
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-magic"></i> Template Rule</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small">Klik template untuk menggunakannya sebagai dasar rule baru.</p>
+                    
+                    <?php foreach ($templates as $index => $template): ?>
+                    <div class="template-card card mb-2" data-template="<?= $index ?>">
+                        <div class="card-body p-3">
+                            <strong class="d-block"><?= htmlspecialchars($template['name']) ?></strong>
+                            <small class="text-muted"><?= htmlspecialchars($template['description']) ?></small>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            
+            <!-- Statistics -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-pie"></i> Statistik</h5>
+                </div>
+                <div class="card-body" id="ruleStats">
+                    <div class="text-center text-muted py-3">
+                        <i class="fas fa-spinner fa-spin"></i> Memuat statistik...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Rule Modal -->
+<div class="modal fade" id="ruleModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="ruleModalTitle">Tambah Rule Baru</h5>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="ruleForm">
+                    <input type="hidden" name="id" id="ruleId">
+                    <input type="hidden" name="irigasi_id" id="ruleIrigasiId" value="<?= $irigasiId ?>">
+                    
+                    <!-- Step 1: Basic Info -->
+                    <div class="wizard-step">
+                        <h6><span class="wizard-step-number">1</span> Informasi Dasar</h6>
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="form-group">
+                                    <label>Nama Rule <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" name="rule_name" id="ruleName" required>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>Prioritas</label>
+                                    <input type="number" class="form-control" name="priority" id="rulePriority" value="10" min="1" max="100">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Deskripsi</label>
+                            <textarea class="form-control" name="description" id="ruleDescription" rows="2"></textarea>
+                        </div>
+                    </div>
+                    
+                    <!-- Step 2: Conditions -->
+                    <div class="wizard-step">
+                        <h6><span class="wizard-step-number">2</span> Kondisi (Kapan rule aktif?)</h6>
+                        <div class="form-group">
+                            <label>Operator Logika:</label>
+                            <select class="form-control form-control-sm w-auto d-inline" id="conditionOperator">
+                                <option value="AND">AND (Semua kondisi harus terpenuhi)</option>
+                                <option value="OR">OR (Salah satu kondisi terpenuhi)</option>
+                            </select>
+                        </div>
+                        <div id="conditionsContainer">
+                            <!-- Conditions will be added here -->
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="btnAddCondition">
+                            <i class="fas fa-plus"></i> Tambah Kondisi
+                        </button>
+                    </div>
+                    
+                    <!-- Step 3: Actions -->
+                    <div class="wizard-step">
+                        <h6><span class="wizard-step-number">3</span> Aksi (Apa yang dilakukan?)</h6>
+                        <div id="actionsContainer">
+                            <!-- Actions will be added here -->
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="btnAddAction">
+                            <i class="fas fa-plus"></i> Tambah Aksi
+                        </button>
+                    </div>
+                    
+                    <!-- Step 4: Settings -->
+                    <div class="wizard-step">
+                        <h6><span class="wizard-step-number">4</span> Pengaturan</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Cooldown (menit)</label>
+                                    <input type="number" class="form-control" name="cooldown_minutes" id="ruleCooldown" value="60" min="1">
+                                    <small class="text-muted">Jeda minimal antar eksekusi</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Status</label>
+                                    <div class="custom-control custom-switch mt-2">
+                                        <input type="checkbox" class="custom-control-input" id="ruleActive" name="is_active" checked>
+                                        <label class="custom-control-label" for="ruleActive">Aktifkan rule ini</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-primary" id="btnSaveRule">
+                    <i class="fas fa-save"></i> Simpan Rule
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const baseUrl = '<?= BASE_URL ?>';
+    const irigasiId = '<?= $irigasiId ?>';
+    const templates = <?= json_encode($templates) ?>;
+    
+    // Irigasi selector change
+    document.getElementById('irigasiSelector').addEventListener('change', function() {
+        if (this.value) {
+            window.location.href = baseUrl + 'irigasi/rules/' + this.value;
+        }
+    });
+    
+    // Add Rule button
+    document.getElementById('btnAddRule')?.addEventListener('click', function() {
+        resetForm();
+        $('#ruleModal').modal('show');
+    });
+    
+    // Template click
+    document.querySelectorAll('.template-card').forEach(card => {
+        card.addEventListener('click', function() {
+            const index = this.dataset.template;
+            const template = templates[index];
+            
+            if (template) {
+                resetForm();
+                document.getElementById('ruleName').value = template.name;
+                document.getElementById('ruleDescription').value = template.description;
+                
+                // Load conditions
+                if (template.conditions?.conditions) {
+                    document.getElementById('conditionOperator').value = template.conditions.operator || 'AND';
+                    template.conditions.conditions.forEach(cond => addConditionRow(cond));
+                }
+                
+                // Load actions
+                if (template.actions?.actions) {
+                    template.actions.actions.forEach(action => addActionRow(action));
+                }
+                
+                $('#ruleModal').modal('show');
+            }
+        });
+    });
+    
+    // Add condition button
+    document.getElementById('btnAddCondition')?.addEventListener('click', () => addConditionRow());
+    
+    // Add action button
+    document.getElementById('btnAddAction')?.addEventListener('click', () => addActionRow());
+    
+    // Save rule
+    document.getElementById('btnSaveRule')?.addEventListener('click', saveRule);
+    
+    // Toggle rule buttons
+    document.querySelectorAll('.btn-toggle-rule').forEach(btn => {
+        btn.addEventListener('click', function() {
+            toggleRule(this.dataset.id);
+        });
+    });
+    
+    // Delete rule buttons
+    document.querySelectorAll('.btn-delete-rule').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (confirm('Hapus rule ini?')) {
+                deleteRule(this.dataset.id);
+            }
+        });
+    });
+    
+    // Run Engine button
+    document.getElementById('btnRunEngine')?.addEventListener('click', function() {
+        if (irigasiId) {
+            runEngine(irigasiId);
+        }
+    });
+    
+    // Functions
+    function resetForm() {
+        document.getElementById('ruleForm').reset();
+        document.getElementById('ruleId').value = '';
+        document.getElementById('conditionsContainer').innerHTML = '';
+        document.getElementById('actionsContainer').innerHTML = '';
+        document.getElementById('ruleModalTitle').textContent = 'Tambah Rule Baru';
+    }
+    
+    function addConditionRow(data = null) {
+        const container = document.getElementById('conditionsContainer');
+        const row = document.createElement('div');
+        row.className = 'condition-row';
+        row.innerHTML = `
+            <select class="form-control form-control-sm cond-type">
+                <option value="sensor" ${data?.sensor ? 'selected' : ''}>Sensor</option>
+                <option value="weather" ${data?.weather ? 'selected' : ''}>Cuaca</option>
+                <option value="time" ${data?.time ? 'selected' : ''}>Waktu</option>
+            </select>
+            <select class="form-control form-control-sm cond-sensor">
+                <option value="soil_moisture" ${data?.sensor === 'soil_moisture' ? 'selected' : ''}>Kelembaban Tanah</option>
+                <option value="water_ph" ${data?.sensor === 'water_ph' ? 'selected' : ''}>pH Air</option>
+                <option value="water_flow" ${data?.sensor === 'water_flow' ? 'selected' : ''}>Debit Air</option>
+                <option value="temperature" ${data?.sensor === 'temperature' ? 'selected' : ''}>Suhu</option>
+            </select>
+            <select class="form-control form-control-sm cond-operator">
+                <option value="<" ${data?.operator === '<' ? 'selected' : ''}>&lt;</option>
+                <option value="<=" ${data?.operator === '<=' ? 'selected' : ''}>&lt;=</option>
+                <option value=">" ${data?.operator === '>' ? 'selected' : ''}>&gt;</option>
+                <option value=">=" ${data?.operator === '>=' ? 'selected' : ''}>&gt;=</option>
+                <option value="=" ${data?.operator === '=' ? 'selected' : ''}>=</option>
+                <option value="!=" ${data?.operator === '!=' ? 'selected' : ''}>!=</option>
+            </select>
+            <input type="number" class="form-control form-control-sm cond-value" placeholder="Nilai" value="${data?.value || ''}">
+            <button type="button" class="btn btn-sm btn-outline-danger btn-remove-condition"><i class="fas fa-times"></i></button>
+        `;
+        container.appendChild(row);
+        
+        row.querySelector('.btn-remove-condition').addEventListener('click', () => row.remove());
+    }
+    
+    function addActionRow(data = null) {
+        const container = document.getElementById('actionsContainer');
+        const row = document.createElement('div');
+        row.className = 'condition-row';
+        row.innerHTML = `
+            <select class="form-control form-control-sm action-type">
+                <option value="irrigation_start" ${data?.type === 'irrigation_start' ? 'selected' : ''}>Mulai Pengairan</option>
+                <option value="irrigation_stop" ${data?.type === 'irrigation_stop' ? 'selected' : ''}>Stop Pengairan</option>
+                <option value="alert" ${data?.type === 'alert' ? 'selected' : ''}>Kirim Alert</option>
+                <option value="log" ${data?.type === 'log' ? 'selected' : ''}>Log Aktivitas</option>
+            </select>
+            <input type="number" class="form-control form-control-sm action-duration" placeholder="Durasi (menit)" value="${data?.duration_minutes || ''}" min="1">
+            <select class="form-control form-control-sm action-level">
+                <option value="info" ${data?.level === 'info' ? 'selected' : ''}>Info</option>
+                <option value="warning" ${data?.level === 'warning' ? 'selected' : ''}>Warning</option>
+                <option value="critical" ${data?.level === 'critical' ? 'selected' : ''}>Critical</option>
+            </select>
+            <button type="button" class="btn btn-sm btn-outline-danger btn-remove-action"><i class="fas fa-times"></i></button>
+        `;
+        container.appendChild(row);
+        
+        row.querySelector('.btn-remove-action').addEventListener('click', () => row.remove());
+    }
+    
+    function collectFormData() {
+        const conditions = {
+            operator: document.getElementById('conditionOperator').value,
+            conditions: []
+        };
+        
+        document.querySelectorAll('#conditionsContainer .condition-row').forEach(row => {
+            const type = row.querySelector('.cond-type').value;
+            let cond = {};
+            
+            if (type === 'sensor') {
+                cond = {
+                    sensor: row.querySelector('.cond-sensor').value,
+                    operator: row.querySelector('.cond-operator').value,
+                    value: parseFloat(row.querySelector('.cond-value').value) || 0
+                };
+            }
+            conditions.conditions.push(cond);
+        });
+        
+        const actions = { actions: [] };
+        document.querySelectorAll('#actionsContainer .condition-row').forEach(row => {
+            const action = {
+                type: row.querySelector('.action-type').value
+            };
+            const duration = row.querySelector('.action-duration').value;
+            if (duration) action.duration_minutes = parseInt(duration);
+            
+            const level = row.querySelector('.action-level').value;
+            if (action.type === 'alert') action.level = level;
+            
+            actions.actions.push(action);
+        });
+        
+        return {
+            id: document.getElementById('ruleId').value || null,
+            irigasi_id: document.getElementById('ruleIrigasiId').value,
+            rule_name: document.getElementById('ruleName').value,
+            description: document.getElementById('ruleDescription').value,
+            priority: parseInt(document.getElementById('rulePriority').value) || 10,
+            cooldown_minutes: parseInt(document.getElementById('ruleCooldown').value) || 60,
+            is_active: document.getElementById('ruleActive').checked ? 1 : 0,
+            conditions: conditions,
+            actions: actions
+        };
+    }
+    
+    function saveRule() {
+        const data = collectFormData();
+        
+        if (!data.rule_name) {
+            alert('Nama rule wajib diisi!');
+            return;
+        }
+        
+        fetch(baseUrl + 'irigasi/saveRule', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        })
+        .then(r => r.json())
+        .then(result => {
+            if (result.success) {
+                alert(result.message);
+                location.reload();
+            } else {
+                alert('Error: ' + result.message);
+            }
+        })
+        .catch(err => alert('Error: ' + err.message));
+    }
+    
+    function toggleRule(id) {
+        fetch(baseUrl + 'irigasi/toggleRuleStatus/' + id, { method: 'POST' })
+        .then(r => r.json())
+        .then(result => {
+            if (result.success) {
+                location.reload();
+            } else {
+                alert('Error: ' + result.message);
+            }
+        });
+    }
+    
+    function deleteRule(id) {
+        fetch(baseUrl + 'irigasi/deleteRule/' + id, { method: 'POST' })
+        .then(r => r.json())
+        .then(result => {
+            if (result.success) {
+                location.reload();
+            } else {
+                alert('Error: ' + result.message);
+            }
+        });
+    }
+    
+    function runEngine(irigasiId) {
+        const btn = document.getElementById('btnRunEngine');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menjalankan...';
+        
+        fetch(baseUrl + 'irigasi/runRuleEngine/' + irigasiId, { method: 'POST' })
+        .then(r => r.json())
+        .then(result => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-play"></i> Jalankan Engine';
+            
+            if (result.success) {
+                const r = result.results;
+                alert(`Evaluasi selesai!\n\nRules dievaluasi: ${r.rules_evaluated}\nRules terpicu: ${r.rules_triggered}\nWaktu: ${r.execution_time_ms}ms`);
+            } else {
+                alert('Error: ' + result.message);
+            }
+        });
+    }
+});
+</script>
+
+<?php require_once ROOT_PATH . '/app/views/layouts/footer.php'; ?>

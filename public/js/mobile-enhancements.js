@@ -43,9 +43,25 @@
 
         addTouchFeedback() {
             // Add visual feedback for touch interactions
+            // Skip feedback for curahHujan page tables (Data Curah Hujan and Log Aktivitas)
+            const shouldSkipFeedback = (element) => {
+                if (!element) return true;
+                // Skip if element has no-touch-feedback class
+                if (element.classList.contains('no-touch-feedback')) return true;
+                // Skip if inside curahHujan tables (#dataTable, #logsTable)
+                if (element.closest('#dataTable, #logsTable, #dataTableBody')) return true;
+                // Skip for checkboxes and their containers
+                if (element.matches('input[type="checkbox"], .data-checkbox, .log-checkbox')) return true;
+                if (element.closest('td') && element.closest('td').querySelector('input[type="checkbox"]')) return true;
+                // Skip for delete buttons in curahHujan
+                if (element.classList.contains('btn-delete') || element.classList.contains('btn-delete-log')) return true;
+                if (element.closest('#btnDeleteSelectedData, #btnDeleteSelectedLogs')) return true;
+                return false;
+            };
+
             document.addEventListener('touchstart', function (e) {
                 const target = e.target.closest('.btn, .nav-link, .card, .table-responsive tr');
-                if (target && !target.classList.contains('no-touch-feedback')) {
+                if (target && !shouldSkipFeedback(target) && !shouldSkipFeedback(e.target)) {
                     target.style.transform = 'scale(0.98)';
                     target.style.transition = 'transform 0.1s ease';
                 }
@@ -53,7 +69,7 @@
 
             document.addEventListener('touchend', function (e) {
                 const target = e.target.closest('.btn, .nav-link, .card, .table-responsive tr');
-                if (target && !target.classList.contains('no-touch-feedback')) {
+                if (target && !shouldSkipFeedback(target) && !shouldSkipFeedback(e.target)) {
                     setTimeout(() => {
                         target.style.transform = 'scale(1)';
                     }, 100);
@@ -761,7 +777,7 @@
                     e.preventDefault();
                     const installBtn = document.createElement('button');
                     installBtn.className = 'btn btn-success btn-sm position-fixed install-app-btn';
-                    installBtn.style.cssText = 'bottom: 20px; right: 20px; z-index: 1000; border-radius: 50px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);';
+                    // Inline styles moved to responsive.css (.install-app-btn)
                     installBtn.innerHTML = '<i class="fas fa-mobile-alt"></i> Install JAGAPADI';
                     installBtn.onclick = () => this.showInstallPrompt(deferredPrompt, installBtn);
                     document.body.appendChild(installBtn);

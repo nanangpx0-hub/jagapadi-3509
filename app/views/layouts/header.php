@@ -276,9 +276,15 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="<?= BASE_URL ?>irigasi" class="nav-link <?= (strpos($_SERVER['REQUEST_URI'], '/irigasi') !== false) ? 'active' : '' ?>">
+                        <a href="<?= BASE_URL ?>irigasi" class="nav-link <?= (strpos($_SERVER['REQUEST_URI'], '/irigasi') !== false && strpos($_SERVER['REQUEST_URI'], '/irigasiScraper') === false) ? 'active' : '' ?>">
                             <i class="nav-icon fas fa-water"></i>
                             <p>Sebaran Irigasi</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="<?= BASE_URL ?>feedback" class="nav-link <?= (strpos($_SERVER['REQUEST_URI'], '/feedback') !== false) ? 'active' : '' ?>">
+                            <i class="nav-icon fas fa-comments"></i>
+                            <p>Masukan & Saran</p>
                         </a>
                     </li>
                     <?php if(in_array($_SESSION['role'] ?? '', ['admin', 'operator'])): ?>
@@ -295,6 +301,42 @@
                         <a href="<?= BASE_URL ?>curahHujan" class="nav-link <?= (strpos($_SERVER['REQUEST_URI'], '/curahHujan') !== false) ? 'active' : '' ?>">
                             <i class="nav-icon fas fa-cloud-showers-heavy"></i>
                             <p>Curah Hujan</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="<?= BASE_URL ?>kecepatanAngin" class="nav-link <?= (strpos($_SERVER['REQUEST_URI'], '/kecepatanAngin') !== false) ? 'active' : '' ?>">
+                            <i class="nav-icon fas fa-wind"></i>
+                            <p>Kecepatan Angin</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="<?= BASE_URL ?>hargaKomoditas" class="nav-link <?= (strpos($_SERVER['REQUEST_URI'], '/hargaKomoditas') !== false) ? 'active' : '' ?>">
+                            <i class="nav-icon fas fa-money-bill-wave"></i>
+                            <p>Harga Gabah & Beras</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="<?= BASE_URL ?>bpsScraper" class="nav-link <?= (strpos($_SERVER['REQUEST_URI'], '/bpsScraper') !== false) ? 'active' : '' ?>">
+                            <i class="nav-icon fas fa-database"></i>
+                            <p>Data BPS Pertanian</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="<?= BASE_URL ?>evaluasi" class="nav-link <?= (strpos($_SERVER['REQUEST_URI'], '/evaluasi') !== false) ? 'active' : '' ?>">
+                            <i class="nav-icon fas fa-chart-line"></i>
+                            <p>Evaluasi Akurasi</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="<?= BASE_URL ?>storytelling" class="nav-link <?= (strpos($_SERVER['REQUEST_URI'], '/storytelling') !== false) ? 'active' : '' ?>">
+                            <i class="nav-icon fas fa-book-open"></i>
+                            <p>Data Storytelling</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="<?= BASE_URL ?>irigasiScraper" class="nav-link <?= (strpos($_SERVER['REQUEST_URI'], '/irigasiScraper') !== false) ? 'active' : '' ?>">
+                            <i class="nav-icon fas fa-water"></i>
+                            <p>Monitoring Irigasi</p>
                         </a>
                     </li>
                     <li class="nav-item">

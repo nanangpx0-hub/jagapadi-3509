@@ -5,7 +5,7 @@
  * Jalankan script ini dengan cron job:
  * 0 23 28-31 * * php /path/to/jagapadi/scripts/cron_curah_hujan.php
  * 
- * @version 1.0.0
+ * @version 1.0.1
  * @author JAGAPADI System
  */
 
@@ -17,11 +17,35 @@ if (php_sapi_name() !== 'cli') {
 // Define ROOT_PATH
 define('ROOT_PATH', dirname(__DIR__));
 
+// Set CLI-safe defaults for $_SERVER variables used by config
+$_SERVER['SERVER_PORT'] = $_SERVER['SERVER_PORT'] ?? 80;
+$_SERVER['HTTP_HOST'] = $_SERVER['HTTP_HOST'] ?? 'localhost';
+$_SERVER['REQUEST_URI'] = $_SERVER['REQUEST_URI'] ?? '/';
+$_SERVER['REMOTE_ADDR'] = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+
 // Load required files
 require_once ROOT_PATH . '/config/config.php';
 require_once ROOT_PATH . '/config/database.php';
-require_once ROOT_PATH . '/app/core/Database.php';
-require_once ROOT_PATH . '/app/services/CurahHujanScraper.php';
+
+// Autoload classes (same as index.php)
+spl_autoload_register(function ($class) {
+    $paths = [
+        'app/controllers/',
+        'app/models/',
+        'app/core/',
+        'app/helpers/',
+        'app/services/',
+        'app/middleware/'
+    ];
+    
+    foreach ($paths as $path) {
+        $file = ROOT_PATH . '/' . $path . $class . '.php';
+        if (file_exists($file)) {
+            require_once $file;
+            return;
+        }
+    }
+});
 
 echo "===========================================\n";
 echo "JAGAPADI - Curah Hujan Scraper Cron Job\n";

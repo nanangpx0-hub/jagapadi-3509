@@ -86,6 +86,101 @@
         width: 100%;
     }
 }
+
+/* ============================================
+   PHASE 1 IMPROVEMENTS: Touch-Optimized UI
+   ============================================ */
+
+/* Touch-friendly input sizing (min 48px for mobile) */
+.form-control, .custom-select, select.form-control {
+    min-height: 48px;
+    font-size: 16px; /* Prevents iOS zoom on focus */
+}
+
+.btn {
+    min-height: 44px;
+    min-width: 44px;
+}
+
+/* Skeleton loading animation for dropdowns */
+.skeleton-loading {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: skeleton-pulse 1.5s ease-in-out infinite;
+    color: transparent !important;
+    pointer-events: none;
+}
+
+.skeleton-loading option {
+    color: #6c757d;
+}
+
+@keyframes skeleton-pulse {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* GPS Confidence Indicator */
+.gps-confidence {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.gps-confidence.high {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.gps-confidence.medium {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.gps-confidence.low {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.gps-accuracy-text {
+    font-size: 0.75rem;
+    color: #6c757d;
+    margin-left: 8px;
+}
+
+/* Auto-save indicator */
+#autoSaveIndicator {
+    font-size: 0.8rem;
+    color: #28a745;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+/* Numeric input with increment/decrement buttons */
+.input-numeric-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.input-numeric-group .form-control {
+    text-align: center;
+}
+
+.input-numeric-group .btn-increment,
+.input-numeric-group .btn-decrement {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    font-size: 18px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
 </style>
 
 <div class="row">
@@ -105,6 +200,10 @@
             </div>
             <form action="<?= BASE_URL ?>laporan/create" method="POST" enctype="multipart/form-data" id="formCreateLaporan">
                 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
+                <!-- Honeypot anti-bot field (hidden from users, bots will fill this) -->
+                <div style="position: absolute; left: -9999px; top: -9999px;" aria-hidden="true">
+                    <input type="text" name="website_hp" tabindex="-1" autocomplete="off" value="">
+                </div>
                 <div class="card-body">
                     <?php if(($_SESSION['role'] ?? '') === 'admin' && !empty($users)): ?>
                     <!-- Admin: Select user to create report on behalf of -->
@@ -320,6 +419,8 @@
                                     <div id="selectedCoordinates" class="alert alert-secondary mb-0">
                                         <i class="fas fa-map-marker-alt"></i> 
                                         <span id="coordDisplay">Belum ada koordinat dipilih</span>
+                                        <span id="gpsConfidenceIndicator" class="gps-confidence ml-2" style="display: none;"></span>
+                                        <span id="gpsAccuracyText" class="gps-accuracy-text"></span>
                                     </div>
                                 </div>
                             </div>
@@ -982,19 +1083,46 @@ document.querySelector('form').addEventListener('submit', function(e) {
                 function(position) {
                     const lat = position.coords.latitude.toFixed(6);
                     const lng = position.coords.longitude.toFixed(6);
+                    const accuracy = position.coords.accuracy; // in meters
                     
                     if (latitudeInput) latitudeInput.value = lat;
                     if (longitudeInput) longitudeInput.value = lng;
                     
                     updateCoordinateDisplay(lat, lng);
                     
+                    // GPS Confidence Indicator
+                    const confidenceIndicator = document.getElementById('gpsConfidenceIndicator');
+                    const accuracyText = document.getElementById('gpsAccuracyText');
+                    
+                    let confidence = 'low';
+                    let confidenceLabel = '✓ Rendah';
+                    
+                    if (accuracy < 10) {
+                        confidence = 'high';
+                        confidenceLabel = '✓✓✓ Tinggi';
+                    } else if (accuracy < 50) {
+                        confidence = 'medium';
+                        confidenceLabel = '✓✓ Sedang';
+                    }
+                    
+                    if (confidenceIndicator) {
+                        confidenceIndicator.className = 'gps-confidence ml-2 ' + confidence;
+                        confidenceIndicator.textContent = confidenceLabel;
+                        confidenceIndicator.style.display = 'inline-flex';
+                    }
+                    
+                    if (accuracyText) {
+                        accuracyText.textContent = `(±${accuracy.toFixed(0)}m)`;
+                    }
+                    
                     btnGetCurrentLocation.disabled = false;
                     btnGetCurrentLocation.innerHTML = '<i class="fas fa-crosshairs"></i> Ambil Lokasi Saat Ini';
                     
-                    // Show success message
+                    // Show success message with confidence
                     const statusDiv = document.getElementById('currentLocationStatus');
                     if (statusDiv) {
-                        statusDiv.innerHTML = `<div class="alert alert-success"><i class="fas fa-check-circle"></i> Lokasi ditemukan: ${lat}, ${lng}</div>`;
+                        const confidenceColor = confidence === 'high' ? 'success' : (confidence === 'medium' ? 'warning' : 'danger');
+                        statusDiv.innerHTML = `<div class="alert alert-success"><i class="fas fa-check-circle"></i> Lokasi ditemukan: ${lat}, ${lng} <span class="badge badge-${confidenceColor} ml-2">Akurasi: ±${accuracy.toFixed(0)}m</span></div>`;
                     }
                 },
                 function(error) {
@@ -1095,27 +1223,143 @@ document.querySelector('form').addEventListener('submit', function(e) {
 
 <?php include ROOT_PATH . '/app/views/layouts/footer.php'; ?>
 <script>
-async function fetchJSON(url){ const r = await fetch(url); return r.json(); }
-async function loadKabupaten(){
-  const data = await fetchJSON('<?= BASE_URL ?>wilayah/kabupaten');
-  const sel = document.getElementById('kabupatenSelect');
-  data.data.forEach(row=>{ const opt=document.createElement('option'); opt.value=row.id; opt.textContent=row.nama_kabupaten; sel.appendChild(opt); });
+// ============================================================================
+// CASCADING DROPDOWN WILAYAH - Improved with Error Handling
+// ============================================================================
+
+/**
+ * Fetch JSON with error handling
+ * Returns valid data structure even on failure
+ */
+async function fetchJSON(url) {
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            console.error('API Error:', response.status, response.statusText);
+            return { status: 'error', data: [], message: `HTTP ${response.status}` };
+        }
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Fetch Error:', error);
+        return { status: 'error', data: [], message: error.message };
+    }
 }
-async function loadKecamatan(kabupatenId){
-  const sel = document.getElementById('kecamatanSelect'); sel.innerHTML = '<option value="">-- Pilih Kecamatan --</option><option value="unknown">Tidak Diketahui</option>';
-  const selDesa = document.getElementById('desaSelect'); selDesa.innerHTML = '<option value="">-- Pilih Desa --</option><option value="unknown">Tidak Diketahui</option>';
-  if(!kabupatenId || kabupatenId==='unknown') return;
-  const data = await fetchJSON('<?= BASE_URL ?>wilayah/kecamatan/'+kabupatenId);
-  data.data.forEach(row=>{ const opt=document.createElement('option'); opt.value=row.id; opt.textContent=row.nama_kecamatan; sel.appendChild(opt); });
+
+/**
+ * Load kabupaten data into dropdown
+ */
+async function loadKabupaten() {
+    const sel = document.getElementById('kabupatenSelect');
+    sel.disabled = true;
+    
+    try {
+        const data = await fetchJSON('<?= BASE_URL ?>wilayah/kabupaten');
+        
+        if (data.status === 'success' && data.data && data.data.length > 0) {
+            data.data.forEach(row => {
+                const opt = document.createElement('option');
+                opt.value = row.id;
+                opt.textContent = row.nama_kabupaten;
+                sel.appendChild(opt);
+            });
+        } else {
+            console.warn('Tidak ada data kabupaten:', data.message || 'Empty data');
+        }
+    } catch (error) {
+        console.error('Error loading kabupaten:', error);
+    } finally {
+        sel.disabled = false;
+    }
 }
-async function loadDesa(kecamatanId){
-  const sel = document.getElementById('desaSelect'); sel.innerHTML = '<option value="">-- Pilih Desa --</option><option value="unknown">Tidak Diketahui</option>';
-  if(!kecamatanId || kecamatanId==='unknown') return;
-  const data = await fetchJSON('<?= BASE_URL ?>wilayah/desa/'+kecamatanId);
-  data.data.forEach(row=>{ const opt=document.createElement('option'); opt.value=row.id; opt.textContent=row.nama_desa; sel.appendChild(opt); });
+
+/**
+ * Load kecamatan data by kabupaten ID
+ */
+async function loadKecamatan(kabupatenId) {
+    const sel = document.getElementById('kecamatanSelect');
+    const selDesa = document.getElementById('desaSelect');
+    
+    // Reset dropdowns
+    sel.innerHTML = '<option value="">-- Pilih Kecamatan --</option><option value="unknown">Tidak Diketahui</option>';
+    selDesa.innerHTML = '<option value="">-- Pilih Desa --</option><option value="unknown">Tidak Diketahui</option>';
+    
+    if (!kabupatenId || kabupatenId === 'unknown') return;
+    
+    // Show loading state
+    sel.disabled = true;
+    sel.innerHTML = '<option value="">Memuat data kecamatan...</option>';
+    
+    try {
+        const data = await fetchJSON('<?= BASE_URL ?>wilayah/kecamatan/' + kabupatenId);
+        
+        // Reset and add default options
+        sel.innerHTML = '<option value="">-- Pilih Kecamatan --</option><option value="unknown">Tidak Diketahui</option>';
+        
+        if (data.status === 'success' && data.data && data.data.length > 0) {
+            data.data.forEach(row => {
+                const opt = document.createElement('option');
+                opt.value = row.id;
+                opt.textContent = row.nama_kecamatan;
+                sel.appendChild(opt);
+            });
+            console.log(`Loaded ${data.data.length} kecamatan`);
+        } else {
+            console.warn('Tidak ada data kecamatan untuk kabupaten ini:', data.message || 'Empty data');
+        }
+    } catch (error) {
+        console.error('Error loading kecamatan:', error);
+        sel.innerHTML = '<option value="">-- Pilih Kecamatan --</option><option value="unknown">Tidak Diketahui</option>';
+    } finally {
+        sel.disabled = false;
+    }
 }
-document.getElementById('kabupatenSelect').addEventListener('change', e=> loadKecamatan(e.target.value));
-document.getElementById('kecamatanSelect').addEventListener('change', e=> loadDesa(e.target.value));
+
+/**
+ * Load desa data by kecamatan ID
+ */
+async function loadDesa(kecamatanId) {
+    const sel = document.getElementById('desaSelect');
+    
+    // Reset dropdown
+    sel.innerHTML = '<option value="">-- Pilih Desa --</option><option value="unknown">Tidak Diketahui</option>';
+    
+    if (!kecamatanId || kecamatanId === 'unknown') return;
+    
+    // Show loading state
+    sel.disabled = true;
+    sel.innerHTML = '<option value="">Memuat data desa...</option>';
+    
+    try {
+        const data = await fetchJSON('<?= BASE_URL ?>wilayah/desa/' + kecamatanId);
+        
+        // Reset and add default options
+        sel.innerHTML = '<option value="">-- Pilih Desa --</option><option value="unknown">Tidak Diketahui</option>';
+        
+        if (data.status === 'success' && data.data && data.data.length > 0) {
+            data.data.forEach(row => {
+                const opt = document.createElement('option');
+                opt.value = row.id;
+                opt.textContent = row.nama_desa;
+                sel.appendChild(opt);
+            });
+            console.log(`Loaded ${data.data.length} desa`);
+        } else {
+            console.warn('Tidak ada data desa untuk kecamatan ini:', data.message || 'Empty data');
+        }
+    } catch (error) {
+        console.error('Error loading desa:', error);
+        sel.innerHTML = '<option value="">-- Pilih Desa --</option><option value="unknown">Tidak Diketahui</option>';
+    } finally {
+        sel.disabled = false;
+    }
+}
+
+// Event listeners for cascading dropdowns
+document.getElementById('kabupatenSelect').addEventListener('change', e => loadKecamatan(e.target.value));
+document.getElementById('kecamatanSelect').addEventListener('change', e => loadDesa(e.target.value));
+
+// Initialize kabupaten dropdown on page load
 loadKabupaten();
 (function() {
     'use strict';
@@ -1689,3 +1933,7 @@ loadKabupaten();
     }
 })();
 </script>
+
+<!-- Phase 3: Draft Auto-Save and Offline Mode -->
+<script src="<?= BASE_URL ?>public/js/draft-autosave.js"></script>
+<script src="<?= BASE_URL ?>public/js/offline-laporan.js"></script>

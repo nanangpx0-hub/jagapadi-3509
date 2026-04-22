@@ -23,7 +23,7 @@ require_once ROOT_PATH . '/app/core/Security.php';
             justify-content: center;
         }
         .login-box {
-            width: 450px;
+            width: 400px;
             max-width: 95%;
         }
         .login-logo a {
@@ -55,99 +55,12 @@ require_once ROOT_PATH . '/app/core/Security.php';
             text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
         }
         
-        /* User Roles Info Styling */
-        .user-roles-info {
-            max-height: 400px;
-            overflow-y: auto;
-            padding: 5px;
+        .password-toggle {
+            cursor: pointer;
+            z-index: 10;
         }
-        
-        .user-roles-info::-webkit-scrollbar {
-            width: 6px;
-        }
-        
-        .user-roles-info::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 10px;
-        }
-        
-        .user-roles-info::-webkit-scrollbar-thumb {
-            background: #888;
-            border-radius: 10px;
-        }
-        
-        .user-roles-info::-webkit-scrollbar-thumb:hover {
-            background: #555;
-        }
-        
-        .role-card {
-            background: #f8f9fa;
-            border-left: 4px solid #007bff;
-            border-radius: 5px;
-            padding: 10px;
-            transition: all 0.3s ease;
-        }
-        
-        .role-card:hover {
-            background: #e9ecef;
-            transform: translateX(5px);
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        
-        .role-card:nth-child(2) {
-            border-left-color: #dc3545;
-        }
-        
-        .role-card:nth-child(3) {
-            border-left-color: #ffc107;
-        }
-        
-        .role-card:nth-child(4) {
-            border-left-color: #17a2b8;
-        }
-        
-        .role-card:nth-child(5) {
-            border-left-color: #28a745;
-        }
-        
-        .role-header {
-            font-size: 14px;
-            margin-bottom: 5px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .role-header i {
-            font-size: 16px;
-        }
-        
-        .role-details {
-            font-size: 12px;
-        }
-        
-        .role-login {
-            margin-bottom: 5px;
-            padding: 5px;
-            background: white;
-            border-radius: 3px;
-        }
-        
-        .role-login code {
-            background: #e9ecef;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 11px;
-            color: #495057;
-        }
-        
-        .role-permissions {
-            padding: 5px;
-        }
-        
-        .role-permissions .badge {
-            font-size: 10px;
-            padding: 3px 8px;
+        .password-toggle:hover {
+            color: #667eea;
         }
         
         /* Responsive Design */
@@ -156,36 +69,8 @@ require_once ROOT_PATH . '/app/core/Security.php';
                 width: 100%;
                 margin: 10px;
             }
-            
             .login-logo a {
                 font-size: 28px;
-            }
-            
-            .role-card {
-                padding: 8px;
-            }
-            
-            .role-header {
-                font-size: 13px;
-            }
-            
-            .role-details {
-                font-size: 11px;
-            }
-            
-            .user-roles-info {
-                max-height: 300px;
-            }
-        }
-        
-        /* Print Styles */
-        @media print {
-            .login-page {
-                background: white;
-            }
-            
-            .btn-success {
-                display: none;
             }
         }
     </style>
@@ -223,112 +108,29 @@ require_once ROOT_PATH . '/app/core/Security.php';
                     </div>
                 </div>
                 <div class="input-group mb-3">
-                    <input type="password" name="password" class="form-control" placeholder="Password" required>
+                    <input type="password" name="password" id="password" class="form-control" placeholder="Password" required>
                     <div class="input-group-append">
-                        <div class="input-group-text">
-                            <span class="fas fa-lock"></span>
+                        <div class="input-group-text password-toggle" onclick="togglePassword()">
+                            <span id="toggleIcon" class="fas fa-eye"></span>
                         </div>
                     </div>
                 </div>
                 <div class="row">
-                    <div class="col-12">
+                    <div class="col-8">
+                        <div class="icheck-primary">
+                            <input type="checkbox" id="showPassCheckbox" onchange="togglePasswordCheckbox()">
+                            <label for="showPassCheckbox">
+                                Tampilkan Password
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-4">
                         <button type="submit" class="btn btn-success btn-block">
-                            <i class="fas fa-sign-in-alt"></i> Login
+                            Login
                         </button>
                     </div>
                 </div>
             </form>
-
-            <hr>
-            
-            <!-- User Roles & Permissions Information -->
-            <div class="user-roles-info">
-                <div class="text-center mb-3">
-                    <strong class="text-primary">
-                        <i class="fas fa-users"></i> Akun Pengguna & Hak Akses
-                    </strong>
-                </div>
-                
-                <!-- Administrator -->
-                <div class="role-card mb-2">
-                    <div class="role-header">
-                        <i class="fas fa-user-shield text-danger"></i>
-                        <strong>Administrator</strong>
-                    </div>
-                    <div class="role-details">
-                        <div class="role-login">
-                            <i class="fas fa-user"></i> <code>admin_jagapadi</code>
-                            <i class="fas fa-key ml-2"></i> <code>admin123</code>
-                        </div>
-                        <div class="role-permissions">
-                            <span class="badge badge-danger">Full Access</span>
-                            <small class="d-block text-muted mt-1">
-                                Create, Read, Update, Delete semua data
-                            </small>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Operator -->
-                <div class="role-card mb-2">
-                    <div class="role-header">
-                        <i class="fas fa-user-cog text-warning"></i>
-                        <strong>Operator</strong>
-                    </div>
-                    <div class="role-details">
-                        <div class="role-login">
-                            <i class="fas fa-user"></i> <code>operator1</code>
-                            <i class="fas fa-key ml-2"></i> <code>op1test</code>
-                        </div>
-                        <div class="role-permissions">
-                            <span class="badge badge-warning">Create, Read, Update</span>
-                            <small class="d-block text-muted mt-1">
-                                Tidak dapat menghapus data
-                            </small>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Viewer -->
-                <div class="role-card mb-2">
-                    <div class="role-header">
-                        <i class="fas fa-eye text-info"></i>
-                        <strong>Viewer</strong>
-                    </div>
-                    <div class="role-details">
-                        <div class="role-login">
-                            <i class="fas fa-user"></i> <code>viewer1</code>
-                            <i class="fas fa-key ml-2"></i> <code>vw1test</code>
-                        </div>
-                        <div class="role-permissions">
-                            <span class="badge badge-info">Read Only</span>
-                            <small class="d-block text-muted mt-1">
-                                Hanya dapat melihat data
-                            </small>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Petugas -->
-                <div class="role-card mb-2">
-                    <div class="role-header">
-                        <i class="fas fa-user-tie text-success"></i>
-                        <strong>Petugas Lapangan</strong>
-                    </div>
-                    <div class="role-details">
-                        <div class="role-login">
-                            <i class="fas fa-user"></i> <code>petugas</code>
-                            <i class="fas fa-key ml-2"></i> <code>petugas3509</code>
-                        </div>
-                        <div class="role-permissions">
-                            <span class="badge badge-success">Create, Read</span>
-                            <small class="d-block text-muted mt-1">
-                                Tidak dapat update atau delete
-                            </small>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
     
@@ -344,5 +146,41 @@ require_once ROOT_PATH . '/app/core/Security.php';
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"></script>
 <!-- AdminLTE App -->
 <script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js"></script>
+
+<script>
+    function togglePassword() {
+        const passwordInput = document.getElementById('password');
+        const toggleIcon = document.getElementById('toggleIcon');
+        const checkbox = document.getElementById('showPassCheckbox');
+        
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            toggleIcon.classList.remove('fa-eye');
+            toggleIcon.classList.add('fa-eye-slash');
+            checkbox.checked = true;
+        } else {
+            passwordInput.type = 'password';
+            toggleIcon.classList.remove('fa-eye-slash');
+            toggleIcon.classList.add('fa-eye');
+            checkbox.checked = false;
+        }
+    }
+    
+    function togglePasswordCheckbox() {
+        const passwordInput = document.getElementById('password');
+        const toggleIcon = document.getElementById('toggleIcon');
+        const checkbox = document.getElementById('showPassCheckbox');
+        
+        if (checkbox.checked) {
+            passwordInput.type = 'text';
+            toggleIcon.classList.remove('fa-eye');
+            toggleIcon.classList.add('fa-eye-slash');
+        } else {
+            passwordInput.type = 'password';
+            toggleIcon.classList.remove('fa-eye-slash');
+            toggleIcon.classList.add('fa-eye');
+        }
+    }
+</script>
 </body>
 </html>

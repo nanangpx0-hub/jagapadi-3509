@@ -123,7 +123,36 @@ class LaporanController extends Controller {
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $this->validateCsrfToken();
+            
+            // ==============================================
+            // PHASE 1 SECURITY: Honeypot anti-bot detection
+            // ==============================================
+            if (!empty($_POST['website_hp'])) {
+                // Honeypot field was filled - this is a bot
+                error_log('Honeypot triggered on laporan/create - potential bot. IP: ' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+                $_SESSION['error'] = 'Terjadi kesalahan. Silakan coba lagi.';
+                $this->redirect('laporan');
+                return;
+            }
+            
+            // ==============================================
+            // PHASE 1 SECURITY: Submission rate limiting
+            // ==============================================
             $user = $this->getCurrentUser();
+            $rateLimitKey = 'laporan_submit_' . $user['id'];
+            $lastSubmit = $_SESSION[$rateLimitKey] ?? 0;
+            $cooldownSeconds = 30;
+            
+            if (time() - $lastSubmit < $cooldownSeconds) {
+                $remaining = $cooldownSeconds - (time() - $lastSubmit);
+                $_SESSION['error'] = "Mohon tunggu {$remaining} detik sebelum mengirim laporan berikutnya.";
+                $this->redirect('laporan/create');
+                return;
+            }
+            
+            // Record this submission attempt time
+            $_SESSION[$rateLimitKey] = time();
+            
             $userRole = $user['role'];
             
             // Role-based user_id assignment

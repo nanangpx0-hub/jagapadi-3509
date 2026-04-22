@@ -538,5 +538,237 @@ class IrigasiController extends Controller {
         
         $this->redirect('irigasi/index');
     }
+
+    // =========================================================================
+    // NEW METHODS: Monitoring, Rules, Analytics
+    // =========================================================================
+
+    /**
+     * Monitoring Dashboard - Real-time monitoring view
+     */
+    public function monitoring() {
+        $this->checkAuth();
+        $user = $this->getCurrentUser();
+        
+        // Get all irigasi for map
+        $irigasiList = [];
+        
+        if ($user['role'] === 'petugas') {
+            $irigasiList = $this->model->getAllWithDetails($user['id']);
+        } else {
+            $irigasiList = $this->model->getAllWithDetails();
+        }
+        
+        $this->view('irigasi/monitoring', [
+            'title' => 'Monitoring Irigasi',
+            'irigasiList' => $irigasiList,
+            'userRole' => $user['role']
+        ]);
+    }
+
+    /**
+     * Rules Configuration Page
+     */
+    public function rules($irigasiId = null) {
+        $this->checkAuth();
+        $this->checkRole(['admin', 'operator'], 'Anda tidak memiliki akses ke konfigurasi rule.');
+        
+        require_once ROOT_PATH . '/app/models/IrrigationRule.php';
+        $ruleModel = new IrrigationRule();
+        
+        $rules = [];
+        $selectedIrigasi = null;
+        
+        if ($irigasiId) {
+            $rules = $ruleModel->getAllRulesForIrigasi($irigasiId);
+            $selectedIrigasi = $this->model->find($irigasiId);
+        }
+        
+        // Get all irigasi for dropdown
+        $irigasiList = $this->model->getAllWithDetails();
+        
+        // Get rule templates
+        $templates = $ruleModel->getTemplates();
+        
+        $this->view('irigasi/rules', [
+            'title' => 'Konfigurasi Rule Otomasi',
+            'rules' => $rules,
+            'templates' => $templates,
+            'irigasiList' => $irigasiList,
+            'selectedIrigasi' => $selectedIrigasi,
+            'irigasiId' => $irigasiId,
+            'userRole' => $_SESSION['role'] ?? 'guest'
+        ]);
+    }
+
+    /**
+     * Save Rule - AJAX endpoint
+     */
+    public function saveRule() {
+        $this->checkAuth();
+        $this->checkRole(['admin', 'operator']);
+        
+        header('Content-Type: application/json');
+        
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
+            return;
+        }
+        
+        try {
+            $this->validateCsrfToken();
+            
+            require_once ROOT_PATH . '/app/models/IrrigationRule.php';
+            $ruleModel = new IrrigationRule();
+            
+            $data = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+            
+            if (empty($data['irigasi_id']) || empty($data['rule_name'])) {
+                echo json_encode(['success' => false, 'message' => 'Missing required fields']);
+                return;
+            }
+            
+            $ruleData = [
+                'irigasi_id' => $data['irigasi_id'],
+                'rule_name' => $data['rule_name'],
+                'description' => $data['description'] ?? null,
+                'conditions' => $data['conditions'] ?? ['operator' => 'AND', 'conditions' => []],
+                'actions' => $data['actions'] ?? ['actions' => []],
+                'priority' => $data['priority'] ?? 10,
+                'is_active' => $data['is_active'] ?? 1,
+                'cooldown_minutes' => $data['cooldown_minutes'] ?? 60,
+                'created_by' => $_SESSION['user_id']
+            ];
+            
+            if (!empty($data['id'])) {
+                // Update existing rule
+                $success = $ruleModel->updateRule($data['id'], $ruleData);
+                $message = $success ? 'Rule berhasil diupdate' : 'Gagal mengupdate rule';
+            } else {
+                // Create new rule
+                $ruleId = $ruleModel->createRule($ruleData);
+                $success = $ruleId !== false;
+                $message = $success ? 'Rule berhasil dibuat' : 'Gagal membuat rule';
+            }
+            
+            echo json_encode(['success' => $success, 'message' => $message]);
+            
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Toggle Rule Active Status - AJAX endpoint
+     */
+    public function toggleRuleStatus($ruleId) {
+        $this->checkAuth();
+        $this->checkRole(['admin', 'operator']);
+        
+        header('Content-Type: application/json');
+        
+        try {
+            require_once ROOT_PATH . '/app/models/IrrigationRule.php';
+            $ruleModel = new IrrigationRule();
+            
+            $rule = $ruleModel->find($ruleId);
+            if (!$rule) {
+                echo json_encode(['success' => false, 'message' => 'Rule tidak ditemukan']);
+                return;
+            }
+            
+            $newStatus = !$rule['is_active'];
+            $success = $ruleModel->toggleRule($ruleId, $newStatus);
+            
+            echo json_encode([
+                'success' => $success,
+                'is_active' => $newStatus,
+                'message' => $success 
+                    ? 'Rule berhasil ' . ($newStatus ? 'diaktifkan' : 'dinonaktifkan')
+                    : 'Gagal mengubah status rule'
+            ]);
+            
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Delete Rule - AJAX endpoint
+     */
+    public function deleteRule($ruleId) {
+        $this->checkAuth();
+        $this->checkRole(['admin']);
+        
+        header('Content-Type: application/json');
+        
+        try {
+            require_once ROOT_PATH . '/app/models/IrrigationRule.php';
+            $ruleModel = new IrrigationRule();
+            
+            $success = $ruleModel->delete($ruleId);
+            
+            echo json_encode([
+                'success' => $success,
+                'message' => $success ? 'Rule berhasil dihapus' : 'Gagal menghapus rule'
+            ]);
+            
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Run Rule Engine - AJAX endpoint
+     */
+    public function runRuleEngine($irigasiId) {
+        $this->checkAuth();
+        $this->checkRole(['admin', 'operator']);
+        
+        header('Content-Type: application/json');
+        
+        try {
+            require_once ROOT_PATH . '/app/services/IrrigationRuleEngine.php';
+            $engine = new IrrigationRuleEngine();
+            
+            $results = $engine->evaluateRules($irigasiId);
+            
+            echo json_encode([
+                'success' => true,
+                'results' => $results
+            ]);
+            
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Analytics View
+     */
+    public function analytics($irigasiId = null) {
+        $this->checkAuth();
+        $user = $this->getCurrentUser();
+        
+        $irigasiList = [];
+        if ($user['role'] === 'petugas') {
+            $irigasiList = $this->model->getAllWithDetails($user['id']);
+        } else {
+            $irigasiList = $this->model->getAllWithDetails();
+        }
+        
+        $selectedIrigasi = null;
+        if ($irigasiId) {
+            $selectedIrigasi = $this->model->getDetailById($irigasiId);
+        }
+        
+        $this->view('irigasi/analytics', [
+            'title' => 'Analitik Irigasi',
+            'irigasiList' => $irigasiList,
+            'selectedIrigasi' => $selectedIrigasi,
+            'irigasiId' => $irigasiId,
+            'userRole' => $user['role']
+        ]);
+    }
 }
 

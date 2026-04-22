@@ -1,327 +1,342 @@
 <?php
-require_once ROOT_PATH . '/app/core/Cache.php';
+/**
+ * Master Kecamatan Model
+ * 
+ * Model untuk data master kecamatan yang digunakan dalam
+ * Data Storytelling untuk filter wilayah analisis.
+ * 
+ * @version 1.0.0
+ * @author JAGAPADI System - Data Storytelling Module
+ */
 
 class MasterKecamatan extends Model {
+    
     protected $table = 'master_kecamatan';
     
-    public function getByKabupaten($kabupatenId, $q = null, $limit = 100) {
-        // Sort by kode_kecamatan ascending (Kencong 3509010 before Ajung 3509110)
-        $cacheKey = 'master_kecamatan_kab_by_kode_' . $kabupatenId;
-        
-        if (!$q) {
-            return Cache::remember($cacheKey, function() use ($kabupatenId) {
-                $stmt = $this->db->prepare("SELECT * FROM master_kecamatan WHERE kabupaten_id = ? AND deleted_at IS NULL ORDER BY kode_kecamatan ASC");
-                $stmt->execute([$kabupatenId]);
-                return $stmt->fetchAll();
-            }, 3600); // Cache for 1 hour
-        }
-        
-        $limit = (int)$limit;
-        $stmt = $this->db->prepare("SELECT * FROM master_kecamatan WHERE kabupaten_id = ? AND nama_kecamatan LIKE ? AND deleted_at IS NULL ORDER BY kode_kecamatan ASC LIMIT $limit");
-        $stmt->execute([$kabupatenId, '%'.$q.'%']);
-        return $stmt->fetchAll();
-    }
-    
-    public function findById($id) {
-        $stmt = $this->db->prepare("SELECT * FROM master_kecamatan WHERE id = ? AND deleted_at IS NULL");
-        $stmt->execute([$id]);
-        return $stmt->fetch();
-    }
-    
-    // Admin CRUD Methods
-    public function getAllWithKabupaten($kabupatenId = null, $search = '', $limit = 20, $offset = 0) {
-        $sql = "SELECT k.*, kb.nama_kabupaten 
-                FROM master_kecamatan k
-                LEFT JOIN master_kabupaten kb ON k.kabupaten_id = kb.id
-                WHERE k.deleted_at IS NULL";
-        $params = [];
-        
-        if ($kabupatenId) {
-            $sql .= " AND k.kabupaten_id = ?";
-            $params[] = $kabupatenId;
-        }
-        
-        if ($search) {
-            $sql .= " AND (k.nama_kecamatan LIKE ? OR k.kode_kecamatan LIKE ? OR kb.nama_kabupaten LIKE ?)";
-            $params[] = "%$search%";
-            $params[] = "%$search%";
-            $params[] = "%$search%";
-        }
-        
-        $limit = (int)$limit;
-        $offset = (int)$offset;
-        $sql .= " ORDER BY kb.nama_kabupaten, k.nama_kecamatan LIMIT $limit OFFSET $offset";
+    /**
+     * Get all kecamatan ordered by name
+     * 
+     * @return array
+     */
+    public function getAllOrdered(): array {
+        $sql = "
+            SELECT 
+                id,
+                nama_kecamatan
+            FROM {$this->table} 
+            ORDER BY nama_kecamatan ASC
+        ";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute($params);
-        return $stmt->fetchAll();
-    }
-    
-    public function count($kabupatenId = null, $search = '') {
-        $sql = "SELECT COUNT(*) as total 
-                FROM master_kecamatan k
-                LEFT JOIN master_kabupaten kb ON k.kabupaten_id = kb.id
-                WHERE k.deleted_at IS NULL";
-        $params = [];
+        $stmt->execute();
         
-        if ($kabupatenId) {
-            $sql .= " AND k.kabupaten_id = ?";
-            $params[] = $kabupatenId;
-        }
-        
-        if ($search) {
-            $sql .= " AND (k.nama_kecamatan LIKE ? OR k.kode_kecamatan LIKE ? OR kb.nama_kabupaten LIKE ?)";
-            $params[] = "%$search%";
-            $params[] = "%$search%";
-            $params[] = "%$search%";
-        }
-        
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute($params);
-        return $stmt->fetch()['total'] ?? 0;
-    }
-    
-    public function create($data) {
-        $sql = "INSERT INTO master_kecamatan (kabupaten_id, nama_kecamatan, kode_kecamatan, created_by) VALUES (?, ?, ?, ?)";
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([$data['kabupaten_id'], $data['nama_kecamatan'], $data['kode_kecamatan'], $data['created_by']]);
-        Cache::delete('master_kecamatan_kab_' . $data['kabupaten_id']);
-        return $this->db->lastInsertId();
-    }
-    
-    public function update($id, $data) {
-        // Get old data to clear cache
-        $old = $this->findById($id);
-        
-        $sql = "UPDATE master_kecamatan SET kabupaten_id = ?, nama_kecamatan = ?, kode_kecamatan = ?, updated_by = ? WHERE id = ?";
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([$data['kabupaten_id'], $data['nama_kecamatan'], $data['kode_kecamatan'], $data['updated_by'], $id]);
-        
-        // Clear cache for both old and new kabupaten
-        if ($old) {
-            Cache::delete('master_kecamatan_kab_' . $old['kabupaten_id']);
-        }
-        Cache::delete('master_kecamatan_kab_' . $data['kabupaten_id']);
-        
-        return $stmt->rowCount();
-    }
-
-    public function updateNameOnly($id, $nama, $userId) {
-        $old = $this->findById($id);
-        if (!$old) return 0;
-
-        $sql = "UPDATE master_kecamatan SET nama_kecamatan = ?, updated_by = ? WHERE id = ?";
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([$nama, $userId, $id]);
-
-        // Clear cache for the related kabupaten
-        Cache::delete('master_kecamatan_kab_' . $old['kabupaten_id']);
-        return $stmt->rowCount();
-    }
-    
-    public function softDelete($id, $userId) {
-        // Get data to clear cache
-        $data = $this->findById($id);
-        
-        $sql = "UPDATE master_kecamatan SET deleted_at = NOW(), deleted_by = ? WHERE id = ?";
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([$userId, $id]);
-        
-        if ($data) {
-            Cache::delete('master_kecamatan_kab_' . $data['kabupaten_id']);
-        }
-        
-        return $stmt->rowCount();
-    }
-
-    public function clearCacheByKabupaten($kabupatenId) {
-        Cache::delete('master_kecamatan_kab_' . $kabupatenId);
-    }
-
-    public function clearAllCache() {
-        // Clear all kecamatan caches (pattern matching)
-        $files = glob(ROOT_PATH . '/storage/cache/*.cache');
-        foreach ($files as $file) {
-            $data = unserialize(file_get_contents($file));
-            if (isset($data['value']) && strpos($file, 'master_kecamatan') !== false) {
-                unlink($file);
-            }
-        }
-    }
-    
-    public function checkKodeExists($kode, $excludeId = null) {
-        $sql = "SELECT COUNT(*) as c FROM master_kecamatan WHERE kode_kecamatan = ? AND deleted_at IS NULL";
-        $params = [$kode];
-        
-        if ($excludeId) {
-            $sql .= " AND id != ?";
-            $params[] = $excludeId;
-        }
-        
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute($params);
-        return ($stmt->fetch()['c'] ?? 0) > 0;
-    }
-    
-    public function countByKabupaten($kabupatenId) {
-        $stmt = $this->db->prepare("SELECT COUNT(*) as c FROM master_kecamatan WHERE kabupaten_id = ? AND deleted_at IS NULL");
-        $stmt->execute([$kabupatenId]);
-        return $stmt->fetch()['c'] ?? 0;
-    }
-    
-    public function findByIdWithKabupaten($id) {
-        $sql = "SELECT k.*, kb.nama_kabupaten 
-                FROM master_kecamatan k
-                LEFT JOIN master_kabupaten kb ON k.kabupaten_id = kb.id
-                WHERE k.id = ? AND k.deleted_at IS NULL";
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([$id]);
-        return $stmt->fetch();
-    }
-    
-    public function getByKabupatenForDropdown($kabupatenId) {
-        // Order by kode_kecamatan ascending so Kencong (3509010) appears before Ajung (3509110)
-        $stmt = $this->db->prepare("SELECT id, nama_kecamatan, kode_kecamatan FROM master_kecamatan WHERE kabupaten_id = ? AND deleted_at IS NULL ORDER BY kode_kecamatan ASC");
-        $stmt->execute([$kabupatenId]);
-        return $stmt->fetchAll();
-    }
-
-    public function checkNameExists($kabupatenId, $nama, $excludeId = null) {
-        $sql = "SELECT COUNT(*) as c FROM master_kecamatan WHERE kabupaten_id = ? AND nama_kecamatan = ? AND deleted_at IS NULL";
-        $params = [$kabupatenId, $nama];
-        if ($excludeId) { $sql .= " AND id != ?"; $params[] = $excludeId; }
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute($params);
-        return ($stmt->fetch()['c'] ?? 0) > 0;
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     
     /**
-     * Get all kecamatan with pagination and advanced filters for DataTables
-     * @param string $search General search term
-     * @param int $limit Number of records per page
-     * @param int $offset Starting offset
-     * @param string $orderBy Column to sort by (whitelisted)
-     * @param string $orderDir Sort direction (asc/desc)
-     * @param string $kabupatenId Filter by specific kabupaten
-     * @param string $kodeKecamatan Filter by specific kode kecamatan
+     * Get kecamatan by ID
+     * 
+     * @param int $id
+     * @return array|null
+     */
+    public function getById(int $id): ?array {
+        $sql = "
+            SELECT 
+                id,
+                nama_kecamatan
+            FROM {$this->table} 
+            WHERE id = ?
+        ";
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$id]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        return $result ?: null;
+    }
+    
+    /**
+     * Get kecamatan with production statistics
+     * 
+     * @param int $year
      * @return array
      */
-    public function getAllWithPaginationAndFilters($search = '', $limit = 20, $offset = 0, $orderBy = 'kode_kecamatan', $orderDir = 'asc', $kabupatenId = '', $kodeKecamatan = '') {
-        $sql = "SELECT k.id, k.kode_kecamatan, k.nama_kecamatan, k.kabupaten_id, kb.nama_kabupaten, kb.kode_kabupaten
-                FROM master_kecamatan k
-                LEFT JOIN master_kabupaten kb ON k.kabupaten_id = kb.id
-                WHERE k.deleted_at IS NULL";
+    public function getWithProductionStats(int $year): array {
+        $sql = "
+            SELECT 
+                mk.id,
+                mk.nama_kecamatan,
+                COALESCE(SUM(pg.luas_panen), 0) as total_luas_panen,
+                COALESCE(SUM(pg.produksi), 0) as total_produksi,
+                COALESCE(AVG(pg.produktivitas), 0) as avg_produktivitas,
+                COUNT(pg.id) as jumlah_laporan
+            FROM {$this->table} mk
+            LEFT JOIN master_desa md ON mk.id = md.kecamatan_id
+            LEFT JOIN produksi_gabah pg ON md.id = pg.desa_id 
+                AND YEAR(pg.tanggal_panen) = ?
+                AND pg.status_verifikasi = 'verified'
+            WHERE 1=1
+            GROUP BY mk.id, mk.nama_kecamatan
+            ORDER BY mk.nama_kecamatan ASC
+        ";
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$year]);
+        
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+    
+    /**
+     * Search kecamatan by name
+     * 
+     * @param string $query
+     * @return array
+     */
+    public function search(string $query): array {
+        $sql = "
+            SELECT 
+                id,
+                nama_kecamatan
+            FROM {$this->table} 
+            WHERE nama_kecamatan LIKE ?
+            ORDER BY nama_kecamatan ASC
+            LIMIT 10
+        ";
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute(['%' . $query . '%']);
+        
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+    
+    /**
+     * Get kecamatan by kabupaten ID
+     * Used by WilayahController::kecamatan() for cascading dropdown
+     * 
+     * @param int $kabupatenId Kabupaten ID
+     * @param string|null $q Search query (optional)
+     * @param int $limit Max results (default 100)
+     * @return array
+     */
+    public function getByKabupaten($kabupatenId, $q = null, $limit = 100): array {
+        $limit = (int)$limit;
+        
+        if (!$q) {
+            $sql = "SELECT id, kode_kecamatan, nama_kecamatan, kabupaten_id 
+                    FROM {$this->table} 
+                    WHERE kabupaten_id = ? AND deleted_at IS NULL 
+                    ORDER BY nama_kecamatan ASC 
+                    LIMIT $limit";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute([$kabupatenId]);
+        } else {
+            $sql = "SELECT id, kode_kecamatan, nama_kecamatan, kabupaten_id 
+                    FROM {$this->table} 
+                    WHERE kabupaten_id = ? AND nama_kecamatan LIKE ? AND deleted_at IS NULL 
+                    ORDER BY nama_kecamatan ASC 
+                    LIMIT $limit";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute([$kabupatenId, '%'.$q.'%']);
+        }
+        
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+    
+    /**
+     * Get all kecamatan with kabupaten filter and pagination
+     * Used by AdminWilayahController::kecamatan
+     */
+    public function getAllWithKabupaten($kabupatenId = null, $search = '', $limit = 20, $offset = 0): array {
+        $sql = "
+            SELECT 
+                k.*,
+                kb.nama_kabupaten
+            FROM {$this->table} k
+            LEFT JOIN master_kabupaten kb ON k.kabupaten_id = kb.id
+            WHERE k.deleted_at IS NULL
+        ";
+        
         $params = [];
         
-        // Filter by kabupaten_id if provided
-        if ($kabupatenId !== '' && is_numeric($kabupatenId)) {
+        if (!empty($kabupatenId)) {
             $sql .= " AND k.kabupaten_id = ?";
-            // Preserve leading zeros by not casting to int
-            $params[] = (string)$kabupatenId;
+            $params[] = $kabupatenId;
         }
         
-        // Filter by specific kode_kecamatan if provided (exact match)
-        if ($kodeKecamatan !== '') {
-            $sql .= " AND k.kode_kecamatan = ?";
-            $params[] = $kodeKecamatan;
+        if (!empty($search)) {
+            $sql .= " AND (k.nama_kecamatan LIKE ? OR k.kode_kecamatan LIKE ?)";
+            $params[] = "%$search%";
+            $params[] = "%$search%";
         }
         
-        // General search filter (applies to nama, kode, and kabupaten name)
-        if ($search !== '') {
-            $sql .= " AND (k.nama_kecamatan LIKE ? OR k.kode_kecamatan LIKE ? OR kb.nama_kabupaten LIKE ?)";
-            $searchTerm = "%$search%";
-            $params[] = $searchTerm;
-            $params[] = $searchTerm;
-            $params[] = $searchTerm;
-        }
-        
-        // Validate and sanitize order parameters (whitelist approach)
-        $allowedColumns = ['kode_kecamatan', 'nama_kecamatan', 'nama_kabupaten', 'kode_kabupaten'];
-        if (!in_array($orderBy, $allowedColumns)) {
-            $orderBy = 'kode_kecamatan';
-        }
-        $orderDir = strtoupper($orderDir) === 'DESC' ? 'DESC' : 'ASC';
-        
-        // Determine the correct table prefix for ordering
-        if ($orderBy === 'nama_kabupaten') {
-            $orderColumn = "kb.$orderBy";
-        } elseif ($orderBy === 'kode_kabupaten') {
-            $orderColumn = "kb.$orderBy";
-        } else {
-            $orderColumn = "k.$orderBy";
-        }
-        
-        $limit = (int)$limit;
-        $offset = (int)$offset;
-        // Default ordering: first by kabupaten BPS code, then by kecamatan BPS code
-        if ($orderBy === 'kode_kecamatan') {
-            // When sorting by kecamatan code, still maintain kabupaten grouping
-            $sql .= " ORDER BY kb.kode_kabupaten ASC, k.kode_kecamatan $orderDir";
-        } else {
-            $sql .= " ORDER BY $orderColumn $orderDir";
-        }
-        
-        $limit = (int)$limit;
-        $offset = (int)$offset;
+        $sql .= " ORDER BY kb.nama_kabupaten ASC, k.nama_kecamatan ASC";
         $sql .= " LIMIT $limit OFFSET $offset";
         
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
-        return $stmt->fetchAll();
+        
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-    
+
     /**
-     * Count kecamatan with filters for DataTables
-     * @param string $search General search term
-     * @param string $kabupatenId Filter by specific kabupaten
-     * @param string $kodeKecamatan Filter by specific kode kecamatan
-     * @return int
+     * Count kecamatan with filters
+     * Used by AdminWilayahController::kecamatan
      */
-    public function countWithFilters($search = '', $kabupatenId = '', $kodeKecamatan = '') {
-        $sql = "SELECT COUNT(*) as c 
-                FROM master_kecamatan k
-                LEFT JOIN master_kabupaten kb ON k.kabupaten_id = kb.id
-                WHERE k.deleted_at IS NULL";
+    public function count($kabupatenId = null, $search = ''): int {
+        return $this->countWithFilters($search, $kabupatenId);
+    }
+
+    /**
+     * Get all with pagination and filters for API
+     */
+    public function getAllWithPaginationAndFilters($search, $limit, $offset, $orderColumn, $orderDir, $kabupatenId = null) {
+        $sql = "
+            SELECT 
+                k.*,
+                kb.nama_kabupaten
+            FROM {$this->table} k
+            LEFT JOIN master_kabupaten kb ON k.kabupaten_id = kb.id
+            WHERE k.deleted_at IS NULL
+        ";
+        
         $params = [];
         
-        // Filter by kabupaten_id if provided
-        if ($kabupatenId !== '' && is_numeric($kabupatenId)) {
-            $sql .= " AND k.kabupaten_id = ?";
-            // Preserve leading zeros by not casting to int
-            $params[] = (string)$kabupatenId;
-        }
-        
-        // Filter by specific kode_kecamatan if provided
-        if ($kodeKecamatan !== '') {
-            $sql .= " AND k.kode_kecamatan = ?";
-            $params[] = $kodeKecamatan;
-        }
-        
-        // General search filter
-        if ($search !== '') {
+        if (!empty($search)) {
             $sql .= " AND (k.nama_kecamatan LIKE ? OR k.kode_kecamatan LIKE ? OR kb.nama_kabupaten LIKE ?)";
-            $searchTerm = "%$search%";
-            $params[] = $searchTerm;
-            $params[] = $searchTerm;
-            $params[] = $searchTerm;
+            $params[] = "%$search%";
+            $params[] = "%$search%";
+            $params[] = "%$search%";
+        }
+
+        if (!empty($kabupatenId)) {
+            $sql .= " AND k.kabupaten_id = ?";
+            $params[] = $kabupatenId;
+        }
+        
+        // Allowed columns for ordering
+        $allowedColumns = ['id', 'nama_kecamatan', 'kode_kecamatan', 'kabupaten_id', 'kode_kabupaten'];
+        if (!in_array($orderColumn, $allowedColumns)) {
+            $orderColumn = 'nama_kecamatan';
+        }
+        
+        // Fix for kode_kabupaten sorting if joined
+        if ($orderColumn === 'kode_kabupaten') {
+            $orderColumn = 'kb.kode_kabupaten';
+        }
+
+        $sql .= " ORDER BY {$orderColumn} " . ($orderDir === 'desc' ? 'DESC' : 'ASC');
+        $sql .= " LIMIT $limit OFFSET $offset";
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Count with filters for API
+     */
+    public function countWithFilters($search, $kabupatenId = null) {
+        $sql = "
+            SELECT COUNT(*) 
+            FROM {$this->table} k
+            LEFT JOIN master_kabupaten kb ON k.kabupaten_id = kb.id
+            WHERE k.deleted_at IS NULL
+        ";
+        
+        $params = [];
+        
+        if (!empty($search)) {
+            $sql .= " AND (k.nama_kecamatan LIKE ? OR k.kode_kecamatan LIKE ? OR kb.nama_kabupaten LIKE ?)";
+            $params[] = "%$search%";
+            $params[] = "%$search%";
+            $params[] = "%$search%";
+        }
+
+        if (!empty($kabupatenId)) {
+            $sql .= " AND k.kabupaten_id = ?";
+            $params[] = $kabupatenId;
         }
         
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
-        return $stmt->fetch()['c'] ?? 0;
+        
+        return (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * Find by ID with Kabupaten details
+     */
+    public function findByIdWithKabupaten($id) {
+        $sql = "
+            SELECT 
+                k.*,
+                kb.nama_kabupaten,
+                kb.kode_kabupaten
+            FROM {$this->table} k
+            LEFT JOIN master_kabupaten kb ON k.kabupaten_id = kb.id
+            WHERE k.id = ? AND k.deleted_at IS NULL
+        ";
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$id]);
+        
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Check if name exists in kabupaten
+     */
+    public function checkNameExists($kabupatenId, $namaKecamatan) {
+        $sql = "SELECT COUNT(*) FROM {$this->table} WHERE kabupaten_id = ? AND nama_kecamatan = ? AND deleted_at IS NULL";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$kabupatenId, $namaKecamatan]);
+        return $stmt->fetchColumn() > 0;
+    }
+
+    /**
+     * Check if kode exists
+     */
+    public function checkKodeExists($kodeKecamatan) {
+        $sql = "SELECT COUNT(*) FROM {$this->table} WHERE kode_kecamatan = ? AND deleted_at IS NULL";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$kodeKecamatan]);
+        return $stmt->fetchColumn() > 0;
     }
     
     /**
-     * Validate that a kecamatan with given kode belongs to specified kabupaten
-     * @param string $kodeKecamatan
-     * @param int $kabupatenId
-     * @return bool
+     * Find by ID (Alias for parent find but with cache check option if needed)
      */
-    public function validateKecamatanInKabupaten($kodeKecamatan, $kabupatenId) {
-        $sql = "SELECT COUNT(*) as c FROM master_kecamatan 
-                WHERE kode_kecamatan = ? AND kabupaten_id = ? AND deleted_at IS NULL";
+    public function findById($id) {
+        return $this->find($id);
+    }
+
+    /**
+     * Soft delete
+     */
+    public function softDelete($id, $userId) {
+        $data = [
+            'deleted_at' => date('Y-m-d H:i:s'),
+            'deleted_by' => $userId
+        ];
+        return $this->update($id, $data);
+    }
+    
+    /**
+     * Clear cache by kabupaten (Placeholder)
+     */
+    public function clearCacheByKabupaten($kabupatenId) {
+        // No caching implemented yet
+        return true;
+    }
+    
+    /**
+     * Count by kabupaten
+     */
+    public function countByKabupaten($kabupatenId) {
+        $sql = "SELECT COUNT(*) FROM {$this->table} WHERE kabupaten_id = ? AND deleted_at IS NULL";
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$kodeKecamatan, (int)$kabupatenId]);
-        return ($stmt->fetch()['c'] ?? 0) > 0;
+        $stmt->execute([$kabupatenId]);
+        return $stmt->fetchColumn();
     }
 }

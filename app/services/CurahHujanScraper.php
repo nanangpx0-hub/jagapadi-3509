@@ -12,26 +12,33 @@ class CurahHujanScraper {
     private $model;
     private $logFile;
     private $config;
+    private $bmkgService;
     
-    // Konfigurasi sumber data
+    // Konfigurasi sumber data (ordered by priority)
     private $sources = [
+        'openmeteo' => [
+            'name' => 'Open-Meteo',
+            'url' => 'https://api.open-meteo.com/v1/forecast',
+            'enabled' => true,
+            'priority' => 1  // Primary source: actual precipitation data
+        ],
         'bmkg_api' => [
             'name' => 'BMKG API',
             'url' => 'https://api.bmkg.go.id/publik/prakiraan-cuaca',
             'enabled' => true,
-            'priority' => 1
+            'priority' => 2  // Secondary: weather categories
         ],
         'dataonline_bmkg' => [
             'name' => 'BMKG Data Online',
             'url' => 'https://dataonline.bmkg.go.id',
             'enabled' => false, // Requires authentication
-            'priority' => 2
+            'priority' => 3
         ],
         'simulation' => [
             'name' => 'Data Simulasi',
             'url' => null,
             'enabled' => true,
-            'priority' => 99
+            'priority' => 99  // Last resort fallback
         ]
     ];
     
@@ -73,9 +80,16 @@ class CurahHujanScraper {
         '35.09.31' => 'Patrang'
     ];
     
+    private $openMeteoService;
+    
     public function __construct() {
         require_once ROOT_PATH . '/app/models/CurahHujan.php';
+        require_once ROOT_PATH . '/app/services/BMKGService.php';
+        require_once ROOT_PATH . '/app/services/OpenMeteoService.php';
+        
         $this->model = new CurahHujan();
+        $this->bmkgService = new BMKGService();
+        $this->openMeteoService = new OpenMeteoService();
         $this->logFile = ROOT_PATH . '/logs/curah_hujan_scraper.log';
         
         // Ensure tables exist
@@ -92,9 +106,12 @@ class CurahHujanScraper {
         $startTime = microtime(true);
         $this->log("=== Starting Curah Hujan Scraper ===");
         
-        $targetMonth = $options['month'] ?? date('m');
-        $targetYear = $options['year'] ?? date('Y');
+        // Normalize month and year as integers
+        $targetMonth = (int)($options['month'] ?? date('m'));
+        $targetYear = (int)($options['year'] ?? date('Y'));
         $forceSimulation = $options['force_simulation'] ?? false;
+        
+        $this->log("Target: {$targetYear}-" . str_pad($targetMonth, 2, '0', STR_PAD_LEFT));
         
         $result = [
             'success' => false,
@@ -103,30 +120,129 @@ class CurahHujanScraper {
             'records_success' => 0,
             'records_failed' => 0,
             'message' => '',
-            'execution_time' => 0
+            'execution_time' => 0,
+            'target_month' => $targetMonth,
+            'target_year' => $targetYear,
+            'no_data' => false
         ];
         
+        // Check if target month is in the future (no data available yet)
+        $currentYear = (int) date('Y');
+        $currentMonth = (int) date('m');
+        $isFutureMonth = false;
+        
+        if ($targetYear > $currentYear) {
+            $isFutureMonth = true;
+        } elseif ($targetYear == $currentYear && $targetMonth > $currentMonth) {
+            $isFutureMonth = true;
+        }
+        
+        if ($isFutureMonth) {
+            $monthName = $this->getMonthName($targetMonth);
+            $this->log("Month {$targetMonth}/{$targetYear} is in the future, no data available yet");
+            
+            $result['success'] = false;
+            $result['no_data'] = true;
+            $result['message'] = "Data untuk bulan {$monthName} {$targetYear} belum tersedia (bulan masa depan)";
+            $result['execution_time'] = round(microtime(true) - $startTime, 4);
+            
+            // Log to database
+            $this->model->logActivity(
+                'scrape',
+                'skipped',
+                $result['message'],
+                [
+                    'processed' => 0,
+                    'success' => 0,
+                    'failed' => 0,
+                    'reason' => 'future_month'
+                ]
+            );
+            
+            return $result;
+        }
+        
         try {
-            // Check if should use simulation
+            // Determine if we can use real-time APIs
+            // Open-Meteo provides forecast data (up to 16 days ahead)
+            // BMKG API provides forecast data (future dates)
+            $currentDate = new DateTime();
+            $targetDate = DateTime::createFromFormat('Y-m-d', "{$targetYear}-{$targetMonth}-01");
+            $isHistoricalRequest = $targetDate < $currentDate && $targetDate->format('Y-m') !== $currentDate->format('Y-m');
+            
             if ($forceSimulation) {
                 $this->log("Force simulation mode enabled");
                 $data = $this->generateSimulationData($targetYear, $targetMonth);
                 $result['source'] = 'Simulasi';
+            } elseif ($isHistoricalRequest) {
+                // APIs cannot provide historical data, use simulation
+                $this->log("Historical data requested ({$targetYear}-{$targetMonth}), APIs only provide forecast");
+                $this->log("Using simulation data for historical period");
+                $data = $this->generateSimulationData($targetYear, $targetMonth);
+                $result['source'] = 'Simulasi (Data Historis)';
             } else {
-                // Try real sources first
-                $data = $this->fetchFromBMKG($targetYear, $targetMonth);
+                // Try data sources in priority order:
+                // 1. Open-Meteo (actual precipitation mm)
+                // 2. BMKG API (weather forecast categories)
+                // 3. Simulation (fallback)
                 
-                if (empty($data)) {
-                    $this->log("BMKG API failed, falling back to simulation");
+                $data = null;
+                
+                // === Priority 1: Open-Meteo (actual mm precipitation) ===
+                if ($this->sources['openmeteo']['enabled']) {
+                    $this->log("[Priority 1] Attempting Open-Meteo API (actual precipitation data)");
+                    try {
+                        if ($this->openMeteoService->isAvailable()) {
+                            $targetDateStr = date('Y-m-d', strtotime("{$targetYear}-{$targetMonth}-01"));
+                            $openMeteoResult = $this->openMeteoService->fetchAllKecamatan($targetDateStr);
+                            
+                            if (!empty($openMeteoResult['data'])) {
+                                $data = $openMeteoResult['data'];
+                                $result['source'] = 'Open-Meteo';
+                                $this->log("✓ Open-Meteo: fetched " . count($data) . " records");
+                            } else {
+                                $this->log("Open-Meteo returned empty data, trying next source");
+                            }
+                        } else {
+                            $this->log("Open-Meteo API health check failed, trying next source");
+                        }
+                    } catch (Exception $e) {
+                        $this->log("Open-Meteo ERROR: " . $e->getMessage());
+                    }
+                }
+                
+                // === Priority 2: BMKG API (weather categories) ===
+                if (empty($data) && $this->sources['bmkg_api']['enabled']) {
+                    $this->log("[Priority 2] Attempting BMKG API (weather categories)");
+                    try {
+                        if ($this->bmkgService->isAvailable()) {
+                            $bmkgResult = $this->bmkgService->fetchAndSave(date('Y-m-d', strtotime("{$targetYear}-{$targetMonth}-01")));
+                            
+                            if ($bmkgResult['success'] && isset($bmkgResult['fetch_results']['data'])) {
+                                $data = $bmkgResult['fetch_results']['data'];
+                                $result['source'] = 'BMKG Forecast API';
+                                $this->log("✓ BMKG: fetched " . count($data) . " records");
+                            } else {
+                                $this->log("BMKG Service failed: " . ($bmkgResult['message'] ?? 'Unknown error'));
+                            }
+                        } else {
+                            $this->log("BMKG API health check failed, trying next source");
+                        }
+                    } catch (Exception $e) {
+                        $this->log("BMKG ERROR: " . $e->getMessage());
+                    }
+                }
+                
+                // === Priority 99: Simulation (fallback) ===
+                if (empty($data) && $this->sources['simulation']['enabled']) {
+                    $this->log("[Fallback] Using simulation data (all API sources failed)");
                     $data = $this->generateSimulationData($targetYear, $targetMonth);
-                    $result['source'] = 'Simulasi (Fallback)';
-                } else {
-                    $result['source'] = 'BMKG API';
+                    $result['source'] = 'Simulasi (API Fallback)';
                 }
             }
             
             if (empty($data)) {
-                throw new Exception("No data available from any source");
+                throw new Exception("No data available from any source for {$targetYear}-{$targetMonth}");
             }
             
             $result['records_processed'] = count($data);
@@ -170,7 +286,7 @@ class CurahHujanScraper {
     }
     
     /**
-     * Fetch data from BMKG API
+     * Fetch data from BMKG API with retry logic
      * 
      * @param int $year
      * @param int $month
@@ -180,30 +296,94 @@ class CurahHujanScraper {
         $this->log("Fetching from BMKG API...");
         
         try {
-            // Sample one kecamatan for weather data
-            $sampleKode = '35.09.29.1001'; // Kaliwates, Jember
-            $url = "https://api.bmkg.go.id/publik/prakiraan-cuaca?adm4={$sampleKode}";
+            // Sample multiple kecamatan for better coverage
+            $sampleKodes = [
+                '35.09.29.1001' => 'Kaliwates',   // Pusat kota
+                '35.09.30.1001' => 'Sumbersari',  // Timur
+                '35.09.05.1001' => 'Ambulu',      // Selatan
+                '35.09.19.1001' => 'Bangsalsari'  // Utara
+            ];
             
-            $response = $this->httpRequest($url);
+            $allData = [];
+            $successCount = 0;
+            $analysisDate = null;
             
-            if ($response === false) {
+            foreach ($sampleKodes as $kode => $nama) {
+                $url = "https://api.bmkg.go.id/publik/prakiraan-cuaca?adm4={$kode}";
+                $this->log("Fetching data for {$nama} (kode: {$kode})");
+                
+                // Use retry logic with exponential backoff
+                $response = $this->fetchWithRetry($url);
+                
+                if ($response === false) {
+                    $this->log("Failed to fetch data for {$nama} after all retries");
+                    continue;
+                }
+                
+                $data = json_decode($response, true);
+                
+                if (empty($data) || !isset($data['data'])) {
+                    $this->log("Invalid response for {$nama}");
+                    continue;
+                }
+                
+                // Capture analysis date from first successful response
+                if ($analysisDate === null && isset($data['data'][0]['cuaca'][0][0]['analysis_date'])) {
+                    $analysisDate = $data['data'][0]['cuaca'][0][0]['analysis_date'];
+                }
+                
+                $parsedData = $this->parseBMKGData($data, $year, $month, $nama, $analysisDate);
+                $allData = array_merge($allData, $parsedData);
+                $successCount++;
+            }
+            
+            if ($successCount === 0) {
+                $this->log("All kecamatan fetch attempts failed");
+                // Send failure notification
+                $this->sendFailureNotification("BMKG API tidak dapat diakses untuk semua kecamatan");
                 return [];
             }
             
-            $data = json_decode($response, true);
-            
-            if (empty($data) || !isset($data['data'])) {
-                $this->log("Invalid response from BMKG API");
-                return [];
-            }
-            
-            // Parse BMKG data
-            return $this->parseBMKGData($data, $year, $month);
+            $this->log("Successfully fetched data from {$successCount} kecamatan");
+            return $allData;
             
         } catch (Exception $e) {
             $this->log("BMKG API Error: " . $e->getMessage());
+            $this->sendFailureNotification("BMKG API Error: " . $e->getMessage());
             return [];
         }
+    }
+    
+    /**
+     * Fetch URL with retry and exponential backoff
+     * 
+     * @param string $url URL to fetch
+     * @param int $maxRetries Maximum number of retry attempts
+     * @return string|false Response body or false on failure
+     */
+    private function fetchWithRetry($url, $maxRetries = 3) {
+        // Exponential backoff delays in seconds: 0, 10, 30
+        $delays = [0, 10, 30];
+        
+        for ($attempt = 0; $attempt < $maxRetries; $attempt++) {
+            // Apply delay (skip for first attempt)
+            $delay = $delays[$attempt] ?? 30;
+            if ($attempt > 0) {
+                $this->log("Retry {$attempt}/{$maxRetries} after {$delay}s delay for URL: {$url}");
+                sleep($delay);
+            }
+            
+            $response = $this->httpRequest($url);
+            
+            if ($response !== false) {
+                return $response;
+            }
+            
+            $this->log("Attempt " . ($attempt + 1) . "/{$maxRetries} failed for URL: {$url}");
+        }
+        
+        $this->log("All {$maxRetries} attempts failed for URL: {$url}");
+        return false;
     }
     
     /**
@@ -212,10 +392,36 @@ class CurahHujanScraper {
      * @param array $data
      * @param int $year
      * @param int $month
+     * @param string $lokasi
+     * @param string $analysisDate
      * @return array
      */
-    private function parseBMKGData($data, $year, $month) {
+    private function parseBMKGData($data, $year, $month, $lokasi = 'Jember', $analysisDate = null) {
         $result = [];
+        $targetYear = (int)$year;
+        $targetMonth = (int)$month;
+        $allDatesReceived = [];
+        $matchedDates = [];
+        
+        $this->log("Parsing BMKG data for {$lokasi}, target: {$targetYear}-" . str_pad($targetMonth, 2, '0', STR_PAD_LEFT));
+        
+        // Format analysis date for keterangan
+        $releaseDateText = 'Data resmi';
+        if ($analysisDate) {
+            try {
+                $dateObj = new DateTime($analysisDate);
+                $bulan = [
+                    1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+                    5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+                    9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember'
+                ];
+                $day = $dateObj->format('j');
+                $monthNum = (int) $dateObj->format('n');
+                $releaseDateText = "Data rilis BMKG tanggal {$day} {$bulan[$monthNum]}";
+            } catch (Exception $e) {
+                $releaseDateText = 'Data resmi';
+            }
+        }
         
         // BMKG provides forecast, not historical data
         // We'll extract what we can and estimate rainfall from weather descriptions
@@ -227,32 +433,59 @@ class CurahHujanScraper {
                     if (!$datetime) continue;
                     
                     $date = substr($datetime, 0, 10);
+                    $allDatesReceived[$date] = true;
+                    
+                    // CRITICAL FIX: Filter by target month and year
+                    $dateYear = (int)substr($date, 0, 4);
+                    $dateMonth = (int)substr($date, 5, 2);
+                    
+                    if ($dateYear !== $targetYear || $dateMonth !== $targetMonth) {
+                        continue; // Skip dates outside target month
+                    }
+                    
+                    $matchedDates[$date] = true;
                     $weatherCode = $hourData['weather'] ?? 0;
+                    $weatherDesc = $hourData['weather_desc'] ?? '';
                     
                     // Estimate rainfall based on weather code
                     $rainfall = $this->estimateRainfallFromWeather($weatherCode);
                     
-                    // Only add if not already exists for this date
-                    $dateKey = $date;
+                    // Build keterangan with weather description
+                    $keterangan = $releaseDateText;
+                    if ($weatherDesc && $rainfall > 0) {
+                        $keterangan .= " ({$weatherDesc})";
+                    }
+                    
+                    // Only add if not already exists for this date and location
+                    $dateKey = $date . '_' . $lokasi;
                     if (!isset($result[$dateKey])) {
                         $result[$dateKey] = [
                             'tanggal' => $date,
-                            'lokasi' => 'Jember',
+                            'lokasi' => $lokasi . ', Jember',
                             'kode_wilayah' => $this->kodeWilayahJember,
                             'curah_hujan' => $rainfall,
                             'satuan' => 'mm',
-                            'sumber_data' => 'BMKG API',
-                            'keterangan' => 'Estimasi dari prakiraan cuaca'
+                            'sumber_data' => 'Data dari BMKG',
+                            'keterangan' => $keterangan
                         ];
                     } else {
                         // Take maximum rainfall for the day
-                        $result[$dateKey]['curah_hujan'] = max(
-                            $result[$dateKey]['curah_hujan'],
-                            $rainfall
-                        );
+                        if ($rainfall > $result[$dateKey]['curah_hujan']) {
+                            $result[$dateKey]['curah_hujan'] = $rainfall;
+                            $result[$dateKey]['keterangan'] = $keterangan;
+                        }
                     }
                 }
             }
+        }
+        
+        // Enhanced logging for troubleshooting
+        $receivedCount = count($allDatesReceived);
+        $matchedCount = count($matchedDates);
+        $this->log("BMKG data for {$lokasi}: received {$receivedCount} dates, matched {$matchedCount} for target month");
+        if ($receivedCount > 0 && $matchedCount === 0) {
+            $sampleDates = array_slice(array_keys($allDatesReceived), 0, 3);
+            $this->log("Sample dates in response: " . implode(', ', $sampleDates) . " (expected: {$targetYear}-" . str_pad($targetMonth, 2, '0', STR_PAD_LEFT) . ")");
         }
         
         return array_values($result);
@@ -459,5 +692,30 @@ class CurahHujanScraper {
         $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
         
         return @mail($to, $subject, $body, $headers);
+    }
+    
+    /**
+     * Get Indonesian month name from month number
+     * 
+     * @param int $month Month number (1-12)
+     * @return string Month name in Indonesian
+     */
+    private function getMonthName($month) {
+        $monthNames = [
+            1 => 'Januari',
+            2 => 'Februari',
+            3 => 'Maret',
+            4 => 'April',
+            5 => 'Mei',
+            6 => 'Juni',
+            7 => 'Juli',
+            8 => 'Agustus',
+            9 => 'September',
+            10 => 'Oktober',
+            11 => 'November',
+            12 => 'Desember'
+        ];
+        
+        return $monthNames[(int)$month] ?? 'Bulan ' . $month;
     }
 }

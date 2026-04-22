@@ -25,24 +25,29 @@ class OptPhotoUploader {
     const JPEG_QUALITY = 80;
     const PNG_COMPRESSION = 6; // 0-9, 6 is good balance
     
-    const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif'];
+    const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
     const ALLOWED_MIME_TYPES = [
         'image/jpeg',
         'image/png',
         'image/gif',
-        'image/jpg'
+        'image/jpg',
+        'image/webp'
     ];
     
     // File signatures (magic bytes) for validation
     const FILE_SIGNATURES = [
         'image/jpeg' => ['FFD8FF'],
         'image/png' => ['89504E47'],
-        'image/gif' => ['47494638']
+        'image/gif' => ['47494638'],
+        'image/webp' => ['52494646'] // RIFF header for WebP
     ];
+    
+    // Thumbnail configuration
+    const THUMB_WIDTH = 200;
+    const THUMB_HEIGHT = 200;
     
     private $uploadDir = 'public/uploads/opt/';
     private $errors = [];
-    private $rateLimitFile = 'storage/rate_limit_opt_upload.json';
     
     /**
      * Upload photo for OPT
@@ -470,10 +475,130 @@ class OptPhotoUploader {
             'image/jpeg' => 'jpg',
             'image/jpg' => 'jpg',
             'image/png' => 'png',
-            'image/gif' => 'gif'
+            'image/gif' => 'gif',
+            'image/webp' => 'webp'
         ];
         
         return $mimeMap[$mimeType] ?? 'jpg';
+    }
+    
+    /**
+     * Generate thumbnail for an image
+     * @param string $sourcePath Full path to source image
+     * @param int $width Thumbnail width (default 200)
+     * @param int $height Thumbnail height (default 200)
+     * @return array Result with 'success', 'path', or 'error'
+     */
+    public function generateThumbnail($sourcePath, $width = null, $height = null) {
+        $width = $width ?? self::THUMB_WIDTH;
+        $height = $height ?? self::THUMB_HEIGHT;
+        
+        try {
+            // Create thumbs directory
+            $thumbDir = dirname($sourcePath) . '/thumbs/';
+            if (!is_dir($thumbDir)) {
+                if (!mkdir($thumbDir, 0755, true)) {
+                    return ['success' => false, 'error' => 'Cannot create thumbnail directory'];
+                }
+            }
+            
+            $thumbPath = $thumbDir . basename($sourcePath);
+            
+            // Get image info
+            $imageInfo = @getimagesize($sourcePath);
+            if (!$imageInfo) {
+                return ['success' => false, 'error' => 'Cannot read source image'];
+            }
+            
+            list($origWidth, $origHeight, $type) = $imageInfo;
+            $mimeType = $imageInfo['mime'];
+            
+            // Create source image resource
+            $sourceImage = null;
+            switch ($mimeType) {
+                case 'image/jpeg':
+                case 'image/jpg':
+                    $sourceImage = @imagecreatefromjpeg($sourcePath);
+                    break;
+                case 'image/png':
+                    $sourceImage = @imagecreatefrompng($sourcePath);
+                    break;
+                case 'image/gif':
+                    $sourceImage = @imagecreatefromgif($sourcePath);
+                    break;
+                case 'image/webp':
+                    if (function_exists('imagecreatefromwebp')) {
+                        $sourceImage = @imagecreatefromwebp($sourcePath);
+                    }
+                    break;
+            }
+            
+            if (!$sourceImage) {
+                return ['success' => false, 'error' => 'Cannot create image resource'];
+            }
+            
+            // Calculate thumbnail dimensions (cover mode - crop to fill)
+            $ratio = max($width / $origWidth, $height / $origHeight);
+            $newWidth = (int)($origWidth * $ratio);
+            $newHeight = (int)($origHeight * $ratio);
+            $offsetX = (int)(($newWidth - $width) / 2);
+            $offsetY = (int)(($newHeight - $height) / 2);
+            
+            // Create thumbnail
+            $thumbImage = imagecreatetruecolor($width, $height);
+            
+            // Preserve transparency
+            if ($mimeType === 'image/png' || $mimeType === 'image/webp') {
+                imagealphablending($thumbImage, false);
+                imagesavealpha($thumbImage, true);
+                $transparent = imagecolorallocatealpha($thumbImage, 255, 255, 255, 127);
+                imagefilledrectangle($thumbImage, 0, 0, $width, $height, $transparent);
+            }
+            
+            // Resize and crop
+            imagecopyresampled(
+                $thumbImage, $sourceImage,
+                -$offsetX, -$offsetY, 0, 0,
+                $newWidth, $newHeight, $origWidth, $origHeight
+            );
+            
+            // Save thumbnail
+            $saved = false;
+            switch ($mimeType) {
+                case 'image/jpeg':
+                case 'image/jpg':
+                    $saved = imagejpeg($thumbImage, $thumbPath, 85);
+                    break;
+                case 'image/png':
+                    $saved = imagepng($thumbImage, $thumbPath, 6);
+                    break;
+                case 'image/gif':
+                    $saved = imagegif($thumbImage, $thumbPath);
+                    break;
+                case 'image/webp':
+                    if (function_exists('imagewebp')) {
+                        $saved = imagewebp($thumbImage, $thumbPath, 85);
+                    }
+                    break;
+            }
+            
+            // Cleanup
+            imagedestroy($sourceImage);
+            imagedestroy($thumbImage);
+            
+            if (!$saved) {
+                return ['success' => false, 'error' => 'Cannot save thumbnail'];
+            }
+            
+            return [
+                'success' => true,
+                'path' => $thumbPath,
+                'relative_path' => str_replace(ROOT_PATH . '/', '', $thumbPath)
+            ];
+            
+        } catch (Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
     }
     
     /**
@@ -490,15 +615,31 @@ class OptPhotoUploader {
     }
     
     /**
-     * Check rate limit
+     * Get rate limit file path for specific user
+     * @param int|null $userId User ID (null for anonymous)
+     * @return string File path
      */
-    private function checkRateLimit() {
+    private function getRateLimitFile($userId = null) {
+        if ($userId === null) {
+            $userId = $_SESSION['user_id'] ?? 'anonymous';
+        }
+        return 'storage/rate_limit_upload_user_' . $userId . '.json';
+    }
+    
+    /**
+     * Check rate limit (per-user)
+     */
+    private function checkRateLimit($userId = null) {
+        if ($userId === null) {
+            $userId = $_SESSION['user_id'] ?? 'anonymous';
+        }
+        
         $rateLimitDir = ROOT_PATH . '/storage/';
         if (!is_dir($rateLimitDir)) {
             @mkdir($rateLimitDir, 0755, true);
         }
         
-        $rateLimitPath = ROOT_PATH . '/' . $this->rateLimitFile;
+        $rateLimitPath = ROOT_PATH . '/storage/' . $this->getRateLimitFile($userId);
         $maxUploads = 10; // Max 10 uploads
         $timeWindow = 60; // Per minute
         
@@ -521,10 +662,14 @@ class OptPhotoUploader {
     }
     
     /**
-     * Record rate limit
+     * Record rate limit (per-user)
      */
-    private function recordRateLimit() {
-        $rateLimitPath = ROOT_PATH . '/' . $this->rateLimitFile;
+    private function recordRateLimit($userId = null) {
+        if ($userId === null) {
+            $userId = $_SESSION['user_id'] ?? 'anonymous';
+        }
+        
+        $rateLimitPath = ROOT_PATH . '/storage/' . $this->getRateLimitFile($userId);
         $data = [];
         
         if (file_exists($rateLimitPath)) {

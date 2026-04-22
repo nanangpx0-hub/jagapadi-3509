@@ -10,3 +10,12 @@
 *.tmp
 node_modules/
 .env
+
+# Database
+/database/*.sql
+!/database/schema.sql
+
+# Data Files
+/data/*.xlsx
+/data/*.xls
+/data/*.csv

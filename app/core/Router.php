@@ -66,6 +66,20 @@ class Router {
         $this->put('/api/irigasi/{id}', 'Api\IrigasiController@update', ['auth']);
         $this->delete('/api/irigasi/{id}', 'Api\IrigasiController@destroy', ['auth', 'admin']);
         
+        // Irigasi Monitoring & Analytics API Routes (NEW)
+        $this->get('/api/irigasi/dashboard-summary', 'Api\IrigasiController@dashboardSummary', ['auth']);
+        $this->get('/api/irigasi/{id}/monitoring', 'Api\IrigasiController@monitoring', ['auth']);
+        $this->get('/api/irigasi/{id}/weather', 'Api\IrigasiController@weather', ['auth']);
+        $this->get('/api/irigasi/{id}/rules', 'Api\IrigasiController@getRules', ['auth']);
+        $this->get('/api/irigasi/{id}/analytics', 'Api\IrigasiController@analytics', ['auth']);
+        $this->post('/api/irigasi/rules', 'Api\IrigasiController@createRule', ['auth', 'operator']);
+        $this->put('/api/irigasi/rules/{id}', 'Api\IrigasiController@updateRule', ['auth', 'operator']);
+        $this->post('/api/irigasi/rules/{id}/toggle', 'Api\IrigasiController@toggleRule', ['auth', 'operator']);
+        $this->post('/api/irigasi/rules/{id}/execute', 'Api\IrigasiController@executeRule', ['auth', 'operator']);
+        $this->post('/api/irigasi/{id}/evaluate-rules', 'Api\IrigasiController@evaluateRules', ['auth', 'operator']);
+        $this->post('/api/irigasi/alerts/{id}/dismiss', 'Api\IrigasiController@dismissAlert', ['auth']);
+
+        
         // IoT/Pengairan API Routes
         $this->get('/api/pengairan/sensor', 'Api\IoTController@getSensors', ['auth']);
         $this->get('/api/pengairan/aktuator', 'Api\IoTController@getActuators', ['auth']);
@@ -91,6 +105,25 @@ class Router {
         $this->get('/api/dashboard/activities', 'Api\DashboardController@getActivities', ['auth']);
         $this->get('/api/dashboard/alerts', 'Api\DashboardController@getAlerts', ['auth']);
         
+        // Dashboard Map API Routes (NEW)
+        $this->get('/api/dashboard/map/layers', 'Api\DashboardMapApiController@layers', ['auth']);
+        $this->get('/api/dashboard/map/hama', 'Api\DashboardMapApiController@hama', ['auth']);
+        $this->get('/api/dashboard/map/irigasi', 'Api\DashboardMapApiController@irigasi', ['auth']);
+        $this->get('/api/dashboard/map/weather', 'Api\DashboardMapApiController@weather', ['auth']);
+        $this->get('/api/dashboard/map/all', 'Api\DashboardMapApiController@all', ['auth']);
+        $this->get('/api/dashboard/map/hamaSummary', 'Api\DashboardMapApiController@hamaSummary', ['auth']);
+        
+        // Dashboard Charts API Routes (NEW)
+        $this->get('/api/dashboard/charts/rainfall', 'Api\DashboardChartsApiController@rainfall', ['auth']);
+        $this->get('/api/dashboard/charts/wind', 'Api\DashboardChartsApiController@wind', ['auth']);
+        $this->get('/api/dashboard/charts/weather', 'Api\DashboardChartsApiController@weather', ['auth']);
+        $this->get('/api/dashboard/charts/prices', 'Api\DashboardChartsApiController@prices', ['auth']);
+        $this->get('/api/dashboard/charts/production', 'Api\DashboardChartsApiController@production', ['auth']);
+        $this->get('/api/dashboard/charts/hama', 'Api\DashboardChartsApiController@hama', ['auth']);
+        $this->get('/api/dashboard/charts/irrigation', 'Api\DashboardChartsApiController@irrigation', ['auth']);
+        $this->get('/api/dashboard/charts/summary', 'Api\DashboardChartsApiController@summary', ['auth']);
+        $this->get('/api/dashboard/charts/export', 'Api\DashboardChartsApiController@export', ['auth']);
+        
         // User API Routes
         $this->get('/api/users', 'Api\UserController@index', ['auth', 'admin']);
         $this->get('/api/users/{id}', 'Api\UserController@show', ['auth']);
@@ -114,6 +147,15 @@ class Router {
         $this->delete('/api/opt/{id}', 'Api\OptController@destroy', ['auth', 'admin']);
         $this->post('/api/opt/{id}/toggle-status', 'Api\OptController@toggleStatus', ['auth', 'admin']);
         $this->get('/api/opt/stats', 'Api\OptController@getStats', ['auth']);
+        
+        // Data Storytelling API Routes (NEW)
+        $this->get('/api/storytelling/analyses', 'Api\StorytellingController@getAnalyses', ['auth', 'statistisi']);
+        $this->get('/api/storytelling/analyses/{id}', 'Api\StorytellingController@getAnalysis', ['auth', 'statistisi']);
+        $this->post('/api/storytelling/generate', 'Api\StorytellingController@generateAnalysis', ['auth', 'statistisi']);
+        $this->post('/api/storytelling/save', 'Api\StorytellingController@saveAnalysis', ['auth', 'statistisi']);
+        $this->post('/api/storytelling/publish/{id}', 'Api\StorytellingController@publishAnalysis', ['auth', 'statistisi']);
+        $this->get('/api/storytelling/chart-data', 'Api\StorytellingController@getChartData', ['auth', 'statistisi']);
+        $this->get('/api/storytelling/stats', 'Api\StorytellingController@getStats', ['auth', 'statistisi']);
         $this->get('/api/opt/search', 'Api\OptController@search', ['auth']);
         $this->get('/api/opt/by-category/{category}', 'Api\OptController@getByCategory', ['auth']);
         $this->get('/api/opt/by-type/{type}', 'Api\OptController@getByType', ['auth']);
