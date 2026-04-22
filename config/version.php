@@ -1,5 +1,4 @@
 <?php
-// config/version.php - Single source of truth for application version
 return [
     'app_version' => '2.2.3',
     'doc_version' => '2.2.3',
