@@ -2,8 +2,8 @@
 session_start();
 
 // Load configuration
-require_once 'config/config.php';
-require_once 'config/database.php';
+require_once __DIR__ . '/config/config.php';
+require_once __DIR__ . '/config/database.php';
 
 // Autoload classes
 spl_autoload_register(function ($class) {
@@ -13,7 +13,7 @@ spl_autoload_register(function ($class) {
         'app/core/',
         'app/helpers/'
     ];
-    
+
     foreach ($paths as $path) {
         $file = ROOT_PATH . '/' . $path . $class . '.php';
         if (file_exists($file)) {
@@ -33,7 +33,7 @@ if (strpos($request, 'api/') === 0 || strpos($request, '/api/') === 0) {
     // Handle API requests with the Router class
     require_once ROOT_PATH . '/app/core/Router.php';
     $router = new Router();
-    
+
     if ($router->handleRequest()) {
         // API request was handled
         exit;
