@@ -262,4 +262,105 @@ class MasterOpt extends Model {
         $this->clearCache();
         return parent::delete($id);
     }
+
+    public function getById($id) {
+        return $this->find($id);
+    }
+
+    public function getByName($name) {
+        $stmt = $this->db->prepare("SELECT * FROM master_opt WHERE nama_opt = ? LIMIT 1");
+        $stmt->execute([$name]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
+    public function getAllWithFilters($filters = [], $limit = 20, $offset = 0) {
+        $sql = "SELECT * FROM master_opt WHERE 1=1";
+        $params = [];
+
+        if (isset($filters['jenis']) && $filters['jenis'] !== '') {
+            $sql .= " AND jenis = ?";
+            $params[] = $filters['jenis'];
+        }
+        if (isset($filters['kategori']) && $filters['kategori'] !== '') {
+            $sql .= " AND kategori = ?";
+            $params[] = $filters['kategori'];
+        }
+        if (isset($filters['aktif']) && $filters['aktif'] !== '') {
+            $sql .= " AND aktif = ?";
+            $params[] = (int)$filters['aktif'];
+        }
+        if (!empty($filters['search'])) {
+            $sql .= " AND (nama_opt LIKE ? OR nama_latin LIKE ? OR nama_ilmiah LIKE ?)";
+            $search = '%' . $filters['search'] . '%';
+            $params[] = $search;
+            $params[] = $search;
+            $params[] = $search;
+        }
+
+        $sql .= " ORDER BY nama_opt ASC LIMIT ? OFFSET ?";
+        $params[] = (int)$limit;
+        $params[] = (int)$offset;
+
+        $stmt = $this->db->prepare($sql);
+        foreach ($params as $idx => $param) {
+            $stmt->bindValue($idx + 1, $param, is_int($param) ? PDO::PARAM_INT : PDO::PARAM_STR);
+        }
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public function getCountWithFilters($filters = []) {
+        $sql = "SELECT COUNT(*) as total FROM master_opt WHERE 1=1";
+        $params = [];
+
+        if (isset($filters['jenis']) && $filters['jenis'] !== '') {
+            $sql .= " AND jenis = ?";
+            $params[] = $filters['jenis'];
+        }
+        if (isset($filters['kategori']) && $filters['kategori'] !== '') {
+            $sql .= " AND kategori = ?";
+            $params[] = $filters['kategori'];
+        }
+        if (isset($filters['aktif']) && $filters['aktif'] !== '') {
+            $sql .= " AND aktif = ?";
+            $params[] = (int)$filters['aktif'];
+        }
+        if (!empty($filters['search'])) {
+            $sql .= " AND (nama_opt LIKE ? OR nama_latin LIKE ? OR nama_ilmiah LIKE ?)";
+            $search = '%' . $filters['search'] . '%';
+            $params[] = $search;
+            $params[] = $search;
+            $params[] = $search;
+        }
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return (int)($stmt->fetch(PDO::FETCH_ASSOC)['total'] ?? 0);
+    }
+
+    public function isUsedInReports($id) {
+        $stmt = $this->db->prepare("SELECT COUNT(*) as total FROM laporan_hama WHERE master_opt_id = ?");
+        $stmt->execute([$id]);
+        return ((int)($stmt->fetch(PDO::FETCH_ASSOC)['total'] ?? 0)) > 0;
+    }
+
+    public function toggleStatus($id) {
+        $sql = "UPDATE master_opt SET aktif = CASE WHEN aktif = 1 THEN 0 ELSE 1 END WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        return $stmt->execute([$id]);
+    }
+
+    public function getStatistics() {
+        return $this->getStats();
+    }
+
+    public function getByCategory($category) {
+        $stmt = $this->db->prepare("SELECT * FROM master_opt WHERE kategori = ? ORDER BY nama_opt");
+        $stmt->execute([$category]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public function getByType($type) {
+        return $this->getByJenis($type);
+    }
 }

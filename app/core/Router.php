@@ -58,7 +58,14 @@ class Router {
         $this->post('/api/laporan-hama', 'Api\LaporanHamaController@store', ['auth']);
         $this->put('/api/laporan-hama/{id}', 'Api\LaporanHamaController@update', ['auth']);
         $this->delete('/api/laporan-hama/{id}', 'Api\LaporanHamaController@destroy', ['auth', 'admin']);
-        
+
+        // External API Routes
+        $this->post('/api/external/report', 'ApiController@submitReport', ['external_auth', 'rate_limit']);
+        $this->get('/api/external/mitra', 'ApiController@getMitra', ['external_auth', 'rate_limit']);
+        $this->get('/api/external/kegiatan', 'ApiController@getKegiatan', ['external_auth', 'rate_limit']);
+        $this->post('/api/external/honor', 'ApiController@addHonorPoptPelaporan', ['external_auth', 'rate_limit']);
+        $this->get('/api/external/validate-sbml', 'ApiController@validateSBML', ['external_auth', 'rate_limit']);
+
         // Irigasi API Routes
         $this->get('/api/irigasi', 'Api\IrigasiController@index', ['auth']);
         $this->get('/api/irigasi/{id}', 'Api\IrigasiController@show', ['auth']);
@@ -91,13 +98,13 @@ class Router {
         $this->post('/api/pengairan/schedule/update', 'Api\IoTController@updateSchedule', ['auth']);
         
         // Wilayah API Routes
-        $this->get('/api/wilayah/kabupaten', 'Api\WilayahController@getKabupaten');
-        $this->get('/api/wilayah/kecamatan/{kabupaten_id}', 'Api\WilayahController@getKecamatan');
-        $this->get('/api/wilayah/desa/{kecamatan_id}', 'Api\WilayahController@getDesa');
-        $this->get('/api/wilayah/hierarchy', 'Api\WilayahController@getHierarchy');
-        $this->get('/api/wilayah/search', 'Api\WilayahController@search');
+        $this->get('/api/wilayah/kabupaten', 'Api\WilayahController@getKabupaten', ['rate_limit']);
+        $this->get('/api/wilayah/kecamatan/{kabupaten_id}', 'Api\WilayahController@getKecamatan', ['rate_limit']);
+        $this->get('/api/wilayah/desa/{kecamatan_id}', 'Api\WilayahController@getDesa', ['rate_limit']);
+        $this->get('/api/wilayah/hierarchy', 'Api\WilayahController@getHierarchy', ['rate_limit']);
+        $this->get('/api/wilayah/search', 'Api\WilayahController@search', ['rate_limit']);
         $this->get('/api/wilayah/stats', 'Api\WilayahController@getStats', ['auth']);
-        $this->get('/api/wilayah/by-coordinates', 'Api\WilayahController@getByCoordinates');
+        $this->get('/api/wilayah/by-coordinates', 'Api\WilayahController@getByCoordinates', ['rate_limit']);
         
         // Dashboard API Routes
         $this->get('/api/dashboard/stats', 'Api\DashboardController@getStats', ['auth']);
@@ -218,33 +225,45 @@ class Router {
         // Parse handler
         list($controller, $method) = explode('@', $route['handler']);
         
-        // Handle namespaced controllers
-        if (strpos($controller, '\\') !== false) {
-            $controllerClass = str_replace('\\', '/', $controller) . 'Controller';
-            $controllerFile = ROOT_PATH . '/app/controllers/' . $controllerClass . '.php';
-        } else {
-            $controllerFile = ROOT_PATH . '/app/controllers/' . $controller . '.php';
+        // Handle namespaced controllers and controller suffixes properly
+        $controllerPath = $controller;
+        if (strpos($controllerPath, '\\') !== false) {
+            $controllerPath = str_replace('\\', '/', $controllerPath);
         }
-        
+        if (!str_ends_with($controllerPath, 'Controller')) {
+            $controllerPath .= 'Controller';
+        }
+
+        $controllerFile = ROOT_PATH . '/app/controllers/' . $controllerPath . '.php';
+
         if (!file_exists($controllerFile)) {
-            $this->sendJsonResponse(['error' => 'Controller not found'], 404);
+            $this->sendJsonResponse([
+                'error' => 'Endpoint not implemented',
+                'message' => "Controller {$controllerPath} belum tersedia"
+            ], 501);
             return true;
         }
-        
+
         require_once $controllerFile;
-        
+
         // Get the actual class name
-        $className = basename($controller) . 'Controller';
-        
+        $className = basename($controllerPath);
+
         if (!class_exists($className)) {
-            $this->sendJsonResponse(['error' => 'Controller class not found'], 404);
+            $this->sendJsonResponse([
+                'error' => 'Endpoint not implemented',
+                'message' => "Class {$className} belum tersedia"
+            ], 501);
             return true;
         }
         
         $controllerInstance = new $className();
         
         if (!method_exists($controllerInstance, $method)) {
-            $this->sendJsonResponse(['error' => 'Method not found'], 404);
+            $this->sendJsonResponse([
+                'error' => 'Endpoint not implemented',
+                'message' => "Method {$className}@{$method} belum tersedia"
+            ], 501);
             return true;
         }
         
@@ -279,23 +298,68 @@ class Router {
                 case 'auth':
                     if (!isset($_SESSION['user_id'])) {
                         $this->sendJsonResponse(['error' => 'Unauthorized'], 401);
-                        return false;
+                        exit; // Stop execution after sending response
                     }
                     break;
                     
                 case 'admin':
                     if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
                         $this->sendJsonResponse(['error' => 'Forbidden'], 403);
-                        return false;
+                        exit; // Stop execution after sending response
                     }
                     break;
                     
                 case 'operator':
                     if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin', 'operator'])) {
                         $this->sendJsonResponse(['error' => 'Forbidden'], 403);
-                        return false;
+                        exit; // Stop execution after sending response
                     }
                     break;
+                    
+                case 'statistisi':
+                    if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin', 'statistisi'])) {
+                        $this->sendJsonResponse(['error' => 'Forbidden'], 403);
+                        exit; // Stop execution after sending response
+                    }
+                    break;
+                    
+                case 'rate_limit':
+                    if (class_exists('RateLimiter')) {
+                        RateLimiter::apply();
+                    }
+                    break;
+
+                case 'external_auth':
+                    if (class_exists('ApiAuthMiddleware')) {
+                        ApiAuthMiddleware::requireAuth('external');
+                    } else {
+                        $this->sendJsonResponse(['error' => 'Internal server error'], 500);
+                        exit;
+                    }
+                    break;
+
+                case 'mobile_auth':
+                    if (class_exists('ApiAuthMiddleware')) {
+                        ApiAuthMiddleware::requireAuth('mobile');
+                    } else {
+                        $this->sendJsonResponse(['error' => 'Internal server error'], 500);
+                        exit;
+                    }
+                    break;
+
+                case 'scraper_auth':
+                    if (class_exists('ApiAuthMiddleware')) {
+                        ApiAuthMiddleware::requireAuth('scraper');
+                    } else {
+                        $this->sendJsonResponse(['error' => 'Internal server error'], 500);
+                        exit;
+                    }
+                    break;
+
+                default:
+                    error_log("[Router] Unknown middleware: {$middleware}");
+                    $this->sendJsonResponse(['error' => 'Forbidden', 'message' => 'Access denied'], 403);
+                    exit;
             }
         }
         

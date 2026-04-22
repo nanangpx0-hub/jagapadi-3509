@@ -37,6 +37,30 @@ class BaseApiController {
         echo json_encode($response, JSON_PRETTY_PRINT);
         exit;
     }
+
+    /**
+     * Backward-compatible alias for JSON success response
+     */
+    protected function jsonResponse($data, $statusCode = 200) {
+        http_response_code($statusCode);
+        header('Content-Type: application/json');
+        echo json_encode($data, JSON_PRETTY_PRINT);
+        exit;
+    }
+
+    /**
+     * Backward-compatible alias for JSON error response
+     */
+    protected function errorResponse($message, $statusCode = 500, $errors = []) {
+        $this->sendError($message, $statusCode, $errors);
+    }
+
+    /**
+     * Consistent response for endpoints intentionally not ready yet
+     */
+    protected function notImplemented($feature = 'Endpoint') {
+        $this->sendError($feature . ' belum diimplementasikan', 501);
+    }
     
     /**
      * Get request data

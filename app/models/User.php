@@ -1,6 +1,7 @@
 <?php
 class User extends Model {
     protected $table = 'users';
+    protected $fillable = ['username', 'password', 'email', 'nama_lengkap', 'role', 'aktif'];
     
     /**
      * Get all users with pagination
@@ -85,6 +86,37 @@ class User extends Model {
         $stmt = $this->db->prepare("SELECT * FROM users WHERE id = ?");
         $stmt->execute([$id]);
         return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+    
+    /**
+     * Get user by ID (alias for API compatibility)
+     */
+    public function getById($id) {
+        return $this->getUserById($id);
+    }
+    
+    /**
+     * Get all users with filters (API compatibility)
+     */
+    public function getAllWithFilters($filters = [], $limit = 20, $offset = 0) {
+        $page = intdiv($offset, max(1, $limit)) + 1;
+        
+        $search = $filters['search'] ?? '';
+        $roleFilter = $filters['role'] ?? '';
+        $statusFilter = isset($filters['aktif']) ? (string) $filters['aktif'] : '';
+        
+        return $this->getAllUsers($page, $limit, $search, $roleFilter, $statusFilter);
+    }
+    
+    /**
+     * Get count with filters (API compatibility)
+     */
+    public function getCountWithFilters($filters = []) {
+        $search = $filters['search'] ?? '';
+        $roleFilter = $filters['role'] ?? '';
+        $statusFilter = isset($filters['aktif']) ? (string) $filters['aktif'] : '';
+        
+        return (int) $this->getTotalUsers($search, $roleFilter, $statusFilter);
     }
     
     /**
@@ -425,5 +457,20 @@ class User extends Model {
             error_log("Failed to log activity: " . $e->getMessage());
             return false;
         }
+    }
+
+    /**
+     * Dashboard-level user statistics for API compatibility
+     */
+    public function getDashboardStats() {
+        $totalStmt = $this->db->query("SELECT COUNT(*) as total FROM users");
+        $activeStmt = $this->db->query("SELECT COUNT(*) as total FROM users WHERE aktif = 1");
+        $roleStmt = $this->db->query("SELECT role, COUNT(*) as total FROM users GROUP BY role");
+
+        return [
+            'total_users' => (int)($totalStmt->fetch(PDO::FETCH_ASSOC)['total'] ?? 0),
+            'active_users' => (int)($activeStmt->fetch(PDO::FETCH_ASSOC)['total'] ?? 0),
+            'by_role' => $roleStmt->fetchAll(PDO::FETCH_ASSOC)
+        ];
     }
 }

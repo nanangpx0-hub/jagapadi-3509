@@ -1,6 +1,7 @@
 <?php
 class LaporanHama extends Model {
     protected $table = 'laporan_hama';
+    protected $fillable = ['user_id', 'master_opt_id', 'lokasi', 'tanggal', 'jenis_hama', 'tingkat_parah', 'luas_terjangkit', 'jenis_tanggulangan', 'hasil_tanggulangan', 'status', 'catatan'];
 
     /**
      * Get reports with pagination using QueryBuilder
@@ -153,11 +154,13 @@ class LaporanHama extends Model {
     /**
      * Get report count by status using QueryBuilder
      */
-    public function getCountByStatus(string $status): int {
+    public function getCountByStatus(string $status, ?int $userId = null): int {
         $qb = new QueryBuilder();
-        return $qb->table('laporan_hama')
-                  ->where('status', $status)
-                  ->count();
+        $qb->table('laporan_hama')->where('status', $status);
+        if ($userId !== null) {
+            $qb->where('user_id', $userId);
+        }
+        return $qb->count();
     }
 
     /**
@@ -742,5 +745,240 @@ class LaporanHama extends Model {
                 'by_area' => []
             ];
         }
+    }
+    
+    /**
+     * Get report by ID (API compatibility)
+     */
+    public function getById($id) {
+        $qb = new QueryBuilder();
+        return $qb->table('laporan_hama lh')
+            ->select([
+                'lh.*',
+                'u.nama_lengkap as pelapor',
+                'mo.nama_opt',
+                'md.nama_desa',
+                'mk.nama_kecamatan',
+                'mkab.nama_kabupaten'
+            ])
+            ->leftJoin('users u', 'lh.user_id = u.id')
+            ->leftJoin('master_opt mo', 'lh.master_opt_id = mo.id')
+            ->leftJoin('master_desa md', 'lh.desa_id = md.id')
+            ->leftJoin('master_kecamatan mk', 'md.kecamatan_id = mk.id')
+            ->leftJoin('master_kabupaten mkab', 'mk.kabupaten_id = mkab.id')
+            ->where('lh.id', $id)
+            ->first();
+    }
+    
+    /**
+     * Get all reports with filters (API compatibility)
+     */
+    public function getAllWithFilters($filters = [], $limit = 20, $offset = 0) {
+        $page = intdiv($offset, max(1, $limit)) + 1;
+        
+        $qb = new QueryBuilder();
+        $qb->table('laporan_hama lh')
+            ->select([
+                'lh.*',
+                'u.nama_lengkap as pelapor',
+                'mo.nama_opt'
+            ])
+            ->leftJoin('users u', 'lh.user_id = u.id')
+            ->leftJoin('master_opt mo', 'lh.master_opt_id = mo.id');
+        
+        // Apply filters
+        if (!empty($filters['search'])) {
+            $qb->where('lh.lokasi', '%' . $filters['search'] . '%', 'LIKE');
+        }
+        
+        if (!empty($filters['status'])) {
+            $qb->where('lh.status', $filters['status']);
+        }
+        
+        if (!empty($filters['kabupaten_id'])) {
+            $qb->where('lh.kabupaten_id', $filters['kabupaten_id']);
+        }
+        
+        if (!empty($filters['kecamatan_id'])) {
+            $qb->where('lh.kecamatan_id', $filters['kecamatan_id']);
+        }
+        
+        if (!empty($filters['desa_id'])) {
+            $qb->where('lh.desa_id', $filters['desa_id']);
+        }
+        
+        if (!empty($filters['master_opt_id'])) {
+            $qb->where('lh.master_opt_id', $filters['master_opt_id']);
+        }
+        
+        if (!empty($filters['user_id'])) {
+            $qb->where('lh.user_id', $filters['user_id']);
+        }
+        
+        $qb->orderBy('lh.created_at', 'DESC')
+            ->limit($limit)
+            ->offset($offset);
+        
+        return $qb->get();
+    }
+    
+    /**
+     * Get count with filters (API compatibility)
+     */
+    public function getCountWithFilters($filters = []) {
+        $qb = new QueryBuilder();
+        $qb->table('laporan_hama lh');
+        
+        // Apply same filters
+        if (!empty($filters['search'])) {
+            $qb->where('lh.lokasi', '%' . $filters['search'] . '%', 'LIKE');
+        }
+        
+        if (!empty($filters['status'])) {
+            $qb->where('lh.status', $filters['status']);
+        }
+        
+        if (!empty($filters['kabupaten_id'])) {
+            $qb->where('lh.kabupaten_id', $filters['kabupaten_id']);
+        }
+        
+        if (!empty($filters['kecamatan_id'])) {
+            $qb->where('lh.kecamatan_id', $filters['kecamatan_id']);
+        }
+        
+        if (!empty($filters['desa_id'])) {
+            $qb->where('lh.desa_id', $filters['desa_id']);
+        }
+        
+        if (!empty($filters['master_opt_id'])) {
+            $qb->where('lh.master_opt_id', $filters['master_opt_id']);
+        }
+        
+        if (!empty($filters['user_id'])) {
+            $qb->where('lh.user_id', $filters['user_id']);
+        }
+        
+        return $qb->count();
+    }
+
+    public function getTotalCount(?int $userId = null): int {
+        if ($userId !== null) {
+            return $this->getCountByStatusAndUser('Submitted', $userId)
+                + $this->getCountByStatusAndUser('Diverifikasi', $userId)
+                + $this->getCountByStatusAndUser('Draf', $userId)
+                + $this->getCountByStatusAndUser('Ditolak', $userId);
+        }
+
+        return $this->count();
+    }
+
+    public function getMonthlyTrends($period = 30, ?int $userId = null): array {
+        $days = max(1, (int)$period);
+        $sql = "
+            SELECT DATE(tanggal) as tanggal, COUNT(*) as total
+            FROM laporan_hama
+            WHERE tanggal >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+        ";
+        $params = [$days];
+        if ($userId !== null) {
+            $sql .= " AND user_id = ?";
+            $params[] = $userId;
+        }
+        $sql .= " GROUP BY DATE(tanggal) ORDER BY tanggal ASC";
+        return $this->query($sql, $params);
+    }
+
+    public function getTopOPT($limit = 10, ?int $userId = null): array {
+        return $this->getTopPests((int)$limit, $userId);
+    }
+
+    public function getAreaStatistics(?int $userId = null): array {
+        $sql = "
+            SELECT
+                mk.nama_kecamatan,
+                COUNT(lh.id) as total_laporan,
+                SUM(lh.luas_serangan) as total_luas
+            FROM laporan_hama lh
+            LEFT JOIN master_kecamatan mk ON lh.kecamatan_id = mk.id
+            WHERE 1=1
+        ";
+        $params = [];
+        if ($userId !== null) {
+            $sql .= " AND lh.user_id = ?";
+            $params[] = $userId;
+        }
+        $sql .= " GROUP BY lh.kecamatan_id, mk.nama_kecamatan ORDER BY total_laporan DESC";
+        return $this->query($sql, $params);
+    }
+
+    public function getRecentActivities($limit = 10, ?int $userId = null): array {
+        $sql = "
+            SELECT
+                lh.id,
+                lh.tingkat_keparahan,
+                lh.created_at,
+                mo.nama_opt as opt_name,
+                md.nama_desa as desa_name,
+                u.nama_lengkap as user_name
+            FROM laporan_hama lh
+            LEFT JOIN master_opt mo ON lh.master_opt_id = mo.id
+            LEFT JOIN master_desa md ON lh.desa_id = md.id
+            LEFT JOIN users u ON lh.user_id = u.id
+            WHERE 1=1
+        ";
+        $params = [];
+        if ($userId !== null) {
+            $sql .= " AND lh.user_id = ?";
+            $params[] = $userId;
+        }
+        $sql .= " ORDER BY lh.created_at DESC LIMIT ?";
+        $params[] = (int)$limit;
+
+        $stmt = $this->db->prepare($sql);
+        foreach ($params as $idx => $param) {
+            $stmt->bindValue($idx + 1, $param, is_int($param) ? PDO::PARAM_INT : PDO::PARAM_STR);
+        }
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public function getCriticalReports(?int $userId = null): array {
+        $sql = "
+            SELECT id, tanggal, tingkat_keparahan, lokasi
+            FROM laporan_hama
+            WHERE tingkat_keparahan = 'Berat' AND status IN ('Submitted', 'Diverifikasi')
+        ";
+        $params = [];
+        if ($userId !== null) {
+            $sql .= " AND user_id = ?";
+            $params[] = $userId;
+        }
+        $sql .= " ORDER BY tanggal DESC LIMIT 20";
+        return $this->query($sql, $params);
+    }
+
+    public function getPendingVerifications(): array {
+        $sql = "
+            SELECT lh.id, lh.tanggal, lh.status, u.nama_lengkap as user_name
+            FROM laporan_hama lh
+            LEFT JOIN users u ON lh.user_id = u.id
+            WHERE lh.status = 'Submitted'
+            ORDER BY lh.created_at ASC
+            LIMIT 50
+        ";
+        return $this->query($sql);
+    }
+
+    public function getOldPendingReports($olderThanDays = 7): int {
+        $days = max(1, (int)$olderThanDays);
+        $stmt = $this->db->prepare("
+            SELECT COUNT(*) as total
+            FROM laporan_hama
+            WHERE status = 'Submitted'
+              AND created_at < DATE_SUB(NOW(), INTERVAL ? DAY)
+        ");
+        $stmt->bindValue(1, $days, PDO::PARAM_INT);
+        $stmt->execute();
+        return (int)($stmt->fetch(PDO::FETCH_ASSOC)['total'] ?? 0);
     }
 }
