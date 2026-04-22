@@ -1,29 +1,46 @@
-/config/config.php
-/config/database.php
-/logs/*.log
-/storage/logs/*.log
-/public/uploads/*
-!/public/uploads/.gitkeep
-/vendor/
-.vscode/
+# Sensitive environment and config
+.env
+.env.*
+!.env.example
+config/database.php
+config/config.php
+config/env.php
+config/*.local.php
+config/*secret*.php
+config/*credential*.php
+*.pem
+*.key
+*.p12
+*.crt
+
+# Database dumps and backups
+*.sql
+*.dump
 *.bak
 *.tmp
-node_modules/
-.env
 
-# Database
-/database/*.sql
-!/database/schema.sql
-
-# Data Files
-/data/*.xlsx
-/data/*.xls
-/data/*.csv
-
-config/database.php
-.env
-.env.production
+# Logs and runtime artifacts
 error_log
 logs/
+storage/logs/
 storage/cache/
+public/uploads/
 uploads/
+cookies.txt
+
+# Dependencies and generated folders
+vendor/
+node_modules/
+
+# Data files
+data/*.xlsx
+data/*.xls
+data/*.csv
+
+# OS/IDE files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.sublime-project
+*.sublime-workspace
