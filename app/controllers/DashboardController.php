@@ -2,10 +2,12 @@
 class DashboardController extends Controller {
     private $laporanModel;
     private $optModel;
+    private CacheManager $cache;
     
     public function __construct() {
         $this->laporanModel = $this->model('LaporanHama');
         $this->optModel = $this->model('MasterOpt');
+        $this->cache = CacheManager::getInstance();
     }
     
     /**
@@ -42,17 +44,41 @@ class DashboardController extends Controller {
             $filter
         ));
     }
+
+    private function dashboardCacheKey(string $section, ?int $userId = null, array $params = []): string {
+        $scope = $userId === null ? 'all' : 'user_' . $userId;
+        $paramHash = empty($params) ? 'default' : sha1(json_encode($params));
+
+        return "dashboard:{$scope}:{$section}:{$paramHash}";
+    }
     
     public function index() {
         $this->checkAuth();
         
         $filterUserId = $this->getFilterUserId();
         $this->logDataAccess('dashboard/index', $filterUserId);
-        
-        $stats = $this->laporanModel->getDashboardStats($filterUserId);
-        $topPests = $this->laporanModel->getTopPests(5, $filterUserId);
-        $monthlyStats = $this->laporanModel->getMonthlyStats(date('Y'), $filterUserId);
-        $recentReports = array_slice($this->laporanModel->getAllWithDetails($filterUserId), 0, 5);
+
+        $year = (int)date('Y');
+        $stats = $this->cache->remember(
+            $this->dashboardCacheKey('stats', $filterUserId),
+            fn() => $this->laporanModel->getDashboardStats($filterUserId),
+            60
+        );
+        $topPests = $this->cache->remember(
+            $this->dashboardCacheKey('top_pests', $filterUserId, ['limit' => 5]),
+            fn() => $this->laporanModel->getTopPests(5, $filterUserId),
+            120
+        );
+        $monthlyStats = $this->cache->remember(
+            $this->dashboardCacheKey('monthly_stats', $filterUserId, ['year' => $year]),
+            fn() => $this->laporanModel->getMonthlyStats($year, $filterUserId),
+            300
+        );
+        $recentReports = $this->cache->remember(
+            $this->dashboardCacheKey('recent_reports', $filterUserId, ['limit' => 5]),
+            fn() => $this->laporanModel->getRecentForDashboard($filterUserId, 5),
+            30
+        );
         
         $data = [
             'title' => 'Dashboard',
@@ -151,16 +177,29 @@ class DashboardController extends Controller {
             
             switch ($type) {
                 case 'stats':
-                    $response['data'] = $this->laporanModel->getDashboardStats($filterUserId);
+                    $response['data'] = $this->cache->remember(
+                        $this->dashboardCacheKey('stats', $filterUserId),
+                        fn() => $this->laporanModel->getDashboardStats($filterUserId),
+                        60
+                    );
                     break;
 
                 case 'monthly':
-                    $response['data'] = $this->laporanModel->getMonthlyStats($year, $filterUserId);
+                    $response['data'] = $this->cache->remember(
+                        $this->dashboardCacheKey('monthly_stats', $filterUserId, ['year' => (int)$year]),
+                        fn() => $this->laporanModel->getMonthlyStats((int)$year, $filterUserId),
+                        300
+                    );
                     break;
                     
                 case 'topPests':
                     $limit = $_GET['limit'] ?? 10;
-                    $response['data'] = $this->laporanModel->getTopPests($limit, $filterUserId);
+                    $limit = min(50, max(1, (int)$limit));
+                    $response['data'] = $this->cache->remember(
+                        $this->dashboardCacheKey('top_pests', $filterUserId, ['limit' => $limit]),
+                        fn() => $this->laporanModel->getTopPests($limit, $filterUserId),
+                        120
+                    );
                     break;
                     
                 case 'severity':

@@ -191,12 +191,15 @@
                                    title="Perbaiki Laporan">
                                     <i class="fas fa-edit"></i> Perbaiki
                                 </a>
-                                <a href="<?= BASE_URL ?>laporan/delete/<?= $row['id'] ?>" 
-                                   class="btn btn-danger btn-sm" 
-                                   onclick="return confirm('Yakin ingin menghapus laporan yang ditolak ini?')" 
-                                   title="Hapus Laporan">
-                                    <i class="fas fa-trash"></i> Hapus
-                                </a>
+                                <form action="<?= BASE_URL ?>laporan/delete/<?= $row['id'] ?>" method="POST" class="d-inline">
+                                    <?= Security::getCsrfField() ?>
+                                    <button type="submit"
+                                            class="btn btn-danger btn-sm"
+                                            onclick="return confirm('Yakin ingin menghapus laporan yang ditolak ini?')"
+                                            title="Hapus Laporan">
+                                        <i class="fas fa-trash"></i> Hapus
+                                    </button>
+                                </form>
                             </div>
                             <?php elseif($canEdit): ?>
                             <!-- Regular edit button -->
@@ -224,13 +227,16 @@
 
                             <?php if($canDelete && $row['status'] !== 'Ditolak'): // Hide if Ditolak because it's already handled in rejected-actions-mobile above for petugas ?>
                             <!-- Regular delete button -->
-                            <a href="<?= BASE_URL ?>laporan/delete/<?= $row['id'] ?>" 
-                               class="btn-action btn-action-danger btn-action-delete" 
-                               data-action="delete"
-                               onclick="return confirm('Yakin ingin menghapus laporan ini?')" 
-                               title="Hapus Laporan">
-                                <i class="fas fa-trash"></i>
-                            </a>
+                            <form action="<?= BASE_URL ?>laporan/delete/<?= $row['id'] ?>" method="POST" class="d-inline">
+                                <?= Security::getCsrfField() ?>
+                                <button type="submit"
+                                        class="btn-action btn-action-danger btn-action-delete"
+                                        data-action="delete"
+                                        onclick="return confirm('Yakin ingin menghapus laporan ini?')"
+                                        title="Hapus Laporan">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
                             <?php endif; ?>
                         </div>
                     </td>

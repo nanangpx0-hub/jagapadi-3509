@@ -21,6 +21,12 @@ class AuthController extends Controller {
                 $this->redirect('auth/login');
             }
             
+            // Check rate limiting for login attempts
+            if (Security::checkRateLimit('auth_login', 10, 60)) {
+                $_SESSION['error'] = 'Terlalu banyak permintaan login. Silakan coba lagi nanti.';
+                $this->redirect('auth/login');
+            }
+
             // Check brute force protection
             if (Security::checkBruteForce('login', 5, 900)) {
                 $_SESSION['error'] = 'Terlalu banyak percobaan login. Silakan coba lagi setelah 15 menit.';
@@ -39,7 +45,7 @@ class AuthController extends Controller {
             
             if ($user) {
                 // Check if user must change password
-                if ($user['must_change_password'] == 1) {
+                if ((int)($user['must_change_password'] ?? 0) === 1) {
                     $_SESSION['user_needs_password_change'] = $user['id'];
                     $_SESSION['temp_user_data'] = [
                         'id' => $user['id'],
@@ -92,6 +98,12 @@ class AuthController extends Controller {
         $isForceChange = isset($_SESSION['user_needs_password_change']);
         
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            // Rate limit password change attempts
+            if (Security::checkRateLimit('auth_change_password', 8, 60)) {
+                $_SESSION['error'] = 'Terlalu banyak permintaan ubah password. Silakan coba lagi nanti.';
+                $this->redirect('auth/change_password');
+            }
+
             // Validate CSRF token
             $token = $_POST['csrf_token'] ?? '';
             if (!Security::validateCsrfToken($token)) {
@@ -166,12 +178,18 @@ class AuthController extends Controller {
     }
     
     public function logout() {
+        $this->requireStateChangingRequest(['POST']);
+
         $userId = $_SESSION['user_id'] ?? null;
         if ($userId) {
-            $this->logActivity($userId, 'Logout', 'users', $userId, 'User logout');
+            try {
+                $this->logActivity($userId, 'Logout', 'users', $userId, 'User logout');
+            } catch (Exception $e) {
+                error_log('Logout activity log failed: ' . $e->getMessage());
+            }
         }
-        
-        session_destroy();
+
+        Security::destroySession();
         $this->redirect('auth/login');
     }
     

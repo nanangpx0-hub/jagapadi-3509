@@ -233,7 +233,7 @@ class FeedbackController extends Controller {
      */
     public function updateStatus($id) {
         $this->checkRole(['admin']);
-        $this->validateCsrfToken();
+        $this->requireStateChangingRequest(['POST', 'PATCH']);
         
         $feedback = $this->feedbackModel->getById($id);
         if (!$feedback) {
@@ -290,7 +290,7 @@ class FeedbackController extends Controller {
      */
     public function delete($id) {
         $this->checkRole(['admin']);
-        $this->validateCsrfToken();
+        $this->requireStateChangingRequest(['POST', 'DELETE']);
         
         $feedback = $this->feedbackModel->getById($id);
         if (!$feedback) {

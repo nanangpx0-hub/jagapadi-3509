@@ -23,6 +23,27 @@ class GabahBerasController {
             exit;
         }
     }
+
+    private function requireStateChangingRequest($methods = ['POST']): void {
+        $allowedMethods = array_map('strtoupper', (array)$methods);
+        $requestMethod = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
+
+        if (!in_array($requestMethod, $allowedMethods, true)) {
+            http_response_code(405);
+            header('Allow: ' . implode(', ', $allowedMethods));
+            echo '405 - Method Not Allowed';
+            exit;
+        }
+
+        $token = Security::getRequestCsrfToken();
+        if (!Security::validateCsrfToken($token)) {
+            http_response_code(403);
+            $_SESSION['flash_message'] = 'Token keamanan tidak valid';
+            $_SESSION['flash_type'] = 'danger';
+            header('Location: ' . BASE_URL . 'gabahBeras');
+            exit;
+        }
+    }
     
     private function getAnalyticsService() {
         if (!$this->analyticsService) {
@@ -295,6 +316,7 @@ class GabahBerasController {
             header('Location: ' . BASE_URL . 'gabahBeras');
             exit;
         }
+        $this->requireStateChangingRequest(['POST', 'DELETE']);
         
         if ($this->model->delete($id)) {
             $_SESSION['flash_message'] = 'Data berhasil dihapus';
@@ -320,6 +342,7 @@ class GabahBerasController {
             header('Location: ' . BASE_URL . 'gabahBeras');
             exit;
         }
+        $this->requireStateChangingRequest(['POST', 'PATCH']);
         
         $status = $_POST['status'] ?? 'verified';
         

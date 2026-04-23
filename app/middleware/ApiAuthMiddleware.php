@@ -8,6 +8,13 @@
  */
 
 class ApiAuthMiddleware {
+    private const MIN_API_KEY_LENGTH = 32;
+    private const INSECURE_DEFAULT_KEYS = [
+        'jagapadi_scraper_default_key_change_me',
+        'your_api_key_here',
+        'your_mobile_api_key_here',
+        'your_external_api_key_here',
+    ];
     
     /**
      * Valid API sources (for logging purposes)
@@ -31,6 +38,12 @@ class ApiAuthMiddleware {
             'error' => null,
             'ip' => self::getClientIp()
         ];
+
+        if (!isset(self::VALID_SOURCES[$requiredSource])) {
+            $result['error'] = 'Invalid API source';
+            self::logAuthAttempt('INVALID_SOURCE', $result['ip'], false);
+            return $result;
+        }
         
         // Check if IP is blocked
         if (self::isIpBlocked($result['ip'])) {
@@ -66,13 +79,7 @@ class ApiAuthMiddleware {
             return $result;
         }
         
-        // Check primary and backup keys
-        $validKeys = array_filter([
-            $keyConfig['api_key'] ?? null,
-            $keyConfig['api_key_backup'] ?? null
-        ]);
-        
-        if (!in_array($apiKey, $validKeys, true)) {
+        if (!self::matchesConfiguredKey($apiKey, $keyConfig)) {
             $result['error'] = 'Invalid API key';
             self::recordAuthFailure($result['ip']);
             self::logAuthAttempt('INVALID_KEY', $result['ip'], false);
@@ -97,34 +104,63 @@ class ApiAuthMiddleware {
     }
     
     /**
-     * Extract API key from request headers
+     * Extract API key from request headers.
+     * External APIs only accept X-API-Key or Authorization: Bearer.
      * 
      * @return string|null
      */
     private static function extractApiKey(): ?string {
         // Check X-API-Key header first
         $apiKey = $_SERVER['HTTP_X_API_KEY'] ?? null;
-        
         if ($apiKey) {
             return trim($apiKey);
         }
-        
+
         // Check Authorization header (Bearer token)
-        $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
-        
-        if (preg_match('/^Bearer\s+(.+)$/i', $authHeader, $matches)) {
+        $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+        if ($authHeader && preg_match('/^Bearer\s+(.+)$/i', $authHeader, $matches)) {
             return trim($matches[1]);
         }
-        
-        // Check query parameter (not recommended, for backwards compatibility)
-        $queryKey = $_GET['api_key'] ?? null;
-        if ($queryKey) {
-            // Log warning about insecure usage
-            error_log('[API_AUTH] Warning: API key passed via query parameter (insecure)');
-            return trim($queryKey);
-        }
-        
+
         return null;
+    }
+
+    private static function matchesConfiguredKey(string $apiKey, array $keyConfig): bool {
+        $presentedKey = trim($apiKey);
+
+        if (!self::isAcceptableApiKey($presentedKey)) {
+            return false;
+        }
+
+        foreach (['api_key', 'api_key_backup'] as $field) {
+            $configuredKey = $keyConfig[$field] ?? null;
+            if (self::isAcceptableApiKey($configuredKey) && hash_equals(trim($configuredKey), $presentedKey)) {
+                return true;
+            }
+        }
+
+        foreach (['api_key_hash', 'api_key_backup_hash'] as $field) {
+            $configuredHash = $keyConfig[$field] ?? null;
+            if (self::isAcceptableHash($configuredHash) && hash_equals(strtolower(trim($configuredHash)), hash('sha256', $presentedKey))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static function isAcceptableApiKey($apiKey): bool {
+        if (!is_string($apiKey)) {
+            return false;
+        }
+
+        $apiKey = trim($apiKey);
+        return strlen($apiKey) >= self::MIN_API_KEY_LENGTH
+            && !in_array($apiKey, self::INSECURE_DEFAULT_KEYS, true);
+    }
+
+    private static function isAcceptableHash($hash): bool {
+        return is_string($hash) && preg_match('/^[a-f0-9]{64}$/i', trim($hash)) === 1;
     }
     
     /**
@@ -167,10 +203,12 @@ return [
     'scraper_api' => [
         // Primary API Key (rotate every 90 days)
         // Generate with: bin2hex(random_bytes(32))
-        'api_key' => getenv('SCRAPER_API_KEY') ?: 'jagapadi_scraper_default_key_change_me',
+        'api_key' => getenv('SCRAPER_API_KEY') ?: null,
+        'api_key_hash' => getenv('SCRAPER_API_KEY_HASH') ?: null,
         
         // Backup API Key (for smooth rotation)
         'api_key_backup' => getenv('SCRAPER_API_KEY_BACKUP') ?: null,
+        'api_key_backup_hash' => getenv('SCRAPER_API_KEY_BACKUP_HASH') ?: null,
         
         // Token TTL in seconds (24 hours)
         'token_ttl' => 86400,
@@ -184,14 +222,18 @@ return [
     
     'mobile_api' => [
         'api_key' => getenv('MOBILE_API_KEY') ?: null,
+        'api_key_hash' => getenv('MOBILE_API_KEY_HASH') ?: null,
         'api_key_backup' => null,
+        'api_key_backup_hash' => null,
         'token_ttl' => 3600,
         'allowed_ips' => [],
     ],
     
     'external_api' => [
         'api_key' => getenv('EXTERNAL_API_KEY') ?: null,
+        'api_key_hash' => getenv('EXTERNAL_API_KEY_HASH') ?: null,
         'api_key_backup' => null,
+        'api_key_backup_hash' => null,
         'token_ttl' => 3600,
         'allowed_ips' => [],
     ],

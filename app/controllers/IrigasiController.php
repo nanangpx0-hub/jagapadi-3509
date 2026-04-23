@@ -510,6 +510,7 @@ class IrigasiController extends Controller {
     public function delete($id) {
         $this->checkAuth();
         $this->checkRole(['admin'], 'Hanya admin yang dapat menghapus data.');
+        $this->requireStateChangingRequest(['POST', 'DELETE']);
         
         try {
             $data = $this->model->find($id);
@@ -664,6 +665,7 @@ class IrigasiController extends Controller {
     public function toggleRuleStatus($ruleId) {
         $this->checkAuth();
         $this->checkRole(['admin', 'operator']);
+        $this->requireStateChangingRequest(['POST', 'PATCH']);
         
         header('Content-Type: application/json');
         
@@ -699,6 +701,7 @@ class IrigasiController extends Controller {
     public function deleteRule($ruleId) {
         $this->checkAuth();
         $this->checkRole(['admin']);
+        $this->requireStateChangingRequest(['POST', 'DELETE']);
         
         header('Content-Type: application/json');
         
@@ -724,6 +727,7 @@ class IrigasiController extends Controller {
     public function runRuleEngine($irigasiId) {
         $this->checkAuth();
         $this->checkRole(['admin', 'operator']);
+        $this->requireStateChangingRequest(['POST']);
         
         header('Content-Type: application/json');
         

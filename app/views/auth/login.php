@@ -87,7 +87,14 @@ require_once ROOT_PATH . '/app/core/Security.php';
             <?php if(isset($_SESSION['error'])): ?>
             <div class="alert alert-danger alert-dismissible">
                 <button type="button" class="close" data-dismiss="alert">&times;</button>
-                <?= $_SESSION['error']; unset($_SESSION['error']); ?>
+                <i class="fas fa-exclamation-triangle"></i> <?= $_SESSION['error']; unset($_SESSION['error']); ?>
+            </div>
+            <?php endif; ?>
+
+            <?php if(isset($_SESSION['success'])): ?>
+            <div class="alert alert-success alert-dismissible">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                <i class="fas fa-check-circle"></i> <?= $_SESSION['success']; unset($_SESSION['success']); ?>
             </div>
             <?php endif; ?>
 

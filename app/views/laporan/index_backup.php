@@ -754,12 +754,15 @@ tbody tr:hover {
                                                    title="Perbaiki Laporan">
                                                     <i class="fas fa-edit"></i> Perbaiki
                                                 </a>
-                                                <a href="<?= BASE_URL ?>laporan/delete/<?= $row['id'] ?>" 
-                                                   class="btn btn-danger btn-sm" 
-                                                   onclick="return confirm('Yakin ingin menghapus laporan yang ditolak ini?')" 
-                                                   title="Hapus Laporan">
-                                                    <i class="fas fa-trash"></i> Hapus
-                                                </a>
+                                                <form action="<?= BASE_URL ?>laporan/delete/<?= $row['id'] ?>" method="POST" class="d-inline">
+                                                    <?= Security::getCsrfField() ?>
+                                                    <button type="submit"
+                                                            class="btn btn-danger btn-sm"
+                                                            onclick="return confirm('Yakin ingin menghapus laporan yang ditolak ini?')"
+                                                            title="Hapus Laporan">
+                                                        <i class="fas fa-trash"></i> Hapus
+                                                    </button>
+                                                </form>
                                             </div>
                                             <?php elseif(in_array($_SESSION['role'] ?? '', ['admin', 'operator', 'petugas'])): ?>
                                             <!-- Regular edit button for other statuses -->
@@ -773,13 +776,16 @@ tbody tr:hover {
                                             
                                             <?php if(($_SESSION['role'] ?? '') == 'admin' || (($_SESSION['role'] ?? '') == 'petugas' && $row['user_id'] == $_SESSION['user_id'] && $row['status'] !== 'Ditolak')): ?>
                                             <!-- Regular delete button (not for rejected reports of petugas - handled above) -->
-                                            <a href="<?= BASE_URL ?>laporan/delete/<?= $row['id'] ?>" 
-                                               class="btn-action btn-action-danger btn-action-delete" 
-                                               data-action="delete"
-                                               onclick="return confirm('Yakin ingin menghapus laporan ini?')" 
-                                               title="Hapus Laporan">
-                                                <i class="fas fa-trash"></i>
-                                            </a>
+                                            <form action="<?= BASE_URL ?>laporan/delete/<?= $row['id'] ?>" method="POST" class="d-inline">
+                                                <?= Security::getCsrfField() ?>
+                                                <button type="submit"
+                                                        class="btn-action btn-action-danger btn-action-delete"
+                                                        data-action="delete"
+                                                        onclick="return confirm('Yakin ingin menghapus laporan ini?')"
+                                                        title="Hapus Laporan">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </form>
                                             <?php endif; ?>
                                         </div>
                                     </td>

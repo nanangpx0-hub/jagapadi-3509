@@ -220,9 +220,12 @@
         <!-- Right navbar links -->
         <ul class="navbar-nav ml-auto">
             <li class="nav-item">
-                <a class="nav-link" href="<?= BASE_URL ?>auth/logout">
-                    <i class="fas fa-sign-out-alt"></i> Logout
-                </a>
+                <form action="<?= BASE_URL ?>auth/logout" method="POST" class="d-inline">
+                    <?= Security::getCsrfField() ?>
+                    <button type="submit" class="nav-link btn btn-link p-0 px-3" style="color: white !important;">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </button>
+                </form>
             </li>
         </ul>
     </nav>

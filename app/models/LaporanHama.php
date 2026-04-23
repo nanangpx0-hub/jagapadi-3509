@@ -2,6 +2,48 @@
 class LaporanHama extends Model {
     protected $table = 'laporan_hama';
     protected $fillable = ['user_id', 'master_opt_id', 'lokasi', 'tanggal', 'jenis_hama', 'tingkat_parah', 'luas_terjangkit', 'jenis_tanggulangan', 'hasil_tanggulangan', 'status', 'catatan'];
+    protected array $relations = [
+        'user' => [
+            'type' => 'belongsTo',
+            'table' => 'users',
+            'local_key' => 'user_id',
+            'foreign_key' => 'id',
+            'columns' => ['id', 'username', 'nama_lengkap', 'role', 'email', 'phone'],
+            'result_key' => 'user',
+        ],
+        'masterOpt' => [
+            'type' => 'belongsTo',
+            'table' => 'master_opt',
+            'local_key' => 'master_opt_id',
+            'foreign_key' => 'id',
+            'columns' => ['id', 'nama_opt', 'jenis', 'etl_acuan'],
+            'result_key' => 'master_opt',
+        ],
+        'kabupaten' => [
+            'type' => 'belongsTo',
+            'table' => 'master_kabupaten',
+            'local_key' => 'kabupaten_id',
+            'foreign_key' => 'id',
+            'columns' => ['id', 'nama_kabupaten'],
+            'result_key' => 'kabupaten',
+        ],
+        'kecamatan' => [
+            'type' => 'belongsTo',
+            'table' => 'master_kecamatan',
+            'local_key' => 'kecamatan_id',
+            'foreign_key' => 'id',
+            'columns' => ['id', 'nama_kecamatan'],
+            'result_key' => 'kecamatan',
+        ],
+        'desa' => [
+            'type' => 'belongsTo',
+            'table' => 'master_desa',
+            'local_key' => 'desa_id',
+            'foreign_key' => 'id',
+            'columns' => ['id', 'nama_desa'],
+            'result_key' => 'desa',
+        ],
+    ];
 
     /**
      * Get reports with pagination using QueryBuilder
@@ -127,6 +169,48 @@ class LaporanHama extends Model {
         }
         
         return $qb->orderBy('lh.created_at', 'DESC')->get();
+    }
+
+    /**
+     * Dashboard recent reports with bounded result size and eager-loaded relations.
+     */
+    public function getRecentForDashboard(?int $userId = null, int $limit = 5): array {
+        $limit = min(50, max(1, $limit));
+
+        $qb = new QueryBuilder();
+        $qb->table('laporan_hama lh')->select(['lh.*']);
+
+        if ($userId !== null) {
+            $qb->where('lh.user_id', $userId);
+        }
+
+        $reports = $qb->orderBy('lh.created_at', 'DESC')
+            ->limit($limit)
+            ->get();
+
+        $reports = $this->eagerLoad($reports, ['user', 'masterOpt', 'kabupaten', 'kecamatan', 'desa']);
+
+        return array_map([$this, 'flattenDashboardReportRelations'], $reports);
+    }
+
+    private function flattenDashboardReportRelations(array $report): array {
+        $user = $report['user'] ?? [];
+        $masterOpt = $report['master_opt'] ?? [];
+        $kabupaten = $report['kabupaten'] ?? [];
+        $kecamatan = $report['kecamatan'] ?? [];
+        $desa = $report['desa'] ?? [];
+
+        $report['pelapor_nama'] = $user['nama_lengkap'] ?? null;
+        $report['pelapor_username'] = $user['username'] ?? null;
+        $report['pelapor_role'] = $user['role'] ?? null;
+        $report['nama_opt'] = $masterOpt['nama_opt'] ?? null;
+        $report['jenis'] = $masterOpt['jenis'] ?? null;
+        $report['etl_acuan'] = $masterOpt['etl_acuan'] ?? null;
+        $report['nama_kabupaten'] = $kabupaten['nama_kabupaten'] ?? null;
+        $report['nama_kecamatan'] = $kecamatan['nama_kecamatan'] ?? null;
+        $report['nama_desa'] = $desa['nama_desa'] ?? null;
+
+        return $report;
     }
 
     /**

@@ -284,10 +284,14 @@
                 </a>
                 <?php endif; ?>
                 <?php if(($_SESSION['role'] ?? '') == 'admin'): ?>
-                <a href="<?= BASE_URL ?>opt/delete/<?= $opt['id'] ?>" class="btn btn-danger"
-                   onclick="return confirm('Yakin ingin menghapus data OPT ini?')">
-                    <i class="fas fa-trash"></i> Hapus
-                </a>
+                <form action="<?= BASE_URL ?>opt/delete/<?= $opt['id'] ?>" method="POST" class="d-inline">
+                    <?= Security::getCsrfField() ?>
+                    <button type="submit"
+                            class="btn btn-danger"
+                            onclick="return confirm('Yakin ingin menghapus data OPT ini?')">
+                        <i class="fas fa-trash"></i> Hapus
+                    </button>
+                </form>
                 <?php endif; ?>
             </div>
         </div>

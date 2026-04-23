@@ -651,12 +651,15 @@ $errorMsg = ErrorMessage::flash();
                                     
                                     <?php if($userRole == 'admin'): ?>
                                     <!-- Delete button - admin only -->
-                                    <a href="<?= BASE_URL ?>irigasi/delete/<?= $item['id'] ?>" 
-                                       class="btn-action btn-action-danger" 
-                                       onclick="return confirm('Yakin ingin menghapus data ini?')"
-                                       title="Hapus">
-                                        <i class="fas fa-trash"></i>
-                                    </a>
+                                    <form action="<?= BASE_URL ?>irigasi/delete/<?= $item['id'] ?>" method="POST" class="d-inline">
+                                        <?= Security::getCsrfField() ?>
+                                        <button type="submit"
+                                                class="btn-action btn-action-danger"
+                                                onclick="return confirm('Yakin ingin menghapus data ini?')"
+                                                title="Hapus">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
                                     <?php endif; ?>
                                 </div>
                                 

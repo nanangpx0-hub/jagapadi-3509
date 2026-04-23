@@ -293,6 +293,7 @@ class OptController extends Controller {
      */
     public function delete($id) {
         $this->checkRole(['admin']);
+        $this->requireStateChangingRequest(['POST', 'DELETE']);
         
         $opt = $this->optModel->find($id);
         if ($opt) {
@@ -607,6 +608,7 @@ class OptController extends Controller {
      */
     public function uploadPhoto() {
         $this->checkRole(['admin', 'operator']);
+        $this->requireStateChangingRequest(['POST']);
         
         header('Content-Type: application/json');
         
@@ -757,6 +759,7 @@ class OptController extends Controller {
      */
     public function deletePhoto() {
         $this->checkRole(['admin', 'operator']);
+        $this->requireStateChangingRequest(['POST', 'DELETE']);
         
         header('Content-Type: application/json');
         

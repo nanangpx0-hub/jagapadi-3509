@@ -441,6 +441,7 @@ $errorMsg = ErrorMessage::flash();
 document.addEventListener('DOMContentLoaded', function() {
     const baseUrl = '<?= BASE_URL ?>';
     const irigasiId = '<?= $irigasiId ?>';
+    const csrfToken = '<?= Security::getCsrfToken() ?>';
     const templates = <?= json_encode($templates) ?>;
     
     // Irigasi selector change
@@ -637,8 +638,11 @@ document.addEventListener('DOMContentLoaded', function() {
         
         fetch(baseUrl + 'irigasi/saveRule', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken
+            },
+            body: JSON.stringify({ ...data, csrf_token: csrfToken })
         })
         .then(r => r.json())
         .then(result => {
@@ -653,7 +657,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function toggleRule(id) {
-        fetch(baseUrl + 'irigasi/toggleRuleStatus/' + id, { method: 'POST' })
+        fetch(baseUrl + 'irigasi/toggleRuleStatus/' + id, {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': csrfToken }
+        })
         .then(r => r.json())
         .then(result => {
             if (result.success) {
@@ -665,7 +672,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function deleteRule(id) {
-        fetch(baseUrl + 'irigasi/deleteRule/' + id, { method: 'POST' })
+        fetch(baseUrl + 'irigasi/deleteRule/' + id, {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': csrfToken }
+        })
         .then(r => r.json())
         .then(result => {
             if (result.success) {
@@ -681,7 +691,10 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menjalankan...';
         
-        fetch(baseUrl + 'irigasi/runRuleEngine/' + irigasiId, { method: 'POST' })
+        fetch(baseUrl + 'irigasi/runRuleEngine/' + irigasiId, {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': csrfToken }
+        })
         .then(r => r.json())
         .then(result => {
             btn.disabled = false;

@@ -56,6 +56,78 @@ class Security {
     }
 
     /**
+     * Get the current CSRF token value.
+     */
+    public static function getCsrfToken(): string {
+        return self::generateCsrfToken();
+    }
+
+    /**
+     * Extract CSRF token from standard web form, AJAX header, or JSON body.
+     */
+    public static function getRequestCsrfToken(): string {
+        $headerToken = $_SERVER['HTTP_X_CSRF_TOKEN']
+            ?? $_SERVER['HTTP_X_CSRFTOKEN']
+            ?? $_SERVER['HTTP_X_XSRF_TOKEN']
+            ?? null;
+
+        if (is_string($headerToken) && trim($headerToken) !== '') {
+            return trim($headerToken);
+        }
+
+        if (isset($_POST['csrf_token']) && is_string($_POST['csrf_token'])) {
+            return trim($_POST['csrf_token']);
+        }
+
+        if (isset($_POST['_token']) && is_string($_POST['_token'])) {
+            return trim($_POST['_token']);
+        }
+
+        $contentType = $_SERVER['CONTENT_TYPE'] ?? $_SERVER['HTTP_CONTENT_TYPE'] ?? '';
+        if (stripos($contentType, 'application/json') !== false) {
+            $rawBody = file_get_contents('php://input');
+            $payload = $rawBody ? json_decode($rawBody, true) : null;
+
+            if (is_array($payload)) {
+                foreach (['csrf_token', '_token'] as $field) {
+                    if (isset($payload[$field]) && is_string($payload[$field])) {
+                        return trim($payload[$field]);
+                    }
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Destroy the active session and expire the session cookie.
+     */
+    public static function destroySession(): void {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            return;
+        }
+
+        $_SESSION = [];
+
+        if (ini_get('session.use_cookies')) {
+            $params = session_get_cookie_params();
+            $cookieOptions = [
+                'expires' => time() - 42000,
+                'path' => $params['path'] ?? '/',
+                'domain' => $params['domain'] ?? '',
+                'secure' => (bool)($params['secure'] ?? false),
+                'httponly' => (bool)($params['httponly'] ?? true),
+                'samesite' => $params['samesite'] ?? 'Lax',
+            ];
+
+            setcookie(session_name(), '', $cookieOptions);
+        }
+
+        session_destroy();
+    }
+
+    /**
      * Validate user input for XSS prevention
      */
     public static function sanitizeInput(string $input): string {
@@ -88,9 +160,8 @@ class Security {
      * Log security events
      */
     public static function logSecurityEvent(string $event, string $description, ?int $userId = null): void {
-        $db = Database::getInstance()->getConnection();
-
         try {
+            $db = Database::getInstance()->getConnection();
             $stmt = $db->prepare("
                 INSERT INTO activity_log (user_id, action, table_name, record_id, description, ip_address, user_agent, created_at)
                 VALUES (?, 'SECURITY_EVENT', 'security', NULL, ?, ?, ?, NOW())

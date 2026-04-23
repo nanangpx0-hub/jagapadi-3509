@@ -958,6 +958,8 @@ class LaporanController extends Controller {
             'Anda tidak memiliki akses untuk menghapus laporan hama. Hanya akun dengan level Admin, Operator, dan Petugas yang dapat menghapus laporan.'
         );
         
+        $this->requireStateChangingRequest(['POST', 'DELETE']);
+
         $laporan = $this->laporanModel->find($id);
         if (!$laporan) {
             $_SESSION['error'] = 'Laporan tidak ditemukan';

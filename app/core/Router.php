@@ -3,11 +3,26 @@
 class Router {
     private $routes = [];
     private $middlewares = [];
-    
-    public function __construct() {
+    private $routesByMethod = [];
+    private Container $container;
+
+    public function __construct(?Container $container = null) {
+        $this->container = $container ?? Container::getInstance();
         $this->loadApiRoutes();
     }
-    
+
+    /**
+     * Optimized route lookup by grouping routes by HTTP method
+     */
+    private function getRoutesByMethod($method) {
+        if (!isset($this->routesByMethod[$method])) {
+            $this->routesByMethod[$method] = array_filter($this->routes, function($route) use ($method) {
+                return $route['method'] === $method;
+            });
+        }
+        return $this->routesByMethod[$method];
+    }
+
     /**
      * Add a GET route
      */
@@ -52,6 +67,8 @@ class Router {
      * Load API routes
      */
     private function loadApiRoutes() {
+        // Internal web/API routes use the authenticated web session.
+        // State-changing internal routes are CSRF-checked in executeRoute().
         // Laporan Hama API Routes
         $this->get('/api/laporan-hama', 'Api\LaporanHamaController@index', ['auth']);
         $this->get('/api/laporan-hama/{id}', 'Api\LaporanHamaController@show', ['auth']);
@@ -59,7 +76,7 @@ class Router {
         $this->put('/api/laporan-hama/{id}', 'Api\LaporanHamaController@update', ['auth']);
         $this->delete('/api/laporan-hama/{id}', 'Api\LaporanHamaController@destroy', ['auth', 'admin']);
 
-        // External API Routes
+        // External API routes never use web sessions. They require X-API-Key or Bearer token.
         $this->post('/api/external/report', 'ApiController@submitReport', ['external_auth', 'rate_limit']);
         $this->get('/api/external/mitra', 'ApiController@getMitra', ['external_auth', 'rate_limit']);
         $this->get('/api/external/kegiatan', 'ApiController@getKegiatan', ['external_auth', 'rate_limit']);
@@ -180,9 +197,9 @@ class Router {
         $uri = strtok($uri, '?');
         $uri = rtrim($uri, '/');
         
-        // Find matching route
-        foreach ($this->routes as $route) {
-            if ($this->matchRoute($method, $uri, $route)) {
+        // Find matching route using method-based grouping for optimization
+        foreach ($this->getRoutesByMethod($method) as $route) {
+            if ($this->matchRoute($uri, $route)) {
                 return $this->executeRoute($route, $uri);
             }
         }
@@ -193,11 +210,7 @@ class Router {
     /**
      * Check if route matches
      */
-    private function matchRoute($method, $uri, $route) {
-        if ($route['method'] !== $method) {
-            return false;
-        }
-        
+    private function matchRoute($uri, $route) {
         $pattern = $this->convertToRegex($route['path']);
         return preg_match($pattern, $uri);
     }
@@ -220,6 +233,10 @@ class Router {
         // Apply middleware
         if (!$this->applyMiddleware($route['middleware'])) {
             return true; // Middleware handled the response
+        }
+
+        if (!$this->enforceCsrfForSessionMutation($route)) {
+            return true;
         }
         
         // Parse handler
@@ -257,7 +274,7 @@ class Router {
             return true;
         }
         
-        $controllerInstance = new $className();
+        $controllerInstance = $this->container->make($className);
         
         if (!method_exists($controllerInstance, $method)) {
             $this->sendJsonResponse([
@@ -296,6 +313,7 @@ class Router {
         foreach ($middlewares as $middleware) {
             switch ($middleware) {
                 case 'auth':
+                    // Session-backed web/API auth. External integrations must use external_auth/mobile_auth/scraper_auth.
                     if (!isset($_SESSION['user_id'])) {
                         $this->sendJsonResponse(['error' => 'Unauthorized'], 401);
                         exit; // Stop execution after sending response
@@ -363,6 +381,37 @@ class Router {
             }
         }
         
+        return true;
+    }
+
+    private function enforceCsrfForSessionMutation($route) {
+        $usesSessionAuth = in_array('auth', $route['middleware'], true);
+        $usesTokenAuth = !empty(array_intersect(
+            ['external_auth', 'mobile_auth', 'scraper_auth'],
+            $route['middleware']
+        ));
+        $isStateChanging = in_array($route['method'], ['POST', 'PUT', 'PATCH', 'DELETE'], true);
+
+        if (!$usesSessionAuth || $usesTokenAuth || !$isStateChanging) {
+            return true;
+        }
+
+        if (!class_exists('Security')) {
+            $this->sendJsonResponse(['error' => 'Internal server error'], 500);
+            return false;
+        }
+
+        $token = Security::getRequestCsrfToken();
+        if (!Security::validateCsrfToken($token)) {
+            Security::logSecurityEvent(
+                'CSRF_VIOLATION',
+                'Invalid CSRF token for session-backed API route ' . ($route['path'] ?? ''),
+                $_SESSION['user_id'] ?? null
+            );
+            $this->sendJsonResponse(['error' => 'CSRF token validation failed'], 403);
+            return false;
+        }
+
         return true;
     }
     

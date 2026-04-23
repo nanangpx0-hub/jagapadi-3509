@@ -7,6 +7,7 @@
                 <h3 class="card-title"><i class="fas fa-user-edit"></i> Edit User</h3>
             </div>
             <form method="POST" action="<?= BASE_URL ?>user/update/<?= $user['id'] ?>" data-validate-form>
+                <?= Security::getCsrfField() ?>
                 <div class="card-body">
                     <div class="form-group">
                         <label>Username <span class="text-danger">*</span></label>

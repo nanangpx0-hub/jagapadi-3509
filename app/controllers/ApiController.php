@@ -1,4 +1,6 @@
 <?php
+require_once ROOT_PATH . '/app/middleware/ApiAuthMiddleware.php';
+
 class ApiController extends Controller {
     private $laporanModel;
     private $optModel;
@@ -11,13 +13,32 @@ class ApiController extends Controller {
     /**
      * Check API authentication
      */
-    private function checkApiAuth() {
-        $apiKey = $_SERVER['HTTP_X_API_KEY'] ?? '';
-        if (empty($apiKey)) {
-            return false;
+    private function checkApiAuth(string $requiredSource = 'external') {
+        $auth = ApiAuthMiddleware::authenticate($requiredSource);
+        if (!$auth['valid']) {
+            $this->json(['status' => 'error', 'message' => 'Unauthorized: ' . $auth['error']], 401);
         }
-        // TODO: Implement proper API key validation against database
         return true;
+    }
+
+    /**
+     * Parse JSON request body and return array data.
+     *
+     * @return array
+     */
+    private function getJsonBody(): array {
+        $body = file_get_contents('php://input');
+        $data = json_decode($body, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            $this->json(['status' => 'error', 'message' => 'Invalid JSON'], 400);
+        }
+
+        if (!is_array($data)) {
+            $this->json(['status' => 'error', 'message' => 'Invalid JSON payload'], 400);
+        }
+
+        return $data;
     }
     
     // Public endpoint for pest distribution data
@@ -50,31 +71,24 @@ class ApiController extends Controller {
     
     // Submit report via API (for external integration)
     public function submitReport() {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->json(['status' => 'error', 'message' => 'Method not allowed'], 405);
+        }
+
+        // Check API authentication first
+        $this->checkApiAuth('external');
+
         // Check rate limiting
         if (Security::checkRateLimit('api_submit_report', 100, 60)) {
             $this->json(['status' => 'error', 'message' => 'Rate limit exceeded'], 429);
         }
-        
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            $this->json(['status' => 'error', 'message' => 'Method not allowed'], 405);
-        }
-        
-        // Simple API key validation
-        $apiKey = $_SERVER['HTTP_X_API_KEY'] ?? '';
-        if (empty($apiKey)) {
-            $this->json(['status' => 'error', 'message' => 'API key required'], 401);
-        }
-        
-        $input = json_decode(file_get_contents('php://input'), true);
-        
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            $this->json(['status' => 'error', 'message' => 'Invalid JSON'], 400);
-        }
-        
+
+        $input = $this->getJsonBody();
+
         // Validate required fields
         $required = ['master_opt_id', 'tanggal', 'lokasi', 'tingkat_keparahan'];
         foreach ($required as $field) {
-            if (!isset($input[$field]) || empty($input[$field])) {
+            if (!isset($input[$field]) || $input[$field] === '') {
                 $this->json(['status' => 'error', 'message' => "Field $field is required"], 400);
             }
         }
@@ -156,8 +170,8 @@ class ApiController extends Controller {
     
     // Simitra Integration Endpoints
     public function getMitra() {
-        // This would typically call Simitra API
-        // For now, return local data
+        $this->checkApiAuth('external');
+
         $db = Database::getInstance()->getConnection();
         $stmt = $db->query("SELECT * FROM mitra_simitra WHERE status = 'Aktif'");
         $mitra = $stmt->fetchAll();
@@ -169,7 +183,8 @@ class ApiController extends Controller {
     }
     
     public function getKegiatan() {
-        // This would typically call Simitra API
+        $this->checkApiAuth('external');
+
         $db = Database::getInstance()->getConnection();
         $stmt = $db->query("SELECT * FROM kegiatan_simitra WHERE status = 'Aktif'");
         $kegiatan = $stmt->fetchAll();
@@ -184,21 +199,39 @@ class ApiController extends Controller {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             $this->json(['status' => 'error', 'message' => 'Method not allowed'], 405);
         }
-        
-        $input = json_decode(file_get_contents('php://input'), true);
-        
+
+        $this->checkApiAuth('external');
+
+        $input = $this->getJsonBody();
+        $required = ['laporan_hama_id', 'mitra_id', 'kegiatan_id', 'jumlah_honor'];
+        foreach ($required as $field) {
+            if (!isset($input[$field]) || $input[$field] === '') {
+                $this->json(['status' => 'error', 'message' => "Field $field is required"], 400);
+            }
+        }
+
+        $laporanId = (int)$input['laporan_hama_id'];
+        $mitraId = (int)$input['mitra_id'];
+        $kegiatanId = (int)$input['kegiatan_id'];
+        $jumlahHonor = (float)$input['jumlah_honor'];
+        $catatan = Security::sanitizeInput($input['catatan'] ?? '');
+
+        if ($laporanId <= 0 || $mitraId <= 0 || $kegiatanId <= 0 || $jumlahHonor < 0) {
+            $this->json(['status' => 'error', 'message' => 'Numeric fields must be valid and non-negative'], 400);
+        }
+
         $db = Database::getInstance()->getConnection();
-        $stmt = $db->prepare("
-            INSERT INTO honor_pelaporan (laporan_hama_id, mitra_id, kegiatan_id, jumlah_honor, catatan)
-            VALUES (?, ?, ?, ?, ?)
-        ");
+        $stmt = $db->prepare(
+            "INSERT INTO honor_pelaporan (laporan_hama_id, mitra_id, kegiatan_id, jumlah_honor, catatan)
+            VALUES (?, ?, ?, ?, ?)"
+        );
         
         $stmt->execute([
-            $input['laporan_hama_id'],
-            $input['mitra_id'],
-            $input['kegiatan_id'],
-            $input['jumlah_honor'],
-            $input['catatan'] ?? ''
+            $laporanId,
+            $mitraId,
+            $kegiatanId,
+            $jumlahHonor,
+            $catatan
         ]);
         
         $this->json([
@@ -209,15 +242,16 @@ class ApiController extends Controller {
     }
     
     public function validateSBML() {
+        $this->checkApiAuth('external');
+
         $kegiatanId = $_GET['kegiatan_id'] ?? null;
         
-        if (!$kegiatanId) {
-            $this->json(['status' => 'error', 'message' => 'kegiatan_id required'], 400);
+        if (!$kegiatanId || !is_numeric($kegiatanId)) {
+            $this->json(['status' => 'error', 'message' => 'Valid kegiatan_id required'], 400);
         }
         
         $db = Database::getInstance()->getConnection();
         
-        // Get kegiatan pagu
         $stmt = $db->prepare("SELECT pagu_honor FROM kegiatan_simitra WHERE id = ?");
         $stmt->execute([$kegiatanId]);
         $kegiatan = $stmt->fetch();
@@ -226,7 +260,6 @@ class ApiController extends Controller {
             $this->json(['status' => 'error', 'message' => 'Kegiatan not found'], 404);
         }
         
-        // Get total honor used
         $stmt = $db->prepare("SELECT SUM(jumlah_honor) as total_used FROM honor_pelaporan WHERE kegiatan_id = ?");
         $stmt->execute([$kegiatanId]);
         $result = $stmt->fetch();

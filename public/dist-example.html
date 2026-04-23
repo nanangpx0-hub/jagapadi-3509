@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="JAGAPADI - Dashboard">
+    <meta name="csrf-token" content="<?= $_SESSION['csrf_token'] ?? '' ?>">
+    
+    <title>Dashboard - JAGAPADI</title>
+    
+    <!-- Critical CSS inline for FCP -->
+    <style>
+        body { margin: 0; font-family: system-ui, sans-serif; }
+        #app-loader { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #fff; z-index: 9999; }
+        .loading-spinner { width: 40px; height: 40px; border: 3px solid #eee; border-top-color: #3498db; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- App Content -->
+    </div>
+
+    <!-- 
+    ========================================
+    SCRIPTS - Use defer for non-blocking load
+    ========================================
+    -->
+    
+    <!-- 
+        1. Vite build output naming convention:
+           js/main-a1b2c3d4.js  (content hash for cache busting)
+           js/dashboard-e5f6g7h8.js
+           css/vendor-i9j0k1l2.css (vendor chunk)
+       
+        2. Include in HTML dengan defer attribute:
+           - Script akan dieksekusi setelah HTML di-parse
+           - Tidak memblokir FCP (First Contentful Paint)
+           - Tidak Perlu menaruh di </body> (otomatis async)
+    -->
+    
+    <!-- Base app events (Event Delegation System) - Loaded first -->
+    <script defer src="/public/dist/js/app-events-a1b2c3d4.js"></script>
+    
+    <!-- Vendor chunk (Chart.js) - Can be cached longer -->
+    <script defer src="/public/dist/js/vendor-e5f6g7h8.js"></script>
+    
+    <!-- Dashboard specific - Loaded on demand -->
+    <script defer src="/public/dist/js/dashboard-i9j0k1l2.js"></script>
+    
+    <!-- 
+    ========================================
+    Alternative: Dynamic Import (Code Splitting)
+    ========================================
+    
+    // Hanya muat script saat dibutuhkan
+    <script type="module">
+        // Lazy load dashboard saat user mengakses halaman dashboard
+        if (window.location.pathname.includes('dashboard')) {
+            import('/public/dist/js/dashboard-chunk.js');
+        }
+    </script>
+    -->
+
+    <!-- 
+    ========================================
+    Contoh Kode di PHP View:
+    ========================================
+    -->
+    
+    <?php 
+    //Di file view PHP (contoh: app/views/dashboard/index.php)
+    
+    /*
+    // Ambil hash dari manifest untuk cache busting
+    $manifest = json_decode(file_get_contents(ROOT_PATH . '/public/dist/manifest.json'), true);
+    
+    $jsAppEvents = $manifest['public/js/app-events.js']['file'] ?? 'js/app-events.js';
+    $jsVendor = $manifest['public/js/vendor.js']['file'] ?? 'js/vendor.js';
+    $jsDashboard = $manifest['public/js/dashboard.js']['file'] ?? 'js/dashboard.js';
+    */
+    ?>
+    
+    <!-- 
+    <script defer src="<?= BASE_URL . 'public/dist/' . $jsAppEvents ?>"></script>
+    <script defer src="<?= BASE_URL . 'public/dist/' . $jsVendor ?>"></script>
+    <script defer src="<?= BASE_URL . 'public/dist/' . $jsDashboard ?>"></script>
+    -->
+
+    <!-- 
+    ========================================
+    Contoh: Inline Script untuk Critical JS
+    ========================================
+    -->
+    <script type="module">
+        // Init app events immediately (tanpa tunggu defer)
+        import('/public/dist/js/app-events.js').then(() => {
+            console.log('AppEvents ready');
+        });
+    </script>
+
+    <!-- Remove loader after app ready -->
+    <script>
+        window.addEventListener('load', () => {
+            const loader = document.getElementById('app-loader');
+            if (loader) loader.remove();
+        });
+    </script>
+</body>
+</html>

@@ -57,11 +57,7 @@ class UserController extends Controller {
     public function store() {
         $this->checkAuth();
         $this->checkAdmin();
-        
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            header('Location: ' . BASE_URL . 'user/create');
-            exit;
-        }
+        $this->requireStateChangingRequest(['POST']);
         
         // Validate input
         $errors = [];
@@ -238,11 +234,7 @@ class UserController extends Controller {
     public function update($id) {
         $this->checkAuth();
         $this->checkAdmin();
-        
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            header('Location: ' . BASE_URL . 'user/edit/' . $id);
-            exit;
-        }
+        $this->requireStateChangingRequest(['POST']);
         
         $user = $this->userModel->getUserById($id);
         
@@ -354,6 +346,7 @@ class UserController extends Controller {
     public function delete($id) {
         $this->checkAuth();
         $this->checkAdmin();
+        $this->requireStateChangingRequest(['POST', 'DELETE']);
         
         $user = $this->userModel->getUserById($id);
         
@@ -395,6 +388,7 @@ class UserController extends Controller {
     public function toggleStatus($id) {
         $this->checkAuth();
         $this->checkAdmin();
+        $this->requireStateChangingRequest(['POST', 'PATCH']);
         
         $user = $this->userModel->getUserById($id);
         

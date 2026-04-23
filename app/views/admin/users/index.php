@@ -100,20 +100,26 @@
                                 <a href="<?= BASE_URL ?>user/edit/<?= $user['id'] ?>" class="btn btn-info" title="Edit">
                                     <i class="fas fa-edit"></i>
                                 </a>
-                                <a href="<?= BASE_URL ?>user/toggleStatus/<?= $user['id'] ?>" 
-                                   class="btn btn-<?= ($user['aktif'] ?? 1) == 1 ? 'warning' : 'success' ?>" 
-                                   title="<?= ($user['aktif'] ?? 1) == 1 ? 'Nonaktifkan' : 'Aktifkan' ?>"
-                                   data-confirm-delete
-                                   data-message="Yakin ingin mengubah status user ini?">
-                                    <i class="fas fa-<?= ($user['aktif'] ?? 1) == 1 ? 'ban' : 'check' ?>"></i>
-                                </a>
-                                <a href="<?= BASE_URL ?>user/delete/<?= $user['id'] ?>" 
-                                   class="btn btn-danger" 
-                                   title="Hapus"
-                                   data-confirm-delete
-                                   data-message="Yakin ingin menghapus user ini? Tindakan ini tidak dapat dibatalkan!">
-                                    <i class="fas fa-trash"></i>
-                                </a>
+                                <form action="<?= BASE_URL ?>user/toggleStatus/<?= $user['id'] ?>" method="POST" class="d-inline">
+                                    <?= Security::getCsrfField() ?>
+                                    <button type="submit"
+                                            class="btn btn-<?= ($user['aktif'] ?? 1) == 1 ? 'warning' : 'success' ?>"
+                                            title="<?= ($user['aktif'] ?? 1) == 1 ? 'Nonaktifkan' : 'Aktifkan' ?>"
+                                            data-confirm-delete
+                                            data-message="Yakin ingin mengubah status user ini?">
+                                        <i class="fas fa-<?= ($user['aktif'] ?? 1) == 1 ? 'ban' : 'check' ?>"></i>
+                                    </button>
+                                </form>
+                                <form action="<?= BASE_URL ?>user/delete/<?= $user['id'] ?>" method="POST" class="d-inline">
+                                    <?= Security::getCsrfField() ?>
+                                    <button type="submit"
+                                            class="btn btn-danger"
+                                            title="Hapus"
+                                            data-confirm-delete
+                                            data-message="Yakin ingin menghapus user ini? Tindakan ini tidak dapat dibatalkan!">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
                                 <?php else: ?>
                                 <button class="btn btn-secondary" disabled title="Tidak dapat mengubah user sendiri">
                                     <i class="fas fa-lock"></i>
