@@ -2,18 +2,18 @@
 class LaporanController extends Controller {
     private $laporanModel;
     private $optModel;
-    
+
     public function __construct() {
         $this->laporanModel = $this->model('LaporanHama');
         $this->optModel = $this->model('MasterOpt');
     }
-    
+
     public function index() {
         $this->checkAuth();
-        
+
         $status = $_GET['status'] ?? null;
         $user = $this->getCurrentUser();
-        
+
         // Role-based filtering: petugas can only see their own reports
         if ($user['role'] === 'petugas') {
             if ($status) {
@@ -29,13 +29,13 @@ class LaporanController extends Controller {
                 $laporan = $this->laporanModel->getAllWithDetails();
             }
         }
-        
+
         // Get rejected reports count for petugas
         $rejectedCount = 0;
         if ($user['role'] === 'petugas') {
             $rejectedCount = $this->laporanModel->getCountByStatusAndUser('Ditolak', $user['id']);
         }
-        
+
         $data = [
             'title' => 'Daftar Laporan',
             'laporan' => $laporan,
@@ -43,22 +43,22 @@ class LaporanController extends Controller {
             'currentUser' => $user,
             'rejectedCount' => $rejectedCount
         ];
-        
+
         $this->view('laporan/index', $data);
     }
-    
+
     /**
      * API: Get tag suggestions for autocomplete
      * Route: GET /laporan/tagSuggestions?q=query
      */
     public function tagSuggestions() {
         $this->checkAuth();
-        
+
         $query = $_GET['q'] ?? '';
         if (empty($query) || strlen($query) < 2) {
             $this->json(['success' => true, 'data' => []]);
         }
-        
+
         try {
             $tagModel = $this->model('Tag');
             $tags = $tagModel->search($query, 10);
@@ -68,25 +68,25 @@ class LaporanController extends Controller {
             $this->json(['success' => false, 'message' => 'Terjadi kesalahan'], 500);
         }
     }
-    
+
     /**
      * API: Generate auto tags based on laporan content
      * Route: POST /laporan/generateAutoTags
      */
     public function generateAutoTags() {
         $this->checkAuth();
-        
+
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             $this->json(['success' => false, 'message' => 'Invalid request method'], 405);
         }
-        
+
         try {
             // Get JSON input or POST data
             $input = json_decode(file_get_contents('php://input'), true);
             if (empty($input) && !empty($_POST)) {
                 $input = $_POST;
             }
-            
+
             // Get OPT name if master_opt_id is provided
             $namaOpt = '';
             if (!empty($input['master_opt_id'])) {
@@ -95,7 +95,7 @@ class LaporanController extends Controller {
                     $namaOpt = $opt['nama_opt'] ?? '';
                 }
             }
-            
+
             $laporanData = [
                 'catatan' => $input['catatan'] ?? '',
                 'tingkat_keparahan' => $input['tingkat_keparahan'] ?? '',
@@ -103,17 +103,17 @@ class LaporanController extends Controller {
                 'luas_serangan' => isset($input['luas_serangan']) ? (float)$input['luas_serangan'] : 0,
                 'nama_opt' => $input['nama_opt'] ?? $namaOpt
             ];
-            
+
             $tagModel = $this->model('Tag');
             $suggestions = $tagModel->generateAutoTags($laporanData);
-            
+
             $this->json(['success' => true, 'data' => $suggestions]);
         } catch (Exception $e) {
             error_log("Error in generateAutoTags: " . $e->getMessage());
             $this->json(['success' => false, 'message' => 'Terjadi kesalahan saat menghasilkan tag'], 500);
         }
     }
-    
+
     public function create() {
         // Validasi level pengguna sebelum proses pembuatan laporan dimulai
         $this->checkRole(
@@ -123,7 +123,7 @@ class LaporanController extends Controller {
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $this->validateCsrfToken();
-            
+
             // ==============================================
             // PHASE 1 SECURITY: Honeypot anti-bot detection
             // ==============================================
@@ -134,7 +134,7 @@ class LaporanController extends Controller {
                 $this->redirect('laporan');
                 return;
             }
-            
+
             // ==============================================
             // PHASE 1 SECURITY: Submission rate limiting
             // ==============================================
@@ -142,19 +142,19 @@ class LaporanController extends Controller {
             $rateLimitKey = 'laporan_submit_' . $user['id'];
             $lastSubmit = $_SESSION[$rateLimitKey] ?? 0;
             $cooldownSeconds = 30;
-            
+
             if (time() - $lastSubmit < $cooldownSeconds) {
                 $remaining = $cooldownSeconds - (time() - $lastSubmit);
                 $_SESSION['error'] = "Mohon tunggu {$remaining} detik sebelum mengirim laporan berikutnya.";
                 $this->redirect('laporan/create');
                 return;
             }
-            
+
             // Record this submission attempt time
             $_SESSION[$rateLimitKey] = time();
-            
+
             $userRole = $user['role'];
-            
+
             // Role-based user_id assignment
             // Admin dapat membuat laporan atas nama user lain
             // Operator dan Petugas hanya dapat membuat laporan atas nama sendiri
@@ -170,10 +170,10 @@ class LaporanController extends Controller {
                     $this->redirect('laporan/create');
                 }
             }
-            
+
             // Prepare post data with proper defaults
             $alamatLengkap = trim($_POST['alamat_lengkap'] ?? $_POST['lokasi'] ?? '');
-            
+
             // Ensure lokasi is never empty (required by database)
             // If alamat_lengkap is empty, use a default value or construct from wilayah
             $lokasi = $alamatLengkap;
@@ -182,7 +182,7 @@ class LaporanController extends Controller {
                 $kabId = $_POST['kabupaten_id'] ?? null;
                 $kecId = $_POST['kecamatan_id'] ?? null;
                 $desId = $_POST['desa_id'] ?? null;
-                
+
                 if ($kabId && $kecId && $desId && $kabId !== 'unknown' && $kecId !== 'unknown' && $desId !== 'unknown') {
                     // Will be filled after wilayah validation
                     $lokasi = 'Lokasi akan diisi setelah validasi wilayah';
@@ -190,7 +190,7 @@ class LaporanController extends Controller {
                     $lokasi = 'Lokasi belum ditentukan';
                 }
             }
-            
+
             $postData = [
                 'user_id' => $targetUserId,
                 'master_opt_id' => $_POST['master_opt_id'] ?? null,
@@ -213,7 +213,7 @@ class LaporanController extends Controller {
             if (!empty($postData['kabupaten_id']) && !empty($postData['kecamatan_id']) && !empty($postData['desa_id'])) {
                 // Will be updated after wilayah names are fetched
             }
-            
+
             // Role-based validation
             $validationErrors = $this->validateLaporanData($postData, $userRole);
             if (!empty($validationErrors)) {
@@ -228,17 +228,17 @@ class LaporanController extends Controller {
             $kab = $kabModel->findById($postData['kabupaten_id']);
             $kec = $kecModel->findById($postData['kecamatan_id']);
             $des = $desaModel->findById($postData['desa_id']);
-                
+
                 if (!$kab || !$kec || !$des) {
                     $_SESSION['error'] = 'Data wilayah tidak ditemukan di database';
                     $this->redirect('laporan/create');
                 }
-                
+
                 if ($kec['kabupaten_id'] != $kab['id'] || $des['kecamatan_id'] != $kec['id']) {
                     $_SESSION['error'] = 'Relasi wilayah tidak valid. Pastikan kecamatan berada di kabupaten yang dipilih dan desa berada di kecamatan yang dipilih.';
                 $this->redirect('laporan/create');
             }
-                
+
             $postData['kabupaten'] = $kab['nama_kabupaten'];
             $postData['kecamatan'] = $kec['nama_kecamatan'];
             $postData['desa'] = $des['nama_desa'];
@@ -259,54 +259,54 @@ class LaporanController extends Controller {
                     $postData['lokasi'] = 'Lokasi belum ditentukan';
                 }
             }
-            
+
             // Handle file upload with automatic compression
             if (isset($_FILES['foto']) && $_FILES['foto']['error'] == 0) {
                 require_once ROOT_PATH . '/app/helpers/ImageCompressor.php';
-                
+
                 $uploadDir = UPLOAD_PATH . 'laporan/';
                 if (!is_dir($uploadDir)) {
                     mkdir($uploadDir, 0777, true);
                 }
-                
+
                 $file = $_FILES['foto'];
                 $maxSize = 2 * 1024 * 1024; // 2MB
                 $allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
                 $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
-                
+
                 // Validate file type using finfo
                 $finfo = finfo_open(FILEINFO_MIME_TYPE);
                 $mimeType = finfo_file($finfo, $file['tmp_name']);
                 finfo_close($finfo);
-                
+
                 if (!in_array($mimeType, $allowedTypes)) {
                     $_SESSION['error'] = 'Tipe file tidak diizinkan. Hanya JPG, PNG, dan WEBP yang diizinkan.';
                     $this->redirect('laporan/create');
                 }
-                
+
                 // Validate file extension
                 $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
                 if (!in_array($extension, $allowedExtensions)) {
                     $_SESSION['error'] = 'Ekstensi file tidak diizinkan. Hanya JPG, PNG, dan WEBP yang diizinkan.';
                     $this->redirect('laporan/create');
                 }
-                
+
                 // Generate secure filename
                 $fileName = hash('sha256', time() . $file['name'] . uniqid()) . '.' . $extension;
                 $targetPath = $uploadDir . $fileName;
-                
+
                 // Move uploaded file to temporary location
                 $tempPath = $file['tmp_name'];
-                
+
                 // Check if compression is needed
                 if ($file['size'] > $maxSize) {
                     // File is too large, compress it
                     $compressor = new ImageCompressor();
                     $result = $compressor->compress($tempPath, $targetPath, $maxSize);
-                    
+
                     if ($result['success']) {
                         $postData['foto_url'] = 'public/uploads/laporan/' . $fileName;
-                        
+
                         // Set info message about compression
                         if ($result['compressed']) {
                             $originalSize = ImageCompressor::formatFileSize($result['original_size']);
@@ -327,10 +327,7 @@ class LaporanController extends Controller {
                     }
                 }
             }
-            
-            // Debug: Log postData before create (remove in production)
-            error_log("Creating laporan with data: " . json_encode($postData));
-            
+
             // Ensure required fields are not null before database insert
             if (empty($postData['lokasi'])) {
                 $_SESSION['error'] = 'Field lokasi tidak boleh kosong. Pastikan alamat lengkap atau data wilayah sudah diisi.';
@@ -344,20 +341,20 @@ class LaporanController extends Controller {
                 $_SESSION['error'] = 'Field tingkat_keparahan tidak boleh kosong.';
                 $this->redirect('laporan/create');
             }
-            
+
             // Try to create the report with comprehensive error handling
             try {
                 $id = $this->laporanModel->create($postData);
-                
+
                 if (!$id || $id <= 0) {
                     throw new Exception('Gagal menyimpan laporan ke database. ID tidak valid.');
                 }
-                
+
                 // Save tags if provided
                 if (!empty($_POST['tags']) && is_array($_POST['tags'])) {
                     $tagModel = $this->model('Tag');
                     $tagIds = [];
-                    
+
                     foreach ($_POST['tags'] as $tagInput) {
                         if (is_numeric($tagInput)) {
                             // Existing tag ID
@@ -368,15 +365,15 @@ class LaporanController extends Controller {
                             $tagIds[] = $tagId;
                         }
                     }
-                    
+
                     if (!empty($tagIds)) {
                         $tagModel->setForLaporan($id, $tagIds);
                     }
                 }
-                
+
                 // Log successful creation
                 error_log("Laporan created successfully: ID {$id} by user {$user['id']} ({$user['role']})");
-                
+
                 // Auto-approve logic (only runs if enabled in config)
                 if (defined('AUTO_APPROVE_ENABLED') && AUTO_APPROVE_ENABLED === true) {
                     $complete = !empty($postData['kabupaten_id']) && !empty($postData['kecamatan_id']) && !empty($postData['desa_id']) && !empty($postData['alamat_lengkap']);
@@ -397,15 +394,15 @@ class LaporanController extends Controller {
                         $this->logStatusHistory($id, 'Submitted', 'Diverifikasi', 1, 'Auto-approve: data lokasi lengkap dan valid');
                     }
                 }
-                
+
                 // Log status history for new reports
                 $this->logStatusHistory($id, null, $postData['status'], $user['id'], 'Laporan baru dibuat');
-                
+
                 // If submitted, notify admin/operators
                 if ($postData['status'] === 'Submitted') {
                     $this->notifyAdminsOperatorsNewSubmission($id, $user);
                 }
-                
+
                 // Check if exceeds ETL and create notification
                 $opt = $this->optModel->find($postData['master_opt_id']);
                 if ($opt && $opt['etl_acuan'] > 0 && $postData['populasi'] > $opt['etl_acuan']) {
@@ -416,11 +413,13 @@ class LaporanController extends Controller {
                         'danger'
                     );
                 }
-                
+
+                $this->clearDashboardCache();
+
                 // Role-based success message and redirect
                 $successMessage = '';
                 $redirectUrl = 'laporan';
-                
+
                 if ($postData['status'] === 'Diverifikasi') {
                     // Admin/Operator langsung approve
                     $successMessage = "Laporan #{$id} berhasil dibuat dan langsung diverifikasi.";
@@ -441,7 +440,7 @@ class LaporanController extends Controller {
                     }
                     $redirectUrl = 'laporan?status=Draf';
                 }
-                
+
                 // Add role-specific info
                 if ($userRole === 'admin' && $targetUserId != $user['id']) {
                     $userModel = $this->model('User');
@@ -450,20 +449,19 @@ class LaporanController extends Controller {
                         $successMessage .= " Laporan dibuat atas nama: " . htmlspecialchars($targetUser['nama_lengkap']);
                     }
                 }
-                
+
                 $_SESSION['success'] = $successMessage;
                 $_SESSION['created_laporan_id'] = $id; // Store ID for confirmation page
-                
+
                 // Redirect to detail page for confirmation
                 $this->redirect('laporan/detail/' . $id);
-                
+
             } catch (PDOException $e) {
                 error_log("Database error creating laporan: " . $e->getMessage());
                 error_log("SQL Error Code: " . $e->getCode());
-                error_log("Post Data: " . json_encode($postData));
-                
+
                 $errorMessage = 'Terjadi kesalahan database saat menyimpan laporan.';
-                
+
                 // Provide more specific error messages
                 if (strpos($e->getMessage(), 'NOT NULL') !== false) {
                     $errorMessage .= ' Pastikan semua field wajib sudah diisi.';
@@ -472,52 +470,51 @@ class LaporanController extends Controller {
                 } elseif (strpos($e->getMessage(), 'Duplicate entry') !== false) {
                     $errorMessage .= ' Data duplikat terdeteksi.';
                 }
-                
+
                 $_SESSION['error'] = $errorMessage;
-                
+
                 // Show detailed error in debug mode
                 if (defined('APP_DEBUG') && APP_DEBUG) {
                     $_SESSION['error'] .= '<br><small>Error Detail: ' . htmlspecialchars($e->getMessage()) . '</small>';
                 }
-                
+
                 $this->redirect('laporan/create');
             } catch (Exception $e) {
                 error_log("Error creating laporan: " . $e->getMessage());
-                error_log("Post Data: " . json_encode($postData));
                 $_SESSION['error'] = 'Terjadi kesalahan saat menyimpan laporan: ' . htmlspecialchars($e->getMessage());
                 $this->redirect('laporan/create');
             }
         }
-        
+
         $data_opt = $this->optModel->all();
-        
+
         $data = [
             'title' => 'Buat Laporan Baru',
             'data_opt' => $data_opt
         ];
-        
+
         $this->view('laporan/create', $data);
     }
-    
+
     public function edit($id) {
         $this->checkRole(
             ['admin', 'operator', 'petugas'],
             'Anda tidak memiliki akses untuk mengedit laporan hama. Hanya akun dengan level Admin, Operator, dan Petugas yang dapat mengedit laporan.'
         );
-        
+
         $laporan = $this->laporanModel->find($id);
         if (!$laporan) {
             $_SESSION['error'] = 'Laporan tidak ditemukan';
             $this->redirect('laporan');
         }
-        
+
         // Only creator or admin can edit
         $user = $this->getCurrentUser();
         if ($laporan['user_id'] != $user['id'] && $user['role'] != 'admin') {
             $_SESSION['error'] = 'Anda tidak memiliki akses untuk mengedit laporan ini';
             $this->redirect('laporan');
         }
-        
+
         // Special handling for rejected reports
         if ($laporan['status'] === 'Ditolak' && $user['role'] === 'petugas' && $laporan['user_id'] == $user['id']) {
             // Add info message for rejected reports
@@ -525,7 +522,7 @@ class LaporanController extends Controller {
                 $_SESSION['info'] = 'Laporan ini ditolak dan perlu diperbaiki. Alasan penolakan: ' . ($laporan['catatan_verifikasi'] ?? 'Tidak ada alasan yang diberikan');
             }
         }
-        
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $this->validateCsrfToken();
             $postData = [
@@ -550,19 +547,19 @@ class LaporanController extends Controller {
             if ($userRole === 'petugas') {
                 // Validasi khusus untuk role Petugas - field lokasi wajib
                 $errors = [];
-                
+
                 if (empty($postData['kabupaten_id'])) {
                     $errors[] = 'Kabupaten wajib dipilih';
                 }
-                
+
                 if (empty($postData['kecamatan_id'])) {
                     $errors[] = 'Kecamatan wajib dipilih';
                 }
-                
+
                 if (empty($postData['desa_id'])) {
                     $errors[] = 'Desa wajib dipilih';
                 }
-                
+
                 if (!empty($errors)) {
                     $_SESSION['error'] = implode('<br>', $errors);
                     $this->redirect('laporan/edit/' . $id);
@@ -598,59 +595,59 @@ class LaporanController extends Controller {
                     $this->redirect('laporan/edit/' . $id);
                 }
             }
-            
+
             // Handle file upload with automatic compression
             if (isset($_FILES['foto']) && $_FILES['foto']['error'] == 0) {
                 require_once ROOT_PATH . '/app/helpers/ImageCompressor.php';
-                
+
                 $uploadDir = UPLOAD_PATH . 'laporan/';
                 if (!is_dir($uploadDir)) {
                     mkdir($uploadDir, 0777, true);
                 }
-                
+
                 $file = $_FILES['foto'];
                 $maxSize = 2 * 1024 * 1024; // 2MB
                 $allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
                 $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
-                
+
                 // Validate file type using finfo
                 $finfo = finfo_open(FILEINFO_MIME_TYPE);
                 $mimeType = finfo_file($finfo, $file['tmp_name']);
                 finfo_close($finfo);
-                
+
                 if (!in_array($mimeType, $allowedTypes)) {
                     $_SESSION['error'] = 'Tipe file tidak diizinkan. Hanya JPG, PNG, dan WEBP yang diizinkan.';
                     $this->redirect('laporan/edit/' . $id);
                 }
-                
+
                 // Validate file extension
                 $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
                 if (!in_array($extension, $allowedExtensions)) {
                     $_SESSION['error'] = 'Ekstensi file tidak diizinkan. Hanya JPG, PNG, dan WEBP yang diizinkan.';
                     $this->redirect('laporan/edit/' . $id);
                 }
-                
+
                 // Generate secure filename
                 $fileName = hash('sha256', time() . $file['name'] . uniqid()) . '.' . $extension;
                 $targetPath = $uploadDir . $fileName;
-                
+
                 // Move uploaded file to temporary location
                 $tempPath = $file['tmp_name'];
-                
+
                 // Check if compression is needed
                 if ($file['size'] > $maxSize) {
                     // File is too large, compress it
                     $compressor = new ImageCompressor();
                     $result = $compressor->compress($tempPath, $targetPath, $maxSize);
-                    
+
                     if ($result['success']) {
                         $postData['foto_url'] = 'public/uploads/laporan/' . $fileName;
-                        
+
                         // Delete old photo if exists
                         if (!empty($laporan['foto_url']) && file_exists(ROOT_PATH . '/' . $laporan['foto_url'])) {
                             unlink(ROOT_PATH . '/' . $laporan['foto_url']);
                         }
-                        
+
                         // Set info message about compression
                         if ($result['compressed']) {
                             $originalSize = ImageCompressor::formatFileSize($result['original_size']);
@@ -665,7 +662,7 @@ class LaporanController extends Controller {
                     // File size is acceptable, just move it
                     if (move_uploaded_file($tempPath, $targetPath)) {
                         $postData['foto_url'] = 'public/uploads/laporan/' . $fileName;
-                        
+
                         // Delete old photo if exists
                         if (!empty($laporan['foto_url']) && file_exists(ROOT_PATH . '/' . $laporan['foto_url'])) {
                             unlink(ROOT_PATH . '/' . $laporan['foto_url']);
@@ -676,7 +673,7 @@ class LaporanController extends Controller {
                     }
                 }
             }
-            
+
             $this->laporanModel->update($id, $postData);
 
             // Auto-approve logic (only runs if enabled in config)
@@ -698,15 +695,15 @@ class LaporanController extends Controller {
                     $stmt->execute([$user['id'], 'AutoApprove', 'laporan_hama', $id, 'Laporan auto-approve setelah edit', $_SERVER['REMOTE_ADDR'] ?? '', $_SERVER['HTTP_USER_AGENT'] ?? '']);
                 }
             }
-            
+
             // Special handling for rejected reports that are being resubmitted
             if ($laporan['status'] === 'Ditolak' && $postData['status'] === 'Submitted') {
                 // Log the resubmission
                 $this->logStatusHistory($id, 'Ditolak', 'Submitted', $user['id'], 'Laporan diperbaiki dan disubmit ulang');
-                
+
                 // Notify admins/operators about resubmission
                 $this->notifyAdminsOperatorsResubmission($id, $user, $laporan['catatan_verifikasi']);
-                
+
                 $_SESSION['success'] = 'Laporan berhasil diperbaiki dan disubmit ulang untuk verifikasi';
                 $this->redirect('laporan?status=Submitted');
             } else {
@@ -714,22 +711,22 @@ class LaporanController extends Controller {
                 $this->redirect('laporan');
             }
         }
-        
+
         $data_opt = $this->optModel->all();
-        
+
         $data = [
             'title' => 'Edit Laporan',
             'laporan' => $laporan,
             'data_opt' => $data_opt
         ];
-        
+
         $this->view('laporan/edit', $data);
     }
-    
+
     public function detail($id) {
         $this->checkAuth();
-        
-        $sql = "SELECT 
+
+        $sql = "SELECT
                     lh.*,
                     mo.kode_opt,
                     mo.nama_opt,
@@ -745,35 +742,35 @@ class LaporanController extends Controller {
                 LEFT JOIN users u ON lh.user_id = u.id
                 LEFT JOIN users v ON lh.verified_by = v.id
                 WHERE lh.id = ?";
-        
+
         $result = $this->laporanModel->query($sql, [$id]);
         $laporan = $result[0] ?? null;
-        
+
         if (!$laporan) {
             $_SESSION['error'] = 'Laporan tidak ditemukan';
             $this->redirect('laporan');
         }
-        
+
         // Fetch status history
         $statusHistory = $this->getStatusHistory($id);
-        
+
         $data = [
             'title' => 'Detail Laporan',
             'laporan' => $laporan,
             'statusHistory' => $statusHistory
         ];
-        
+
         $this->view('laporan/view', $data);
     }
-    
+
     private function getStatusHistory($laporanId) {
         try {
             $db = Database::getInstance()->getConnection();
             $stmt = $db->prepare("
-                SELECT sh.*, u.nama_lengkap as changed_by_name 
-                FROM laporan_status_history sh 
-                LEFT JOIN users u ON sh.changed_by = u.id 
-                WHERE sh.laporan_id = ? 
+                SELECT sh.*, u.nama_lengkap as changed_by_name
+                FROM laporan_status_history sh
+                LEFT JOIN users u ON sh.changed_by = u.id
+                WHERE sh.laporan_id = ?
                 ORDER BY sh.created_at DESC
             ");
             $stmt->execute([$laporanId]);
@@ -784,53 +781,53 @@ class LaporanController extends Controller {
             return [];
         }
     }
-    
+
     public function verify($id) {
         $this->checkRole(['admin', 'operator']);
-        
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Handle AJAX request
             $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
-            
+
             if ($isAjax) {
                 // Validate CSRF token for AJAX
                 $input = json_decode(file_get_contents('php://input'), true);
                 if (empty($input['csrf_token']) || !$this->validateCsrfTokenAjax($input['csrf_token'])) {
                     $this->json(['success' => false, 'message' => 'Token CSRF tidak valid'], 403);
                 }
-                
+
                 // Get the current report
                 $laporan = $this->laporanModel->find($id);
                 if (!$laporan) {
                     $this->json(['success' => false, 'message' => 'Laporan tidak ditemukan'], 404);
                 }
-                
+
                 // Validate status transition: only Submitted can be verified/rejected
                 if ($laporan['status'] !== 'Submitted') {
                     $this->json(['success' => false, 'message' => 'Hanya laporan dengan status "Submitted" yang dapat diverifikasi'], 400);
                 }
-                
+
                 $user = $this->getCurrentUser();
                 $status = $input['status'] ?? '';
                 $catatan = $input['catatan_verifikasi'] ?? '';
-                
+
                 // Validate status value
                 if (!in_array($status, ['Diverifikasi', 'Ditolak'])) {
                     $this->json(['success' => false, 'message' => 'Status verifikasi tidak valid'], 400);
                 }
-                
+
                 // Require comment for rejection
                 if ($status === 'Ditolak' && empty(trim($catatan))) {
                     $this->json(['success' => false, 'message' => 'Alasan penolakan wajib diisi'], 400);
                 }
-                
+
                 try {
                     // Perform verification
                     $this->laporanModel->verify($id, $user['id'], $status, $catatan);
-                    
+
                     // Log to status history table
                     $this->logStatusHistory($id, 'Submitted', $status, $user['id'], $catatan);
-                    
+
                     // Log to activity_log
                     $db = Database::getInstance()->getConnection();
                     $action = $status === 'Diverifikasi' ? 'VerifyReport' : 'RejectReport';
@@ -839,7 +836,7 @@ class LaporanController extends Controller {
                         : "Laporan #{$id} ditolak: {$catatan}";
                     $stmt = $db->prepare("INSERT INTO activity_log (user_id, action, table_name, record_id, description, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?)");
                     $stmt->execute([$user['id'], $action, 'laporan_hama', $id, $description, $_SERVER['REMOTE_ADDR'] ?? '', $_SERVER['HTTP_USER_AGENT'] ?? '']);
-                    
+
                     // Create notification for the report creator
                     if ($laporan['user_id']) {
                         $notifTitle = $status === 'Diverifikasi'
@@ -849,16 +846,18 @@ class LaporanController extends Controller {
                             ? "Laporan #{$id} telah diverifikasi oleh {$user['nama_lengkap']}"
                             : "Laporan #{$id} ditolak oleh {$user['nama_lengkap']}. Alasan: {$catatan}";
                         $notifType = $status === 'Diverifikasi' ? 'success' : 'danger';
-                        
+
                         $this->createNotification($laporan['user_id'], $notifTitle, $notifMessage, $notifType);
                     }
-                    
+
+                    $this->clearDashboardCache();
+
                     $successMsg = $status === 'Diverifikasi'
                         ? 'Laporan berhasil diverifikasi'
                         : 'Laporan berhasil ditolak';
-                    
+
                     $this->json(['success' => true, 'message' => $successMsg]);
-                    
+
                 } catch (Exception $e) {
                     error_log("Verification error: " . $e->getMessage());
                     $this->json(['success' => false, 'message' => 'Terjadi kesalahan saat memproses laporan'], 500);
@@ -866,42 +865,42 @@ class LaporanController extends Controller {
             } else {
                 // Handle traditional form submission
                 $this->validateCsrfToken();
-                
+
                 // Get the current report
                 $laporan = $this->laporanModel->find($id);
                 if (!$laporan) {
                     $_SESSION['error'] = 'Laporan tidak ditemukan';
                     $this->redirect('laporan');
                 }
-                
+
                 // Validate status transition: only Submitted can be verified/rejected
                 if ($laporan['status'] !== 'Submitted') {
                     $_SESSION['error'] = 'Hanya laporan dengan status "Submitted" yang dapat diverifikasi';
                     $this->redirect('laporan/detail/' . $id);
                 }
-                
+
                 $user = $this->getCurrentUser();
                 $status = $_POST['status'];
                 $catatan = $_POST['catatan_verifikasi'] ?? '';
-                
+
                 // Validate status value
                 if (!in_array($status, ['Diverifikasi', 'Ditolak'])) {
                     $_SESSION['error'] = 'Status verifikasi tidak valid';
                     $this->redirect('laporan/detail/' . $id);
                 }
-                
+
                 // Require comment for rejection
                 if ($status === 'Ditolak' && empty(trim($catatan))) {
                     $_SESSION['error'] = 'Alasan penolakan wajib diisi';
                     $this->redirect('laporan/detail/' . $id);
                 }
-                
+
                 // Perform verification
                 $this->laporanModel->verify($id, $user['id'], $status, $catatan);
-                
+
                 // Log to status history table
                 $this->logStatusHistory($id, 'Submitted', $status, $user['id'], $catatan);
-                
+
                 // Log to activity_log
                 $db = Database::getInstance()->getConnection();
                 $action = $status === 'Diverifikasi' ? 'VerifyReport' : 'RejectReport';
@@ -910,7 +909,7 @@ class LaporanController extends Controller {
                     : "Laporan #{$id} ditolak: {$catatan}";
                 $stmt = $db->prepare("INSERT INTO activity_log (user_id, action, table_name, record_id, description, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?)");
                 $stmt->execute([$user['id'], $action, 'laporan_hama', $id, $description, $_SERVER['REMOTE_ADDR'] ?? '', $_SERVER['HTTP_USER_AGENT'] ?? '']);
-                
+
                 // Create notification for the report creator
                 if ($laporan['user_id']) {
                     $notifTitle = $status === 'Diverifikasi'
@@ -920,15 +919,17 @@ class LaporanController extends Controller {
                         ? "Laporan #{$id} telah diverifikasi oleh {$user['nama_lengkap']}"
                         : "Laporan #{$id} ditolak oleh {$user['nama_lengkap']}. Alasan: {$catatan}";
                     $notifType = $status === 'Diverifikasi' ? 'success' : 'danger';
-                    
+
                     $this->createNotification($laporan['user_id'], $notifTitle, $notifMessage, $notifType);
                 }
-                
+
+                $this->clearDashboardCache();
+
                 $successMsg = $status === 'Diverifikasi'
                     ? 'Laporan berhasil diverifikasi'
                     : 'Laporan berhasil ditolak';
                 $_SESSION['success'] = $successMsg;
-                
+
                 // Check if redirect_to parameter is set (for AJAX calls from index page)
                 $redirectTo = $_POST['redirect_to'] ?? 'detail';
                 if ($redirectTo === 'index') {
@@ -939,7 +940,7 @@ class LaporanController extends Controller {
             }
         }
     }
-    
+
     private function logStatusHistory($laporanId, $oldStatus, $newStatus, $userId, $komentar = '') {
         try {
             $db = Database::getInstance()->getConnection();
@@ -951,13 +952,21 @@ class LaporanController extends Controller {
             return false;
         }
     }
-    
+
+    private function clearDashboardCache(): void {
+        try {
+            CacheManager::getInstance()->clearPrefix('dashboard:');
+        } catch (Throwable $e) {
+            error_log('Failed to clear dashboard cache: ' . $e->getMessage());
+        }
+    }
+
     public function delete($id) {
         $this->checkRole(
             ['admin', 'operator', 'petugas'],
             'Anda tidak memiliki akses untuk menghapus laporan hama. Hanya akun dengan level Admin, Operator, dan Petugas yang dapat menghapus laporan.'
         );
-        
+
         $this->requireStateChangingRequest(['POST', 'DELETE']);
 
         $laporan = $this->laporanModel->find($id);
@@ -972,33 +981,34 @@ class LaporanController extends Controller {
             $_SESSION['error'] = 'Anda hanya dapat menghapus laporan yang Anda buat sendiri';
             $this->redirect('laporan');
         }
-        
+
         $this->laporanModel->delete($id);
+        $this->clearDashboardCache();
         $_SESSION['success'] = 'Laporan berhasil dihapus';
         $this->redirect('laporan');
     }
-    
+
     public function bulkDelete() {
         $this->checkRole(['admin']);
-        
+
         // Handle AJAX request
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Content-Type: application/json');
-            
+
             // Validate CSRF token
             $token = $_POST['csrf_token'] ?? '';
             if (!$this->validateCsrfTokenAjax($token)) {
                 echo json_encode(['success' => false, 'message' => 'Token CSRF tidak valid']);
                 exit;
             }
-            
+
             $ids = $_POST['ids'] ?? [];
-            
+
             if (empty($ids) || !is_array($ids)) {
                 echo json_encode(['success' => false, 'message' => 'Tidak ada data yang dipilih']);
                 exit;
             }
-            
+
             // Validate all IDs are numeric
             foreach ($ids as $id) {
                 if (!is_numeric($id)) {
@@ -1006,7 +1016,7 @@ class LaporanController extends Controller {
                     exit;
                 }
             }
-            
+
             try {
                 $deletedCount = 0;
                 foreach ($ids as $id) {
@@ -1014,9 +1024,9 @@ class LaporanController extends Controller {
                         $deletedCount++;
                     }
                 }
-                
+
                 echo json_encode([
-                    'success' => true, 
+                    'success' => true,
                     'message' => "Berhasil menghapus {$deletedCount} laporan",
                     'count' => $deletedCount
                 ]);
@@ -1026,11 +1036,11 @@ class LaporanController extends Controller {
             exit;
         }
     }
-    
+
     private function validateCsrfTokenAjax($token) {
         return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
     }
-    
+
     private function createNotification($userId, $title, $message, $type = 'info') {
         $db = Database::getInstance()->getConnection();
         $stmt = $db->prepare("
@@ -1039,14 +1049,14 @@ class LaporanController extends Controller {
         ");
         $stmt->execute([$userId, $title, $message, $type]);
     }
-    
+
     private function notifyAdminsOperatorsNewSubmission($laporanId, $creator) {
         try {
             $db = Database::getInstance()->getConnection();
             // Get all admin and operator users
             $stmt = $db->query("SELECT id FROM users WHERE role IN ('admin', 'operator') AND aktif = 1");
             $admins = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
+
             foreach ($admins as $admin) {
                 $this->createNotification(
                     $admin['id'],
@@ -1059,14 +1069,14 @@ class LaporanController extends Controller {
             error_log("Failed to notify admins/operators: " . $e->getMessage());
         }
     }
-    
+
     private function notifyAdminsOperatorsResubmission($laporanId, $creator, $previousRejectionReason) {
         try {
             $db = Database::getInstance()->getConnection();
             // Get all admin and operator users
             $stmt = $db->query("SELECT id FROM users WHERE role IN ('admin', 'operator') AND aktif = 1");
             $admins = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
+
             foreach ($admins as $admin) {
                 $this->createNotification(
                     $admin['id'],
@@ -1079,19 +1089,19 @@ class LaporanController extends Controller {
             error_log("Failed to notify admins/operators about resubmission: " . $e->getMessage());
         }
     }
-    
+
     /**
      * Validate laporan data based on user role
      * Different validation rules for admin, operator, and petugas
      */
     private function validateLaporanData($data, $userRole) {
         $errors = [];
-        
+
         // Common validations for all roles
         if (empty($data['master_opt_id'])) {
             $errors[] = 'OPT wajib dipilih';
         }
-        
+
         if (empty($data['tanggal'])) {
             $errors[] = 'Tanggal pelaporan wajib diisi';
         } else {
@@ -1105,7 +1115,7 @@ class LaporanController extends Controller {
                 $errors[] = 'Tanggal pelaporan tidak boleh di masa depan';
             }
         }
-        
+
         if (empty($data['tingkat_keparahan'])) {
             $errors[] = 'Tingkat keparahan wajib dipilih';
         } else {
@@ -1114,103 +1124,178 @@ class LaporanController extends Controller {
                 $errors[] = 'Tingkat keparahan tidak valid';
             }
         }
-        
+
         // Role-specific validations
         if ($userRole === 'petugas') {
             // Petugas: Validasi lebih ketat, semua field lokasi wajib
             if (empty($data['kabupaten_id']) || empty($data['kecamatan_id']) || empty($data['desa_id'])) {
                 $errors[] = 'Data lokasi lengkap (kabupaten, kecamatan, desa) wajib diisi untuk petugas';
             }
-            
+
             if (empty($data['alamat_lengkap']) || strlen(trim($data['alamat_lengkap'])) < 10) {
                 $errors[] = 'Alamat lengkap wajib diisi minimal 10 karakter untuk petugas';
             }
-            
+
             // Petugas hanya dapat membuat dengan status Draf atau Submitted
             if (!in_array($data['status'], ['Draf', 'Submitted'])) {
                 $errors[] = 'Status tidak valid untuk petugas. Hanya Draf dan Submitted yang diizinkan.';
             }
-            
+
             // Petugas wajib mengisi populasi jika tingkat keparahan Berat
             if ($data['tingkat_keparahan'] === 'Berat' && empty($data['populasi'])) {
                 $errors[] = 'Populasi wajib diisi untuk tingkat keparahan Berat';
             }
-            
+
         } elseif ($userRole === 'operator') {
             // Operator: Validasi standar
             if (empty($data['kabupaten_id']) || empty($data['kecamatan_id']) || empty($data['desa_id'])) {
                 $errors[] = 'Data lokasi lengkap (kabupaten, kecamatan, desa) wajib diisi';
             }
-            
+
             if (empty($data['alamat_lengkap']) || strlen(trim($data['alamat_lengkap'])) < 5) {
                 $errors[] = 'Alamat lengkap wajib diisi minimal 5 karakter';
             }
-            
+
             // Operator dapat membuat dengan status Draf, Submitted, atau Diverifikasi
             if (!in_array($data['status'], ['Draf', 'Submitted', 'Diverifikasi'])) {
                 $errors[] = 'Status tidak valid untuk operator';
             }
-            
+
         } elseif ($userRole === 'admin') {
             // Admin: Validasi lebih fleksibel
             // Admin dapat membuat laporan dengan lokasi tidak lengkap (untuk data entry)
             if (empty($data['alamat_lengkap'])) {
                 $errors[] = 'Alamat lengkap wajib diisi';
             }
-            
+
             // Admin dapat membuat dengan status apapun
             $allowedStatuses = ['Draf', 'Submitted', 'Diverifikasi', 'Ditolak'];
             if (!in_array($data['status'], $allowedStatuses)) {
                 $errors[] = 'Status tidak valid';
             }
-            
+
             // Admin dapat langsung approve (Diverifikasi)
             if ($data['status'] === 'Diverifikasi' && (empty($data['kabupaten_id']) || empty($data['kecamatan_id']) || empty($data['desa_id']))) {
                 $errors[] = 'Data lokasi lengkap wajib diisi untuk laporan yang langsung diverifikasi';
             }
         }
-        
+
         // Validate numeric fields
         if (isset($data['populasi']) && $data['populasi'] < 0) {
             $errors[] = 'Populasi tidak boleh negatif';
         }
-        
+
         if (isset($data['luas_serangan']) && $data['luas_serangan'] < 0) {
             $errors[] = 'Luas serangan tidak boleh negatif';
         }
-        
+
         // Validate luas serangan tidak boleh melebihi populasi (boleh sama dengan)
         if (isset($data['populasi']) && isset($data['luas_serangan'])) {
             $populasi = (float)$data['populasi'];
             $luasSerangan = (float)$data['luas_serangan'];
-            
+
             // Only validate if both values are provided and greater than 0
             // Luas serangan boleh sama dengan populasi (<=), tidak boleh lebih besar (>)
             if ($populasi > 0 && $luasSerangan > 0 && $luasSerangan > $populasi) {
                 $errors[] = 'Luas Serangan (' . number_format($luasSerangan, 2) . ' Ha) tidak boleh melebihi Populasi/Intensitas (' . number_format($populasi, 2) . ' Ha). Nilai maksimal yang diizinkan: ' . number_format($populasi, 2) . ' Ha';
             }
         }
-        
+
         // Validate GPS coordinates if provided
         if (!empty($data['latitude']) && !empty($data['longitude'])) {
             $lat = (float)$data['latitude'];
             $lon = (float)$data['longitude'];
-            
+
             if ($lat < -90 || $lat > 90) {
                 $errors[] = 'Latitude harus antara -90 dan 90';
             }
-            
+
             if ($lon < -180 || $lon > 180) {
                 $errors[] = 'Longitude harus antara -180 dan 180';
             }
-            
+
             // Check Jember boundaries if both provided
-            if ($lat < JEMBER_LAT_MIN || $lat > JEMBER_LAT_MAX || 
+            if ($lat < JEMBER_LAT_MIN || $lat > JEMBER_LAT_MAX ||
                 $lon < JEMBER_LON_MIN || $lon > JEMBER_LON_MAX) {
                 $errors[] = 'Koordinat GPS harus berada dalam wilayah Jember';
             }
         }
-        
+
         return $errors;
+    }
+
+    /**
+     * API: AJAX pagination fetch for Daftar Laporan page
+     * GET /laporan/fetch
+     *
+     * Query params:
+     *   page       Page number (default: 1)
+     *   per_page   Rows per page: 10, 20, 50, 100, or all (default: 10)
+     *   status     Filter by status (optional)
+     *   search    Search query (optional)
+     *   sort_col  Sort column (optional)
+     *   sort_dir  Sort direction ASC|DESC (optional)
+     */
+    public function fetch() {
+        $this->checkAuth();
+        header('Content-Type: application/json');
+
+        error_log("[LaporanController::fetch] Request received - GET: " . json_encode($_GET));
+
+        try {
+            $page    = max(1, intval($_GET['page'] ?? 1));
+            $perPage = $_GET['per_page'] ?? '10';
+            $search  = trim($_GET['search'] ?? '');
+            $status  = trim($_GET['status'] ?? '');
+            $sortCol = trim($_GET['sort_col'] ?? 'tanggal');
+            $sortDir = trim($_GET['sort_dir'] ?? 'desc');
+
+            error_log("[LaporanController::fetch] Parsed params: page=$page, perPage=$perPage, search='$search', status='$status', sortCol='$sortCol', sortDir='$sortDir'");
+
+            $perPage = match (strtolower($perPage)) {
+                '20'   => 20,
+                '50'   => 50,
+                '100'  => 100,
+                'all'  => -1,
+                default => 10,
+            };
+
+            $user = $this->getCurrentUser();
+            error_log("[LaporanController::fetch] Current user: id={$user['id']}, role={$user['role']}");
+
+            $userId = $user['role'] === 'petugas' ? $user['id'] : null;
+            if ($userId) {
+                error_log("[LaporanController::fetch] Petugas user - filtering by user_id=$userId");
+            }
+
+            $filters = [
+                'search'    => $search,
+                'status'    => $status,
+                'order_col' => 'lh.' . $sortCol,
+                'order_dir' => in_array(strtoupper($sortDir), ['ASC', 'DESC']) ? strtoupper($sortDir) : 'DESC',
+            ];
+
+            error_log("[LaporanController::fetch] Calling model->fetchPaginated");
+            $result = $this->laporanModel->fetchPaginated($filters, $page, $perPage, $userId);
+
+            error_log("[LaporanController::fetch] Model returned: total={$result['total']}, rows=" . count($result['rows']));
+
+            echo json_encode([
+                'success' => true,
+                'data'    => $result,
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+
+        } catch (Exception $e) {
+            error_log("[LaporanController::fetch] Exception: " . $e->getMessage());
+            error_log("[LaporanController::fetch] Trace: " . $e->getTraceAsString());
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Terjadi kesalahan server: ' . $e->getMessage(),
+                'data'    => ['rows' => [], 'total' => 0, 'page' => $page, 'perPage' => $perPage, 'totalPages' => 0, 'statusCounts' => []]
+            ]);
+            exit;
+        }
     }
 }

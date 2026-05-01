@@ -209,12 +209,14 @@ tbody tr:hover {
     background-color: rgba(0, 0, 0, 0.9);
     z-index: 9999;
     cursor: pointer;
-    cursor: pointer;
-}
-
-    display: flex;
     align-items: center;
     justify-content: center;
+}
+
+/* Show overlay when active */
+.photo-preview-overlay.show {
+    display: flex;
+}
 
 .photo-preview-image {
     max-width: 90%;
@@ -722,12 +724,38 @@ tbody tr:hover {
                     </div>
                 </div>
 
+<!-- Table Toolbar -->
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3" id="tableToolbar">
+                    <!-- Per-page dropdown -->
+                    <div class="d-flex align-items-center gap-2">
+                        <label class="text-muted small mb-0" for="perPageSelect">Tampilkan:</label>
+                        <select id="perPageSelect" class="form-select form-select-sm" style="width:auto; min-width:90px;">
+                            <option value="10" selected>10</option>
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                            <option value="all">Semua</option>
+                        </select>
+                        <span class="text-muted small" id="tableInfo">—</span>
+                    </div>
+                    <!-- Search -->
+                    <div class="input-group input-group-sm" style="max-width:280px;">
+                        <input type="text" id="tableSearch" class="form-control" placeholder="Cari laporan..." value="">
+                        <button class="btn btn-outline-secondary" type="button" id="searchBtn" title="Cari">
+                            <i class="fas fa-search"></i>
+                        </button>
+                        <button class="btn btn-outline-secondary" type="button" id="clearSearchBtn" title="Hapus filter" style="display:none;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Table Scroll Hint for Mobile -->
                 <div class="table-scroll-hint d-md-none">
                     <i class="fas fa-arrows-alt-h"></i>
                     <span>Geser ke kiri/kanan untuk melihat semua kolom</span>
                 </div>
-                
+
                 <!-- Table -->
                 <div class="table-responsive">
                     <table class="table table-bordered table-striped table-hover" id="laporanTable">
@@ -738,216 +766,37 @@ tbody tr:hover {
                                     <input type="checkbox" id="checkAll" title="Pilih Semua">
                                 </th>
                                 <?php endif; ?>
-                                <th width="50">No</th>
-                                <th>ID</th>
+                                <th data-sort="id" data-dir="desc" class="sortable">
+                                    ID <i class="fas fa-sort fa-sm text-muted"></i>
+                                </th>
                                 <th>Foto</th>
-                                <th>Tanggal</th>
+                                <th data-sort="tanggal" data-dir="desc" class="sortable">
+                                    Tanggal <i class="fas fa-sort fa-sm text-muted"></i>
+                                </th>
                                 <th>OPT</th>
                                 <th>Lokasi</th>
-                                <th>Keparahan</th>
+                                <th data-sort="tingkat_keparahan" data-dir="asc" class="sortable">
+                                    Keparahan <i class="fas fa-sort fa-sm text-muted"></i>
+                                </th>
                                 <th>Populasi</th>
-                                <th>Status</th>
+                                <th data-sort="status" data-dir="asc" class="sortable">
+                                    Status <i class="fas fa-sort fa-sm text-muted"></i>
+                                </th>
                                 <th>Pelapor</th>
-                                <th>Dibuat</th>
+                                <th data-sort="created_at" data-dir="desc" class="sortable">
+                                    Dibuat <i class="fas fa-sort fa-sm text-muted"></i>
+                                </th>
                                 <th width="120">Aksi</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            <?php if(empty($laporan)): ?>
-                            <tr>
-                                <td colspan="<?= ($_SESSION['role'] ?? '') == 'admin' ? '13' : '12' ?>" class="text-center">
-                                    <?php if(($_SESSION['role'] ?? '') === 'petugas'): ?>
-                                        Anda belum memiliki laporan<?= !empty($status) ? ' dengan status ' . $status : '' ?>
-                                    <?php else: ?>
-                                        Tidak ada data laporan<?= !empty($status) ? ' dengan status ' . $status : '' ?>
-                                    <?php endif; ?>
-                                </td>
-                            </tr>
-                            <?php else: ?>
-                                <?php $no = 1; foreach($laporan as $row): ?>
-                                <tr <?= ($row['status'] === 'Ditolak' && ($_SESSION['role'] ?? '') === 'petugas') ? 'class="rejected-report-row"' : '' ?>>
-                                    <?php if(($_SESSION['role'] ?? '') == 'admin'): ?>
-                                    <td data-label="Pilih">
-                                        <input type="checkbox" class="checkbox-item" value="<?= $row['id'] ?>">
-                                    </td>
-                                    <?php endif; ?>
-                                    <td data-label="No"><?= $no++ ?></td>
-                                    <td data-label="ID">
-                                        <span class="badge badge-light">#<?= $row['id'] ?></span>
-                                    </td>
-                                    <td data-label="Foto">
-                                        <?php if(!empty($row['foto_url'])): ?>
-                                        <div class="photo-thumbnail-container">
-                                            <img src="<?= BASE_URL . $row['foto_url'] ?>" 
-                                                 alt="Foto Laporan #<?= $row['id'] ?>"
-                                                 class="photo-thumbnail"
-                                                 data-full-image="<?= BASE_URL . $row['foto_url'] ?>"
-                                                 loading="lazy"
-                                                 onerror="this.onerror=null; this.classList.add('no-image'); this.alt='Foto tidak ditemukan'; this.style.display='none'; this.parentElement.innerHTML='<div class=\'photo-thumbnail no-image\' title=\'Foto tidak ditemukan\'><i class=\'fas fa-image\'></i></div>';">
-                                        </div>
-                                        <?php else: ?>
-                                        <div class="photo-thumbnail-container">
-                                            <div class="photo-thumbnail no-image" title="Tidak ada foto">
-                                                <i class="fas fa-image"></i>
-                                            </div>
-                                        </div>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td data-label="Tanggal"><?= date('d/m/Y', strtotime($row['tanggal'])) ?></td>
-                                    <td data-label="OPT">
-                                        <strong><?= htmlspecialchars($row['nama_opt'] ?? 'N/A') ?></strong>
-                                        <br><small class="text-muted"><?= htmlspecialchars($row['jenis'] ?? '-') ?></small>
-                                    </td>
-                                    <td data-label="Lokasi">
-                                        <div><strong>Kab. <?= htmlspecialchars($row['kabupaten'] ?? 'Jember') ?></strong></div>
-                                        <div>Kec. <?= htmlspecialchars($row['kecamatan'] ?? '-') ?></div>
-                                        <div>Desa <?= htmlspecialchars($row['desa'] ?? '-') ?></div>
-                                        <div class="text-muted small"><?= htmlspecialchars(substr($row['alamat_lengkap'] ?? ($row['lokasi'] ?? '-'), 0, 30)) ?><?= strlen($row['alamat_lengkap'] ?? ($row['lokasi'] ?? '')) > 30 ? '...' : '' ?></div>
-                                    </td>
-                                    <td data-label="Keparahan">
-                                        <span class="badge badge-<?= 
-                                            $row['tingkat_keparahan'] == 'Berat' ? 'danger' : 
-                                            ($row['tingkat_keparahan'] == 'Sedang' ? 'warning' : 'info') 
-                                        ?>">
-                                            <?= $row['tingkat_keparahan'] ?>
-                                        </span>
-                                    </td>
-                                    <td data-label="Populasi">
-                                        <?= $row['populasi'] ?? 0 ?>
-                                        <?php if(isset($row['etl_acuan']) && $row['etl_acuan'] > 0 && ($row['populasi'] ?? 0) > $row['etl_acuan']): ?>
-                                        <i class="fas fa-exclamation-triangle text-danger" title="Melampaui ETL"></i>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td data-label="Status">
-                                        <span class="badge badge-<?= 
-                                            $row['status'] == 'Diverifikasi' ? 'success' : 
-                                            ($row['status'] == 'Submitted' ? 'warning' : 
-                                            ($row['status'] == 'Ditolak' ? 'danger' : 'secondary'))
-                                        ?>" title="<?= 
-                                            $row['status'] == 'Diverifikasi' ? 'Laporan telah diverifikasi' : 
-                                            ($row['status'] == 'Submitted' ? 'Menunggu verifikasi' : 
-                                            ($row['status'] == 'Ditolak' ? 'Laporan ditolak' : 'Draft belum resmi'))
-                                        ?>">
-                                            <i class="fas fa-<?= 
-                                                $row['status'] == 'Diverifikasi' ? 'check-circle' : 
-                                                ($row['status'] == 'Submitted' ? 'paper-plane' : 
-                                                ($row['status'] == 'Ditolak' ? 'times-circle' : 'file'))
-                                            ?>"></i>
-                                            <?= $row['status'] ?>
-                                        </span>
-                                        
-                                        <?php if($row['status'] === 'Ditolak' && !empty($row['catatan_verifikasi'])): ?>
-                                        <br>
-                                        <small class="text-danger">
-                                            <i class="fas fa-comment"></i> 
-                                            <strong>Alasan:</strong> <?= htmlspecialchars(substr($row['catatan_verifikasi'], 0, 30)) ?><?= strlen($row['catatan_verifikasi']) > 30 ? '...' : '' ?>
-                                        </small>
-                                        <?php endif; ?>
-                                        
-                                        <?php if($row['status'] === 'Ditolak' && !empty($row['verified_at'])): ?>
-                                        <br>
-                                        <small class="text-muted">
-                                            <i class="fas fa-clock"></i> 
-                                            <?= date('d/m H:i', strtotime($row['verified_at'])) ?>
-                                        </small>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td data-label="Pelapor">
-                                        <div><strong><?= htmlspecialchars(substr($row['pelapor_nama'] ?? '-', 0, 15)) ?><?= strlen($row['pelapor_nama'] ?? '') > 15 ? '...' : '' ?></strong></div>
-                                        <small class="text-muted">
-                                            <i class="fas fa-user"></i> <?= htmlspecialchars($row['pelapor_username'] ?? '-') ?>
-                                        </small>
-                                        <br>
-                                        <span class="badge badge-<?= 
-                                            ($row['pelapor_role'] ?? '') == 'admin' ? 'danger' : 
-                                            (($row['pelapor_role'] ?? '') == 'operator' ? 'primary' : 'secondary')
-                                        ?> badge-sm">
-                                            <?= ucfirst($row['pelapor_role'] ?? '-') ?>
-                                        </span>
-                                    </td>
-                                    <td data-label="Dibuat">
-                                        <small class="text-muted">
-                                            <?= date('d/m/Y', strtotime($row['created_at'])) ?>
-                                            <br><?= date('H:i', strtotime($row['created_at'])) ?>
-                                        </small>
-                                    </td>
-                                    <td data-label="Aksi">
-                                        <div class="btn-action-group" data-row-id="<?= $row['id'] ?>">
-                                            <!-- View button - always available -->
-                                            <a href="<?= BASE_URL ?>laporan/detail/<?= $row['id'] ?>" 
-                                               class="btn-action btn-action-info btn-action-view" 
-                                               data-action="view"
-                                               title="Lihat Detail">
-                                                <i class="fas fa-eye"></i>
-                                            </a>
-                                            
-                                            <?php if($row['status'] === 'Submitted' && in_array($_SESSION['role'] ?? '', ['admin', 'operator'])): ?>
-                                            <!-- Verification buttons for Submitted reports -->
-                                            <button type="button" 
-                                                    class="btn-action btn-action-success" 
-                                                    onclick="verifyLaporan(<?= $row['id'] ?>, 'Diverifikasi')" 
-                                                    title="Verifikasi Laporan">
-                                                <i class="fas fa-check"></i>
-                                            </button>
-                                            <button type="button" 
-                                                    class="btn-action btn-action-danger" 
-                                                    onclick="rejectLaporan(<?= $row['id'] ?>)" 
-                                                    title="Tolak Laporan">
-                                                <i class="fas fa-times"></i>
-                                            </button>
-                                            <?php endif; ?>
-                                            
-                                            <?php if($row['status'] === 'Ditolak' && ($_SESSION['role'] ?? '') === 'petugas' && $row['user_id'] == $_SESSION['user_id']): ?>
-                                            <!-- Special actions for rejected reports (petugas only) -->
-                                            <div class="rejected-actions-mobile">
-                                                <small class="text-danger d-block mb-1">
-                                                    <i class="fas fa-exclamation-triangle"></i> Perlu Diperbaiki
-                                                </small>
-                                                <a href="<?= BASE_URL ?>laporan/edit/<?= $row['id'] ?>" 
-                                                   class="btn btn-warning btn-sm" 
-                                                   title="Perbaiki Laporan">
-                                                    <i class="fas fa-edit"></i> Perbaiki
-                                                </a>
-                                                <form action="<?= BASE_URL ?>laporan/delete/<?= $row['id'] ?>" method="POST" class="d-inline">
-                                                    <?= Security::getCsrfField() ?>
-                                                    <button type="submit"
-                                                            class="btn btn-danger btn-sm"
-                                                            onclick="return confirm('Yakin ingin menghapus laporan yang ditolak ini?')"
-                                                            title="Hapus Laporan">
-                                                        <i class="fas fa-trash"></i> Hapus
-                                                    </button>
-                                                </form>
-                                            </div>
-                                            <?php elseif(in_array($_SESSION['role'] ?? '', ['admin', 'operator', 'petugas'])): ?>
-                                            <!-- Regular edit button for other statuses -->
-                                            <a href="<?= BASE_URL ?>laporan/edit/<?= $row['id'] ?>" 
-                                               class="btn-action btn-action-warning btn-action-edit" 
-                                               data-action="edit"
-                                               title="Edit Laporan">
-                                                <i class="fas fa-edit"></i>
-                                            </a>
-                                            <?php endif; ?>
-                                            
-                                            <?php if(($_SESSION['role'] ?? '') == 'admin' || (($_SESSION['role'] ?? '') == 'petugas' && $row['user_id'] == $_SESSION['user_id'] && $row['status'] !== 'Ditolak')): ?>
-                                            <!-- Regular delete button (not for rejected reports of petugas - handled above) -->
-                                            <form action="<?= BASE_URL ?>laporan/delete/<?= $row['id'] ?>" method="POST" class="d-inline">
-                                                <?= Security::getCsrfField() ?>
-                                                <button type="submit"
-                                                        class="btn-action btn-action-danger btn-action-delete"
-                                                        data-action="delete"
-                                                        onclick="return confirm('Yakin ingin menghapus laporan ini?')"
-                                                        title="Hapus Laporan">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            </form>
-                                            <?php endif; ?>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                        </tbody>
+                        <tbody id="tableBody"><!-- populated by AJAX --></tbody>
                     </table>
+                </div>
+
+                <!-- Pagination Controls -->
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-3" id="paginationControls">
+                    <div class="text-muted small" id="paginationInfo"></div>
+                    <nav id="paginationNav" aria-label="Table pagination"><!-- JS --></nav>
                 </div>
             </div>
         </div>
@@ -973,7 +822,8 @@ tbody tr:hover {
     let bulkDeleteButton = null;
     let selectedCountElement = null;
     let tbody = null;
-    
+    tbody = document.querySelector('#tableBody');
+
     /**
      * Initialize bulk select functionality
      */
@@ -1001,306 +851,343 @@ tbody tr:hover {
         // Set initial state
         updateUI();
         
-        console.log('[Checkbox] Bulk select initialized successfully');
+    console.log('[Checkbox] Bulk select initialized successfully');
     }
-    
-    /**
-     * Setup master checkbox click handler
-     */
-    function setupMasterCheckbox() {
-        // Remove any existing listeners by cloning
-        const newCheckAll = checkAllElement.cloneNode(true);
-        checkAllElement.parentNode.replaceChild(newCheckAll, checkAllElement);
-        checkAllElement = newCheckAll;
-        
-        checkAllElement.addEventListener('change', function(e) {
-            e.stopPropagation();
-            
-            const isChecked = this.checked;
-            const checkboxes = document.querySelectorAll('.checkbox-item');
-            
-            // Update all child checkboxes
-            checkboxes.forEach(function(cb) {
-                cb.checked = isChecked;
-                updateRowHighlight(cb);
-            });
-            
-            // Clear indeterminate state since we're setting all to same value
-            this.indeterminate = false;
-            
-            // Update UI
-            updateBulkButton();
-        });
-    }
-    
-    /**
-     * Setup child checkboxes using event delegation
-     */
-    function setupChildCheckboxes() {
-        if (!tbody) return;
-        
-        // Use event delegation for better performance and dynamic content support
-        tbody.addEventListener('change', function(e) {
-            if (e.target.classList.contains('checkbox-item')) {
-                updateRowHighlight(e.target);
-                updateMasterState();
-                updateBulkButton();
-            }
-        });
-    }
-    
-    /**
-     * Update row highlighting based on checkbox state
-     */
-    function updateRowHighlight(checkbox) {
-        const row = checkbox.closest('tr');
-        if (!row) return;
-        
-        // Clean up any conflicting classes first
-        row.classList.remove('table-warning');
-        row.style.transform = '';
-        
-        if (checkbox.checked) {
-            row.classList.add('row-selected');
-        } else {
-            row.classList.remove('row-selected');
-        }
-    }
-    
-    /**
-     * Update master checkbox state based on child checkboxes
-     */
-    function updateMasterState() {
-        if (!checkAllElement) return;
-        
-        const allCheckboxes = document.querySelectorAll('.checkbox-item');
-        const checkedCheckboxes = document.querySelectorAll('.checkbox-item:checked');
-        
-        const totalCount = allCheckboxes.length;
-        const checkedCount = checkedCheckboxes.length;
-        
-        if (totalCount === 0 || checkedCount === 0) {
-            // None checked or no checkboxes
-            checkAllElement.checked = false;
-            checkAllElement.indeterminate = false;
-        } else if (checkedCount === totalCount) {
-            // All checked
-            checkAllElement.checked = true;
-            checkAllElement.indeterminate = false;
-        } else {
-            // Partial selection - indeterminate state
-            checkAllElement.checked = false;
-            checkAllElement.indeterminate = true;
-        }
-    }
-    
-    /**
-     * Update bulk delete button visibility and count
-     */
-    function updateBulkButton() {
-        if (!bulkDeleteButton) return;
-        
-        const checkedCount = document.querySelectorAll('.checkbox-item:checked').length;
-        
-        // Update count display
-        if (selectedCountElement) {
-            selectedCountElement.textContent = checkedCount;
-        }
-        
-        // Toggle visibility using class
-        if (checkedCount > 0) {
-            bulkDeleteButton.classList.add('show');
-        } else {
-            bulkDeleteButton.classList.remove('show');
-        }
-    }
-    
-    /**
-     * Update all UI elements
-     */
-    function updateUI() {
-        updateMasterState();
-        updateBulkButton();
-    }
-    
-    /**
-     * Setup bulk delete button handler
-     */
-    function setupBulkDeleteHandler() {
-        if (!bulkDeleteButton) return;
-        
-        // Remove existing listeners by cloning
-        const newButton = bulkDeleteButton.cloneNode(true);
-        bulkDeleteButton.parentNode.replaceChild(newButton, bulkDeleteButton);
-        bulkDeleteButton = newButton;
-        selectedCountElement = document.getElementById('selectedCount');
-        
-        bulkDeleteButton.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            handleBulkDelete();
-        });
-    }
-    
-    /**
-     * Handle bulk delete operation
-     */
-    function handleBulkDelete() {
-        const checkedBoxes = document.querySelectorAll('.checkbox-item:checked');
-        const ids = Array.from(checkedBoxes)
-            .map(function(cb) {
-                const id = cb.value;
-                return (id && /^\d+$/.test(id)) ? id : null;
-            })
-            .filter(function(id) {
-                return id !== null;
-            });
-        
-        if (ids.length === 0) {
-            showNotification('error', 'Tidak ada data yang dipilih');
-            return;
-        }
-        
-        const confirmMessage = 'Apakah Anda yakin ingin menghapus ' + ids.length + ' laporan yang dipilih?\n\n⚠️ Tindakan ini tidak dapat dibatalkan!';
-        
-        if (!confirm(confirmMessage)) {
-            return;
-        }
-        
-        // Show loading state
-        const originalHtml = bulkDeleteButton.innerHTML;
-        bulkDeleteButton.disabled = true;
-        bulkDeleteButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menghapus...';
-        
-        // Prepare form data
-        const formData = new FormData();
-        const csrfToken = '<?= $_SESSION['csrf_token'] ?? '' ?>';
-        
-        if (!csrfToken) {
-            showNotification('error', 'Token CSRF tidak ditemukan. Silakan refresh halaman.');
-            restoreBulkDeleteButton(originalHtml);
-            return;
-        }
-        
-        formData.append('csrf_token', csrfToken);
-        ids.forEach(function(id) {
-            formData.append('ids[]', id);
-        });
-        
-        // Send AJAX request
-        const controller = new AbortController();
-        const timeoutId = setTimeout(function() {
-            controller.abort();
-        }, 30000);
-        
-        fetch('<?= BASE_URL ?>laporan/bulkDelete', {
-            method: 'POST',
-            body: formData,
-            signal: controller.signal
-        })
-        .then(function(response) {
-            clearTimeout(timeoutId);
-            if (!response.ok) {
-                throw new Error('Network error: ' + response.status);
-            }
-            return response.json();
-        })
-        .then(function(data) {
-            restoreBulkDeleteButton(originalHtml);
-            
-            if (data && data.success) {
-                const message = data.message || '✅ Berhasil menghapus ' + ids.length + ' laporan';
-                showNotification('success', message);
-                setTimeout(function() {
-                    window.location.reload();
-                }, 1500);
-            } else {
-                showNotification('error', (data && data.message) ? data.message : 'Gagal menghapus data');
-            }
-        })
-        .catch(function(error) {
-            clearTimeout(timeoutId);
-            restoreBulkDeleteButton(originalHtml);
-            
-            let errorMsg = 'Terjadi kesalahan saat menghapus data';
-            if (error.name === 'AbortError') {
-                errorMsg = 'Request timeout. Silakan coba lagi.';
-            } else if (error.message) {
-                errorMsg = error.message;
-            }
-            
-            showNotification('error', errorMsg);
-            console.error('[BulkDelete] Error:', error);
-        });
-    }
-    
-    /**
-     * Restore bulk delete button to original state
-     */
-    function restoreBulkDeleteButton(originalHtml) {
-        if (bulkDeleteButton) {
-            bulkDeleteButton.disabled = false;
-            bulkDeleteButton.innerHTML = originalHtml;
-            selectedCountElement = document.getElementById('selectedCount');
-        }
-    }
-    
-    /**
-     * Show notification message
-     */
-    window.showNotification = function(type, message) {
-        // Remove existing notifications
-        document.querySelectorAll('.bulk-delete-notification').forEach(function(n) {
-            n.remove();
-        });
-        
-        const notification = document.createElement('div');
-        const typeClass = type === 'success' ? 'success' : (type === 'info' ? 'info' : 'danger');
-        const icon = type === 'success' ? 'check-circle' : (type === 'info' ? 'info-circle' : 'exclamation-circle');
-        
-        notification.className = 'bulk-delete-notification alert alert-' + typeClass + ' alert-dismissible fade show';
-        notification.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 10000; min-width: 300px; max-width: 500px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); border-radius: 8px; border: none;';
-        
-        notification.innerHTML = '<button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>' +
-            '<i class="fas fa-' + icon + ' mr-2"></i> ' +
-            '<strong>' + (type === 'success' ? 'Berhasil!' : (type === 'info' ? 'Info:' : 'Error!')) + '</strong> ' +
-            message;
-        
-        document.body.appendChild(notification);
-        
-        // Auto remove after 5 seconds
-        setTimeout(function() {
-            if (notification.parentNode) {
-                notification.remove();
-            }
-        }, 5000);
-        
-        // Click to dismiss
-        notification.addEventListener('click', function() {
-            this.remove();
-        });
+
+    // ─────────────────────────────────────────────────────────────────────
+    // AJAX Pagination Table
+    // ─────────────────────────────────────────────────────────────────────
+    const BASE_URL = '<?= rtrim(BASE_URL, '/') ?>/';
+    let state = {
+        page: 1,
+        perPage: 10,
+        search: '',
+        status: '<?= $status ?>',
+        sortCol: 'tanggal',
+        sortDir: 'desc',
+        total: 0,
+        totalPages: 1,
+        loading: false,
+        abortController: null,
     };
-    
-    /**
-     * Initialize on DOM ready
-     */
-    function init() {
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initBulkSelect);
-        } else {
-            initBulkSelect();
+
+    function qs(sel) { return document.querySelector(sel); }
+    function qsa(sel) { return document.querySelectorAll(sel); }
+
+    function buildURL() {
+        const params = new URLSearchParams({
+            page: state.page,
+            per_page: state.perPage,
+            search: state.search,
+            status: state.status,
+            sort_col: state.sortCol,
+            sort_dir: state.sortDir,
+        });
+        return BASE_URL + 'laporan/fetch?' + params;
+    }
+
+    function showLoader() {
+        const tbody = qs('#tableBody');
+        if (!tbody) return;
+        tbody.innerHTML = '<tr><td colspan="12" class="text-center py-5"><div class="spinner-border text-primary" role="status" style="width:2rem;height:2rem;"><span class="visually-hidden">Loading...</span></div><div class="mt-2 text-muted small">Memuat data...</div></td></tr>';
+    }
+
+    function escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        const div = document.createElement('div');
+        div.textContent = String(str);
+        return div.innerHTML;
+    }
+
+    function formatDate(d) {
+        if (!d) return '—';
+        try { return new Date(d).toLocaleDateString('id-ID', {day:'2-digit',month:'2-digit',year:'numeric'}); }
+        catch { return d; }
+    }
+
+    function severityBadge(k) {
+        const map = {Berat:'danger', Sedang:'warning'};
+        return `<span class="badge badge-${map[k]||'info'}">${escapeHtml(k)}</span>`;
+    }
+
+    function statusBadge(s) {
+        const map = {
+            Diverifikasi: { cls:'success', icon:'check-circle' },
+            Submitted:    { cls:'warning',  icon:'paper-plane' },
+            Ditolak:      { cls:'danger',   icon:'times-circle' },
+            Draf:         { cls:'secondary',icon:'file' },
+        };
+        const cfg = map[s] || { cls:'secondary', icon:'file' };
+        return `<span class="badge badge-${cfg.cls}" title="${escapeHtml(s)}"><i class="fas fa-${cfg.icon}"></i> ${escapeHtml(s)}</span>`;
+    }
+
+    function roleBadge(r) {
+        const map = {admin:'danger', operator:'primary'};
+        return `<span class="badge badge-${map[r]||'secondary'} badge-sm">${escapeHtml(r||'-')}</span>`;
+    }
+
+    function sortIcon(col) {
+        if (state.sortCol !== col) return '<i class="fas fa-sort fa-sm text-muted"></i>';
+        return state.sortDir === 'asc' ? '<i class="fas fa-sort-up fa-sm text-primary"></i>' : '<i class="fas fa-sort-down fa-sm text-primary"></i>';
+    }
+
+    function buildTableRow(r, idx) {
+        const isAdmin = '<?= $_SESSION['role'] ?? '' ?>' === 'admin';
+        const isPetugas = '<?= $_SESSION['role'] ?? '' ?>' === 'petugas';
+        const canVerify = r.status === 'Submitted' && (isAdmin || '<?= $_SESSION['role'] ?? '' ?>' === 'operator');
+        const canEdit = (isAdmin || isPetugas) && r.status !== 'Ditolak';
+        const canDelete = isAdmin || (isPetugas);
+        const foto = r.foto_url
+            ? `<div class="photo-thumbnail-container"><img src="${BASE_URL}${r.foto_url}" alt="Foto" class="photo-thumbnail" data-full-image="${BASE_URL}${r.foto_url}" loading="lazy" onerror="this.onerror=null;this.style.display='none';this.parentElement.innerHTML='<div class=\\'photo-thumbnail no-image\\'><i class=\\'fas fa-image\\'></i></div>';"></div>`
+            : `<div class="photo-thumbnail-container"><div class="photo-thumbnail no-image"><i class="fas fa-image"></i></div></div>`;
+        const etlWarn = (r.etl_acuan > 0 && r.populasi > r.etl_acuan) ? '<i class="fas fa-exclamation-triangle text-danger ms-1" title="Melampaui ETL"></i>' : '';
+
+        const verifyBtns = canVerify ? `
+            <button type="button" class="btn-action btn-action-success" onclick="verifyLaporan(${r.id},'Diverifikasi')" title="Verifikasi">
+                <i class="fas fa-check"></i>
+            </button>
+            <button type="button" class="btn-action btn-action-danger" onclick="rejectLaporan(${r.id})" title="Tolak">
+                <i class="fas fa-times"></i>
+            </button>` : '';
+
+        const editBtn = canEdit ? `<a href="${BASE_URL}laporan/edit/${r.id}" class="btn-action btn-action-warning" title="Edit"><i class="fas fa-edit"></i></a>` : '';
+
+        const deleteBtn = canDelete && r.status !== 'Ditolak' ? `
+            <form action="${BASE_URL}laporan/delete/${r.id}" method="POST" class="d-inline">
+                <?= Security::getCsrfField() ?>
+                <button type="submit" class="btn-action btn-action-danger" onclick="return confirm('Yakin ingin menghapus laporan ini?')" title="Hapus">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </form>` : '';
+
+        const checkbox = isAdmin ? `<td><input type="checkbox" class="checkbox-item" value="${r.id}"></td>` : '';
+
+        const rejectNote = r.status === 'Ditolak' && r.catatan_verifikasi
+            ? `<br><small class="text-danger"><i class="fas fa-comment"></i> ${escapeHtml(r.catatan_verifikasi.substring(0,30))}${r.catatan_verifikasi.length > 30 ? '...' : ''}</small>` : '';
+
+        return `<tr>
+            ${checkbox}
+            <td><span class="badge badge-light">#${r.id}</span></td>
+            <td>${foto}</td>
+            <td>${formatDate(r.tanggal)}</td>
+            <td><strong>${escapeHtml(r.nama_opt||'N/A')}</strong><br><small class="text-muted">${escapeHtml(r.jenis||'-')}</small></td>
+            <td>Kab. Jember<br>Kec. ${escapeHtml(r.kecamatan||'-')}<br>Desa ${escapeHtml(r.desa||'-')}</td>
+            <td>${severityBadge(r.tingkat_keparahan)}</td>
+            <td>${r.populasi||0}${etlWarn}</td>
+            <td>${statusBadge(r.status)}${rejectNote}</td>
+            <td><strong>${escapeHtml((r.pelapor||'-').substring(0,15))}</strong><br><small class="text-muted">${roleBadge(r.pelapor_role)}</small></td>
+            <td><small class="text-muted">${formatDate(r.created_at)}</small></td>
+            <td>
+                <div class="btn-action-group">
+                    <a href="${BASE_URL}laporan/detail/${r.id}" class="btn-action btn-action-info" title="Lihat"><i class="fas fa-eye"></i></a>
+                    ${verifyBtns}
+                    ${editBtn}
+                    ${deleteBtn}
+                </div>
+            </td>
+        </tr>`;
+    }
+
+    function buildPaginationHTML() {
+        const nav = qs('#paginationNav');
+        if (!nav) return;
+        if (state.totalPages <= 1) {
+            nav.innerHTML = '';
+            return;
+        }
+        const maxBtns = 5;
+        let start = Math.max(1, state.page - 2);
+        let end = Math.min(state.totalPages, start + maxBtns - 1);
+        if (end - start < maxBtns - 1) start = Math.max(1, end - maxBtns + 1);
+
+        let html = '<ul class="pagination mb-0">';
+        html += `<li class="page-item ${state.page <= 1 ? 'disabled' : ''}">
+            <a class="page-link" href="#" data-page="${state.page - 1}" tabindex="-1"><i class="fas fa-chevron-left"></i></a>
+        </li>`;
+        for (let p = start; p <= end; p++) {
+            html += `<li class="page-item ${p === state.page ? 'active' : ''}">
+                <a class="page-link" href="#" data-page="${p}">${p}</a>
+            </li>`;
+        }
+        html += `<li class="page-item ${state.page >= state.totalPages ? 'disabled' : ''}">
+            <a class="page-link" href="#" data-page="${state.page + 1}"><i class="fas fa-chevron-right"></i></a>
+        </li>`;
+        html += '</ul>';
+        nav.innerHTML = html;
+    }
+
+    function updateStatusFilterCounts(statusCounts) {
+        if (!statusCounts) return;
+        const labels = ['Semua','Draf','Submitted','Diverifikasi','Ditolak'];
+        const vals   = [null,'Draf','Submitted','Diverifikasi','Ditolak'];
+        vals.forEach((v, i) => {
+            const badge = document.querySelector(`.btn-filter[data-filter="${labels[i].toLowerCase()}"] .badge`);
+            if (badge) badge.textContent = statusCounts[v] ?? 0;
+        });
+    }
+
+    function updateSortHeaders() {
+        qsa('#laporanTable thead th.sortable').forEach(th => {
+            const col = th.dataset.sort;
+            const dir = th.dataset.dir;
+            const icon = sortIcon(col);
+            th.innerHTML = th.textContent.trim().split('(')[0].trim() + ' ' + icon;
+        });
+    }
+
+    function updateInfo() {
+        const pp = qs('#perPageSelect');
+        const ppLabel = pp && pp.value === 'all' ? 'semua' : (pp ? pp.value : state.perPage);
+        qs('#tableInfo').textContent = `${state.total} total`;
+        const from = state.total === 0 ? 0 : (state.page - 1) * state.perPage + 1;
+        const to = state.perPage < 0 ? state.total : Math.min(state.page * state.perPage, state.total);
+        qs('#paginationInfo').textContent = state.total === 0
+            ? 'Tidak ada data'
+            : `Menampilkan ${from}–${to} dari ${state.total}`;
+    }
+
+    // ========== AJAX DATA LOADING ==========
+    async function loadTable() {
+        if (state.loading && state.abortController) {
+            state.abortController.abort();
+        }
+        state.abortController = new AbortController();
+        state.loading = true;
+        showLoader();
+
+        try {
+            console.log('[LaporanTable] Fetching URL:', buildURL());
+            const resp = await fetch(buildURL(), { signal: state.abortController.signal });
+            console.log('[LaporanTable] Response status:', resp.status);
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const json = await resp.json();
+            console.log('[LaporanTable] Response data:', json);
+            if (!json.success) throw new Error(json.message || 'Gagal mengambil data');
+
+            const d = json.data;
+            state.total = d.total;
+            state.totalPages = d.totalPages;
+            state.page = d.page;
+
+            const tbody = qs('#tableBody');
+            if (!tbody) {
+                console.error('[LaporanTable] tbody element not found!');
+                return;
+            }
+
+            if (d.rows.length === 0) {
+                // Determine correct colspan from table header
+                const headerRow = qs('#laporanTable thead tr');
+                const colCount = headerRow ? headerRow.children.length : 12;
+                tbody.innerHTML = `<tr><td colspan="${colCount}" class="text-center text-muted py-4">Tidak ada data laporan</td></tr>`;
+            } else {
+                tbody.innerHTML = d.rows.map((r, i) => buildTableRow(r, i)).join('');
+            }
+
+            updateSortHeaders();
+            updateInfo();
+            buildPaginationHTML();
+            updateStatusFilterCounts(d.statusCounts);
+
+            if (typeof initBulkSelect === 'function') initBulkSelect();
+
+        } catch (err) {
+            console.error('[LaporanTable] Error:', err);
+            if (err.name === 'AbortError') return;
+            const tbody = qs('#tableBody');
+            if (tbody) tbody.innerHTML = `<tr><td colspan="12" class="text-center text-danger py-4"><i class="fas fa-exclamation-triangle"></i> Gagal memuat: ${escapeHtml(err.message)}</td></tr>`;
+        } finally {
+            state.loading = false;
         }
     }
-    
-    // Start initialization
-    init();
-    
+
+    function setPage(p) {
+        state.page = p;
+        loadTable();
+    }
+
+    function setPerPage(v) {
+        state.perPage = v;
+        state.page = 1;
+        loadTable();
+    }
+
+    function setSearch(q) {
+        state.search = q;
+        state.page = 1;
+        loadTable();
+    }
+
+    function setStatus(s) {
+        state.status = s;
+        state.page = 1;
+        loadTable();
+    }
+
+    function setSort(col) {
+        if (state.sortCol === col) {
+            state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+            state.sortCol = col;
+            state.sortDir = 'desc';
+        }
+        state.page = 1;
+        loadTable();
+    }
+
+    // ========== BULK SELECT HELPER FUNCTIONS ==========
+    function setupMasterCheckbox() {
+        console.log('[BulkSelect] setupMasterCheckbox called');
+        const checkAll = document.getElementById('checkAll');
+        if (!checkAll) return;
+        checkAll.addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('#laporanTable tbody input[type="checkbox"]');
+            checkboxes.forEach(cb => cb.checked = this.checked);
+            updateUI();
+        });
+    }
+
+    function setupChildCheckboxes() {
+        console.log('[BulkSelect] setupChildCheckboxes called');
+        // Handled via event delegation on tbody
+    }
+
+    function setupBulkDeleteHandler() {
+        console.log('[BulkSelect] setupBulkDeleteHandler called');
+        // Handled via inline onclick in button
+    }
+
+    function updateUI() {
+        const checkAll = document.getElementById('checkAll');
+        const checkboxes = document.querySelectorAll('#laporanTable tbody input[type="checkbox"]');
+        const selected = document.querySelectorAll('#laporanTable tbody input[type="checkbox"]:checked');
+        const count = selected.length;
+        document.getElementById('selectedCount').textContent = count;
+        document.getElementById('btnBulkDelete').disabled = count === 0;
+        // Indeterminate state
+        if (checkAll) {
+            checkAll.indeterminate = count > 0 && count < checkboxes.length;
+            checkAll.checked = count === checkboxes.length && checkboxes.length > 0;
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // INITIALIZATION
+    // ─────────────────────────────────────────────────────────────────────
+
+    // Start initialization after DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', loadTable);
+    } else {
+        loadTable();
+    }
+
     // Support for dynamic content updates
     window.addEventListener('laporanContentUpdated', function() {
         console.log('[Checkbox] Content updated, re-initializing...');
         initBulkSelect();
     });
+
 })();
 </script>
 <?php endif; ?>

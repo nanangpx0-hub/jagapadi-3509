@@ -207,7 +207,7 @@ class DashboardController extends Controller {
                     break;
                     
                 case 'area':
-                    $response['data'] = $this->laporanModel->getAreaStatsByMonth($year, $filterUserId);
+                    $response['data'] = $this->laporanModel->getAreaStatsByMonth((int)$year, $filterUserId);
                     break;
 
                 case 'kecamatan':
@@ -232,7 +232,7 @@ class DashboardController extends Controller {
             echo json_encode([
                 'success' => false,
                 'error' => 'Gagal memuat data grafik',
-                'message' => $e->getMessage()
+                'message' => (defined('APP_DEBUG') && APP_DEBUG) ? $e->getMessage() : 'Silakan hubungi administrator'
             ]);
         }
         exit;
@@ -241,7 +241,7 @@ class DashboardController extends Controller {
     /**
      * Validate chart data integrity
      */
-    private function validateChartData($monthlyStats, $topPests, $severityStats, $areaStats) {
+    private function validateChartData(array $monthlyStats, array $topPests, array $severityStats, array $areaStats): bool {
         $errors = [];
         
         // Check monthly stats structure

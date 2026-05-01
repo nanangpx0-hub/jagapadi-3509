@@ -1,7 +1,30 @@
 <?php
 class LaporanHama extends Model {
     protected $table = 'laporan_hama';
-    protected $fillable = ['user_id', 'master_opt_id', 'lokasi', 'tanggal', 'jenis_hama', 'tingkat_parah', 'luas_terjangkit', 'jenis_tanggulangan', 'hasil_tanggulangan', 'status', 'catatan'];
+    protected $fillable = [
+        'user_id',
+        'master_opt_id',
+        'tanggal',
+        'lokasi',
+        'latitude',
+        'longitude',
+        'tingkat_keparahan',
+        'populasi',
+        'luas_serangan',
+        'foto_url',
+        'status',
+        'catatan',
+        'catatan_verifikasi',
+        'verified_by',
+        'verified_at',
+        'kabupaten',
+        'kecamatan',
+        'desa',
+        'alamat_lengkap',
+        'kabupaten_id',
+        'kecamatan_id',
+        'desa_id',
+    ];
     protected array $relations = [
         'user' => [
             'type' => 'belongsTo',
@@ -162,12 +185,12 @@ class LaporanHama extends Model {
            ->leftJoin('master_kabupaten kab', 'lh.kabupaten_id = kab.id')
            ->leftJoin('master_kecamatan kec', 'lh.kecamatan_id = kec.id')
            ->leftJoin('master_desa des', 'lh.desa_id = des.id');
-        
+
         // Filter by user if provided
         if ($userId !== null) {
             $qb->where('lh.user_id', $userId);
         }
-        
+
         return $qb->orderBy('lh.created_at', 'DESC')->get();
     }
 
@@ -285,25 +308,25 @@ class LaporanHama extends Model {
                 LEFT JOIN master_opt mo ON lh.master_opt_id = mo.id
                 WHERE lh.status = 'Diverifikasi'
                 AND mo.nama_opt IS NOT NULL";
-            
+
             if ($userId !== null) {
                 $sql .= " AND lh.user_id = :user_id";
             }
-            
+
             $sql .= "
                 GROUP BY mo.id, mo.nama_opt, mo.jenis
                 ORDER BY total_laporan DESC
                 LIMIT :limit";
-            
+
             $stmt = $this->db->prepare($sql);
             if ($userId !== null) {
                 $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
             }
             $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
             $stmt->execute();
-            
+
             $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
+
             // Data validation
             foreach ($results as &$row) {
                 $row['total_laporan'] = (int) $row['total_laporan'];
@@ -313,15 +336,15 @@ class LaporanHama extends Model {
                 $row['sedang'] = (int) $row['sedang'];
                 $row['ringan'] = (int) $row['ringan'];
             }
-            
+
             return $results;
-            
+
         } catch (PDOException $e) {
             error_log("Error in getTopPests: " . $e->getMessage());
             return [];
         }
     }
-    
+
     /**
      * Get severity distribution statistics
      * @param int|null $userId Optional user ID to filter reports by user
@@ -337,27 +360,27 @@ class LaporanHama extends Model {
                 FROM laporan_hama
                 WHERE status = 'Diverifikasi'
                 AND tingkat_keparahan IS NOT NULL";
-            
+
             if ($userId !== null) {
                 $sql .= " AND user_id = :user_id";
             }
-            
+
             $sql .= "
                 GROUP BY tingkat_keparahan
                 ORDER BY FIELD(tingkat_keparahan, 'Ringan', 'Sedang', 'Berat')";
-            
+
             $stmt = $this->db->prepare($sql);
             if ($userId !== null) {
                 $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
             }
             $stmt->execute();
-            
+
             $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
+
             // Ensure all severity levels exist
             $severityLevels = ['Ringan', 'Sedang', 'Berat'];
             $distribution = [];
-            
+
             foreach ($severityLevels as $level) {
                 $found = false;
                 foreach ($results as $row) {
@@ -372,7 +395,7 @@ class LaporanHama extends Model {
                         break;
                     }
                 }
-                
+
                 if (!$found) {
                     $distribution[] = [
                         'tingkat_keparahan' => $level,
@@ -382,9 +405,9 @@ class LaporanHama extends Model {
                     ];
                 }
             }
-            
+
             return $distribution;
-            
+
         } catch (PDOException $e) {
             error_log("Error in getSeverityDistribution: " . $e->getMessage());
             return [
@@ -394,7 +417,7 @@ class LaporanHama extends Model {
             ];
         }
     }
-    
+
     /**
      * Get area statistics by month
      * @param int $year Year to get statistics for
@@ -412,24 +435,24 @@ class LaporanHama extends Model {
                 WHERE YEAR(tanggal) = :year
                 AND status = 'Diverifikasi'
                 AND luas_serangan > 0";
-            
+
             if ($userId !== null) {
                 $sql .= " AND user_id = :user_id";
             }
-            
+
             $sql .= "
                 GROUP BY MONTH(tanggal)
                 ORDER BY bulan";
-            
+
             $stmt = $this->db->prepare($sql);
             $stmt->bindValue(':year', $year, PDO::PARAM_INT);
             if ($userId !== null) {
                 $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
             }
             $stmt->execute();
-            
+
             $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
+
             // Initialize all 12 months
             $stats = [];
             for ($i = 1; $i <= 12; $i++) {
@@ -440,7 +463,7 @@ class LaporanHama extends Model {
                     'jumlah_laporan' => 0
                 ];
             }
-            
+
             // Fill in actual data
             foreach ($results as $row) {
                 $month = (int) $row['bulan'];
@@ -451,9 +474,9 @@ class LaporanHama extends Model {
                     'jumlah_laporan' => (int) $row['jumlah_laporan']
                 ];
             }
-            
+
             return array_values($stats);
-            
+
         } catch (PDOException $e) {
             error_log("Error in getAreaStatsByMonth: " . $e->getMessage());
             return [];
@@ -501,7 +524,7 @@ class LaporanHama extends Model {
         // Search functionality
         if (!empty($params['search'])) {
             $searchTerm = '%' . $params['search'] . '%';
-            $qb->having("lh.lokasi LIKE ? OR mo.nama_opt LIKE ? OR u.nama_lengkap LIKE ?", [
+            $qb->whereRaw("lh.lokasi LIKE ? OR mo.nama_opt LIKE ? OR u.nama_lengkap LIKE ?", [
                 $searchTerm, $searchTerm, $searchTerm
             ]);
         }
@@ -541,7 +564,7 @@ class LaporanHama extends Model {
         // Apply same filters as getForDataTable
         if (!empty($params['search'])) {
             $searchTerm = '%' . $params['search'] . '%';
-            $qb->having("lh.lokasi LIKE ? OR mo.nama_opt LIKE ? OR u.nama_lengkap LIKE ?", [
+            $qb->whereRaw("lh.lokasi LIKE ? OR mo.nama_opt LIKE ? OR u.nama_lengkap LIKE ?", [
                 $searchTerm, $searchTerm, $searchTerm
             ]);
         }
@@ -564,7 +587,7 @@ class LaporanHama extends Model {
     public function getDashboardStats(?int $userId = null): array {
         try {
             $sql = "
-                SELECT 
+                SELECT
                     COUNT(*) as total_laporan,
                     SUM(CASE WHEN status = 'Submitted' THEN 1 ELSE 0 END) as pending_verifikasi,
                     SUM(CASE WHEN status = 'Diverifikasi' THEN 1 ELSE 0 END) as terverifikasi,
@@ -574,11 +597,11 @@ class LaporanHama extends Model {
                     SUM(CASE WHEN status = 'Diverifikasi' THEN luas_serangan ELSE 0 END) as total_luas,
                     SUM(CASE WHEN status = 'Diverifikasi' THEN populasi ELSE 0 END) as total_populasi
                 FROM laporan_hama";
-            
+
             if ($userId !== null) {
                 $sql .= " WHERE user_id = :user_id";
             }
-            
+
             $stmt = $this->db->prepare($sql);
             if ($userId !== null) {
                 $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
@@ -597,7 +620,7 @@ class LaporanHama extends Model {
                 'ditolak' => (int) ($result['ditolak'] ?? 0),
                 'total_luas' => (float) ($result['total_luas'] ?? 0),
                 'total_populasi' => (int) ($result['total_populasi'] ?? 0),
-                
+
                 // Backward compatibility with old keys
                 'total_reports' => (int) ($result['total_laporan'] ?? 0),
                 'verified_reports' => (int) ($result['terverifikasi'] ?? 0),
@@ -606,10 +629,10 @@ class LaporanHama extends Model {
                 'total_area_affected' => (float) ($result['total_luas'] ?? 0),
                 'total_population' => (int) ($result['total_populasi'] ?? 0)
             ];
-            
+
         } catch (PDOException $e) {
             error_log("Error in getDashboardStats: " . $e->getMessage());
-            
+
             // Return default values on error
             return [
                 'total_laporan' => 0,
@@ -647,22 +670,22 @@ class LaporanHama extends Model {
                     SUM(luas_serangan) as total_luas
                 FROM laporan_hama
                 WHERE YEAR(tanggal) = :year";
-            
+
             if ($userId !== null) {
                 $sql .= " AND user_id = :user_id";
             }
-            
+
             $sql .= "
                 GROUP BY MONTH(tanggal)
                 ORDER BY bulan";
-            
+
             $stmt = $this->db->prepare($sql);
             $stmt->bindValue(':year', $year, PDO::PARAM_INT);
             if ($userId !== null) {
                 $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
             }
             $stmt->execute();
-            
+
             $monthlyData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             // Initialize array with all months
@@ -692,10 +715,10 @@ class LaporanHama extends Model {
             }
 
             return array_values($stats);
-            
+
         } catch (PDOException $e) {
             error_log("Error in getMonthlyStats: " . $e->getMessage());
-            
+
             // Return empty structure for all 12 months
             $stats = [];
             for ($i = 1; $i <= 12; $i++) {
@@ -735,13 +758,13 @@ class LaporanHama extends Model {
             WHERE lh.status = 'Diverifikasi'
             AND lh.latitude IS NOT NULL
             AND lh.longitude IS NOT NULL";
-        
+
         if ($userId !== null) {
             $sql .= " AND lh.user_id = :user_id";
         }
-        
+
         $sql .= " ORDER BY lh.tanggal DESC";
-        
+
         $stmt = $this->db->prepare($sql);
         if ($userId !== null) {
             $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
@@ -762,25 +785,25 @@ class LaporanHama extends Model {
                 'by_count' => [],
                 'by_area' => []
             ];
-            
+
             // 1. Get Top by Count (Jumlah Laporan)
             $sqlCount = "
-                SELECT 
-                    mk.nama_kecamatan, 
+                SELECT
+                    mk.nama_kecamatan,
                     COUNT(lh.id) as total_laporan
                 FROM laporan_hama lh
                 JOIN master_kecamatan mk ON lh.kecamatan_id = mk.id
                 WHERE lh.status = 'Diverifikasi'";
-            
+
             if ($userId !== null) {
                 $sqlCount .= " AND lh.user_id = :user_id";
             }
-            
+
             $sqlCount .= "
                 GROUP BY mk.id, mk.nama_kecamatan
                 ORDER BY total_laporan DESC
                 LIMIT :limit";
-            
+
             $stmtCount = $this->db->prepare($sqlCount);
             if ($userId !== null) {
                 $stmtCount->bindValue(':user_id', $userId, PDO::PARAM_INT);
@@ -791,22 +814,22 @@ class LaporanHama extends Model {
 
             // 2. Get Top by Area (Luas Serangan)
             $sqlArea = "
-                SELECT 
-                    mk.nama_kecamatan, 
+                SELECT
+                    mk.nama_kecamatan,
                     SUM(lh.luas_serangan) as total_luas
                 FROM laporan_hama lh
                 JOIN master_kecamatan mk ON lh.kecamatan_id = mk.id
                 WHERE lh.status = 'Diverifikasi'";
-            
+
             if ($userId !== null) {
                 $sqlArea .= " AND lh.user_id = :user_id";
             }
-            
+
             $sqlArea .= "
                 GROUP BY mk.id, mk.nama_kecamatan
                 ORDER BY total_luas DESC
                 LIMIT :limit";
-            
+
             $stmtArea = $this->db->prepare($sqlArea);
             if ($userId !== null) {
                 $stmtArea->bindValue(':user_id', $userId, PDO::PARAM_INT);
@@ -830,7 +853,7 @@ class LaporanHama extends Model {
             ];
         }
     }
-    
+
     /**
      * Get report by ID (API compatibility)
      */
@@ -853,13 +876,13 @@ class LaporanHama extends Model {
             ->where('lh.id', $id)
             ->first();
     }
-    
+
     /**
      * Get all reports with filters (API compatibility)
      */
     public function getAllWithFilters($filters = [], $limit = 20, $offset = 0) {
         $page = intdiv($offset, max(1, $limit)) + 1;
-        
+
         $qb = new QueryBuilder();
         $qb->table('laporan_hama lh')
             ->select([
@@ -869,79 +892,79 @@ class LaporanHama extends Model {
             ])
             ->leftJoin('users u', 'lh.user_id = u.id')
             ->leftJoin('master_opt mo', 'lh.master_opt_id = mo.id');
-        
+
         // Apply filters
         if (!empty($filters['search'])) {
             $qb->where('lh.lokasi', '%' . $filters['search'] . '%', 'LIKE');
         }
-        
+
         if (!empty($filters['status'])) {
             $qb->where('lh.status', $filters['status']);
         }
-        
+
         if (!empty($filters['kabupaten_id'])) {
             $qb->where('lh.kabupaten_id', $filters['kabupaten_id']);
         }
-        
+
         if (!empty($filters['kecamatan_id'])) {
             $qb->where('lh.kecamatan_id', $filters['kecamatan_id']);
         }
-        
+
         if (!empty($filters['desa_id'])) {
             $qb->where('lh.desa_id', $filters['desa_id']);
         }
-        
+
         if (!empty($filters['master_opt_id'])) {
             $qb->where('lh.master_opt_id', $filters['master_opt_id']);
         }
-        
+
         if (!empty($filters['user_id'])) {
             $qb->where('lh.user_id', $filters['user_id']);
         }
-        
+
         $qb->orderBy('lh.created_at', 'DESC')
             ->limit($limit)
             ->offset($offset);
-        
+
         return $qb->get();
     }
-    
+
     /**
      * Get count with filters (API compatibility)
      */
     public function getCountWithFilters($filters = []) {
         $qb = new QueryBuilder();
         $qb->table('laporan_hama lh');
-        
+
         // Apply same filters
         if (!empty($filters['search'])) {
             $qb->where('lh.lokasi', '%' . $filters['search'] . '%', 'LIKE');
         }
-        
+
         if (!empty($filters['status'])) {
             $qb->where('lh.status', $filters['status']);
         }
-        
+
         if (!empty($filters['kabupaten_id'])) {
             $qb->where('lh.kabupaten_id', $filters['kabupaten_id']);
         }
-        
+
         if (!empty($filters['kecamatan_id'])) {
             $qb->where('lh.kecamatan_id', $filters['kecamatan_id']);
         }
-        
+
         if (!empty($filters['desa_id'])) {
             $qb->where('lh.desa_id', $filters['desa_id']);
         }
-        
+
         if (!empty($filters['master_opt_id'])) {
             $qb->where('lh.master_opt_id', $filters['master_opt_id']);
         }
-        
+
         if (!empty($filters['user_id'])) {
             $qb->where('lh.user_id', $filters['user_id']);
         }
-        
+
         return $qb->count();
     }
 
@@ -1064,5 +1087,153 @@ class LaporanHama extends Model {
         $stmt->bindValue(1, $days, PDO::PARAM_INT);
         $stmt->execute();
         return (int)($stmt->fetch(PDO::FETCH_ASSOC)['total'] ?? 0);
+    }
+
+    /**
+     * AJAX pagination: fetch a page of reports with full details
+     * Used by the Daftar Laporan page with per-page dropdown
+     *
+     * @param array $filters    Optional search/status/kecamatan filters
+     * @param int   $page      Page number (1-indexed)
+     * @param int   $perPage   Rows per page (-1 = ALL)
+     * @param int   $userId    Optional user filter
+     * @return array{rows: array, total: int, page: int, perPage: int, totalPages: int, statusCounts: array}
+     */
+    public function fetchPaginated(array $filters = [], int $page = 1, int $perPage = 10, ?int $userId = null): array {
+        error_log("[LaporanHama::fetchPaginated] Entered - page=$page, perPage=$perPage, userId=$userId, filters=" . json_encode($filters));
+
+        try {
+            $where = ['1=1'];
+            $params = [];
+
+            // Role-based: petugas only sees their own
+            if ($userId !== null) {
+                $where[] = 'lh.user_id = ?';
+                $params[] = $userId;
+                error_log("[LaporanHama::fetchPaginated] Filtering by user_id=$userId");
+            }
+
+            // Status filter
+            if (!empty($filters['status'])) {
+                $where[] = 'lh.status = ?';
+                $params[] = $filters['status'];
+                error_log("[LaporanHama::fetchPaginated] Filtering by status={$filters['status']}");
+            }
+
+            // Search
+            if (!empty($filters['search'])) {
+                $q = '%' . $filters['search'] . '%';
+                $where[] = '(lh.lokasi LIKE ? OR mo.nama_opt LIKE ? OR u.nama_lengkap LIKE ? OR lh.catatan LIKE ?)';
+                $params[] = $q; $params[] = $q; $params[] = $q; $params[] = $q;
+                error_log("[LaporanHama::fetchPaginated] Searching with query='{$filters['search']}'");
+            }
+
+            // OPT filter
+            if (!empty($filters['master_opt_id'])) {
+                $where[] = 'lh.master_opt_id = ?';
+                $params[] = $filters['master_opt_id'];
+                error_log("[LaporanHama::fetchPaginated] Filtering by master_opt_id={$filters['master_opt_id']}");
+            }
+
+            // Kecamatan filter
+            if (!empty($filters['kecamatan_id'])) {
+                $where[] = 'lh.kecamatan_id = ?';
+                $params[] = $filters['kecamatan_id'];
+                error_log("[LaporanHama::fetchPaginated] Filtering by kecamatan_id={$filters['kecamatan_id']}");
+            }
+
+            $whereSQL = implode(' AND ', $where);
+            error_log("[LaporanHama::fetchPaginated] WHERE clause: $whereSQL");
+            error_log("[LaporanHama::fetchPaginated] Params: " . json_encode($params));
+
+            // Total count
+            $countSQL = "SELECT COUNT(*) FROM laporan_hama lh LEFT JOIN master_opt mo ON lh.master_opt_id = mo.id LEFT JOIN users u ON lh.user_id = u.id WHERE $whereSQL";
+            $stmt = $this->db->prepare($countSQL);
+            $stmt->execute($params);
+            $total = (int)$stmt->fetchColumn();
+            error_log("[LaporanHama::fetchPaginated] Total records: $total");
+
+            // Total pages
+            $totalPages = $perPage > 0 ? max(1, (int)ceil($total / $perPage)) : 1;
+            $page = max(1, min($page, $totalPages));
+
+            // Fetch rows
+            $orderCol = $filters['order_col'] ?? 'lh.tanggal';
+            $orderDir = in_array(strtoupper($filters['order_dir'] ?? 'DESC'), ['ASC', 'DESC']) ? strtoupper($filters['order_dir'] ?? 'DESC') : 'DESC';
+            $safeOrder = preg_replace('/[^a-zA-Z0-9_.]/', '', $orderCol);
+
+            $dataSQL = "SELECT
+                lh.id,
+                lh.tanggal,
+                lh.lokasi,
+                mo.nama_opt,
+                mo.jenis,
+                mo.etl_acuan,
+                lh.tingkat_keparahan,
+                lh.populasi,
+                lh.luas_serangan,
+                lh.foto_url,
+                lh.status,
+                lh.catatan,
+                lh.catatan_verifikasi,
+                lh.created_at,
+                u.nama_lengkap AS pelapor,
+                u.role AS pelapor_role,
+                kec.nama_kecamatan AS kecamatan,
+                des.nama_desa AS desa
+            FROM laporan_hama lh
+            LEFT JOIN master_opt mo ON lh.master_opt_id = mo.id
+            LEFT JOIN users u ON lh.user_id = u.id
+            LEFT JOIN master_kecamatan kec ON lh.kecamatan_id = kec.id
+            LEFT JOIN master_desa des ON lh.desa_id = des.id
+            WHERE $whereSQL
+            ORDER BY $safeOrder $orderDir";
+
+            if ($perPage > 0) {
+                $offset = ($page - 1) * $perPage;
+                $dataSQL .= " LIMIT $perPage OFFSET $offset";
+            }
+
+            error_log("[LaporanHama::fetchPaginated] Executing data query");
+            $stmt = $this->db->prepare($dataSQL);
+            $stmt->execute($params);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            error_log("[LaporanHama::fetchPaginated] Fetched " . count($rows) . " rows");
+
+            // Debug: log first row structure if any
+            if (!empty($rows)) {
+                error_log("[LaporanHama::fetchPaginated] Sample row keys: " . implode(', ', array_keys($rows[0])));
+            }
+
+            // Status counts for filter badges
+            $statusSQL = "SELECT status, COUNT(*) as cnt FROM laporan_hama lh WHERE " . ($userId !== null ? "lh.user_id = ? AND " : "") . "1=1 GROUP BY status";
+            $sParams = $userId !== null ? [$userId] : [];
+            $sStmt = $this->db->prepare($statusSQL);
+            $sStmt->execute($sParams);
+            $statusCounts = [];
+            while ($r = $sStmt->fetch(PDO::FETCH_ASSOC)) {
+                $statusCounts[$r['status']] = (int)$r['cnt'];
+            }
+            error_log("[LaporanHama::fetchPaginated] Status counts: " . json_encode($statusCounts));
+
+            return [
+                'rows'         => $rows,
+                'total'        => $total,
+                'page'         => $page,
+                'perPage'      => $perPage,
+                'totalPages'   => $totalPages,
+                'statusCounts' => $statusCounts,
+            ];
+
+        } catch (PDOException $e) {
+            error_log("[LaporanHama::fetchPaginated] PDOException: " . $e->getMessage());
+            error_log("[LaporanHama::fetchPaginated] SQL State: " . $e->getCode());
+            error_log("[LaporanHama::fetchPaginated] Trace: " . $e->getTraceAsString());
+            throw $e; // Re-throw to be caught by controller
+        } catch (Exception $e) {
+            error_log("[LaporanHama::fetchPaginated] Exception: " . $e->getMessage());
+            error_log("[LaporanHama::fetchPaginated] Trace: " . $e->getTraceAsString());
+            throw $e;
+        }
     }
 }

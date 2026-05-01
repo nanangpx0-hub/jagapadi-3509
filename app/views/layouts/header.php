@@ -261,6 +261,12 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="<?= BASE_URL ?>dashboardPadi" class="nav-link <?= (strpos($_SERVER['REQUEST_URI'], '/dashboardPadi') !== false) ? 'active' : '' ?>">
+                            <i class="nav-icon fas fa-seedling"></i>
+                            <p>Dashboard Padi</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="<?= BASE_URL ?>dashboard/map" class="nav-link">
                             <i class="nav-icon fas fa-map-marked-alt"></i>
                             <p>Peta Sebaran</p>

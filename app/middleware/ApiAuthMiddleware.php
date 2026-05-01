@@ -281,12 +281,10 @@ PHP;
         $maxFailures = $config['brute_force']['max_failures'] ?? 10;
         $blockDuration = $config['brute_force']['block_duration'] ?? 3600;
         
-        // Use file-based cache
-        Cache::init();
-        $failures = Cache::get($cacheKey) ?? 0;
+        $failures = self::cache()->get($cacheKey) ?? 0;
         $failures++;
         
-        Cache::set($cacheKey, $failures, $blockDuration);
+        self::cache()->set($cacheKey, $failures, $blockDuration);
         
         if ($failures >= $maxFailures) {
             self::blockIp($ip, $blockDuration);
@@ -300,7 +298,7 @@ PHP;
      */
     private static function clearAuthFailures(string $ip): void {
         $cacheKey = "auth_failures:{$ip}";
-        Cache::delete($cacheKey);
+        self::cache()->delete($cacheKey);
     }
     
     /**
@@ -311,7 +309,7 @@ PHP;
      */
     private static function blockIp(string $ip, int $duration = 3600): void {
         $cacheKey = "blocked_ip:{$ip}";
-        Cache::set($cacheKey, true, $duration);
+        self::cache()->set($cacheKey, true, $duration);
         
         // Log security event
         if (class_exists('Security')) {
@@ -332,7 +330,11 @@ PHP;
      */
     private static function isIpBlocked(string $ip): bool {
         $cacheKey = "blocked_ip:{$ip}";
-        return Cache::get($cacheKey) === true;
+        return self::cache()->get($cacheKey) === true;
+    }
+
+    private static function cache(): CacheManager {
+        return CacheManager::getInstance();
     }
     
     /**
