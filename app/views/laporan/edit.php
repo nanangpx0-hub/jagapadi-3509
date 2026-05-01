@@ -158,76 +158,7 @@
                         </div>
                     </div>
                     
-                    <!-- Status Controls (Role-Based) -->
-                    <div class="form-group">
-                        <label>Status <span class="text-danger">*</span></label>
-                        <?php 
-                        $userRole = $_SESSION['role'] ?? '';
-                        $currentStatus = $laporan['status'];
-                        $canChangeStatus = ($userRole === 'petugas' && $currentStatus === 'Draf') || 
-                                           in_array($userRole, ['admin', 'operator']);
-                        ?>
-                        
-                        <?php if($userRole === 'petugas' && $currentStatus === 'Draf'): ?>
-                        <!-- Petugas with Draft: Can save as draft or submit -->
-                        <input type="hidden" name="status" id="statusInput" value="<?= $currentStatus ?>">
-                        <div class="btn-group w-100" role="group">
-                            <button type="button" class="btn <?= $currentStatus === 'Draf' ? 'btn-secondary active' : 'btn-outline-secondary' ?> status-btn" data-status="Draf" id="btnDraf">
-                                <i class="fas fa-file"></i> Simpan sebagai Draf
-                            </button>
-                            <button type="button" class="btn <?= $currentStatus === 'Submitted' ? 'btn-success active' : 'btn-outline-success' ?> status-btn" data-status="Submitted" id="btnSubmit">
-                                <i class="fas fa-paper-plane"></i> Submit untuk Verifikasi
-                            </button>
-                        </div>
-                        <small class="text-muted d-block mt-1">
-                            <i class="fas fa-info-circle"></i> Draf: belum resmi, dapat diedit. Submit: kirim untuk diverifikasi.
-                        </small>
-                        
-                        <?php elseif($userRole === 'petugas' && $currentStatus !== 'Draf'): ?>
-                        <!-- Petugas with non-Draft: Read-only status -->
-                        <input type="hidden" name="status" value="<?= $currentStatus ?>">
-                        <div class="alert alert-info mb-0">
-                            <span class="badge badge-lg badge-<?= 
-                                $currentStatus == 'Diverifikasi' ? 'success' : 
-                                ($currentStatus == 'Submitted' ? 'warning' : 
-                                ($currentStatus == 'Ditolak' ? 'danger' : 'secondary'))
-                            ?>">
-                                <i class="fas fa-<?= 
-                                    $currentStatus == 'Diverifikasi' ? 'check-circle' : 
-                                    ($currentStatus == 'Submitted' ? 'paper-plane' : 
-                                    ($currentStatus == 'Ditolak' ? 'times-circle' : 'file'))
-                                ?>"></i>
-                                <?= $currentStatus ?>
-                            </span>
-                            <small class="d-block mt-1">Status tidak dapat diubah karena laporan sudah di-submit.</small>
-                        </div>
-                        
-                        <?php else: ?>
-                        <!-- Admin/Operator: Can see status but edit via verification panel on detail page -->
-                        <input type="hidden" name="status" value="<?= $currentStatus ?>">
-                        <div class="alert alert-info mb-0">
-                            <span class="badge badge-lg badge-<?= 
-                                $currentStatus == 'Diverifikasi' ? 'success' : 
-                                ($currentStatus == 'Submitted' ? 'warning' : 
-                                ($currentStatus == 'Ditolak' ? 'danger' : 'secondary'))
-                            ?>">
-                                <i class="fas fa-<?= 
-                                    $currentStatus == 'Diverifikasi' ? 'check-circle' : 
-                                    ($currentStatus == 'Submitted' ? 'paper-plane' : 
-                                    ($currentStatus == 'Ditolak' ? 'times-circle' : 'file'))
-                                ?>"></i>
-                                <?= $currentStatus ?>
-                            </span>
-                            <?php if($currentStatus === 'Submitted'): ?>
-                            <small class="d-block mt-1">
-                                <a href="<?= BASE_URL ?>laporan/detail/<?= $laporan['id'] ?>" class="text-primary">
-                                    <i class="fas fa-check-circle"></i> Verifikasi laporan di halaman detail
-                                </a>
-                            </small>
-                            <?php endif; ?>
-                        </div>
-                        <?php endif; ?>
-                    </div>
+                    <input type="hidden" name="status" value="<?= htmlspecialchars($laporan['status'] ?? 'Submitted') ?>">
                 </div>
                 <div class="card-footer">
                     <button type="submit" class="btn btn-success">

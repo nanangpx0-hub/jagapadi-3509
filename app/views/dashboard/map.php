@@ -365,9 +365,9 @@
                             <div class="filter-group">
                                 <label>Status</label>
                                 <select id="filterStatus">
-                                    <option value="Diverifikasi">Diverifikasi</option>
-                                    <option value="Submitted">Pending</option>
-                                    <option value="">Semua</option>
+                                    <option value="" selected>Semua Aktif</option>
+                                    <option value="Submitted">Baru Masuk</option>
+                                    <option value="Diverifikasi">Lama (Diverifikasi)</option>
                                 </select>
                             </div>
                             <button class="btn btn-primary btn-sm btn-block" onclick="applyFilters()">
@@ -482,7 +482,7 @@ let map;
 let layers = {};
 let activeFilters = {
     year: <?= date('Y') ?>,
-    status: 'Diverifikasi'
+    status: ''
 };
 
 // Layer colors

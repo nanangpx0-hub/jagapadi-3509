@@ -33,12 +33,12 @@
         <div class="small-box bg-warning">
             <div class="inner">
                 <h3 data-stat="pending_verifikasi"><?= $stats['pending_verifikasi'] ?? 0 ?></h3>
-                <p>Pending Verifikasi</p>
+                <p>Baru Masuk</p>
             </div>
             <div class="icon">
                 <i class="fas fa-clock"></i>
             </div>
-            <a href="<?= BASE_URL ?>laporan?status=Submitted" class="small-box-footer">More info <i class="fas fa-arrow-circle-right"></i></a>
+            <a href="<?= BASE_URL ?>laporan" class="small-box-footer">More info <i class="fas fa-arrow-circle-right"></i></a>
         </div>
     </div>
     
@@ -46,12 +46,12 @@
         <div class="small-box bg-success">
             <div class="inner">
                 <h3 data-stat="terverifikasi"><?= $stats['terverifikasi'] ?? 0 ?></h3>
-                <p>Terverifikasi</p>
+                <p>Laporan Aktif</p>
             </div>
             <div class="icon">
                 <i class="fas fa-check-circle"></i>
             </div>
-            <a href="<?= BASE_URL ?>laporan?status=Diverifikasi" class="small-box-footer">More info <i class="fas fa-arrow-circle-right"></i></a>
+            <a href="<?= BASE_URL ?>laporan" class="small-box-footer">More info <i class="fas fa-arrow-circle-right"></i></a>
         </div>
     </div>
     
@@ -205,12 +205,16 @@
                                         </span>
                                     </td>
                                     <td class="col-status">
+                                        <?php
+                                        $reportStatus = $report['status'] ?? 'Draf';
+                                        $statusLabel = $reportStatus === 'Diverifikasi' ? 'Lama (Diverifikasi)' : ($reportStatus === 'Submitted' ? 'Baru Masuk' : $reportStatus);
+                                        ?>
                                         <span class="badge badge-<?=
                                             ($report['status'] ?? '') == 'Diverifikasi' ? 'success' :
                                             (($report['status'] ?? '') == 'Submitted' ? 'warning' :
                                             (($report['status'] ?? '') == 'Ditolak' ? 'danger' : 'secondary'))
                                         ?>">
-                                            <?= $report['status'] ?? 'Draf' ?>
+                                            <?= $statusLabel ?>
                                         </span>
                                     </td>
                                     <td class="col-pelapor" title="<?= htmlspecialchars($report['pelapor_nama'] ?? 'Unknown') ?>"><?= htmlspecialchars($report['pelapor_nama'] ?? 'Unknown') ?></td>

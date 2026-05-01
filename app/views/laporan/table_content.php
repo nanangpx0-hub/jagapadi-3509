@@ -34,7 +34,7 @@
             </tr>
             <?php else: ?>
                 <?php $no = 1; foreach($laporan as $row): ?>
-                <tr <?= ($row['status'] === 'Ditolak' && ($_SESSION['role'] ?? '') === 'petugas') ? 'class="rejected-report-row"' : '' ?>>
+                <tr>
                     <?php if(($_SESSION['role'] ?? '') == 'admin'): ?>
                     <td data-label="Pilih">
                         <input type="checkbox" class="checkbox-item" value="<?= $row['id'] ?>">
@@ -88,21 +88,18 @@
                         <?php endif; ?>
                     </td>
                     <td data-label="Status">
+                        <?php
+                        $isActiveReport = in_array($row['status'], ['Submitted', 'Diverifikasi']);
+                        $statusLabel = $isActiveReport ? 'Aktif' : $row['status'];
+                        $statusClass = $isActiveReport ? 'success' : ($row['status'] == 'Diarsipkan' ? 'dark' : ($row['status'] == 'Ditolak' ? 'danger' : 'secondary'));
+                        $statusIcon = $isActiveReport ? 'check-circle' : ($row['status'] == 'Diarsipkan' ? 'archive' : ($row['status'] == 'Ditolak' ? 'exclamation-circle' : 'file'));
+                        $statusTitle = $isActiveReport ? 'Laporan aktif/masuk' : ($row['status'] == 'Diarsipkan' ? 'Laporan diarsipkan' : ($row['status'] == 'Ditolak' ? 'Status lama: ditolak' : 'Draf belum resmi'));
+                        ?>
                         <span class="badge badge-<?= 
-                            $row['status'] == 'Diverifikasi' ? 'success' : 
-                            ($row['status'] == 'Submitted' ? 'warning' : 
-                            ($row['status'] == 'Ditolak' ? 'danger' : 'secondary'))
-                        ?>" title="<?= 
-                            $row['status'] == 'Diverifikasi' ? 'Laporan telah diverifikasi' : 
-                            ($row['status'] == 'Submitted' ? 'Menunggu verifikasi' : 
-                            ($row['status'] == 'Ditolak' ? 'Laporan ditolak' : 'Draft belum resmi'))
-                        ?>">
-                            <i class="fas fa-<?= 
-                                $row['status'] == 'Diverifikasi' ? 'check-circle' : 
-                                ($row['status'] == 'Submitted' ? 'paper-plane' : 
-                                ($row['status'] == 'Ditolak' ? 'times-circle' : 'file'))
-                            ?>"></i>
-                            <?= $row['status'] ?>
+                            $statusClass
+                        ?>" title="<?= $statusTitle ?>">
+                            <i class="fas fa-<?= $statusIcon ?>"></i>
+                            <?= $statusLabel ?>
                         </span>
                         
                         <?php if($row['status'] === 'Ditolak' && !empty($row['catatan_verifikasi'])): ?>
@@ -150,58 +147,21 @@
                                 <i class="fas fa-eye"></i>
                             </a>
                             
-                            <?php if($row['status'] === 'Submitted' && in_array($_SESSION['role'] ?? '', ['admin', 'operator'])): ?>
-                            <!-- Verification buttons for Submitted reports -->
-                            <button type="button" 
-                                    class="btn-action btn-action-success" 
-                                    onclick="verifyLaporan(<?= $row['id'] ?>, 'Diverifikasi')" 
-                                    title="Verifikasi Laporan">
-                                <i class="fas fa-check"></i>
-                            </button>
-                            <button type="button" 
-                                    class="btn-action btn-action-danger" 
-                                    onclick="rejectLaporan(<?= $row['id'] ?>)" 
-                                    title="Tolak Laporan">
-                                <i class="fas fa-times"></i>
-                            </button>
-                            <?php endif; ?>
-                            
                             <?php 
                             // LOGIKA HAK AKSES EDIT
                             // 1. Admin/Operator: Bisa edit semua (kecuali dibatasi logic lain)
-                            // 2. Petugas: HANYA bisa edit jika status 'Draf' atau 'Ditolak'
+                            // 2. Petugas: bisa edit laporan miliknya sendiri
                             $canEdit = false;
                             if (in_array($_SESSION['role'] ?? '', ['admin', 'operator'])) {
                                 $canEdit = true;
                             } elseif (($_SESSION['role'] ?? '') === 'petugas') {
-                                if (in_array($row['status'], ['Draf', 'Ditolak']) && $row['user_id'] == $_SESSION['user_id']) {
+                                if ($row['user_id'] == $_SESSION['user_id']) {
                                     $canEdit = true;
                                 }
                             }
                             ?>
 
-                            <?php if($row['status'] === 'Ditolak' && ($_SESSION['role'] ?? '') === 'petugas' && $row['user_id'] == $_SESSION['user_id']): ?>
-                            <!-- Special actions for rejected reports (petugas only) -->
-                            <div class="rejected-actions-mobile">
-                                <small class="text-danger d-block mb-1">
-                                    <i class="fas fa-exclamation-triangle"></i> Perlu Diperbaiki
-                                </small>
-                                <a href="<?= BASE_URL ?>laporan/edit/<?= $row['id'] ?>" 
-                                   class="btn btn-warning btn-sm" 
-                                   title="Perbaiki Laporan">
-                                    <i class="fas fa-edit"></i> Perbaiki
-                                </a>
-                                <form action="<?= BASE_URL ?>laporan/delete/<?= $row['id'] ?>" method="POST" class="d-inline">
-                                    <?= Security::getCsrfField() ?>
-                                    <button type="submit"
-                                            class="btn btn-danger btn-sm"
-                                            onclick="return confirm('Yakin ingin menghapus laporan yang ditolak ini?')"
-                                            title="Hapus Laporan">
-                                        <i class="fas fa-trash"></i> Hapus
-                                    </button>
-                                </form>
-                            </div>
-                            <?php elseif($canEdit): ?>
+                            <?php if($canEdit): ?>
                             <!-- Regular edit button -->
                             <a href="<?= BASE_URL ?>laporan/edit/<?= $row['id'] ?>" 
                                class="btn-action btn-action-warning btn-action-edit" 
@@ -209,6 +169,19 @@
                                title="Edit Laporan">
                                 <i class="fas fa-edit"></i>
                             </a>
+                            <?php endif; ?>
+
+                            <?php if(in_array($_SESSION['role'] ?? '', ['admin', 'operator']) && $row['status'] !== 'Diarsipkan'): ?>
+                            <form action="<?= BASE_URL ?>laporan/archive/<?= $row['id'] ?>" method="POST" class="d-inline">
+                                <?= Security::getCsrfField() ?>
+                                <button type="submit"
+                                        class="btn-action btn-action-secondary"
+                                        data-action="archive"
+                                        onclick="return confirm('Arsipkan laporan ini? Laporan tidak lagi dihitung sebagai laporan aktif.')"
+                                        title="Arsipkan Laporan">
+                                    <i class="fas fa-archive"></i>
+                                </button>
+                            </form>
                             <?php endif; ?>
                             
                             <?php 
@@ -225,7 +198,7 @@
                             }
                             ?>
 
-                            <?php if($canDelete && $row['status'] !== 'Ditolak'): // Hide if Ditolak because it's already handled in rejected-actions-mobile above for petugas ?>
+                            <?php if($canDelete): ?>
                             <!-- Regular delete button -->
                             <form action="<?= BASE_URL ?>laporan/delete/<?= $row['id'] ?>" method="POST" class="d-inline">
                                 <?= Security::getCsrfField() ?>
