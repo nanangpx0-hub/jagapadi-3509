@@ -41,8 +41,9 @@ class WilayahController extends Controller {
      */
     public function kecamatan($kabupatenId = null) {
         $kabupatenId = $kabupatenId ?? ($_GET['kabupaten_id'] ?? null);
+        $kabupatenId = $this->normalizeKabupatenId($kabupatenId);
         
-        if (!$kabupatenId) {
+        if ($kabupatenId === null) {
             $this->json(['status' => 'error', 'message' => 'kabupaten_id required', 'data' => []], 400);
             return;
         }
@@ -91,5 +92,20 @@ class WilayahController extends Controller {
             error_log("WilayahController::desa error: " . $e->getMessage());
             $this->json(['status' => 'error', 'message' => 'Gagal mengambil data desa', 'data' => []], 500);
         }
+    }
+
+    private function normalizeKabupatenId($kabupatenId): ?string {
+        if ($kabupatenId === null) {
+            return null;
+        }
+
+        $kabupatenId = trim((string)$kabupatenId);
+        if ($kabupatenId === '') {
+            return null;
+        }
+
+        return ctype_digit($kabupatenId) && strlen($kabupatenId) === 1
+            ? str_pad($kabupatenId, 2, '0', STR_PAD_LEFT)
+            : $kabupatenId;
     }
 }

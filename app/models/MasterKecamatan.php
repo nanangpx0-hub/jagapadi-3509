@@ -113,12 +113,17 @@ class MasterKecamatan extends Model {
      * Get kecamatan by kabupaten ID
      * Used by WilayahController::kecamatan() for cascading dropdown
      * 
-     * @param int $kabupatenId Kabupaten ID
+     * @param string|int $kabupatenId Kabupaten ID
      * @param string|null $q Search query (optional)
      * @param int $limit Max results (default 100)
      * @return array
      */
     public function getByKabupaten($kabupatenId, $q = null, $limit = 100): array {
+        $kabupatenId = $this->normalizeKabupatenId($kabupatenId);
+        if ($kabupatenId === null) {
+            return [];
+        }
+
         $limit = (int)$limit;
         
         if (!$q) {
@@ -140,6 +145,21 @@ class MasterKecamatan extends Model {
         }
         
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    private function normalizeKabupatenId($kabupatenId): ?string {
+        if ($kabupatenId === null) {
+            return null;
+        }
+
+        $kabupatenId = trim((string)$kabupatenId);
+        if ($kabupatenId === '') {
+            return null;
+        }
+
+        return ctype_digit($kabupatenId) && strlen($kabupatenId) === 1
+            ? str_pad($kabupatenId, 2, '0', STR_PAD_LEFT)
+            : $kabupatenId;
     }
     
     /**
