@@ -4,6 +4,9 @@ on:
   pull_request:
     branches: [ main ]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   php-lint-and-test:
     runs-on: ubuntu-latest
@@ -19,7 +22,6 @@ jobs:
           extensions: mbstring, mysqli, pdo_mysql
 
       - name: Cache Composer dependencies
-        if: hashFiles('composer.json') != ''
         uses: actions/cache@v4
         with:
           path: vendor
@@ -28,8 +30,12 @@ jobs:
             ${{ runner.os }}-composer-
 
       - name: Install dependencies
-        if: hashFiles('composer.json') != ''
-        run: composer install --no-interaction --prefer-dist --no-progress
+        run: |
+          if [ -f composer.json ]; then
+            composer install --no-interaction --prefer-dist --no-progress
+          else
+            echo "composer.json tidak ditemukan, composer install dilewati."
+          fi
 
       - name: PHP lint
         run: |
@@ -40,10 +46,9 @@ jobs:
             -print0 | xargs -0 -n1 php -l
 
       - name: PHPUnit
-        if: hashFiles('composer.json') != ''
         run: |
           if [ -f vendor/bin/phpunit ]; then
             vendor/bin/phpunit --configuration phpunit.xml.dist
           else
-            echo "PHPUnit tidak ditemukan, skip test."
+            echo "PHPUnit tidak ditemukan, test dilewati."
           fi
