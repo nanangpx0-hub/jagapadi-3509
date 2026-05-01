@@ -51,3 +51,8 @@ storage/laporan/*
 !storage/laporan/.gitkeep
 
 _final_test.php
+
+data/mfd/cache/
+data/mfd/*.csv
+data/mfd/*.json
+data/mfd/*errors*.csv
