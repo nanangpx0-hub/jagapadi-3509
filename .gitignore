@@ -44,3 +44,4 @@ data/*.csv
 Thumbs.db
 *.sublime-project
 *.sublime-workspace
+storage/laporan/*.jpg
