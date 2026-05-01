@@ -120,6 +120,17 @@ class QueryBuilder {
     }
 
     /**
+     * Add a raw WHERE condition with bound parameters.
+     *
+     * Use only with static SQL fragments; pass all dynamic values through $params.
+     */
+    public function whereRaw(string $condition, array $params = []): self {
+        $this->whereClauses[] = '(' . $condition . ')';
+        $this->whereParams = array_merge($this->whereParams, $params);
+        return $this;
+    }
+
+    /**
      * Add JOIN clause
      */
     public function join(string $table, string $condition, string $type = 'INNER'): self {

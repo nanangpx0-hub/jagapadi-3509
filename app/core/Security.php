@@ -185,10 +185,9 @@ class Security {
         $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
         $key = "brute_force:{$action}:{$ip}";
 
-        // For now, implement simple session-based tracking
-        // In production, this should use Redis or database
-        $attempts = $_SESSION[$key]['count'] ?? 0;
-        $lastAttempt = $_SESSION[$key]['time'] ?? 0;
+        $counter = self::readCounter($key);
+        $attempts = $counter['count'];
+        $lastAttempt = $counter['time'];
 
         // Reset counter if time window has passed
         if (time() - $lastAttempt > $timeWindow) {
@@ -196,7 +195,7 @@ class Security {
         }
 
         $attempts++;
-        $_SESSION[$key] = ['count' => $attempts, 'time' => time()];
+        self::writeCounter($key, $attempts, $timeWindow);
 
         if ($attempts > $maxAttempts) {
             self::logSecurityEvent('BRUTE_FORCE_ATTEMPT', "Too many {$action} attempts from IP: {$ip}");
@@ -213,10 +212,9 @@ class Security {
         $identifier = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
         $cacheKey = "rate_limit:{$key}:{$identifier}";
 
-        // Simple implementation using session
-        // In production, should use Redis
-        $requests = $_SESSION[$cacheKey]['count'] ?? 0;
-        $lastRequest = $_SESSION[$cacheKey]['time'] ?? 0;
+        $counter = self::readCounter($cacheKey);
+        $requests = $counter['count'];
+        $lastRequest = $counter['time'];
 
         // Reset counter if time window has passed
         if (time() - $lastRequest > $timeWindow) {
@@ -230,8 +228,41 @@ class Security {
             return true; // Rate limit exceeded
         }
 
-        $_SESSION[$cacheKey] = ['count' => $requests, 'time' => time()];
+        self::writeCounter($cacheKey, $requests, $timeWindow);
 
         return false; // Within rate limit
+    }
+
+    private static function readCounter(string $key): array {
+        try {
+            $cached = CacheManager::getInstance()->get($key);
+            if (is_array($cached)) {
+                return [
+                    'count' => (int)($cached['count'] ?? 0),
+                    'time' => (int)($cached['time'] ?? 0),
+                ];
+            }
+        } catch (Throwable $e) {
+            error_log('Failed to read security counter cache: ' . $e->getMessage());
+        }
+
+        return [
+            'count' => (int)($_SESSION[$key]['count'] ?? 0),
+            'time' => (int)($_SESSION[$key]['time'] ?? 0),
+        ];
+    }
+
+    private static function writeCounter(string $key, int $count, int $ttl): void {
+        $payload = ['count' => $count, 'time' => time()];
+
+        try {
+            if (CacheManager::getInstance()->set($key, $payload, $ttl)) {
+                return;
+            }
+        } catch (Throwable $e) {
+            error_log('Failed to write security counter cache: ' . $e->getMessage());
+        }
+
+        $_SESSION[$key] = $payload;
     }
 }

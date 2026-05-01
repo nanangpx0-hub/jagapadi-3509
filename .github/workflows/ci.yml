@@ -4,9 +4,13 @@ on:
   pull_request:
     branches: [ main ]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   php-lint-and-test:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -18,19 +22,35 @@ jobs:
           extensions: mbstring, mysqli, pdo_mysql
 
       - name: Cache Composer dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: vendor
-          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.json') }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('composer.lock') }}
           restore-keys: |
             ${{ runner.os }}-composer-
 
       - name: Install dependencies
-        run: composer install --no-interaction --prefer-dist --no-progress
+        run: |
+          if [ -f composer.json ]; then
+            composer install --no-interaction --prefer-dist --no-progress
+          else
+            echo "composer.json tidak ditemukan, composer install dilewati."
+          fi
 
       - name: PHP lint
         run: |
-          find . -name '*.php' -print0 | xargs -0 -n1 php -l
+          find . -type f -name "*.php" \
+            -not -path "./vendor/*" \
+            -not -path "./storage/*" \
+            -not -path "./node_modules/*" \
+            -print0 | xargs -0 -n1 php -l
 
       - name: PHPUnit
-        run: vendor/bin/phpunit --configuration phpunit.xml.dist || true
+        run: |
+          if [ -f vendor/bin/phpunit ] && [ -f phpunit.xml.dist ]; then
+            vendor/bin/phpunit --configuration phpunit.xml.dist
+          elif [ -f vendor/bin/phpunit ] && [ -f phpunit.xml ]; then
+            vendor/bin/phpunit --configuration phpunit.xml
+          else
+            echo "PHPUnit atau file konfigurasi PHPUnit tidak ditemukan, test dilewati."
+          fi

@@ -2,37 +2,29 @@ import { defineConfig } from 'vite';
 import { resolve } from 'path';
 
 export default defineConfig({
+  publicDir: false,
   build: {
     outDir: 'public/dist',
     emptyOutDir: true,
     rollupOptions: {
       input: {
-        main: resolve(__dirname, 'index.html'),
-        dashboard: resolve(__dirname, 'dashboard.html'),
-        irigasi: resolve(__dirname, 'irigasi.html'),
-        opt: resolve(__dirname, 'opt.html'),
+        validation: resolve(__dirname, 'public/js/validation.js'),
+        loading: resolve(__dirname, 'public/js/loading.js'),
+        confirmDialog: resolve(__dirname, 'public/js/confirm-dialog.js'),
+        mobileEnhancements: resolve(__dirname, 'public/js/mobile-enhancements.js'),
       },
       output: {
         entryFileNames: 'js/[name]-[hash].js',
         chunkFileNames: 'js/[name]-[hash].js',
         assetFileNames: (assetInfo) => {
-          if (assetInfo.name.endsWith('.css')) {
+          if (assetInfo.name && assetInfo.name.endsWith('.css')) {
             return 'css/[name]-[hash][extname]';
           }
           return 'assets/[name]-[hash][extname]';
         },
-        manualChunks: {
-          'vendor': ['chart.js'],
-        },
       },
     },
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: true,
-        drop_debugger: true,
-      },
-    },
+    minify: 'esbuild',
   },
   server: {
     port: 3000,

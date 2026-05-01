@@ -29,28 +29,28 @@ class Router {
     public function get($path, $handler, $middleware = []) {
         $this->addRoute('GET', $path, $handler, $middleware);
     }
-
+    
     /**
      * Add a POST route
      */
     public function post($path, $handler, $middleware = []) {
         $this->addRoute('POST', $path, $handler, $middleware);
     }
-
+    
     /**
      * Add a PUT route
      */
     public function put($path, $handler, $middleware = []) {
         $this->addRoute('PUT', $path, $handler, $middleware);
     }
-
+    
     /**
      * Add a DELETE route
      */
     public function delete($path, $handler, $middleware = []) {
         $this->addRoute('DELETE', $path, $handler, $middleware);
     }
-
+    
     /**
      * Add a route with any method
      */
@@ -62,7 +62,7 @@ class Router {
             'middleware' => $middleware
         ];
     }
-
+    
     /**
      * Load API routes
      */
@@ -82,18 +82,16 @@ class Router {
         $this->get('/api/external/kegiatan', 'ApiController@getKegiatan', ['external_auth', 'rate_limit']);
         $this->post('/api/external/honor', 'ApiController@addHonorPoptPelaporan', ['external_auth', 'rate_limit']);
         $this->get('/api/external/validate-sbml', 'ApiController@validateSBML', ['external_auth', 'rate_limit']);
-        $this->post("/api/qwen/token", "Api\QwenController@token", ["external_auth", "rate_limit"]);
-        $this->get("/api/qwen/status", "Api\QwenController@status", ["external_auth", "rate_limit"]);
 
         // Irigasi API Routes
         $this->get('/api/irigasi', 'Api\IrigasiController@index', ['auth']);
-        $this->get('/api/irigasi/dashboard-summary', 'Api\IrigasiController@dashboardSummary', ['auth']);
         $this->get('/api/irigasi/{id}', 'Api\IrigasiController@show', ['auth']);
         $this->post('/api/irigasi', 'Api\IrigasiController@store', ['auth']);
         $this->put('/api/irigasi/{id}', 'Api\IrigasiController@update', ['auth']);
         $this->delete('/api/irigasi/{id}', 'Api\IrigasiController@destroy', ['auth', 'admin']);
-
+        
         // Irigasi Monitoring & Analytics API Routes (NEW)
+        $this->get('/api/irigasi/dashboard-summary', 'Api\IrigasiController@dashboardSummary', ['auth']);
         $this->get('/api/irigasi/{id}/monitoring', 'Api\IrigasiController@monitoring', ['auth']);
         $this->get('/api/irigasi/{id}/weather', 'Api\IrigasiController@weather', ['auth']);
         $this->get('/api/irigasi/{id}/rules', 'Api\IrigasiController@getRules', ['auth']);
@@ -105,7 +103,7 @@ class Router {
         $this->post('/api/irigasi/{id}/evaluate-rules', 'Api\IrigasiController@evaluateRules', ['auth', 'operator']);
         $this->post('/api/irigasi/alerts/{id}/dismiss', 'Api\IrigasiController@dismissAlert', ['auth']);
 
-
+        
         // IoT/Pengairan API Routes
         $this->get('/api/pengairan/sensor', 'Api\IoTController@getSensors', ['auth']);
         $this->get('/api/pengairan/aktuator', 'Api\IoTController@getActuators', ['auth']);
@@ -115,7 +113,7 @@ class Router {
         $this->get('/api/pengairan/sensor/realtime', 'Api\IoTController@getRealtimeSensors', ['auth']);
         $this->get('/api/pengairan/schedule', 'Api\IoTController@getSchedule', ['auth']);
         $this->post('/api/pengairan/schedule/update', 'Api\IoTController@updateSchedule', ['auth']);
-
+        
         // Wilayah API Routes
         $this->get('/api/wilayah/kabupaten', 'Api\WilayahController@getKabupaten', ['rate_limit']);
         $this->get('/api/wilayah/kecamatan/{kabupaten_id}', 'Api\WilayahController@getKecamatan', ['rate_limit']);
@@ -124,13 +122,13 @@ class Router {
         $this->get('/api/wilayah/search', 'Api\WilayahController@search', ['rate_limit']);
         $this->get('/api/wilayah/stats', 'Api\WilayahController@getStats', ['auth']);
         $this->get('/api/wilayah/by-coordinates', 'Api\WilayahController@getByCoordinates', ['rate_limit']);
-
+        
         // Dashboard API Routes
         $this->get('/api/dashboard/stats', 'Api\DashboardController@getStats', ['auth']);
         $this->get('/api/dashboard/charts', 'Api\DashboardController@getChartData', ['auth']);
         $this->get('/api/dashboard/activities', 'Api\DashboardController@getActivities', ['auth']);
         $this->get('/api/dashboard/alerts', 'Api\DashboardController@getAlerts', ['auth']);
-
+        
         // Dashboard Map API Routes (NEW)
         $this->get('/api/dashboard/map/layers', 'Api\DashboardMapApiController@layers', ['auth']);
         $this->get('/api/dashboard/map/hama', 'Api\DashboardMapApiController@hama', ['auth']);
@@ -138,7 +136,7 @@ class Router {
         $this->get('/api/dashboard/map/weather', 'Api\DashboardMapApiController@weather', ['auth']);
         $this->get('/api/dashboard/map/all', 'Api\DashboardMapApiController@all', ['auth']);
         $this->get('/api/dashboard/map/hamaSummary', 'Api\DashboardMapApiController@hamaSummary', ['auth']);
-
+        
         // Dashboard Charts API Routes (NEW)
         $this->get('/api/dashboard/charts/rainfall', 'Api\DashboardChartsApiController@rainfall', ['auth']);
         $this->get('/api/dashboard/charts/wind', 'Api\DashboardChartsApiController@wind', ['auth']);
@@ -149,7 +147,7 @@ class Router {
         $this->get('/api/dashboard/charts/irrigation', 'Api\DashboardChartsApiController@irrigation', ['auth']);
         $this->get('/api/dashboard/charts/summary', 'Api\DashboardChartsApiController@summary', ['auth']);
         $this->get('/api/dashboard/charts/export', 'Api\DashboardChartsApiController@export', ['auth']);
-
+        
         // User API Routes
         $this->get('/api/users', 'Api\UserController@index', ['auth', 'admin']);
         $this->get('/api/users/{id}', 'Api\UserController@show', ['auth']);
@@ -164,7 +162,7 @@ class Router {
         $this->get('/api/users/check-password-change', 'Api\UserController@checkPasswordChange', ['auth']);
         $this->post('/api/users/{id}/force-password-change', 'Api\UserController@setForcePasswordChange', ['auth', 'admin']);
         $this->get('/api/users/needing-password-change', 'Api\UserController@getUsersNeedingPasswordChange', ['auth', 'admin']);
-
+        
         // OPT API Routes
         $this->get('/api/opt', 'Api\OptController@index', ['auth']);
         $this->get('/api/opt/{id}', 'Api\OptController@show', ['auth']);
@@ -173,7 +171,7 @@ class Router {
         $this->delete('/api/opt/{id}', 'Api\OptController@destroy', ['auth', 'admin']);
         $this->post('/api/opt/{id}/toggle-status', 'Api\OptController@toggleStatus', ['auth', 'admin']);
         $this->get('/api/opt/stats', 'Api\OptController@getStats', ['auth']);
-
+        
         // Data Storytelling API Routes (NEW)
         $this->get('/api/storytelling/analyses', 'Api\StorytellingController@getAnalyses', ['auth', 'statistisi']);
         $this->get('/api/storytelling/analyses/{id}', 'Api\StorytellingController@getAnalysis', ['auth', 'statistisi']);
@@ -185,7 +183,7 @@ class Router {
         $this->get('/api/opt/search', 'Api\OptController@search', ['auth']);
         $this->get('/api/opt/by-category/{category}', 'Api\OptController@getByCategory', ['auth']);
         $this->get('/api/opt/by-type/{type}', 'Api\OptController@getByType', ['auth']);
-
+        
         // Laporan Hama Analytics Page Routes
         $this->get('/laporan-hama/analytics', 'LaporanHamaController@analytics', ['auth']);
         $this->get('/api/laporan-hama/analytics/export', 'LaporanHamaController@exportAnalytics', ['auth']);
@@ -194,29 +192,29 @@ class Router {
         // Laporan AJAX Routes
         $this->get('/laporan/fetch', 'LaporanController@fetch', ['auth']);
     }
-
+    
     /**
      * Handle the current request
      */
     public function handleRequest() {
         $method = $_SERVER['REQUEST_METHOD'];
         $uri = $_SERVER['REQUEST_URI'];
-
+        
         // Remove base path and query string
         $uri = str_replace('/jagapadi', '', $uri);
         $uri = strtok($uri, '?');
         $uri = rtrim($uri, '/');
-
+        
         // Find matching route using method-based grouping for optimization
         foreach ($this->getRoutesByMethod($method) as $route) {
             if ($this->matchRoute($uri, $route)) {
                 return $this->executeRoute($route, $uri);
             }
         }
-
+        
         return false; // No API route matched
     }
-
+    
     /**
      * Check if route matches
      */
@@ -224,7 +222,7 @@ class Router {
         $pattern = $this->convertToRegex($route['path']);
         return preg_match($pattern, $uri);
     }
-
+    
     /**
      * Convert route path to regex pattern
      */
@@ -232,14 +230,14 @@ class Router {
         $pattern = preg_replace('/\{([^}]+)\}/', '([^/]+)', $path);
         return '#^' . $pattern . '$#';
     }
-
+    
     /**
      * Execute the matched route
      */
     private function executeRoute($route, $uri) {
         // Extract parameters
         $params = $this->extractParams($route['path'], $uri);
-
+        
         // Apply middleware
         if (!$this->applyMiddleware($route['middleware'])) {
             return true; // Middleware handled the response
@@ -248,10 +246,10 @@ class Router {
         if (!$this->enforceCsrfForSessionMutation($route)) {
             return true;
         }
-
+        
         // Parse handler
         list($controller, $method) = explode('@', $route['handler']);
-
+        
         // Handle namespaced controllers and controller suffixes properly
         $controllerPath = $controller;
         if (strpos($controllerPath, '\\') !== false) {
@@ -283,9 +281,9 @@ class Router {
             ], 501);
             return true;
         }
-
+        
         $controllerInstance = $this->container->make($className);
-
+        
         if (!method_exists($controllerInstance, $method)) {
             $this->sendJsonResponse([
                 'error' => 'Endpoint not implemented',
@@ -293,29 +291,29 @@ class Router {
             ], 501);
             return true;
         }
-
+        
         // Call the method with parameters
         call_user_func_array([$controllerInstance, $method], $params);
         return true;
     }
-
+    
     /**
      * Extract parameters from URI
      */
     private function extractParams($routePath, $uri) {
         $routeParts = explode('/', trim($routePath, '/'));
         $uriParts = explode('/', trim($uri, '/'));
-
+        
         $params = [];
         foreach ($routeParts as $index => $part) {
             if (preg_match('/\{([^}]+)\}/', $part, $matches)) {
                 $params[$matches[1]] = $uriParts[$index] ?? null;
             }
         }
-
+        
         return array_values($params);
     }
-
+    
     /**
      * Apply middleware
      */
@@ -329,28 +327,28 @@ class Router {
                         exit; // Stop execution after sending response
                     }
                     break;
-
+                    
                 case 'admin':
                     if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
                         $this->sendJsonResponse(['error' => 'Forbidden'], 403);
                         exit; // Stop execution after sending response
                     }
                     break;
-
+                    
                 case 'operator':
                     if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin', 'operator'])) {
                         $this->sendJsonResponse(['error' => 'Forbidden'], 403);
                         exit; // Stop execution after sending response
                     }
                     break;
-
+                    
                 case 'statistisi':
                     if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin', 'statistisi'])) {
                         $this->sendJsonResponse(['error' => 'Forbidden'], 403);
                         exit; // Stop execution after sending response
                     }
                     break;
-
+                    
                 case 'rate_limit':
                     if (class_exists('RateLimiter')) {
                         RateLimiter::apply();
@@ -386,11 +384,11 @@ class Router {
 
                 default:
                     error_log("[Router] Unknown middleware: {$middleware}");
-                    $this->sendJsonResponse(['error' => 'Internal server error', 'message' => 'Unknown middleware configuration'], 500);
+                    $this->sendJsonResponse(['error' => 'Forbidden', 'message' => 'Access denied'], 403);
                     exit;
             }
         }
-
+        
         return true;
     }
 
@@ -424,7 +422,7 @@ class Router {
 
         return true;
     }
-
+    
     /**
      * Send JSON response
      */

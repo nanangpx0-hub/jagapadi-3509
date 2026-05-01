@@ -11,6 +11,24 @@ require_once __DIR__ . '/../config/database.php';
 
 $db = Database::getInstance()->getConnection();
 
+function quoteIdentifierForIndex(string $identifier): string {
+    if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $identifier)) {
+        throw new InvalidArgumentException("Invalid database identifier: {$identifier}");
+    }
+
+    return "`{$identifier}`";
+}
+
+function quoteColumnListForIndex(string $columns): string {
+    $quotedColumns = [];
+
+    foreach (array_map('trim', explode(',', $columns)) as $column) {
+        $quotedColumns[] = quoteIdentifierForIndex($column);
+    }
+
+    return implode(', ', $quotedColumns);
+}
+
 echo "=== Database Indexes Migration ===\n";
 echo "Starting at: " . date('Y-m-d H:i:s') . "\n\n";
 
@@ -156,16 +174,21 @@ foreach ($indexes as $indexInfo) {
     $columns = $indexInfo['columns'];
     
     try {
+        $quotedTable = quoteIdentifierForIndex($table);
+        $quotedIndex = quoteIdentifierForIndex($indexName);
+        $quotedColumns = quoteColumnListForIndex($columns);
+
         // Check if index already exists
         $checkSql = "
             SELECT COUNT(*) as count 
             FROM information_schema.statistics 
             WHERE table_schema = DATABASE() 
-            AND table_name = '{$table}' 
-            AND index_name = '{$indexName}'
+            AND table_name = ?
+            AND index_name = ?
         ";
         
-        $stmt = $db->query($checkSql);
+        $stmt = $db->prepare($checkSql);
+        $stmt->execute([$table, $indexName]);
         $result = $stmt->fetch();
         
         if ($result['count'] > 0) {
@@ -175,7 +198,7 @@ foreach ($indexes as $indexInfo) {
         }
         
         // Create index
-        $sql = "CREATE INDEX {$indexName} ON {$table}({$columns})";
+        $sql = "CREATE INDEX {$quotedIndex} ON {$quotedTable}({$quotedColumns})";
         $db->exec($sql);
         
         echo "✓ Created index {$indexName} on {$table}.{$columns}\n";
