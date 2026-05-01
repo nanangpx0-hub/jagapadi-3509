@@ -109,7 +109,7 @@ class LaporanHamaController extends BaseApiController {
             // Set default values
             $data['populasi'] = $data['populasi'] ?? 0;
             $data['luas_serangan'] = $data['luas_serangan'] ?? 0;
-            $data['status'] = $data['status'] ?? 'Draf';
+            $data['status'] = 'Submitted';
             $data['created_at'] = date('Y-m-d H:i:s');
             
             // Handle file upload if present
@@ -173,6 +173,34 @@ class LaporanHamaController extends BaseApiController {
             
         } catch (Exception $e) {
             $this->sendError('Failed to update laporan hama: ' . $e->getMessage(), 500);
+        }
+    }
+
+    public function archive($id) {
+        try {
+            if (!$id || !is_numeric($id)) {
+                $this->sendError('Invalid laporan ID', 400);
+            }
+
+            if (!in_array($_SESSION['role'] ?? '', ['admin', 'operator'], true)) {
+                $this->sendError('Forbidden', 403);
+            }
+
+            $existingLaporan = $this->laporanModel->getById($id);
+            if (!$existingLaporan) {
+                $this->sendError('Laporan not found', 404);
+            }
+
+            $success = $this->laporanModel->archive((int)$id);
+
+            if ($success) {
+                $laporan = $this->laporanModel->getById($id);
+                $this->sendResponse($laporan, 'Laporan hama archived successfully');
+            } else {
+                $this->sendError('Failed to archive laporan hama', 500);
+            }
+        } catch (Exception $e) {
+            $this->sendError('Failed to archive laporan hama: ' . $e->getMessage(), 500);
         }
     }
     

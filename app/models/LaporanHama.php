@@ -306,7 +306,7 @@ class LaporanHama extends Model {
                     SUM(CASE WHEN lh.tingkat_keparahan = 'Ringan' THEN 1 ELSE 0 END) as ringan
                 FROM laporan_hama lh
                 LEFT JOIN master_opt mo ON lh.master_opt_id = mo.id
-                WHERE lh.status = 'Diverifikasi'
+                WHERE lh.status IN ('Submitted', 'Diverifikasi')
                 AND mo.nama_opt IS NOT NULL";
 
             if ($userId !== null) {
@@ -358,7 +358,7 @@ class LaporanHama extends Model {
                     SUM(luas_serangan) as total_luas,
                     AVG(populasi) as avg_populasi
                 FROM laporan_hama
-                WHERE status = 'Diverifikasi'
+                WHERE status IN ('Submitted', 'Diverifikasi')
                 AND tingkat_keparahan IS NOT NULL";
 
             if ($userId !== null) {
@@ -433,7 +433,7 @@ class LaporanHama extends Model {
                     COUNT(*) as jumlah_laporan
                 FROM laporan_hama
                 WHERE YEAR(tanggal) = :year
-                AND status = 'Diverifikasi'
+                AND status IN ('Submitted', 'Diverifikasi')
                 AND luas_serangan > 0";
 
             if ($userId !== null) {
@@ -500,6 +500,13 @@ class LaporanHama extends Model {
         return $qb->table('laporan_hama')
                   ->where('id', $id)
                   ->update($data);
+    }
+
+    public function archive(int $id): bool {
+        return (bool) $this->update($id, [
+            'status' => 'Diarsipkan',
+            'updated_at' => date('Y-m-d H:i:s')
+        ]);
     }
 
     /**
@@ -589,13 +596,13 @@ class LaporanHama extends Model {
             $sql = "
                 SELECT
                     COUNT(*) as total_laporan,
-                    SUM(CASE WHEN status = 'Submitted' THEN 1 ELSE 0 END) as pending_verifikasi,
-                    SUM(CASE WHEN status = 'Diverifikasi' THEN 1 ELSE 0 END) as terverifikasi,
+                    0 as pending_verifikasi,
+                    SUM(CASE WHEN status IN ('Submitted', 'Diverifikasi') THEN 1 ELSE 0 END) as terverifikasi,
                     SUM(CASE WHEN status = 'Draf' THEN 1 ELSE 0 END) as draf,
                     SUM(CASE WHEN status = 'Ditolak' THEN 1 ELSE 0 END) as ditolak,
                     SUM(CASE WHEN tingkat_keparahan = 'Berat' THEN 1 ELSE 0 END) as keparahan_berat,
-                    SUM(CASE WHEN status = 'Diverifikasi' THEN luas_serangan ELSE 0 END) as total_luas,
-                    SUM(CASE WHEN status = 'Diverifikasi' THEN populasi ELSE 0 END) as total_populasi
+                    SUM(CASE WHEN status IN ('Submitted', 'Diverifikasi') THEN luas_serangan ELSE 0 END) as total_luas,
+                    SUM(CASE WHEN status IN ('Submitted', 'Diverifikasi') THEN populasi ELSE 0 END) as total_populasi
                 FROM laporan_hama";
 
             if ($userId !== null) {
@@ -665,8 +672,8 @@ class LaporanHama extends Model {
                 SELECT
                     MONTH(tanggal) as bulan,
                     COUNT(*) as total,
-                    SUM(CASE WHEN status = 'Diverifikasi' THEN 1 ELSE 0 END) as terverifikasi,
-                    SUM(CASE WHEN status = 'Submitted' THEN 1 ELSE 0 END) as pending,
+                    SUM(CASE WHEN status IN ('Submitted', 'Diverifikasi') THEN 1 ELSE 0 END) as terverifikasi,
+                    0 as pending,
                     SUM(luas_serangan) as total_luas
                 FROM laporan_hama
                 WHERE YEAR(tanggal) = :year";
@@ -755,7 +762,7 @@ class LaporanHama extends Model {
             FROM laporan_hama lh
             LEFT JOIN master_opt mo ON lh.master_opt_id = mo.id
             LEFT JOIN users u ON lh.user_id = u.id
-            WHERE lh.status = 'Diverifikasi'
+            WHERE lh.status IN ('Submitted', 'Diverifikasi')
             AND lh.latitude IS NOT NULL
             AND lh.longitude IS NOT NULL";
 
@@ -793,7 +800,7 @@ class LaporanHama extends Model {
                     COUNT(lh.id) as total_laporan
                 FROM laporan_hama lh
                 JOIN master_kecamatan mk ON lh.kecamatan_id = mk.id
-                WHERE lh.status = 'Diverifikasi'";
+                WHERE lh.status IN ('Submitted', 'Diverifikasi')";
 
             if ($userId !== null) {
                 $sqlCount .= " AND lh.user_id = :user_id";
@@ -819,7 +826,7 @@ class LaporanHama extends Model {
                     SUM(lh.luas_serangan) as total_luas
                 FROM laporan_hama lh
                 JOIN master_kecamatan mk ON lh.kecamatan_id = mk.id
-                WHERE lh.status = 'Diverifikasi'";
+                WHERE lh.status IN ('Submitted', 'Diverifikasi')";
 
             if ($userId !== null) {
                 $sqlArea .= " AND lh.user_id = :user_id";
@@ -971,12 +978,10 @@ class LaporanHama extends Model {
     public function getTotalCount(?int $userId = null): int {
         if ($userId !== null) {
             return $this->getCountByStatusAndUser('Submitted', $userId)
-                + $this->getCountByStatusAndUser('Diverifikasi', $userId)
-                + $this->getCountByStatusAndUser('Draf', $userId)
-                + $this->getCountByStatusAndUser('Ditolak', $userId);
+                + $this->getCountByStatusAndUser('Diverifikasi', $userId);
         }
 
-        return $this->count();
+        return $this->getCountByStatus('Submitted') + $this->getCountByStatus('Diverifikasi');
     }
 
     public function getMonthlyTrends($period = 30, ?int $userId = null): array {
@@ -1065,28 +1070,11 @@ class LaporanHama extends Model {
     }
 
     public function getPendingVerifications(): array {
-        $sql = "
-            SELECT lh.id, lh.tanggal, lh.status, u.nama_lengkap as user_name
-            FROM laporan_hama lh
-            LEFT JOIN users u ON lh.user_id = u.id
-            WHERE lh.status = 'Submitted'
-            ORDER BY lh.created_at ASC
-            LIMIT 50
-        ";
-        return $this->query($sql);
+        return [];
     }
 
     public function getOldPendingReports($olderThanDays = 7): int {
-        $days = max(1, (int)$olderThanDays);
-        $stmt = $this->db->prepare("
-            SELECT COUNT(*) as total
-            FROM laporan_hama
-            WHERE status = 'Submitted'
-              AND created_at < DATE_SUB(NOW(), INTERVAL ? DAY)
-        ");
-        $stmt->bindValue(1, $days, PDO::PARAM_INT);
-        $stmt->execute();
-        return (int)($stmt->fetch(PDO::FETCH_ASSOC)['total'] ?? 0);
+        return 0;
     }
 
     /**

@@ -76,8 +76,7 @@ class DashboardMapApiController extends BaseApiController {
     public function hama() {
         try {
             $filters = [
-                'year' => $_GET['year'] ?? date('Y'),
-                'status' => $_GET['status'] ?? 'Diverifikasi'
+                'year' => $_GET['year'] ?? date('Y')
             ];
             
             $data = $this->aggregator->getHamaMapData($filters);

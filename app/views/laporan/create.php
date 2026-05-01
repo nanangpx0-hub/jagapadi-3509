@@ -482,41 +482,7 @@
                         </div>
                     </div>
                     
-                    <!-- Status Controls (Role-Based) -->
-                    <div class="form-group">
-                        <label>Status <span class="text-danger">*</span></label>
-                        <?php if(($_SESSION['role'] ?? '') === 'petugas'): ?>
-                        <!-- Petugas: Dropdown (Draf and Submitted only) -->
-                        <select name="status" class="form-control" required id="statusSelect">
-                            <option value="Draf">Simpan sebagai Draf</option>
-                            <option value="Submitted" selected>Submit untuk Verifikasi</option>
-                        </select>
-                        <small class="text-muted d-block mt-1">
-                            <i class="fas fa-info-circle"></i> Petugas dapat menyimpan sebagai Draf atau Submit untuk verifikasi oleh operator/admin.
-                        </small>
-                        <?php elseif(($_SESSION['role'] ?? '') === 'operator'): ?>
-                        <!-- Operator: Dropdown with Draf, Submitted, or Diverifikasi -->
-                        <select name="status" class="form-control" required id="statusSelect">
-                            <option value="Draf">Simpan sebagai Draf</option>
-                            <option value="Submitted" selected>Submit untuk Verifikasi</option>
-                            <option value="Diverifikasi">Langsung Diverifikasi (Approve)</option>
-                        </select>
-                        <small class="text-muted d-block mt-1">
-                            <i class="fas fa-info-circle"></i> Operator dapat langsung memverifikasi laporan yang dibuat.
-                        </small>
-                        <?php else: ?>
-                        <!-- Admin: Full control -->
-                        <select name="status" class="form-control" required id="statusSelect">
-                            <option value="Draf">Simpan sebagai Draf</option>
-                            <option value="Submitted">Submit untuk Verifikasi</option>
-                            <option value="Diverifikasi" selected>Langsung Diverifikasi (Approve)</option>
-                            <option value="Ditolak">Tandai sebagai Ditolak</option>
-                        </select>
-                        <small class="text-muted d-block mt-1">
-                            <i class="fas fa-info-circle"></i> Admin memiliki kontrol penuh atas status laporan.
-                        </small>
-                        <?php endif; ?>
-                    </div>
+                    <input type="hidden" name="status" id="statusSelect" value="Submitted">
 
                 </div>
                 <div class="card-footer">
@@ -771,10 +737,10 @@ document.querySelector('form').addEventListener('submit', function(e) {
             statusText = 'disimpan sebagai draf';
             break;
         case 'Submitted':
-            statusText = 'disubmit untuk verifikasi';
+            statusText = 'disimpan sebagai laporan aktif';
             break;
         case 'Diverifikasi':
-            statusText = 'langsung diverifikasi (approved)';
+            statusText = 'disimpan sebagai laporan aktif';
             break;
         case 'Ditolak':
             statusText = 'ditandai sebagai ditolak';

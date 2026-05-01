@@ -73,6 +73,7 @@ class Router {
         $this->get('/api/laporan-hama', 'Api\LaporanHamaController@index', ['auth']);
         $this->get('/api/laporan-hama/{id}', 'Api\LaporanHamaController@show', ['auth']);
         $this->post('/api/laporan-hama', 'Api\LaporanHamaController@store', ['auth']);
+        $this->post('/api/laporan-hama/{id}/archive', 'Api\LaporanHamaController@archive', ['auth']);
         $this->put('/api/laporan-hama/{id}', 'Api\LaporanHamaController@update', ['auth']);
         $this->delete('/api/laporan-hama/{id}', 'Api\LaporanHamaController@destroy', ['auth', 'admin']);
 

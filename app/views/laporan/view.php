@@ -10,6 +10,14 @@
                     <a href="<?= BASE_URL ?>laporan/edit/<?= $laporan['id'] ?>" class="btn btn-warning btn-sm">
                         <i class="fas fa-edit"></i> Edit
                     </a>
+                    <?php if(($laporan['status'] ?? '') !== 'Diarsipkan'): ?>
+                    <form action="<?= BASE_URL ?>laporan/archive/<?= $laporan['id'] ?>" method="POST" class="d-inline">
+                        <?= Security::getCsrfField() ?>
+                        <button type="submit" class="btn btn-secondary btn-sm" onclick="return confirm('Arsipkan laporan ini? Laporan tidak lagi dihitung sebagai laporan aktif.')">
+                            <i class="fas fa-archive"></i> Arsipkan
+                        </button>
+                    </form>
+                    <?php endif; ?>
                     <?php endif; ?>
                     <a href="<?= BASE_URL ?>laporan" class="btn btn-secondary btn-sm">
                         <i class="fas fa-arrow-left"></i> Kembali
@@ -24,10 +32,8 @@
                     <p><strong>Laporan #<?= $laporan['id'] ?></strong> telah berhasil dibuat dengan status: <strong><?= $laporan['status'] ?></strong></p>
                     <hr>
                     <p class="mb-0">
-                        <?php if($laporan['status'] === 'Diverifikasi'): ?>
-                            <i class="fas fa-check"></i> Laporan ini sudah diverifikasi dan dapat dilihat di dashboard.
-                        <?php elseif($laporan['status'] === 'Submitted'): ?>
-                            <i class="fas fa-clock"></i> Laporan ini sedang menunggu verifikasi dari operator/admin.
+                        <?php if(in_array($laporan['status'], ['Submitted', 'Diverifikasi'])): ?>
+                            <i class="fas fa-check"></i> Laporan ini aktif dan dapat dilihat di dashboard.
                         <?php else: ?>
                             <i class="fas fa-file"></i> Laporan ini disimpan sebagai draf. Anda dapat mengedit atau submit nanti.
                         <?php endif; ?>
@@ -124,11 +130,11 @@
                         <th>Status</th>
                         <td>
                             <span class="badge badge-lg badge-<?= 
-                                $laporan['status'] == 'Diverifikasi' ? 'success' : 
-                                ($laporan['status'] == 'Submitted' ? 'warning' : 
-                                ($laporan['status'] == 'Ditolak' ? 'danger' : 'secondary'))
+                            in_array($laporan['status'], ['Submitted', 'Diverifikasi']) ? 'success' : 
+                            ($laporan['status'] == 'Diarsipkan' ? 'dark' :
+                            ($laporan['status'] == 'Ditolak' ? 'danger' : 'secondary'))
                             ?>">
-                                <?= $laporan['status'] ?>
+                                <?= in_array($laporan['status'], ['Submitted', 'Diverifikasi']) ? 'Aktif' : $laporan['status'] ?>
                             </span>
                         </td>
                     </tr>
@@ -196,7 +202,7 @@
     </div>
     
     <div class="col-md-4">
-        <?php if($laporan['status'] == 'Submitted' && in_array($_SESSION['role'] ?? '', ['admin', 'operator'])): ?>
+        <?php if(false): ?>
         <div class="card card-warning">
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-check-circle"></i> Verifikasi Laporan</h3>

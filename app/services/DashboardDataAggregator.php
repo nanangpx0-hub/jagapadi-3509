@@ -502,8 +502,8 @@ class DashboardDataAggregator {
     public function getHamaStats($year) {
         $sql = "SELECT 
                     COUNT(*) as total_laporan,
-                    SUM(CASE WHEN status = 'Diverifikasi' THEN 1 ELSE 0 END) as terverifikasi,
-                    SUM(CASE WHEN status = 'Submitted' THEN 1 ELSE 0 END) as pending,
+                    SUM(CASE WHEN status IN ('Submitted', 'Diverifikasi') THEN 1 ELSE 0 END) as terverifikasi,
+                    0 as pending,
                     SUM(CASE WHEN tingkat_keparahan = 'Berat' THEN 1 ELSE 0 END) as berat,
                     SUM(CASE WHEN tingkat_keparahan = 'Sedang' THEN 1 ELSE 0 END) as sedang,
                     SUM(CASE WHEN tingkat_keparahan = 'Ringan' THEN 1 ELSE 0 END) as ringan,
@@ -546,7 +546,7 @@ class DashboardDataAggregator {
                 FROM laporan_hama lh
                 JOIN master_opt mo ON lh.master_opt_id = mo.id
                 WHERE YEAR(lh.tanggal) = :year
-                AND lh.status = 'Diverifikasi'
+                AND lh.status IN ('Submitted', 'Diverifikasi')
                 GROUP BY lh.master_opt_id, mo.nama_opt, mo.jenis
                 ORDER BY total_laporan DESC
                 LIMIT :limit";
@@ -574,7 +574,7 @@ class DashboardDataAggregator {
                 LEFT JOIN master_desa md ON lh.desa_id = md.id
                 LEFT JOIN master_kecamatan mk ON md.kecamatan_id = mk.id
                 WHERE YEAR(lh.tanggal) = :year
-                AND lh.status = 'Diverifikasi'
+                AND lh.status IN ('Submitted', 'Diverifikasi')
                 GROUP BY mk.id, mk.nama_kecamatan
                 ORDER BY total_laporan DESC";
         
@@ -604,8 +604,6 @@ class DashboardDataAggregator {
      */
     public function getHamaMapData($filters = []) {
         $year = $filters['year'] ?? date('Y');
-        $status = $filters['status'] ?? 'Diverifikasi';
-        
         $sql = "SELECT 
                     lh.id,
                     lh.tanggal,
@@ -620,13 +618,13 @@ class DashboardDataAggregator {
                 FROM laporan_hama lh
                 LEFT JOIN master_opt mo ON lh.master_opt_id = mo.id
                 WHERE YEAR(lh.tanggal) = :year
-                AND lh.status = :status
+                AND lh.status IN ('Submitted', 'Diverifikasi')
                 AND lh.latitude IS NOT NULL
                 AND lh.longitude IS NOT NULL
                 ORDER BY lh.tanggal DESC";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([':year' => $year, ':status' => $status]);
+        $stmt->execute([':year' => $year]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     

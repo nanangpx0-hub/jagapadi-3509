@@ -151,8 +151,8 @@ class DashboardController extends BaseApiController {
     private function getSummaryStats($userFilter = null) {
         return [
             'total_reports' => $this->laporanModel->getTotalCount($userFilter),
-            'pending_reports' => $this->laporanModel->getCountByStatus('Submitted', $userFilter),
-            'verified_reports' => $this->laporanModel->getCountByStatus('Diverifikasi', $userFilter),
+            'pending_reports' => 0,
+            'verified_reports' => $this->laporanModel->getCountByStatus('Submitted', $userFilter) + $this->laporanModel->getCountByStatus('Diverifikasi', $userFilter),
             'rejected_reports' => $this->laporanModel->getCountByStatus('Ditolak', $userFilter),
             'total_irrigation' => $this->irigasiModel->getTotalCount($userFilter),
             'active_irrigation' => $this->irigasiModel->getCountByStatus('Aktif', $userFilter)
@@ -251,7 +251,7 @@ class DashboardController extends BaseApiController {
             return [];
         }
         
-        return $this->laporanModel->getPendingVerifications();
+        return [];
     }
     
     /**
@@ -262,16 +262,7 @@ class DashboardController extends BaseApiController {
         
         // Check for system issues
         if ($_SESSION['role'] !== 'petugas') {
-            // Check for old pending reports
-            $oldPending = $this->laporanModel->getOldPendingReports(7); // 7 days old
-            if ($oldPending > 0) {
-                $alerts[] = [
-                    'type' => 'warning',
-                    'title' => 'Laporan Tertunda',
-                    'message' => "{$oldPending} laporan menunggu verifikasi lebih dari 7 hari",
-                    'action' => 'review_pending'
-                ];
-            }
+            // Approval laporan hama sudah dinonaktifkan, jadi tidak ada alert verifikasi tertunda.
         }
         
         return $alerts;

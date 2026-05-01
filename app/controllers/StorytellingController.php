@@ -557,7 +557,7 @@ class StorytellingController extends Controller {
             WHERE MONTH(lh.tanggal_laporan) = ? 
               AND YEAR(lh.tanggal_laporan) = ?
               AND md.kecamatan_id = ?
-              AND lh.status_verifikasi = 'verified'
+              AND lh.status IN ('Submitted', 'Diverifikasi')
         ";
         
         $stmt = Database::getInstance()->getConnection()->prepare($sql);

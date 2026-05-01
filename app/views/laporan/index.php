@@ -636,21 +636,6 @@ tbody tr:hover {
                     </span>
                 </div>
                 
-                <!-- Rejected Reports Alert (for petugas) -->
-                <?php if (($rejectedCount ?? 0) > 0): ?>
-                <div class="alert alert-warning mb-3">
-                    <i class="fas fa-exclamation-triangle"></i> 
-                    <strong>Perhatian:</strong> Anda memiliki <strong><?= $rejectedCount ?></strong> laporan yang ditolak dan perlu diperbaiki.
-                    <br>
-                    <small class="text-muted">
-                        <i class="fas fa-info-circle"></i> 
-                        Laporan yang ditolak dapat Anda edit untuk memperbaiki data, atau hapus jika tidak diperlukan lagi.
-                        <?php if ($status !== 'Ditolak'): ?>
-                        <a href="<?= BASE_URL ?>laporan?status=Ditolak" class="alert-link">Lihat laporan yang ditolak</a>
-                        <?php endif; ?>
-                    </small>
-                </div>
-                <?php endif; ?>
                 <?php endif; ?>
 
                 <!-- Filter Status dengan Efek Timbul-Tenggelam -->
@@ -660,9 +645,7 @@ tbody tr:hover {
                         // Hitung jumlah per status
                         $countAll = count($laporan);
                         $countDraft = 0;
-                        $countSubmitted = 0;
-                        $countVerified = 0;
-                        $countRejected = 0;
+                        $countActive = 0;
                         
                         foreach ($laporan as $item) {
                             switch ($item['status']) {
@@ -670,13 +653,8 @@ tbody tr:hover {
                                     $countDraft++;
                                     break;
                                 case 'Submitted':
-                                    $countSubmitted++;
-                                    break;
                                 case 'Diverifikasi':
-                                    $countVerified++;
-                                    break;
-                                case 'Ditolak':
-                                    $countRejected++;
+                                    $countActive++;
                                     break;
                             }
                         }
@@ -698,28 +676,12 @@ tbody tr:hover {
                             <span class="badge badge-warning"><?= $countDraft ?></span>
                         </a>
 
-                        <a href="<?= BASE_URL ?>laporan?status=Submitted" 
-                           class="btn-filter <?= ($status === 'Submitted') ? 'active' : '' ?>" 
-                           data-filter="submitted"
-                           aria-pressed="<?= ($status === 'Submitted') ? 'true' : 'false' ?>">
-                            <i class="fas fa-paper-plane"></i> Submitted
-                            <span class="badge badge-info"><?= $countSubmitted ?></span>
-                        </a>
-
-                        <a href="<?= BASE_URL ?>laporan?status=Diverifikasi" 
-                           class="btn-filter <?= ($status === 'Diverifikasi') ? 'active' : '' ?>" 
-                           data-filter="diverifikasi"
-                           aria-pressed="<?= ($status === 'Diverifikasi') ? 'true' : 'false' ?>">
-                            <i class="fas fa-check-circle"></i> Diverifikasi
-                            <span class="badge badge-success"><?= $countVerified ?></span>
-                        </a>
-
-                        <a href="<?= BASE_URL ?>laporan?status=Ditolak" 
-                           class="btn-filter <?= ($status === 'Ditolak') ? 'active' : '' ?>" 
-                           data-filter="ditolak"
-                           aria-pressed="<?= ($status === 'Ditolak') ? 'true' : 'false' ?>">
-                            <i class="fas fa-times-circle"></i> Ditolak
-                            <span class="badge badge-danger"><?= $countRejected ?></span>
+                        <a href="<?= BASE_URL ?>laporan" 
+                           class="btn-filter" 
+                           data-filter="aktif"
+                           aria-pressed="false">
+                            <i class="fas fa-check-circle"></i> Aktif
+                            <span class="badge badge-success"><?= $countActive ?></span>
                         </a>
                     </div>
                 </div>
@@ -911,9 +873,11 @@ tbody tr:hover {
     }
 
     function statusBadge(s) {
+        if (s === 'Submitted' || s === 'Diverifikasi') {
+            return `<span class="badge badge-success" title="Laporan aktif/masuk"><i class="fas fa-check-circle"></i> Aktif</span>`;
+        }
         const map = {
-            Diverifikasi: { cls:'success', icon:'check-circle' },
-            Submitted:    { cls:'warning',  icon:'paper-plane' },
+            Diarsipkan:   { cls:'dark',     icon:'archive' },
             Ditolak:      { cls:'danger',   icon:'times-circle' },
             Draf:         { cls:'secondary',icon:'file' },
         };
@@ -933,26 +897,25 @@ tbody tr:hover {
 
     function buildTableRow(r, idx) {
         const isAdmin = '<?= $_SESSION['role'] ?? '' ?>' === 'admin';
+        const isOperator = '<?= $_SESSION['role'] ?? '' ?>' === 'operator';
         const isPetugas = '<?= $_SESSION['role'] ?? '' ?>' === 'petugas';
-        const canVerify = r.status === 'Submitted' && (isAdmin || '<?= $_SESSION['role'] ?? '' ?>' === 'operator');
-        const canEdit = (isAdmin || isPetugas) && r.status !== 'Ditolak';
-        const canDelete = isAdmin || (isPetugas);
+        const canEdit = isAdmin || isOperator || isPetugas;
+        const canDelete = isAdmin || (isPetugas && (r.status === 'Draf' || r.status === 'Ditolak'));
         const foto = r.foto_url
             ? `<div class="photo-thumbnail-container"><img src="${BASE_URL}${r.foto_url}" alt="Foto" class="photo-thumbnail" data-full-image="${BASE_URL}${r.foto_url}" loading="lazy" onerror="this.onerror=null;this.style.display='none';this.parentElement.innerHTML='<div class=\\'photo-thumbnail no-image\\'><i class=\\'fas fa-image\\'></i></div>';"></div>`
             : `<div class="photo-thumbnail-container"><div class="photo-thumbnail no-image"><i class="fas fa-image"></i></div></div>`;
         const etlWarn = (r.etl_acuan > 0 && r.populasi > r.etl_acuan) ? '<i class="fas fa-exclamation-triangle text-danger ms-1" title="Melampaui ETL"></i>' : '';
 
-        const verifyBtns = canVerify ? `
-            <button type="button" class="btn-action btn-action-success" onclick="verifyLaporan(${r.id},'Diverifikasi')" title="Verifikasi">
-                <i class="fas fa-check"></i>
-            </button>
-            <button type="button" class="btn-action btn-action-danger" onclick="rejectLaporan(${r.id})" title="Tolak">
-                <i class="fas fa-times"></i>
-            </button>` : '';
-
         const editBtn = canEdit ? `<a href="${BASE_URL}laporan/edit/${r.id}" class="btn-action btn-action-warning" title="Edit"><i class="fas fa-edit"></i></a>` : '';
+        const archiveBtn = (isAdmin || isOperator) && r.status !== 'Diarsipkan' ? `
+            <form action="${BASE_URL}laporan/archive/${r.id}" method="POST" class="d-inline">
+                <?= Security::getCsrfField() ?>
+                <button type="submit" class="btn-action btn-action-secondary" onclick="return confirm('Arsipkan laporan ini? Laporan tidak lagi dihitung sebagai laporan aktif.')" title="Arsipkan">
+                    <i class="fas fa-archive"></i>
+                </button>
+            </form>` : '';
 
-        const deleteBtn = canDelete && r.status !== 'Ditolak' ? `
+        const deleteBtn = canDelete ? `
             <form action="${BASE_URL}laporan/delete/${r.id}" method="POST" class="d-inline">
                 <?= Security::getCsrfField() ?>
                 <button type="submit" class="btn-action btn-action-danger" onclick="return confirm('Yakin ingin menghapus laporan ini?')" title="Hapus">
@@ -980,8 +943,8 @@ tbody tr:hover {
             <td>
                 <div class="btn-action-group">
                     <a href="${BASE_URL}laporan/detail/${r.id}" class="btn-action btn-action-info" title="Lihat"><i class="fas fa-eye"></i></a>
-                    ${verifyBtns}
                     ${editBtn}
+                    ${archiveBtn}
                     ${deleteBtn}
                 </div>
             </td>
@@ -1192,7 +1155,7 @@ tbody tr:hover {
 </script>
 <?php endif; ?>
 
-<?php if(in_array($_SESSION['role'] ?? '', ['admin', 'operator'])): ?>
+<?php if(false): ?>
 <script>
 // Enhanced Verification and Rejection functions with AJAX
 class LaporanVerifier {
@@ -1503,7 +1466,7 @@ function rejectLaporan(laporanId) {
 <?php endif; ?>
 
 
-<?php if(in_array($_SESSION['role'] ?? '', ['admin', 'operator'])): ?>
+<?php if(false): ?>
 <script>
 // Verification and Rejection functions for operators
 function verifyLaporan(laporanId, status) {
