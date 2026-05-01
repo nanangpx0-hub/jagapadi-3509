@@ -279,16 +279,22 @@ if (statusButtons.length > 0 && statusInput) {
 <?php include ROOT_PATH . '/app/views/layouts/footer.php'; ?>
 <script>
 async function fetchJSON(url){ const r = await fetch(url); return r.json(); }
+function normalizeKabupatenId(kabupatenId){
+  const value = String(kabupatenId ?? '').trim();
+  return /^\d$/.test(value) ? value.padStart(2, '0') : value;
+}
 async function loadKabupaten(selected){
   const data = await fetchJSON('<?= BASE_URL ?>wilayah/kabupaten');
   const sel = document.getElementById('kabupatenSelect');
-  data.data.forEach(row=>{ const opt=document.createElement('option'); opt.value=row.id; opt.textContent=row.nama_kabupaten; if(String(row.id)===String(selected)) opt.selected=true; sel.appendChild(opt); });
+  const selectedId = normalizeKabupatenId(selected);
+  data.data.forEach(row=>{ const opt=document.createElement('option'); opt.value=normalizeKabupatenId(row.id); opt.textContent=row.nama_kabupaten; if(opt.value===selectedId) opt.selected=true; sel.appendChild(opt); });
 }
 async function loadKecamatan(kabupatenId, selected){
+  kabupatenId = normalizeKabupatenId(kabupatenId);
   const sel = document.getElementById('kecamatanSelect'); sel.innerHTML = '<option value="">-- Pilih Kecamatan --</option><option value="unknown">Tidak Diketahui</option>';
   const selDesa = document.getElementById('desaSelect'); selDesa.innerHTML = '<option value="">-- Pilih Desa --</option><option value="unknown">Tidak Diketahui</option>';
   if(!kabupatenId || kabupatenId==='unknown') return;
-  const data = await fetchJSON('<?= BASE_URL ?>wilayah/kecamatan/'+kabupatenId);
+  const data = await fetchJSON('<?= BASE_URL ?>wilayah/kecamatan/'+encodeURIComponent(kabupatenId));
   data.data.forEach(row=>{ const opt=document.createElement('option'); opt.value=row.id; opt.textContent=row.nama_kecamatan; if(String(row.id)===String(selected)) opt.selected=true; sel.appendChild(opt); });
 }
 async function loadDesa(kecamatanId, selected){
