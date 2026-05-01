@@ -49,3 +49,5 @@ storage/laporan/*.jpg
 storage/laporan/*
 
 !storage/laporan/.gitkeep
+
+_final_test.php
