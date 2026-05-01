@@ -47,8 +47,10 @@ jobs:
 
       - name: PHPUnit
         run: |
-          if [ -f vendor/bin/phpunit ]; then
+          if [ -f vendor/bin/phpunit ] && [ -f phpunit.xml.dist ]; then
             vendor/bin/phpunit --configuration phpunit.xml.dist
+          elif [ -f vendor/bin/phpunit ] && [ -f phpunit.xml ]; then
+            vendor/bin/phpunit --configuration phpunit.xml
           else
-            echo "PHPUnit tidak ditemukan, test dilewati."
+            echo "PHPUnit atau file konfigurasi PHPUnit tidak ditemukan, test dilewati."
           fi
