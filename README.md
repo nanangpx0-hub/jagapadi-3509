@@ -29,5 +29,16 @@ Repo JAGAPADI pakai pola branch-per-fitur dan multi-agent.
 - **Blackbox / Antigravity** – review / second opinion.
 - **ChatGPT** – orkestrasi & dokumentasi.
 
-Detail aturan kolaborasi agent: lihat [`AGENTS.md`](./AGENTS.md)  
+Detail aturan kolaborasi agent: lihat [`AGENTS.md`](./AGENTS.md)
 Panduan kontribusi lengkap: lihat [`CONTRIBUTING.md`](./CONTRIBUTING.md)
+
+**Konteks cepat untuk AI / handover:**
+
+- [`PROJECT_SUMMARY.md`](./PROJECT_SUMMARY.md)
+- [`TECH_STACK.md`](./TECH_STACK.md)
+- [`CURRENT_TASK.md`](./CURRENT_TASK.md)
+- [`DATABASE_SCHEMA.md`](./DATABASE_SCHEMA.md)
+- [`DATA_DICTIONARY.md`](./DATA_DICTIONARY.md)
+- [`CHANGELOG.md`](./CHANGELOG.md)
+- [`prompts/`](./prompts/)
+- [`docs/AI_WORKFLOW.md`](./docs/AI_WORKFLOW.md)
