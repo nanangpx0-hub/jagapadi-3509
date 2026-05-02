@@ -54,6 +54,27 @@ Review tambahan atau second opinion. Berguna untuk menguji asumsi, mengecek blin
 ### ChatGPT
 Orkestrasi, penyusunan arah kerja, perapihan dokumentasi, dan sinkronisasi hasil dari agent lain.
 
+## Context dan Prompt Portable
+
+Untuk onboarding agent baru atau AI dengan context window terbatas, gunakan file ringkas berikut:
+
+- `PROJECT_SUMMARY.md`
+- `TECH_STACK.md`
+- `CURRENT_TASK.md`
+- `DATABASE_SCHEMA.md`
+- `DATA_DICTIONARY.md`
+- `CHANGELOG.md`
+
+Prompt model-agnostic disimpan di folder `prompts/`:
+
+- `prompts/code-review.md`
+- `prompts/new-feature.md`
+- `prompts/debug-error.md`
+- `prompts/documentation.md`
+
+Panduan workflow lintas AI ada di `docs/AI_WORKFLOW.md`. Jika task aktif berubah, update `CURRENT_TASK.md` agar handover tetap akurat.
+Jika fitur, bugfix, maintenance data, atau dokumentasi penting selesai, update `CHANGELOG.md`.
+
 ## Aturan Commit
 
 Sebelum commit, wajib lakukan pengecekan berikut:
