@@ -224,6 +224,7 @@ tbody tr:hover {
     border-radius: 8px;
     box-shadow: 0 8px 32px rgba(0,0,0,0.5);
     box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
 
 .photo-preview-close {
     position: absolute;
@@ -851,7 +852,9 @@ tbody tr:hover {
     function showLoader() {
         const tbody = qs('#tableBody');
         if (!tbody) return;
-        tbody.innerHTML = '<tr><td colspan="12" class="text-center py-5"><div class="spinner-border text-primary" role="status" style="width:2rem;height:2rem;"><span class="visually-hidden">Loading...</span></div><div class="mt-2 text-muted small">Memuat data...</div></td></tr>';
+        const headerRow = qs('#laporanTable thead tr');
+        const colCount = headerRow ? headerRow.children.length : 12;
+        tbody.innerHTML = '<tr><td colspan="' + colCount + '" class="text-center py-5"><div class="spinner-border text-primary" role="status" style="width:2rem;height:2rem;"><span class="visually-hidden">Loading...</span></div><div class="mt-2 text-muted small">Memuat data...</div></td></tr>';
     }
 
     function escapeHtml(str) {
@@ -1098,6 +1101,97 @@ tbody tr:hover {
         loadTable();
     }
 
+    // ========== EVENT LISTENERS FOR TABLE CONTROLS ==========
+
+    // Per-page dropdown change
+    const perPageSelect = qs('#perPageSelect');
+    if (perPageSelect) {
+        perPageSelect.addEventListener('change', function() {
+            const val = this.value;
+            const perPage = val === 'all' ? -1 : parseInt(val);
+            if (!isNaN(perPage) && perPage > 0) {
+                setPerPage(perPage);
+            } else if (val === 'all') {
+                setPerPage(-1);
+            }
+        });
+    }
+
+    // Search input with debounce
+    const tableSearch = qs('#tableSearch');
+    const clearSearchBtn = qs('#clearSearchBtn');
+    let searchTimer = null;
+    if (tableSearch) {
+        tableSearch.addEventListener('input', function() {
+            clearTimeout(searchTimer);
+            const query = this.value.trim();
+            if (clearSearchBtn) {
+                clearSearchBtn.style.display = query ? 'block' : 'none';
+            }
+            searchTimer = setTimeout(function() {
+                setSearch(query);
+            }, 400);
+        });
+    }
+
+    // Search button click
+    const searchBtn = qs('#searchBtn');
+    if (searchBtn) {
+        searchBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            clearTimeout(searchTimer);
+            const query = (tableSearch && tableSearch.value) ? tableSearch.value.trim() : '';
+            setSearch(query);
+        });
+    }
+
+    // Clear search button click
+    if (clearSearchBtn) {
+        clearSearchBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            if (tableSearch) tableSearch.value = '';
+            clearSearchBtn.style.display = 'none';
+            clearTimeout(searchTimer);
+            setSearch('');
+        });
+    }
+
+    // Pagination click with event delegation
+    const paginationNav = qs('#paginationNav');
+    if (paginationNav) {
+        paginationNav.addEventListener('click', function(e) {
+            const link = e.target.closest('[data-page]');
+            if (link) {
+                e.preventDefault();
+                const pageNum = parseInt(link.dataset.page);
+                if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= state.totalPages) {
+                    setPage(pageNum);
+                }
+            }
+        });
+    }
+
+    // Sortable header click
+    const tableHeaders = qs('#laporanTable');
+    if (tableHeaders) {
+        tableHeaders.addEventListener('click', function(e) {
+            const th = e.target.closest('th.sortable');
+            if (th) {
+                e.preventDefault();
+                th.style.cursor = 'pointer';
+                const sortCol = th.dataset.sort;
+                if (sortCol) {
+                    setSort(sortCol);
+                }
+            }
+        });
+    }
+
+    // Ensure all sortable headers have pointer cursor
+    qsa('#laporanTable thead th.sortable').forEach(th => {
+        th.style.cursor = 'pointer';
+    });
+
     // ========== BULK SELECT HELPER FUNCTIONS ==========
     function setupMasterCheckbox() {
         console.log('[BulkSelect] setupMasterCheckbox called');
@@ -1199,7 +1293,7 @@ tbody tr:hover {
     const overlay = document.getElementById('photoPreviewOverlay');
     const previewImage = document.getElementById('photoPreviewImage');
     const closeBtn = document.querySelector('.photo-preview-close');
-    const thumbnails = document.querySelectorAll('.photo-thumbnail');
+    const tableBody = document.getElementById('tableBody');
     
     // Open preview
     function openPreview(imageSrc) {
@@ -1215,18 +1309,18 @@ tbody tr:hover {
         overlay.classList.remove('show');
         document.body.style.overflow = ''; // Restore scrolling
         previewImage.src = '';
-
     }
     
-    // Attach click events to thumbnails
-    thumbnails.forEach(thumbnail => {
-        if (thumbnail.tagName === 'IMG' && thumbnail.dataset.fullImage) {
-            thumbnail.addEventListener('click', function(e) {
+    // Photo preview event delegation on table body for AJAX rows
+    if (tableBody) {
+        tableBody.addEventListener('click', function(e) {
+            const thumbnail = e.target.closest('.photo-thumbnail[data-full-image]');
+            if (thumbnail && thumbnail.tagName === 'IMG') {
                 e.preventDefault();
-                openPreview(this.dataset.fullImage);
-            });
-        }
-    });
+                openPreview(thumbnail.dataset.fullImage);
+            }
+        });
+    }
     
     // Close on overlay click
     overlay.addEventListener('click', function(e) {
