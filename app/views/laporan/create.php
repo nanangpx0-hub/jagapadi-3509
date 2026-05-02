@@ -1,4 +1,4 @@
-<?php include ROOT_PATH . '/app/views/layouts/header.php'; ?>
+﻿<?php include ROOT_PATH . '/app/views/layouts/header.php'; ?>
 
 <style>
 /* Validation styles for luas serangan vs populasi */
@@ -252,7 +252,6 @@
                                 <label>Kabupaten <span class="text-danger">*</span></label>
                                 <select name="kabupaten_id" id="kabupatenSelect" class="form-control" required autocomplete="off">
                                     <option value="">-- Pilih Kabupaten --</option>
-                                    <option value="unknown">Tidak Diketahui</option>
                                 </select>
                             </div>
                         </div>
@@ -1059,14 +1058,14 @@ document.querySelector('form').addEventListener('submit', function(e) {
                     const accuracyText = document.getElementById('gpsAccuracyText');
                     
                     let confidence = 'low';
-                    let confidenceLabel = '✓ Rendah';
+                    let confidenceLabel = 'âœ“ Rendah';
                     
                     if (accuracy < 10) {
                         confidence = 'high';
-                        confidenceLabel = '✓✓✓ Tinggi';
+                        confidenceLabel = 'âœ“âœ“âœ“ Tinggi';
                     } else if (accuracy < 50) {
                         confidence = 'medium';
-                        confidenceLabel = '✓✓ Sedang';
+                        confidenceLabel = 'âœ“âœ“ Sedang';
                     }
                     
                     if (confidenceIndicator) {
@@ -1076,7 +1075,7 @@ document.querySelector('form').addEventListener('submit', function(e) {
                     }
                     
                     if (accuracyText) {
-                        accuracyText.textContent = `(±${accuracy.toFixed(0)}m)`;
+                        accuracyText.textContent = `(Â±${accuracy.toFixed(0)}m)`;
                     }
                     
                     btnGetCurrentLocation.disabled = false;
@@ -1086,7 +1085,7 @@ document.querySelector('form').addEventListener('submit', function(e) {
                     const statusDiv = document.getElementById('currentLocationStatus');
                     if (statusDiv) {
                         const confidenceColor = confidence === 'high' ? 'success' : (confidence === 'medium' ? 'warning' : 'danger');
-                        statusDiv.innerHTML = `<div class="alert alert-success"><i class="fas fa-check-circle"></i> Lokasi ditemukan: ${lat}, ${lng} <span class="badge badge-${confidenceColor} ml-2">Akurasi: ±${accuracy.toFixed(0)}m</span></div>`;
+                        statusDiv.innerHTML = `<div class="alert alert-success"><i class="fas fa-check-circle"></i> Lokasi ditemukan: ${lat}, ${lng} <span class="badge badge-${confidenceColor} ml-2">Akurasi: Â±${accuracy.toFixed(0)}m</span></div>`;
                     }
                 },
                 function(error) {
@@ -1188,30 +1187,42 @@ document.querySelector('form').addEventListener('submit', function(e) {
 <?php include ROOT_PATH . '/app/views/layouts/footer.php'; ?>
 <script>
 // ============================================================================
-// CASCADING DROPDOWN WILAYAH - Improved with Error Handling
+// CASCADING DROPDOWN WILAYAH - Default Kabupaten Jember
 // ============================================================================
 
-/**
- * Fetch JSON with error handling
- * Returns valid data structure even on failure
- */
 async function fetchJSON(url) {
     try {
-        const response = await fetch(url);
+        const response = await fetch(url, {
+            cache: 'no-store',
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+
         if (!response.ok) {
             console.error('API Error:', response.status, response.statusText);
-            return { status: 'error', data: [], message: `HTTP ${response.status}` };
+            return {
+                status: 'error',
+                data: [],
+                message: `HTTP ${response.status}`
+            };
         }
-        const data = await response.json();
-        return data;
+
+        return await response.json();
     } catch (error) {
         console.error('Fetch Error:', error);
-        return { status: 'error', data: [], message: error.message };
+        return {
+            status: 'error',
+            data: [],
+            message: error.message
+        };
     }
 }
 
 const DEFAULT_KABUPATEN_JEMBER_ID = '09';
-const UNKNOWN_WILAYAH_VALUE = 'unknown';
+const DEFAULT_KABUPATEN_JEMBER_KODE = '3509';
+
+let userChangedKabupaten = false;
 
 function normalizeKabupatenId(kabupatenId) {
     const value = String(kabupatenId ?? '').trim();
@@ -1219,8 +1230,22 @@ function normalizeKabupatenId(kabupatenId) {
 }
 
 function selectOptionIfExists(select, value) {
-    const normalizedValue = String(value ?? '');
-    const hasOption = Array.from(select.options).some(option => option.value === normalizedValue);
+    if (!select) {
+        return false;
+    }
+
+    const normalizedValue = String(value ?? '').trim();
+    let hasOption = false;
+
+    Array.from(select.options).forEach((option, index) => {
+        const isSelected = option.value === normalizedValue;
+        option.selected = isSelected;
+
+        if (isSelected) {
+            select.selectedIndex = index;
+            hasOption = true;
+        }
+    });
 
     if (hasOption) {
         select.value = normalizedValue;
@@ -1230,12 +1255,12 @@ function selectOptionIfExists(select, value) {
 }
 
 function resetSelectOptions(select, placeholder, includeUnknown = false, selectedValue = '') {
+    if (!select) {
+        return;
+    }
+
     select.innerHTML = '';
     select.appendChild(new Option(placeholder, ''));
-
-    if (includeUnknown) {
-        select.appendChild(new Option('Tidak Diketahui', UNKNOWN_WILAYAH_VALUE));
-    }
 
     if (selectedValue && selectOptionIfExists(select, selectedValue)) {
         return;
@@ -1246,186 +1271,308 @@ function resetSelectOptions(select, placeholder, includeUnknown = false, selecte
 }
 
 function syncSelectPlugin(select) {
-    if (window.jQuery && jQuery.fn?.select2 && jQuery(select).data('select2')) {
-        jQuery(select).trigger('change.select2');
+    if (!select || !window.jQuery) {
+        return;
+    }
+
+    const $select = jQuery(select);
+
+    if (jQuery.fn?.select2 && $select.data('select2')) {
+        $select.val(select.value).trigger('change.select2');
+    }
+
+    if (jQuery.fn?.selectpicker && ($select.data('selectpicker') || select.classList.contains('selectpicker'))) {
+        $select.selectpicker('refresh');
+    }
+
+    if (jQuery.fn?.chosen && $select.data('chosen')) {
+        $select.trigger('chosen:updated');
     }
 }
 
-/**
- * Load kabupaten data into dropdown
- */
-async function loadKabupaten() {
-    const sel = document.getElementById('kabupatenSelect');
-    const preferredValue = DEFAULT_KABUPATEN_JEMBER_ID;
+function selectDefaultKabupatenJember() {
+    const kabupatenSelect = document.getElementById('kabupatenSelect');
 
-    sel.disabled = true;
-    resetSelectOptions(sel, '-- Pilih Kabupaten --', true);
-    
+    if (!kabupatenSelect) {
+        return false;
+    }
+
+    const selected = selectOptionIfExists(kabupatenSelect, DEFAULT_KABUPATEN_JEMBER_ID);
+    syncSelectPlugin(kabupatenSelect);
+
+    return selected;
+}
+
+async function enforceDefaultKabupatenJember() {
+    const kabupatenSelect = document.getElementById('kabupatenSelect');
+
+    if (!kabupatenSelect || userChangedKabupaten) {
+        return;
+    }
+
+    const currentValue = normalizeKabupatenId(kabupatenSelect.value);
+
+    if (currentValue === DEFAULT_KABUPATEN_JEMBER_ID) {
+        syncSelectPlugin(kabupatenSelect);
+        return;
+    }
+
+    if (selectDefaultKabupatenJember()) {
+        await loadKecamatan(DEFAULT_KABUPATEN_JEMBER_ID);
+    }
+}
+
+function scheduleDefaultKabupatenJemberEnforcement() {
+    const run = () => {
+        setTimeout(enforceDefaultKabupatenJember, 0);
+        setTimeout(enforceDefaultKabupatenJember, 300);
+        setTimeout(enforceDefaultKabupatenJember, 1000);
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', run, { once: true });
+    } else {
+        run();
+    }
+
+    window.addEventListener('load', () => {
+        setTimeout(enforceDefaultKabupatenJember, 0);
+        setTimeout(enforceDefaultKabupatenJember, 500);
+    }, { once: true });
+}
+
+async function loadKabupaten() {
+    const kabupatenSelect = document.getElementById('kabupatenSelect');
+
+    if (!kabupatenSelect) {
+        console.error('Element #kabupatenSelect tidak ditemukan.');
+        return '';
+    }
+
+    kabupatenSelect.disabled = true;
+    resetSelectOptions(kabupatenSelect, '-- Pilih Kabupaten --');
+
     try {
         const data = await fetchJSON('<?= BASE_URL ?>wilayah/kabupaten');
-        
-        if (data.status === 'success' && data.data && data.data.length > 0) {
+
+        if (data.status === 'success' && Array.isArray(data.data) && data.data.length > 0) {
             data.data.forEach(row => {
                 const normalizedId = normalizeKabupatenId(row.id);
                 const kodeKabupaten = String(row.kode_kabupaten ?? '').trim();
                 const namaKabupaten = String(row.nama_kabupaten ?? '').toUpperCase();
-                const opt = document.createElement('option');
 
-                opt.value = (
+                const option = document.createElement('option');
+
+                const isJember =
                     normalizedId === DEFAULT_KABUPATEN_JEMBER_ID ||
-                    kodeKabupaten === '3509' ||
-                    namaKabupaten.includes('JEMBER')
-                ) ? DEFAULT_KABUPATEN_JEMBER_ID : normalizedId;
-                opt.textContent = row.nama_kabupaten;
-                sel.appendChild(opt);
+                    kodeKabupaten === DEFAULT_KABUPATEN_JEMBER_KODE ||
+                    namaKabupaten.includes('JEMBER');
+
+                option.value = isJember ? DEFAULT_KABUPATEN_JEMBER_ID : normalizedId;
+                option.textContent = row.nama_kabupaten;
+
+                kabupatenSelect.appendChild(option);
             });
 
-            if (!selectOptionIfExists(sel, preferredValue)) {
-                selectOptionIfExists(sel, UNKNOWN_WILAYAH_VALUE);
-                console.warn('Kabupaten Jember tidak ditemukan, fallback ke Tidak Diketahui.');
+            if (!selectDefaultKabupatenJember()) {
+                console.warn('Kabupaten Jember tidak ditemukan. Tetap gunakan placeholder dan data yang tersedia.');
             }
         } else {
             console.warn('Tidak ada data kabupaten:', data.message || 'Empty data');
-            selectOptionIfExists(sel, UNKNOWN_WILAYAH_VALUE);
         }
     } catch (error) {
         console.error('Error loading kabupaten:', error);
-        selectOptionIfExists(sel, UNKNOWN_WILAYAH_VALUE);
     } finally {
-        sel.disabled = false;
-        syncSelectPlugin(sel);
+        kabupatenSelect.disabled = false;
+        syncSelectPlugin(kabupatenSelect);
     }
 
-    return normalizeKabupatenId(sel.value);
+    return normalizeKabupatenId(kabupatenSelect.value);
 }
 
-/**
- * Load kecamatan data by kabupaten ID
- */
 async function loadKecamatan(kabupatenId) {
-    const sel = document.getElementById('kecamatanSelect');
-    const selDesa = document.getElementById('desaSelect');
-    kabupatenId = normalizeKabupatenId(kabupatenId);
-    
-    // Reset dropdowns
-    resetSelectOptions(sel, '-- Pilih Kecamatan --', true);
-    resetSelectOptions(selDesa, '-- Pilih Desa --', true, UNKNOWN_WILAYAH_VALUE);
-    
-    if (!kabupatenId || kabupatenId === UNKNOWN_WILAYAH_VALUE) return;
-    
-    // Show loading state
-    sel.disabled = true;
-    resetSelectOptions(sel, 'Memuat data kecamatan...');
-    
+    const kecamatanSelect = document.getElementById('kecamatanSelect');
+    const desaSelect = document.getElementById('desaSelect');
+
+    if (!kecamatanSelect || !desaSelect) {
+        console.error('Element kecamatan/desa tidak ditemukan.');
+        return;
+    }
+
+    const normalizedKabupatenId = normalizeKabupatenId(kabupatenId);
+
+    resetSelectOptions(kecamatanSelect, '-- Pilih Kecamatan --');
+    resetSelectOptions(desaSelect, '-- Pilih Desa --');
+
+    if (!normalizedKabupatenId) {
+        syncSelectPlugin(kecamatanSelect);
+        syncSelectPlugin(desaSelect);
+        return;
+    }
+
+    kecamatanSelect.disabled = true;
+    resetSelectOptions(kecamatanSelect, 'Memuat data kecamatan...');
+
     try {
-        const data = await fetchJSON('<?= BASE_URL ?>wilayah/kecamatan/' + encodeURIComponent(kabupatenId));
-        
-        // Reset and add default options
-        resetSelectOptions(sel, '-- Pilih Kecamatan --');
-        
-        if (data.status === 'success' && data.data && data.data.length > 0) {
+        const data = await fetchJSON('<?= BASE_URL ?>wilayah/kecamatan/' + encodeURIComponent(normalizedKabupatenId));
+
+        resetSelectOptions(kecamatanSelect, '-- Pilih Kecamatan --');
+
+        if (data.status === 'success' && Array.isArray(data.data) && data.data.length > 0) {
             data.data.forEach(row => {
-                const opt = document.createElement('option');
-                opt.value = row.id;
-                opt.textContent = row.nama_kecamatan;
-                sel.appendChild(opt);
+                const option = document.createElement('option');
+                option.value = row.id;
+                option.textContent = row.nama_kecamatan;
+                kecamatanSelect.appendChild(option);
             });
 
-            sel.value = '';
-            sel.selectedIndex = 0;
-            resetSelectOptions(selDesa, '-- Pilih Desa --', true, UNKNOWN_WILAYAH_VALUE);
-            syncSelectPlugin(sel);
-            syncSelectPlugin(selDesa);
-            console.log('Kecamatan rendered', {
+            kecamatanSelect.value = '';
+            kecamatanSelect.selectedIndex = 0;
+
+            resetSelectOptions(desaSelect, '-- Pilih Desa --');
+
+            syncSelectPlugin(kecamatanSelect);
+            syncSelectPlugin(desaSelect);
+
+            console.log('Kecamatan rendered:', {
+                kabupatenId: normalizedKabupatenId,
                 count: data.data.length,
-                value: sel.value,
-                options: sel.options.length
+                options: kecamatanSelect.options.length
             });
         } else {
-            resetSelectOptions(sel, '-- Pilih Kecamatan --', true);
+            resetSelectOptions(kecamatanSelect, '-- Pilih Kecamatan --');
             console.warn('Tidak ada data kecamatan untuk kabupaten ini:', data.message || 'Empty data');
         }
     } catch (error) {
         console.error('Error loading kecamatan:', error);
-        resetSelectOptions(sel, '-- Pilih Kecamatan --', true);
+        resetSelectOptions(kecamatanSelect, '-- Pilih Kecamatan --');
     } finally {
-        sel.disabled = false;
+        kecamatanSelect.disabled = false;
+        syncSelectPlugin(kecamatanSelect);
     }
 }
 
-/**
- * Load desa data by kecamatan ID
- */
 async function loadDesa(kecamatanId) {
-    const sel = document.getElementById('desaSelect');
-    
-    // Reset dropdown
-    resetSelectOptions(sel, '-- Pilih Desa --', true, UNKNOWN_WILAYAH_VALUE);
-    
-    if (!kecamatanId || kecamatanId === UNKNOWN_WILAYAH_VALUE) return;
-    
-    // Show loading state
-    sel.disabled = true;
-    resetSelectOptions(sel, 'Memuat data desa...');
-    
+    const desaSelect = document.getElementById('desaSelect');
+
+    if (!desaSelect) {
+        console.error('Element #desaSelect tidak ditemukan.');
+        return;
+    }
+
+    resetSelectOptions(desaSelect, '-- Pilih Desa --');
+
+    if (!kecamatanId) {
+        syncSelectPlugin(desaSelect);
+        return;
+    }
+
+    desaSelect.disabled = true;
+    resetSelectOptions(desaSelect, 'Memuat data desa...');
+
     try {
-        const data = await fetchJSON('<?= BASE_URL ?>wilayah/desa/' + kecamatanId);
-        
-        // Reset and add default options
-        resetSelectOptions(sel, '-- Pilih Desa --');
-        
-        if (data.status === 'success' && data.data && data.data.length > 0) {
+        const data = await fetchJSON('<?= BASE_URL ?>wilayah/desa/' + encodeURIComponent(kecamatanId));
+
+        resetSelectOptions(desaSelect, '-- Pilih Desa --');
+
+        if (data.status === 'success' && Array.isArray(data.data) && data.data.length > 0) {
             data.data.forEach(row => {
-                const opt = document.createElement('option');
-                opt.value = row.id;
-                opt.textContent = row.nama_desa;
-                sel.appendChild(opt);
+                const option = document.createElement('option');
+                option.value = row.id;
+                option.textContent = row.nama_desa;
+                desaSelect.appendChild(option);
             });
 
-            sel.value = '';
-            sel.selectedIndex = 0;
-            syncSelectPlugin(sel);
-            console.log(`Loaded ${data.data.length} desa`);
+            desaSelect.value = '';
+            desaSelect.selectedIndex = 0;
+
+            syncSelectPlugin(desaSelect);
+
+            console.log('Desa rendered:', {
+                kecamatanId,
+                count: data.data.length,
+                options: desaSelect.options.length
+            });
         } else {
-            resetSelectOptions(sel, '-- Pilih Desa --', true);
+            resetSelectOptions(desaSelect, '-- Pilih Desa --');
             console.warn('Tidak ada data desa untuk kecamatan ini:', data.message || 'Empty data');
         }
     } catch (error) {
         console.error('Error loading desa:', error);
-        resetSelectOptions(sel, '-- Pilih Desa --', true);
+        resetSelectOptions(desaSelect, '-- Pilih Desa --');
     } finally {
-        sel.disabled = false;
+        desaSelect.disabled = false;
+        syncSelectPlugin(desaSelect);
     }
 }
 
-// Event listeners for cascading dropdowns
-document.getElementById('kabupatenSelect').addEventListener('change', e => loadKecamatan(normalizeKabupatenId(e.target.value)));
-document.getElementById('kecamatanSelect').addEventListener('change', e => {
-    if (!e.target.value && e.target.selectedIndex < 0) {
-        e.target.selectedIndex = 0;
+function bindWilayahDropdownEvents() {
+    const kabupatenSelect = document.getElementById('kabupatenSelect');
+    const kecamatanSelect = document.getElementById('kecamatanSelect');
+
+    if (kabupatenSelect) {
+        kabupatenSelect.addEventListener('change', event => {
+            if (event.isTrusted) {
+                userChangedKabupaten = true;
+            }
+
+            const kabupatenId = normalizeKabupatenId(event.target.value);
+
+                    if (
+                !event.isTrusted &&
+                !userChangedKabupaten &&
+                !kabupatenId &&
+                selectDefaultKabupatenJember()
+            ) {
+                loadKecamatan(DEFAULT_KABUPATEN_JEMBER_ID);
+                return;
+            }
+
+            loadKecamatan(kabupatenId);
+        });
     }
 
-    loadDesa(e.target.value);
-});
+    if (kecamatanSelect) {
+        kecamatanSelect.addEventListener('change', event => {
+            if (!event.target.value && event.target.selectedIndex < 0) {
+                event.target.selectedIndex = 0;
+            }
 
-// Initialize kabupaten dropdown on page load
+            loadDesa(event.target.value);
+        });
+    }
+}
+
 async function initializeWilayahDropdowns() {
     const kabupatenSelect = document.getElementById('kabupatenSelect');
+    const kecamatanSelect = document.getElementById('kecamatanSelect');
+    const desaSelect = document.getElementById('desaSelect');
+
+    if (!kabupatenSelect || !kecamatanSelect || !desaSelect) {
+        console.error('Dropdown wilayah tidak lengkap. Pastikan kabupatenSelect, kecamatanSelect, dan desaSelect ada di HTML.');
+        return;
+    }
 
     const selectedKabupatenId = await loadKabupaten();
     const kabupatenId = normalizeKabupatenId(selectedKabupatenId || kabupatenSelect.value);
 
-    if (kabupatenId && kabupatenId !== UNKNOWN_WILAYAH_VALUE) {
-        kabupatenSelect.value = kabupatenId;
-        syncSelectPlugin(kabupatenSelect);
-        await loadKecamatan(kabupatenId);
+    if (kabupatenId) {
+        if (selectDefaultKabupatenJember()) {
+            await loadKecamatan(DEFAULT_KABUPATEN_JEMBER_ID);
+        } else {
+            syncSelectPlugin(kabupatenSelect);
+            resetSelectOptions(kecamatanSelect, '-- Pilih Kecamatan --');
+            resetSelectOptions(desaSelect, '-- Pilih Desa --');
+        }
     } else {
-        resetSelectOptions(document.getElementById('kecamatanSelect'), '-- Pilih Kecamatan --', true);
-        resetSelectOptions(document.getElementById('desaSelect'), '-- Pilih Desa --', true, UNKNOWN_WILAYAH_VALUE);
+        resetSelectOptions(kecamatanSelect, '-- Pilih Kecamatan --');
+        resetSelectOptions(desaSelect, '-- Pilih Desa --');
     }
 }
 
+bindWilayahDropdownEvents();
 initializeWilayahDropdowns();
+scheduleDefaultKabupatenJemberEnforcement();
 (function() {
     'use strict';
     
@@ -2002,3 +2149,4 @@ initializeWilayahDropdowns();
 <!-- Phase 3: Draft Auto-Save and Offline Mode -->
 <script src="<?= BASE_URL ?>public/js/draft-autosave.js"></script>
 <script src="<?= BASE_URL ?>public/js/offline-laporan.js"></script>
+
