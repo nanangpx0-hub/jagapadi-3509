@@ -1,44 +1,97 @@
-## Kontribusi & Agent
+# JAGAPADI — Jember Agrikultur Gapai Prestasi Digital
 
-Repo JAGAPADI pakai pola branch-per-fitur dan multi-agent.
+Sistem pelaporan pertanian (Hama/OPT & Kondisi Irigasi) untuk Kabupaten Jember.
 
-**Aturan singkat:**
+---
 
-- Jangan pernah commit langsung ke `main`.
-- Satu fitur / perbaikan = satu branch terpisah.
-- Satu branch hanya punya satu eksekutor utama.
-- Semua perubahan harus lewat Pull Request (PR) + CI.
-- Jangan commit file runtime (upload, backup SQL, log, cache, dll).
-- Perubahan database harus lewat migration/script yang aman dan bisa di-rollback.
+## Status Proyek
 
-**Alur kontribusi:**
+**v1.0.0 Production Ready** ✅
 
-1. Buat branch baru dari `main` (misal: `feature/laporan-hama-archive`).
-2. Kerjakan perubahan di branch tersebut.
-3. Jalankan pengecekan manual sesuai area yang disentuh.
-4. Commit dengan pesan yang jelas.
-5. Push branch dan buka PR, isi template `PULL_REQUEST_TEMPLATE.md`.
-6. Tunggu review dan pastikan CI hijau sebelum merge.
+---
 
-**Peran agent (jika memakai AI agent):**
 
-- **Codex** – implementasi utama (coding, refactor, bugfix).
-- **Kiro** – review requirement & alur bisnis.
-- **Perplexity** – riset & referensi.
-- **Cursor / Trae / OpenCode** – patch kecil & eksperimen.
-- **Blackbox / Antigravity** – review / second opinion.
-- **ChatGPT** – orkestrasi & dokumentasi.
 
-Detail aturan kolaborasi agent: lihat [`AGENTS.md`](./AGENTS.md)
-Panduan kontribusi lengkap: lihat [`CONTRIBUTING.md`](./CONTRIBUTING.md)
+## Stack Teknologi (Direncanakan)
 
-**Konteks cepat untuk AI / handover:**
+| Layer | Teknologi |
+|-------|-----------|
+| Backend | PHP 8.2 native, MVC ringan, PDO, MariaDB/MySQL, REST API |
+| Web Admin | PHP server-rendered, Session + CSRF |
+| Mobile | Flutter (Android), JWT auth, offline-first draft |
+| Database | MariaDB / MySQL `utf8mb4` |
+| Hosting | cPanel (document root → `backend/public`) |
 
-- [`PROJECT_SUMMARY.md`](./PROJECT_SUMMARY.md)
-- [`TECH_STACK.md`](./TECH_STACK.md)
-- [`CURRENT_TASK.md`](./CURRENT_TASK.md)
-- [`DATABASE_SCHEMA.md`](./DATABASE_SCHEMA.md)
-- [`DATA_DICTIONARY.md`](./DATA_DICTIONARY.md)
-- [`CHANGELOG.md`](./CHANGELOG.md)
-- [`prompts/`](./prompts/)
-- [`docs/AI_WORKFLOW.md`](./docs/AI_WORKFLOW.md)
+---
+
+## Struktur Monorepo
+
+```
+jagapadi/
+├── backend/          # PHP backend (PHP 8.2 MVC skeleton)
+├── mobile/           # Flutter app (placeholder)
+├── docs/             # Dokumentasi teknis
+├── scripts/          # Utility scripts (placeholder)
+├── .github/
+│   ├── workflows/    # CI/CD workflows (placeholder)
+│   └── ISSUE_TEMPLATE/
+├── README.md
+├── CHANGELOG.md
+├── AGENTS.md         # Instruksi permanen untuk AI agent
+├── .gitignore
+├── .editorconfig
+```
+
+> **Catatan**: Backend telah memiliki MVC lengkap (auth, master data wilayah & OPT, CRUD laporan hama & irigasi, workflow verifikasi admin, upload foto aman) dan skema database lengkap (11 tabel). Mobile masih placeholder.
+
+---
+
+## Dokumentasi (Folder `docs/`)
+
+| File | Deskripsi |
+|------|-----------|
+| `BLUEPRINT.md` | Ringkasan arsitektur, modul v1, status laporan, kebijakan Draf |
+| `TUTORIAL_BUILD.md` | Tahapan pembangunan 0–14 |
+| `API.md` | Kontrak API (`/api/v1`, JSON, JWT, `include_draft`) |
+| `DATABASE.md` | Skema database aktual, migrasi & seed |
+| `DEPLOY.md` | **Panduan deployment production (Nginx, TLS, backup, cron)** |
+| `SMOKE_TEST.md` | Prosedur smoke test post-deploy |
+| `GO_LIVE_CHECKLIST.md` | Checklist go-live |
+| `QA_CHECKLIST.md` | Checklist regresi manual |
+| `Dokumentasi-aplikasi-jagapadi-3509.md` | Dokumen referensi lengkap (blueprint detail) |
+
+---
+
+## Clone Repository
+
+```bash
+git clone <repository-url>
+cd jagapadi-3509
+```
+
+> **Catatan**: Instruksi instalasi backend tersedia di `backend/README.md` (lokal) dan `docs/DEPLOY.md` (production). Instruksi Flutter tersedia di `mobile/README.md`.
+
+---
+
+## Aturan Kerja (Ringkas)
+
+- **Branch per task/issue** → Pull Request → Review → Merge
+- **Conventional Commits**: `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`, `ci:`
+- **AGENTS.md** = panduan wajib AI agent (baca sebelum coding)
+- **Tidak commit secret** (`.env`, `.key`, `.pem`, token, password)
+- **Tahap 1-2**: Setup repo & backend skeleton
+- **Tahap 3**: Database migration & seed data lokal
+- **Tahap 4**: Authentication web (Session+CSRF) & mobile (JWT)
+- **Tahap 5**: Master data wilayah & OPT
+- **Tahap 6**: Laporan Hama (CRUD, Draft, Submit)
+- **Tahap 7**: Laporan Irigasi (CRUD, Draft, Submit)
+- **Tahap 8**: Verifikasi Admin (hama & irigasi)
+- **Tahap 9**: Upload Foto Aman (OPT + laporan)
+- **Tahap 10**: Dashboard, Statistik & Cache (KPI, chart, peta, cache file TTL 5 menit)
+- **Tidak commit secret** (`.env`, `.key`, `.pem`, token, password)
+
+---
+
+## Lisensi
+
+Proyek internal Pemerintah Kabupaten Jember. Hak cipta dilindungi.

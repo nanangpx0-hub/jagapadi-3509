@@ -1,0 +1,60 @@
+#!/bin/bash
+# =============================================================================
+# JAGAPADI — Database Backup Script (example)
+# =============================================================================
+# Usage: ./scripts/backup-db.sh
+# Schedule: daily via cron
+#
+# Prerequisites:
+#   - Create /var/www/jagapadi/backups/ directory
+#   - Set DB_* env vars in a .env.backup file or export them securely
+#   - Do NOT hardcode passwords in this script
+# =============================================================================
+
+set -euo pipefail
+
+# --- Configuration (override via environment) ---
+BACKUP_DIR="${BACKUP_DIR:-/var/www/jagapadi/backups}"
+DB_HOST="${DB_HOST:-localhost}"
+DB_PORT="${DB_PORT:-3306}"
+DB_NAME="${DB_NAME:-jagapadi_prod}"
+DB_USER="${DB_USER:-jagapadi_user}"
+DB_PASS="${DB_PASS:-}"
+
+RETENTION_DAYS="${RETENTION_DAYS:-30}"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+FILENAME="jagapadi_db_${TIMESTAMP}.sql.gz"
+
+# --- Ensure backup directory exists ---
+mkdir -p "$BACKUP_DIR"
+
+# --- Dump ---
+if [ -z "$DB_PASS" ]; then
+  echo "ERROR: DB_PASS is not set."
+  echo "Set it via: export DB_PASS='your_password'"
+  exit 1
+fi
+
+MYSQL_PWD="$DB_PASS" mysqldump \
+  --host="$DB_HOST" \
+  --port="$DB_PORT" \
+  --user="$DB_USER" \
+  --single-transaction \
+  --routines \
+  --triggers \
+  --events \
+  "$DB_NAME" | gzip > "${BACKUP_DIR}/${FILENAME}"
+
+# --- Verify ---
+if [ -f "${BACKUP_DIR}/${FILENAME}" ]; then
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Backup created: ${BACKUP_DIR}/${FILENAME} ($(du -h "${BACKUP_DIR}/${FILENAME}" | cut -f1))"
+else
+  echo "ERROR: Backup file not created."
+  exit 1
+fi
+
+# --- Retention: delete older than RETENTION_DAYS ---
+find "$BACKUP_DIR" -name "jagapadi_db_*.sql.gz" -type f -mtime "+${RETENTION_DAYS}" -delete
+
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Retention: deleted backups older than ${RETENTION_DAYS} days."
+echo "Done."

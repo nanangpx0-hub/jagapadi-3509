@@ -1,0 +1,100 @@
+# Dependabot Configuration for JAGAPADI
+# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+updates:
+  # PHP Composer dependencies
+  - package-ecosystem: "composer"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Jakarta"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "composer"
+      - "backend"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      laravel-packages:
+        patterns:
+          - "laravel/*"
+          - "illuminate/*"
+      symfony-packages:
+        patterns:
+          - "symfony/*"
+      phpunit:
+        patterns:
+          - "phpunit/*"
+          - "mockery/*"
+    ignore:
+      # Ignore major version updates for framework packages until tested
+      - dependency-name: "laravel/framework"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "symfony/*"
+        update-types: ["version-update:semver-major"]
+
+  # Flutter/Dart pub dependencies
+  - package-ecosystem: "pub"
+    directory: "/mobile"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Jakarta"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "pub"
+      - "mobile"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      flutter-packages:
+        patterns:
+          - "flutter_*"
+      firebase-packages:
+        patterns:
+          - "firebase_*"
+          - "cloud_firestore"
+      riverpod-packages:
+        patterns:
+          - "riverpod*"
+          - "hooks_riverpod"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Jakarta"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci(deps)"
+
+  # Docker (if used)
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+      day: 1
+      time: "09:00"
+      timezone: "Asia/Jakarta"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "ci(deps)"
+
+# Security updates are automatic and don't need configuration

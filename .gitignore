@@ -1,58 +1,100 @@
-# Sensitive environment and config
+# =============================================================================
+# JAGAPADI .gitignore
+# =============================================================================
+
+# --- Secrets ---
 .env
-.env.*
-!.env.example
-config/database.php
-config/config.php
-config/env.php
-config/*.local.php
-config/*secret*.php
-config/*credential*.php
+**/.env
 *.pem
 *.key
-*.p12
 *.crt
+*.p12
+credentials
+*.credentials
+*.secret
+*.token
+google-services.json
+**/google-services.json
+*.service_account.json
+*.jks
+key.properties
 
-# Database dumps and backups
-*.sql
-*.dump
-*.bak
-*.tmp
+# --- Backend ---
+backend/vendor/
+backend/storage/cache/
+backend/storage/logs/
+backend/public/uploads/
+backend/.phpunit.cache/
+!backend/storage/cache/.gitkeep
+!backend/storage/logs/.gitkeep
+!backend/public/uploads/.gitkeep
 
-# Logs and runtime artifacts
-error_log
-logs/
-storage/logs/
-storage/cache/
-public/uploads/
-uploads/
-cookies.txt
+# --- Flutter ---
+mobile/**/.dart_tool/
+mobile/**/build/
+mobile/**/.flutter-plugins
+mobile/**/.flutter-plugins-dependencies
+mobile/**/*.iml
+mobile/**/android/.gradle/
+mobile/**/android/local.properties
+mobile/**/.packages
+mobile/**/.pub-cache/
+mobile/**/.pub/
+mobile/**/pubspec.lock
 
-# Dependencies and generated folders
-vendor/
-node_modules/
-
-# Data files
-data/*.xlsx
-data/*.xls
-data/*.csv
-
-# OS/IDE files
-.vscode/
+# --- IDE & Editor ---
 .idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# --- OS Artifacts ---
 .DS_Store
 Thumbs.db
-*.sublime-project
-*.sublime-workspace
-storage/laporan/*.jpg
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
 
-storage/laporan/*
+# --- Build Output ---
+dist/
+build/
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-!storage/laporan/.gitkeep
+# --- Logs & Cache ---
+*.log
+.tmp/
+tmp/
+.cache/
 
-_final_test.php
+# --- Test Coverage ---
+coverage/
+.coverage
+.pytest_cache/
 
-data/mfd/cache/
-data/mfd/*.csv
-data/mfd/*.json
-data/mfd/*errors*.csv
+# --- Docker local overrides ---
+docker-compose.override.yml
+
+# --- Backup artifacts ---
+backups/
+
+# --- Keep these ---
+!.gitignore
+!.gitkeep
+!.editorconfig
+!.env.example
+!.env.example.*
+!.github/
+!.github/**
+!docs/
+!docs/**
+!dok/
+!dok/**
+!scripts/
+!scripts/**

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<?= \App\Core\Security::csrfToken() ?>">
+    <title><?= $pageTitle ?? 'JAGAPADI' ?> — JAGAPADI</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f0f2f5; color: #333; min-height: 100vh;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .auth-container { width: 100%; max-width: 420px; padding: 20px; }
+        .auth-card {
+            background: #fff; border-radius: 8px; padding: 40px 32px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+        .auth-logo { text-align: center; margin-bottom: 32px; }
+        .auth-logo h1 { font-size: 24px; color: #1a73e8; }
+        .auth-logo p { font-size: 13px; color: #666; margin-top: 4px; }
+        .flash-message {
+            padding: 12px 16px; border-radius: 6px; margin-bottom: 16px;
+            font-size: 14px; line-height: 1.4;
+        }
+        .flash-error { background: #fce4ec; color: #c62828; border: 1px solid #f8bbd0; }
+        .flash-success { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; }
+        .flash-warning { background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 6px; color: #555; }
+        .form-group input {
+            width: 100%; padding: 10px 14px; border: 1px solid #d0d0d0;
+            border-radius: 6px; font-size: 15px; transition: border-color .2s;
+        }
+        .form-group input:focus { outline: none; border-color: #1a73e8; box-shadow: 0 0 0 3px rgba(26,115,232,0.1); }
+        .btn {
+            width: 100%; padding: 12px; border: none; border-radius: 6px;
+            font-size: 15px; font-weight: 600; cursor: pointer; transition: background .2s;
+        }
+        .btn-primary { background: #1a73e8; color: #fff; }
+        .btn-primary:hover { background: #1557b0; }
+        .btn-primary:disabled { background: #93b8f0; cursor: not-allowed; }
+        .auth-footer { text-align: center; margin-top: 20px; font-size: 13px; color: #888; }
+        .error-text { color: #c62828; font-size: 13px; margin-top: 4px; }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <div class="auth-logo">
+                <h1>JAGAPADI</h1>
+                <p>Jember Agrikultur Gapai Prestasi Digital</p>
+            </div>
+
+            <?php if (!empty($_SESSION['flash_error'])): ?>
+                <div class="flash-message flash-error"><?= \App\Core\Security::e($_SESSION['flash_error']) ?></div>
+                <?php unset($_SESSION['flash_error']); ?>
+            <?php endif; ?>
+
+            <?php if (!empty($_SESSION['flash_success'])): ?>
+                <div class="flash-message flash-success"><?= \App\Core\Security::e($_SESSION['flash_success']) ?></div>
+                <?php unset($_SESSION['flash_success']); ?>
+            <?php endif; ?>
+
+            <?php if (!empty($_SESSION['flash_warning'])): ?>
+                <div class="flash-message flash-warning"><?= \App\Core\Security::e($_SESSION['flash_warning']) ?></div>
+                <?php unset($_SESSION['flash_warning']); ?>
+            <?php endif; ?>
+
+            <?= $content ?? '' ?>
+        </div>
+        <div class="auth-footer">&copy; <?= date('Y') ?> Pemerintah Kabupaten Jember</div>
+    </div>
+</body>
+</html>

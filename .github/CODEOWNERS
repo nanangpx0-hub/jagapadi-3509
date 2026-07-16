@@ -1,0 +1,32 @@
+# CODEOWNERS
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global owners - all files
+* @jagapadi-lead
+
+# Backend PHP
+/backend/ @jagapadi-backend
+
+# Mobile Flutter
+/mobile/ @jagapadi-mobile
+
+# Documentation
+/docs/ @jagapadi-lead @jagapadi-backend @jagapadi-mobile
+
+# CI/CD
+/.github/workflows/ @jagapadi-devops
+
+# Scripts
+/scripts/ @jagapadi-devops
+
+# Configuration files
+/.editorconfig @jagapadi-lead
+/.gitignore @jagapadi-lead
+/AGENTS.md @jagapadi-lead
+/README.md @jagapadi-lead
+/CHANGELOG.md @jagapadi-lead
+
+# Security-sensitive - require lead approval
+/.env.example @jagapadi-lead
+/composer.json @jagapadi-lead @jagapadi-backend
+/pubspec.yaml @jagapadi-lead @jagapadi-mobile

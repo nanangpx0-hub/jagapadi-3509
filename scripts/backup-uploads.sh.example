@@ -1,0 +1,49 @@
+#!/bin/bash
+# =============================================================================
+# JAGAPADI — Uploads Backup Script (example)
+# =============================================================================
+# Usage: ./scripts/backup-uploads.sh
+# Schedule: weekly via cron
+#
+# Prerequisites:
+#   - Create /var/www/jagapadi/backups/ directory
+#   - Uploads directory exists at UPLOADS_DIR
+# =============================================================================
+
+set -euo pipefail
+
+# --- Configuration (override via environment) ---
+BACKUP_DIR="${BACKUP_DIR:-/var/www/jagapadi/backups}"
+UPLOADS_DIR="${UPLOADS_DIR:-/var/www/jagapadi/backend/public/assets/uploads}"
+
+RETENTION_DAYS="${RETENTION_DAYS:-90}"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+FILENAME="jagapadi_uploads_${TIMESTAMP}.tar.gz"
+
+# --- Ensure backup directory exists ---
+mkdir -p "$BACKUP_DIR"
+
+# --- Check uploads directory ---
+if [ ! -d "$UPLOADS_DIR" ]; then
+  echo "ERROR: Uploads directory does not exist: $UPLOADS_DIR"
+  exit 1
+fi
+
+# --- Archive ---
+tar -czf "${BACKUP_DIR}/${FILENAME}" \
+  -C "$(dirname "$UPLOADS_DIR")" \
+  "$(basename "$UPLOADS_DIR")"
+
+# --- Verify ---
+if [ -f "${BACKUP_DIR}/${FILENAME}" ]; then
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Backup created: ${BACKUP_DIR}/${FILENAME} ($(du -h "${BACKUP_DIR}/${FILENAME}" | cut -f1))"
+else
+  echo "ERROR: Backup file not created."
+  exit 1
+fi
+
+# --- Retention: delete older than RETENTION_DAYS ---
+find "$BACKUP_DIR" -name "jagapadi_uploads_*.tar.gz" -type f -mtime "+${RETENTION_DAYS}" -delete
+
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Retention: deleted backups older than ${RETENTION_DAYS} days."
+echo "Done."

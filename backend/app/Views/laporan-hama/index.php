@@ -1,0 +1,143 @@
+<style>
+    .header-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px; }
+    .btn-add { display:inline-block; padding:8px 16px; background:#1a73e8; color:#fff; border-radius:6px; text-decoration:none; font-size:14px; font-weight:500; }
+    .btn-sm { padding:4px 12px; border-radius:4px; font-size:12px; text-decoration:none; display:inline-block; margin-right:4px; }
+    .btn-edit { background:#fff3e0; color:#e65100; }
+    .btn-view { background:#e8f5e9; color:#2e7d32; }
+    .btn-delete { background:#fce4ec; color:#c62828; border:none; cursor:pointer; font-size:12px; padding:4px 12px; border-radius:4px; }
+    .filter-bar { display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap; align-items:flex-end; }
+    .filter-bar input, .filter-bar select { padding:8px 12px; border:1px solid #d0d0d0; border-radius:6px; font-size:14px; }
+    .filter-bar button { padding:8px 16px; background:#f5f5f5; border:1px solid #d0d0d0; border-radius:6px; cursor:pointer; font-size:14px; }
+    .filter-bar button:hover { background:#e0e0e0; }
+    table { width:100%; border-collapse:collapse; margin-top:12px; }
+    th, td { text-align:left; padding:10px 12px; border-bottom:1px solid #e0e0e0; font-size:14px; }
+    th { background:#f5f5f5; font-weight:600; color:#555; }
+    tr:hover td { background:#fafafa; }
+    .badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:500; }
+    .badge-draf { background:#fff3e0; color:#e65100; }
+    .badge-submitted { background:#e3f2fd; color:#1565c0; }
+    .badge-verified { background:#e8f5e9; color:#2e7d32; }
+    .badge-rejected { background:#fce4ec; color:#c62828; }
+    .badge-archived { background:#f5f5f5; color:#888; }
+    .pagination { display:flex; gap:8px; justify-content:center; margin-top:20px; flex-wrap:wrap; }
+    .pagination a, .pagination span { padding:6px 12px; border:1px solid #d0d0d0; border-radius:4px; font-size:13px; text-decoration:none; color:#333; }
+    .pagination a:hover { background:#f0f0f0; }
+    .pagination .active { background:#1a73e8; color:#fff; border-color:#1a73e8; }
+    .text-muted { color:#999; font-size:13px; }
+    .mb-2 { margin-bottom:8px; }
+</style>
+
+<div class="header-bar">
+    <h2 style="margin:0;">Laporan Hama</h2>
+    <?php if ($currentUser['role'] === 'petugas'): ?>
+        <a href="/laporan-hama/create" class="btn-add">+ Buat Laporan</a>
+    <?php endif; ?>
+</div>
+
+<form method="GET" action="/laporan-hama" class="filter-bar">
+    <div>
+        <label style="font-size:12px;color:#888;display:block;">Status</label>
+        <select name="status">
+            <option value="">Semua Status</option>
+            <option value="Draf" <?= ($filters['status'] ?? '') === 'Draf' ? 'selected' : '' ?>>Draf</option>
+            <option value="Submitted" <?= ($filters['status'] ?? '') === 'Submitted' ? 'selected' : '' ?>>Submitted</option>
+            <option value="Diverifikasi" <?= ($filters['status'] ?? '') === 'Diverifikasi' ? 'selected' : '' ?>>Diverifikasi</option>
+            <option value="Ditolak" <?= ($filters['status'] ?? '') === 'Ditolak' ? 'selected' : '' ?>>Ditolak</option>
+            <option value="Diarsipkan" <?= ($filters['status'] ?? '') === 'Diarsipkan' ? 'selected' : '' ?>>Diarsipkan</option>
+        </select>
+    </div>
+    <div>
+        <label style="font-size:12px;color:#888;display:block;">Tanggal Dari</label>
+        <input type="date" name="tanggal_from" value="<?= \App\Core\Security::e($filters['tanggal_from'] ?? '') ?>">
+    </div>
+    <div>
+        <label style="font-size:12px;color:#888;display:block;">Tanggal Sampai</label>
+        <input type="date" name="tanggal_to" value="<?= \App\Core\Security::e($filters['tanggal_to'] ?? '') ?>">
+    </div>
+    <div>
+        <label style="font-size:12px;color:#888;display:block;">Kabupaten</label>
+        <select name="kabupaten_id">
+            <option value="">Semua Kabupaten</option>
+            <?php foreach ($kabupaten as $k): ?>
+                <option value="<?= (int) $k['id'] ?>" <?= ($filters['kabupaten_id'] ?? '') == $k['id'] ? 'selected' : '' ?>><?= \App\Core\Security::e($k['nama_kabupaten']) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+    <div>
+        <label style="font-size:12px;color:#888;display:block;">OPT</label>
+        <select name="master_opt_id">
+            <option value="">Semua OPT</option>
+            <?php foreach ($optList as $o): ?>
+                <option value="<?= (int) $o['id'] ?>" <?= ($filters['master_opt_id'] ?? '') == $o['id'] ? 'selected' : '' ?>><?= \App\Core\Security::e($o['nama_opt']) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+    <div>
+        <label style="font-size:12px;color:#888;display:block;">Cari</label>
+        <input type="text" name="q" placeholder="Cari nomor/lokasi/catatan..." value="<?= \App\Core\Security::e($filters['q'] ?? '') ?>">
+    </div>
+    <div>
+        <label style="font-size:12px;color:#888;display:block;">&nbsp;</label>
+        <button type="submit">Filter</button>
+    </div>
+</form>
+
+<table>
+    <thead>
+        <tr>
+            <th>No. Laporan</th>
+            <th>Tanggal</th>
+            <th>OPT</th>
+            <th>Kecamatan</th>
+            <th>Desa</th>
+            <th>Tingkat</th>
+            <th>Status</th>
+            <th>Diperbarui</th>
+            <th>Aksi</th>
+        </tr>
+    </thead>
+    <tbody>
+    <?php foreach ($data as $lh): ?>
+        <tr>
+            <td><?= $lh['nomor_laporan'] !== null ? \App\Core\Security::e($lh['nomor_laporan']) : '<span class="text-muted">Belum dibuat</span>' ?></td>
+            <td><?= \App\Core\Security::e($lh['tanggal'] ?? '-') ?></td>
+            <td><?= \App\Core\Security::e($lh['nama_opt'] ?? '-') ?></td>
+            <td><?= \App\Core\Security::e($lh['nama_kecamatan'] ?? '-') ?></td>
+            <td><?= \App\Core\Security::e($lh['nama_desa'] ?? '-') ?></td>
+            <td><?= \App\Core\Security::e($lh['tingkat_keparahan'] ?? '-') ?></td>
+            <td><span class="badge badge-<?= strtolower($lh['status']) ?>"><?= \App\Core\Security::e($lh['status']) ?></span></td>
+            <td><?= date('d/m/Y H:i', strtotime($lh['updated_at'])) ?></td>
+            <td>
+                <a href="/laporan-hama/<?= (int) $lh['id'] ?>" class="btn-sm btn-view">Detail</a>
+                <?php if ($lh['status'] === 'Draf' && $currentUser['role'] === 'petugas'): ?>
+                    <a href="/laporan-hama/<?= (int) $lh['id'] ?>/edit" class="btn-sm btn-edit">Edit</a>
+                    <form method="POST" action="/laporan-hama/<?= (int) $lh['id'] ?>/delete" style="display:inline" onsubmit="return confirm('Hapus draf ini?')">
+                        <?= \App\Core\Security::csrfField() ?>
+                        <button type="submit" class="btn-delete">Hapus</button>
+                    </form>
+                <?php endif; ?>
+            </td>
+        </tr>
+    <?php endforeach; ?>
+    <?php if (count($data) === 0): ?>
+        <tr><td colspan="9" style="text-align:center;color:#999;padding:24px;">Belum ada laporan hama.</td></tr>
+    <?php endif; ?>
+    </tbody>
+</table>
+
+<?php if ($meta['last_page'] > 1): ?>
+<div class="pagination">
+    <?php for ($i = 1; $i <= $meta['last_page']; $i++): ?>
+        <?php if ($i == $meta['page']): ?>
+            <span class="active"><?= $i ?></span>
+        <?php else: ?>
+            <?php
+                $query = $_GET;
+                $query['page'] = $i;
+                $qs = http_build_query($query);
+            ?>
+            <a href="/laporan-hama?<?= \App\Core\Security::e($qs) ?>"><?= $i ?></a>
+        <?php endif; ?>
+    <?php endfor; ?>
+</div>
+<?php endif; ?>

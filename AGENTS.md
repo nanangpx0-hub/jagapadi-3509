@@ -1,153 +1,115 @@
-# AGENTS.md
+# AGENTS.md — Permanent Instructions for AI Coding Agent (JAGAPADI)
 
-Panduan ini menjadi aturan kerja agent untuk repository JAGAPADI. Tujuannya sederhana: perubahan tetap rapi, ownership jelas, branch tidak semrawut, dan tidak ada modifikasi berisiko yang lolos tanpa review.
+> **Wajib dibaca** sebelum menulis kode apapun.
 
-## Prinsip Utama
+---
 
-- Jangan mengubah branch `main` secara langsung.
-- Satu fitur dikerjakan di satu branch terpisah.
-- Satu branch hanya boleh memiliki satu eksekutor utama.
-- Agent lain hanya boleh memberi review, analisis, atau second opinion, kecuali diminta eksplisit untuk ikut mengubah kode.
-- Semua perubahan harus melalui Pull Request (PR) dan CI.
-- Jangan commit file runtime, file lokal, file backup, atau artefak yang tidak relevan dengan source code.
-- Jangan melakukan perubahan destruktif pada data atau database tanpa backup dan review.
+## 1. Ringkasan Proyek & Stack
 
-## Aturan Branch
+| Aspek | Detail |
+|-------|--------|
+| Nama | JAGAPADI — Jember Agrikultur Gapai Prestasi Digital |
+| Deskripsi | Sistem pelaporan pertanian (Hama/OPT & Kondisi Irigasi) untuk Kab. Jember |
+| Backend | PHP 8.2 native, MVC ringan, PDO, MariaDB/MySQL, REST API |
+| Web Admin | PHP server-rendered (Session + CSRF) |
+| Mobile | Flutter Android (JWT auth) |
+| Hosting | cPanel; document root production = `backend/public` |
 
-- Selalu buat branch baru sebelum mulai kerja.
-- Nama branch harus mewakili satu pekerjaan yang jelas.
-- Satu branch hanya untuk satu scope kerja utama.
-- Jangan menumpuk banyak fitur berbeda dalam satu branch.
-- Jangan pakai `main` sebagai workspace eksperimen.
+---
 
-Contoh nama branch:
+## 2. Dokumen Wajib Dibaca Sebelum Coding
 
-- `feature/laporan-hama-archive`
-- `fix/dashboard-status-filter`
-- `docs/laporan-hama-guide`
-- `refactor/dashboard-aggregator`
+1. `docs/BLUEPRINT.md` — Arsitektur, modul v1, status laporan, kebijakan Draf
+2. `docs/TUTORIAL_BUILD.md` — Tahapan pembangunan 0–14
+3. `docs/API.md` — Kontrak API (`/api/v1`, JSON, JWT, `include_draft`)
+4. `docs/DATABASE.md` — Target DB MariaDB/MySQL `utf8mb4`
+5. `README.md` — Overview proyek & struktur monorepo
 
-## Ownership Branch
+---
 
-- Setiap branch punya satu eksekutor utama.
-- Eksekutor utama bertanggung jawab atas implementasi, konsistensi perubahan, dan kesiapan PR.
-- Agent lain tidak boleh push perubahan langsung ke branch yang sama tanpa instruksi eksplisit.
-- Jika butuh masukan dari agent lain, perlakukan sebagai review, audit, atau usulan patch.
+## 3. Aturan Bisnis Inti
 
-## Role Agent
+| Aturan | Detail |
+|--------|--------|
+| Draf disimpan di server | Saat koneksi tersedia, draf wajib tersimpan ke DB server |
+| Draf bisa dianalisis | Bila field minimum analisis terpenuhi |
+| Statistik default tanpa Draf | `include_draft=false` default (dashboard, peta, analisis, ekspor) |
+| Filter include_draft | Semua endpoint agregat wajib support `?include_draft=true\|false` |
+| Status laporan | `Draf`, `Submitted`, `Diverifikasi`, `Ditolak`, `Diarsipkan` |
+| Role awal | `admin`, `petugas` |
+| Nomor laporan | Hanya dibuat saat `Submitted`, bukan saat `Draf` |
+| Petugas hanya laporan sendiri | Enforced di level query & policy |
+| Admin verifikasi Submitted | Hanya admin yang boleh verifikasi |
+| Draf tidak boleh diverifikasi | Validasi wajib di server |
 
-### Codex
-Eksekutor implementasi utama. Cocok untuk coding inti, refactor, perbaikan bug, dan perubahan file produksi.
+---
 
-### Kiro
-Reviewer requirement dan alur bisnis. Fokus pada validasi apakah implementasi sesuai kebutuhan dan tidak melenceng dari flow aplikasi.
+## 4. Aturan Keamanan
 
-### Perplexity
-Riset dan referensi. Dipakai untuk mencari informasi, cross-check, atau memperkaya dokumentasi dan keputusan teknis.
+- **No secret commit**: `.env`, token, password, private key, `.pem`, `.key`
+- **PDO prepared statements**: Semua query DB wajib prepared statement
+- **No raw SQL from input**: Tidak ada query dari input mentah
+- **HTML escape**: Semua output HTML wajib `htmlspecialchars()` / `e()`
+- **CSRF**: Semua aksi mutasi web wajib CSRF token
+- **AuthZ di API**: Semua endpoint wajib autentikasi + otorisasi
+- **Upload validation**: Validasi magic bytes, MIME, ekstensi, ukuran, nama random
 
-### Cursor / Trae / OpenCode
-Patch kecil atau eksperimen terbatas. Jangan dijadikan pemilik utama branch kecuali memang ditetapkan begitu dari awal.
+---
 
-### Blackbox / Antigravity
-Review tambahan atau second opinion. Berguna untuk menguji asumsi, mengecek blind spot, atau membandingkan solusi.
+## 5. Cara Kerja Agent
 
-### ChatGPT
-Orkestrasi, penyusunan arah kerja, perapihan dokumentasi, dan sinkronisasi hasil dari agent lain.
+1. **Baca dulu**: Baca dokumen & kode relevan sebelum coding
+2. **Satu task kecil**: Selesaikan satu task, verifikasi, baru lanjut
+3. **No schema change tanpa migration**: Jangan ubah skema DB tanpa migration baru
+4. **No refactor di luar scope**: Jangan refactor di luar cakupan task
+5. **Jalankan test/lint**: Setelah implementasi, jalankan test/lint relevan
+6. **Laporan akhir**: Daftar file berubah, hasil test, risiko/pekerjaan lanjutan
 
-## Context dan Prompt Portable
+---
 
-Untuk onboarding agent baru atau AI dengan context window terbatas, gunakan file ringkas berikut:
+## 6. Konvensi Kode
 
-- `PROJECT_SUMMARY.md`
-- `TECH_STACK.md`
-- `CURRENT_TASK.md`
-- `DATABASE_SCHEMA.md`
-- `DATA_DICTIONARY.md`
-- `CHANGELOG.md`
+| Area | Aturan |
+|------|--------|
+| PHP | PSR-12, `declare(strict_types=1)`, type hint ketat |
+| PHP indent | 4 spasi |
+| YAML/JSON/MD | 2 spasi |
+| Line ending | LF |
+| Charset | UTF-8 |
+| Naming DB | `snake_case` jamak, PK `id` (BIGINT UNSIGNED) |
+| API | `/api/v1`, JSON, JWT, `include_draft` query param |
+| Git | Conventional Commits, branch per task/issue |
 
-Prompt model-agnostic disimpan di folder `prompts/`:
+---
 
-- `prompts/code-review.md`
-- `prompts/new-feature.md`
-- `prompts/debug-error.md`
-- `prompts/documentation.md`
+## 7. Tahapan Pembangunan
 
-Panduan workflow lintas AI ada di `docs/AI_WORKFLOW.md`. Jika task aktif berubah, update `CURRENT_TASK.md` agar handover tetap akurat.
-Jika fitur, bugfix, maintenance data, atau dokumentasi penting selesai, update `CHANGELOG.md`.
+| Tahap | Nama | Status |
+|-------|------|--------|
+| 1 | Repository & Standar Kerja | **Done** |
+| 2 | Backend Skeleton | **Done** |
+| 3 | Database Schema & Migration | **IN PROGRESS** |
+| 3 | Database Schema & Migration | Pending |
+| 4 | Auth Web & Mobile | Pending |
+| 5 | Modul Laporan (CRUD, Draft, Submit) | Pending |
+| 6 | Modul Verifikasi (Admin) | Pending |
+| 7 | Dashboard & Statistik | Pending |
+| 8 | Peta & Geospasial | Pending |
+| 9 | Analisis & Ekspor | Pending |
+| 10 | Mobile App Flutter | **DONE** |
+| 11 | Notifikasi & Real-time (FCM) | **DONE** |
+| 12 | Testing & QA | Pending |
+| 13 | Deployment & CI/CD | **DONE** |
+| 14 | Dokumentasi Akhir & Handover | Pending |
 
-## Aturan Commit
+---
 
-Sebelum commit, wajib lakukan pengecekan berikut:
+## 8. Aturan PR & Commit
 
-- Jalankan `git status`.
-- Pastikan branch aktif **bukan** `main`.
-- Pastikan file yang ikut commit memang relevan.
-- Pastikan file upload, runtime, backup, dan file lokal tidak ikut terbawa.
-- Lakukan pengecekan manual sesuai scope perubahan.
-- Buat ringkasan perubahan yang singkat dan jelas.
+- **Conventional Commits**: `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`, `ci:`
+- **Branch**: `feat/<slug>`, `fix/<slug>`, `chore/<slug>`
+- **PR checklist**: scope sesuai, no secret, test/lint, docs updated, migration if needed, draft policy intact
 
-## File yang Tidak Boleh Di-commit
+---
 
-Jangan commit file berikut kecuali memang ada alasan yang sudah disetujui dalam task:
-
-- `composer.lock` jika project tidak memakai Composer sebagai dependency source utama.
-- File upload runtime seperti `storage/laporan` atau direktori sejenis.
-- Backup database, dump SQL lokal, atau file hasil maintenance sementara.
-- File testing lokal, catatan pribadi, screenshot sementara, file cache, dan artefak eksperimen.
-- File hasil generate yang tidak dibutuhkan repository.
-
-## Aturan Data dan Database
-
-- Jangan hapus data tanpa backup.
-- Jangan jalankan script destructive tanpa review.
-- Jangan ubah schema database secara sembarangan.
-- Semua perubahan database harus aman, jelas tujuannya, dan sebisa mungkin reversible.
-- Jika perubahan menyentuh data produksi, wajib ada approval eksplisit.
-
-## Pull Request
-
-Setiap perubahan harus diajukan melalui PR.
-
-PR minimal harus berisi:
-
-- Ringkasan perubahan.
-- Scope file yang diubah.
-- Risiko atau catatan dampak.
-- Checklist pengujian manual.
-- Catatan migration atau data impact jika ada.
-
-## CI dan Review
-
-- Jangan merge bila CI gagal.
-- Jangan merge bila masih ada perubahan yang belum dipahami.
-- Review bukan formalitas; reviewer harus cek scope, risiko, dan konsistensi terhadap requirement.
-- Jika ada konflik antara implementasi dan requirement, requirement yang sudah disepakati jadi acuan.
-
-## Aturan Praktis Kolaborasi Agent
-
-- Kalau satu agent sedang pegang branch, agent lain jangan ikut nyopet perubahan diam-diam.
-- Review boleh keras, branch jangan liar.
-- Eksperimen pisahkan dari implementasi utama.
-- Jika butuh pendekatan alternatif, buat branch atau patch terpisah.
-- Semua keputusan final tetap harus tercermin jelas di PR.
-
-## Checklist Singkat Sebelum Commit
-
-- [ ] Sudah cek `git status`
-- [ ] Branch aktif bukan `main`
-- [ ] Scope branch hanya untuk satu fitur/perbaikan
-- [ ] Tidak ada file runtime/upload/backup yang ikut commit
-- [ ] Sudah lakukan pengecekan manual
-- [ ] Sudah buat ringkasan perubahan
-- [ ] Siap diajukan lewat PR
-
-## Checklist Singkat Sebelum Merge
-
-- [ ] PR sudah dibuat
-- [ ] CI lolos
-- [ ] Scope perubahan jelas
-- [ ] Tidak ada file aneh atau artefak lokal
-- [ ] Requirement sudah sesuai
-- [ ] Risiko perubahan sudah dipahami
-- [ ] Reviewer sudah menyetujui
-
+> Agent yang tidak mengikuti AGENTS.md ini tidak diizinkan menulis kode produksi.
