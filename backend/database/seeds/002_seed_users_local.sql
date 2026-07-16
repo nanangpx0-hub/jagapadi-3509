@@ -1,0 +1,12 @@
+-- Users seed reference.
+-- NOTE: Password harus di-hash dengan bcrypt via PHP (seed.php).
+-- Jangan jalankan SQL ini langsung; gunakan `php scripts/seed.php`.
+--
+-- Password default (wajib ganti setelah login pertama):
+--   admin    / ChangeMeAdmin!123
+--   petugas01 / ChangeMePetugas!123
+
+-- INSERT IGNORE INTO `users` (`username`, `password`, `email`, `nama_lengkap`, `role`, `aktif`, `must_change_password`)
+-- VALUES
+-- ('admin', '<hash_bcrypt>', 'admin@jagapadi.local', 'Administrator JAGAPADI', 'admin', 1, 1),
+-- ('petugas01', '<hash_bcrypt>', 'petugas01@jagapadi.local', 'Petugas Lapangan 01', 'petugas', 1, 1);

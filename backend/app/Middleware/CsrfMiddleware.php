@@ -1,0 +1,43 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Middleware;
+
+use App\Core\Security;
+use App\Core\Request;
+
+class CsrfMiddleware
+{
+    public function handle(array $route, array $params): bool
+    {
+        $method = Request::method();
+        if (!in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
+            return true;
+        }
+
+        $uri = Request::uri();
+        if (str_starts_with($uri, '/api/')) {
+            return true;
+        }
+
+        $token = Request::input('_csrf_token');
+
+        if ($token === null) {
+            $headerToken = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+            if ($headerToken !== '') {
+                $token = $headerToken;
+            }
+        }
+
+        if (!Security::validateCsrfToken($token)) {
+            http_response_code(419);
+            $_SESSION['flash_error'] = 'CSRF token tidak valid. Silakan coba lagi.';
+            $redirect = $_SERVER['HTTP_REFERER'] ?? '/login';
+            header("Location: $redirect");
+            return false;
+        }
+
+        return true;
+    }
+}

@@ -1,0 +1,92 @@
+# =============================================================================
+# JAGAPADI .gitignore
+# =============================================================================
+
+# --- Secrets ---
+.env
+**/.env
+*.pem
+*.key
+*.crt
+*.p12
+credentials
+*.credentials
+*.secret
+*.token
+
+# --- Backend ---
+backend/vendor/
+backend/storage/cache/
+backend/storage/logs/
+backend/public/uploads/
+backend/.phpunit.cache/
+!backend/storage/cache/.gitkeep
+!backend/storage/logs/.gitkeep
+!backend/public/uploads/.gitkeep
+
+# --- Flutter ---
+mobile/**/.dart_tool/
+mobile/**/build/
+mobile/**/.flutter-plugins
+mobile/**/.flutter-plugins-dependencies
+mobile/**/*.iml
+mobile/**/android/.gradle/
+mobile/**/android/local.properties
+mobile/**/.packages
+mobile/**/.pub-cache/
+mobile/**/.pub/
+mobile/**/pubspec.lock
+
+# --- IDE & Editor ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# --- OS Artifacts ---
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# --- Build Output ---
+dist/
+build/
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Logs & Cache ---
+*.log
+.tmp/
+tmp/
+.cache/
+
+# --- Test Coverage ---
+coverage/
+.coverage
+.pytest_cache/
+
+# --- Docker local overrides ---
+docker-compose.override.yml
+
+# --- Keep these ---
+!.gitignore
+!.gitkeep
+!.editorconfig
+!.env.example
+!.env.example.*
+!.github/
+!.github/**
+!docs/
+!docs/**
+!dok/
+!dok/**
+!scripts/
+!scripts/**

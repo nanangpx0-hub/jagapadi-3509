@@ -1,0 +1,364 @@
+# API Contract JAGAPADI
+
+> **Status**: Tahap 4 — Autentikasi (Web Session + CSRF & API JWT) telah diimplementasikan.
+> **Base URL**: `https://domain.tld/api/v1`
+> **Format**: JSON
+> **Auth Mobile**: JWT (`Authorization: Bearer <access_token>`)
+> **Auth Web**: Session cookie + CSRF token (field `_csrf_token` atau header `X-CSRF-TOKEN`)
+
+---
+
+## Konvensi Umum
+
+| Aspek | Aturan |
+|-------|--------|
+| Base path | `/api/v1` |
+| Response envelope | `{ "data": ..., "meta": ... }` atau `{ "error": { "code": "...", "message": "..." } }` |
+| Pagination | `?page=1&per_page=15` (default 15, max 100) |
+| Sorting | `?sort=created_at:desc` |
+| Filter draft | `?include_draft=true\|false` (default `false`) |
+| Date format | ISO 8601 (`YYYY-MM-DD`, `YYYY-MM-DDTHH:MM:SSZ`) |
+| Error codes | `ValidationError`, `Unauthorized`, `Unauthenticated`, `Forbidden`, `NotFound`, `Conflict`, `ServerError`, `TooManyRequests`, `TokenInvalid` |
+| Rate limit | 60 req/min (auth), 20 req/min (guest); brute-force: 5 failed login / IP / 15 menit |
+
+---
+
+## Health (Implemented — Tahap 2)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/v1/health` | Public | Pemeriksaan kesehatan aplikasi & database |
+
+**Response 200** (database tersambung):
+```json
+{
+  "success": true,
+  "message": "JAGAPADI is healthy",
+  "data": {
+    "app": "JAGAPADI",
+    "environment": "local",
+    "time": "2026-07-16T13:00:00+07:00",
+    "database": "connected"
+  }
+}
+```
+
+**Response 503** (database tidak tersedia):
+```json
+{
+  "success": false,
+  "error": "DatabaseUnavailable",
+  "message": "Layanan database tidak tersedia."
+}
+```
+
+---
+
+## Auth Endpoints (Implemented — Tahap 4)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/v1/auth/login` | Public | Login mobile (JWT) |
+| POST | `/api/v1/auth/refresh` | JWT | Refresh access token (perpanjang masa berlaku) |
+| POST | `/api/v1/auth/logout` | JWT | Logout (catat activity log) |
+| POST | `/api/v1/auth/change-password` | JWT | Ubah password (validasi password lama + policy) |
+| GET | `/api/v1/me` | JWT | Current user profile (public fields) |
+
+### POST /api/v1/auth/login
+
+**Request:**
+```json
+{
+  "username": "petugas01",
+  "password": "ChangeMePetugas!123"
+}
+```
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "message": "Login berhasil",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIs...",
+    "token_type": "Bearer",
+    "expires_in": 3600,
+    "user": {
+      "id": 2,
+      "username": "petugas01",
+      "nama_lengkap": "Petugas Satu",
+      "role": "petugas",
+      "is_active": 1,
+      "must_change_password": true
+    }
+  }
+}
+```
+
+**Response 401 (salah password):**
+```json
+{
+  "success": false,
+  "error": "Unauthorized",
+  "message": "Username atau password salah."
+}
+```
+
+**Response 422 (validasi):**
+```json
+{
+  "success": false,
+  "error": "ValidationError",
+  "message": "Username dan password harus diisi.",
+  "errors": {
+    "username": "Username wajib diisi.",
+    "password": "Password wajib diisi."
+  }
+}
+```
+
+**Response 429 (rate limit):**
+```json
+{
+  "success": false,
+  "error": "TooManyRequests",
+  "message": "Terlalu banyak percobaan login. Coba lagi nanti."
+}
+```
+
+### POST /api/v1/auth/refresh
+
+Memperbarui token JWT sebelum kedaluwarsa. Mengembalikan token baru dengan `exp` yang diperbarui.
+
+**Request:** (Bearer token di header)
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "message": "Token berhasil diperbarui",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIs...",
+    "token_type": "Bearer",
+    "expires_in": 3600
+  }
+}
+```
+
+**Response 401:**
+```json
+{
+  "success": false,
+  "error": "TokenInvalid",
+  "message": "Token tidak valid atau sudah kedaluwarsa."
+}
+```
+
+### POST /api/v1/auth/logout
+
+Mencatat aktivitas logout. Tidak ada revoke token (stateless JWT).
+
+### POST /api/v1/auth/change-password
+
+**Request:**
+```json
+{
+  "current_password": "ChangeMePetugas!123",
+  "new_password": "NewPass!234",
+  "new_password_confirmation": "NewPass!234"
+}
+```
+
+**Password policy:**
+- Minimal 8 karakter
+- Minimal 1 huruf besar
+- Minimal 1 huruf kecil
+- Minimal 1 angka
+- Minimal 1 karakter khusus
+
+### GET /api/v1/me
+
+Mengembalikan data user yang sedang login (tanpa field `password`).
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "message": "OK",
+  "data": {
+    "id": 2,
+    "username": "petugas01",
+    "nama_lengkap": "Petugas Satu",
+    "role": "petugas",
+    "is_active": 1,
+    "must_change_password": false
+  }
+}
+```
+
+---
+
+## Report Endpoints (Planned)
+
+### Hama/OPT
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/reports/hama` | Auth | List (filter: status, date, location, `include_draft`) |
+| POST | `/reports/hama` | Auth (petugas) | Create draft |
+| GET | `/reports/hama/{id}` | Auth (owner/admin) | Detail |
+| PUT | `/reports/hama/{id}` | Auth (owner, draft only) | Update draft |
+| POST | `/reports/hama/{id}/submit` | Auth (owner, draft) | Submit → `submitted` |
+| POST | `/reports/hama/{id}/verify` | Admin | Verify → `verified` |
+| POST | `/reports/hama/{id}/reject` | Admin | Reject → `rejected` |
+| POST | `/reports/hama/{id}/archive` | Admin | Archive → `archived` |
+| DELETE | `/reports/hama/{id}` | Auth (owner, draft) | Delete draft |
+
+### Irigasi
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/reports/irigasi` | Auth | List (filter: status, date, location, `include_draft`) |
+| POST | `/reports/irigasi` | Auth (petugas) | Create draft |
+| GET | `/reports/irigasi/{id}` | Auth (owner/admin) | Detail |
+| PUT | `/reports/irigasi/{id}` | Auth (owner, draft only) | Update draft |
+| POST | `/reports/irigasi/{id}/submit` | Auth (owner, draft) | Submit → `submitted` |
+| POST | `/reports/irigasi/{id}/verify` | Admin | Verify → `verified` |
+| POST | `/reports/irigasi/{id}/reject` | Admin | Reject → `rejected` |
+| POST | `/reports/irigasi/{id}/archive` | Admin | Archive → `archived` |
+| DELETE | `/reports/irigasi/{id}` | Auth (owner, draft) | Delete draft |
+
+---
+
+## Dashboard & Statistics (Planned)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/dashboard/stats` | Auth | Summary counts (filter `include_draft`) |
+| GET | `/dashboard/trends` | Auth | Time-series (filter `include_draft`) |
+| GET | `/dashboard/by-location` | Auth | Aggregated by kecamatan/desa (filter `include_draft`) |
+| GET | `/dashboard/by-pest` | Auth | Hama breakdown (filter `include_draft`) |
+| GET | `/dashboard/by-channel` | Auth | Irigasi channel breakdown (filter `include_draft`) |
+
+---
+
+## Map / Geospatial (Planned)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/map/reports` | Auth | GeoJSON points (filter: status, type, date, `include_draft`) |
+| GET | `/map/clusters` | Auth | Clustered points for zoom levels |
+
+---
+
+## Analysis (Planned)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/analysis/hama` | Auth | Hama analysis (only `analysis_ready=true`, filter `include_draft`) |
+| GET | `/analysis/irigasi` | Auth | Irigasi analysis (only `analysis_ready=true`, filter `include_draft`) |
+| GET | `/analysis/comparison` | Auth | Period comparison |
+
+---
+
+## Export (Planned)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/export/hama` | Admin | CSV/Excel/PDF (filter `include_draft`) |
+| GET | `/export/irigasi` | Admin | CSV/Excel/PDF (filter `include_draft`) |
+| GET | `/export/dashboard` | Admin | Dashboard summary export |
+
+---
+
+## User Management (Admin Only, Planned)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/users` | Admin | List users |
+| POST | `/users` | Admin | Create user |
+| GET | `/users/{id}` | Admin | Detail user |
+| PUT | `/users/{id}` | Admin | Update user |
+| DELETE | `/users/{id}` | Admin | Deactivate user |
+
+---
+
+## Error Response Format
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Validation failed",
+    "details": [
+      { "field": "latitude", "message": "Latitude is required" }
+    ]
+  }
+}
+```
+
+---
+
+## Success Response Format
+
+```json
+{
+  "data": { ... },
+  "meta": {
+    "pagination": {
+      "current_page": 1,
+      "per_page": 15,
+      "total": 100,
+      "last_page": 7
+    }
+  }
+}
+```
+
+---
+
+## `include_draft` Behavior (Critical)
+
+| Endpoint Category | Default | `include_draft=true` | `include_draft=false` |
+|-------------------|---------|---------------------|----------------------|
+| Dashboard stats | Exclude draft | Include draft | Exclude draft (default) |
+| Map points | Exclude draft | Include draft | Exclude draft (default) |
+| Analysis | Exclude draft | Include draft (if `analysis_ready`) | Exclude draft (default) |
+| Export | Exclude draft | Include draft | Exclude draft (default) |
+| List reports (petugas) | Include own draft | Include own draft | Exclude own draft |
+
+> **Rule**: Semua endpoint yang menampilkan data agregat/statistik/visualisasi **wajib** support parameter `include_draft`.
+
+---
+
+## JWT Token Structure
+
+**Access Token** (configurable, default 3600 detik / 1 jam):
+```json
+{
+  "sub": 2,
+  "role": "petugas",
+  "username": "petugas01",
+  "iat": 1742160000,
+  "exp": 1742163600
+}
+```
+
+**Key notes:**
+- Algoritma: HMAC SHA-256 (HS256)
+- Secret: env `JWT_SECRET` (minimal 64 karakter)
+- Tidak ada refresh token terpisah — gunakan endpoint `/auth/refresh` untuk memperpanjang token yang masih valid
+- Verifikasi dilakukan di `ApiAuthMiddleware` setiap request
+
+---
+
+## Webhook / Callback (Future)
+
+- Notifikasi push ke mobile (FCM)
+- Webhook verifikasi ke sistem eksternal
+
+---
+
+## Next Steps
+
+- Tahap 5: Implement report CRUD endpoints (Hama/OPT & Irigasi)
+- Update `docs/API.md` dengan kontrak final (OpenAPI/Swagger)
+- Generate SDK/client untuk Flutter
