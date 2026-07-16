@@ -11,13 +11,13 @@
 | 0 | **Tahap 0** | Persiapan & Riset | ✅ Done | Dokumen blueprint & riset teknis selesai |
 | **1** | **Tahap 1** | **Repository & Standar Kerja** | ✅ **Done** | Setup monorepo, `.gitignore`, `AGENTS.md`, docs, templates |
 | **2** | **Tahap 2** | **Backend Skeleton** | ✅ **Done** | PHP 8.2 MVC, Router, PDO, Config, `.env.example` |
-| **3** | **Tahap 3** | **Database Schema & Migration** | 🔄 **IN PROGRESS** | MariaDB/MySQL utf8mb4, 11 tabel, migration runner, seeders |
+| **3** | **Tahap 3** | **Database Schema & Migration** | ✅ **Done** | MariaDB/MySQL utf8mb4, 11 tabel, migration runner, seeders |
 | **4** | **Tahap 4** | Auth Web (Session+CSRF) & Auth Mobile (JWT) | ✅ **Done** | Web: Session aman + CSRF, middleware chain; API: JWT HS256; Role admin/petugas; Rate limiter; Activity log; Password policy; Must change password
-| 5 | **Tahap 5** | Modul Laporan (CRUD, Draft, Submit, Validasi) | ⏳ Pending | Hama/OPT & Irigasi, draft server, nomor laporan saat submit |
-| 6 | **Tahap 6** | Modul Verifikasi (Admin) | ⏳ Pending | Submitted → Verified/Rejected/Archived |
-| 7 | **Tahap 7** | Dashboard & Statistik | ⏳ Pending | Filter `include_draft=true/false` (default false) |
-| 8 | **Tahap 8** | Peta & Geospasial | ⏳ Pending | Titik laporan, cluster, filter status |
-| 9 | **Tahap 9** | Analisis & Ekspor | ⏳ Pending | Field minimum analisis, CSV/Excel/PDF |
+| **5** | **Tahap 5** | Master Data Wilayah & OPT | ✅ **Done** | Master wilayah (kab/kec/desa) + audit log; Master OPT CRUD + soft deactivate; API read auth, write admin; Web admin cascading dropdown
+| 6 | **Tahap 6** | Laporan Hama (Draf, Submit, List, Detail) | ⏳ Pending | CRUD draft, submit, nomor LH-..., validasi field wajib, petugas scoped
+| 7 | **Tahap 7** | Laporan Irigasi (Draf, Submit, List, Detail) | ⏳ Pending | CRUD draft, submit, nomor LI-..., validasi field wajib, petugas scoped
+| 8 | **Tahap 8** | Verifikasi Admin (Hama & Irigasi) | ⏳ Pending | Submitted → Verified/Rejected/Archived, resubmit from Ditolak
+| 9 | **Tahap 9** | Upload Foto Aman | ⏳ Pending | OPT + Laporan Hama + Laporan Irigasi, magic bytes, random name
 | 10 | **Tahap 10** | Mobile App Flutter | ⏳ Pending | Auth, offline draft, sync, JWT |
 | 11 | **Tahap 11** | Notifikasi & Real-time | ⏳ Pending | Push notif, websocket/polling |
 | 12 | **Tahap 12** | Testing & QA | ⏳ Pending | Unit, feature, E2E, security audit |

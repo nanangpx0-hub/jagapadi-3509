@@ -1,6 +1,6 @@
 # API Contract JAGAPADI
 
-> **Status**: Tahap 4 — Autentikasi (Web Session + CSRF & API JWT) telah diimplementasikan.
+> **Status**: Tahap 5 — Master Data Wilayah dan Master OPT telah diimplementasikan.
 > **Base URL**: `https://domain.tld/api/v1`
 > **Format**: JSON
 > **Auth Mobile**: JWT (`Authorization: Bearer <access_token>`)
@@ -197,6 +197,57 @@ Mengembalikan data user yang sedang login (tanpa field `password`).
 ```
 
 ---
+
+## Master Data (Implemented — Tahap 5)
+
+### Wilayah
+
+Master wilayah berjenjang: Kabupaten → Kecamatan → Desa.
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/v1/wilayah/kabupaten` | JWT/Web | List kabupaten |
+| GET | `/api/v1/wilayah/kabupaten/{id}` | JWT/Web | Detail kabupaten |
+| GET | `/api/v1/wilayah/kecamatan?kabupaten_id=` | JWT/Web | List kecamatan (wajib filter) |
+| GET | `/api/v1/wilayah/kecamatan/{id}` | JWT/Web | Detail kecamatan |
+| GET | `/api/v1/wilayah/desa?kecamatan_id=` | JWT/Web | List desa (wajib filter) |
+| GET | `/api/v1/wilayah/desa/{id}` | JWT/Web | Detail desa |
+| POST | `/api/v1/wilayah/kabupaten` | Admin | Tambah kabupaten |
+| PUT | `/api/v1/wilayah/kabupaten/{id}` | Admin | Update kabupaten |
+| DELETE | `/api/v1/wilayah/kabupaten/{id}` | Admin | Hapus kabupaten |
+| POST | `/api/v1/wilayah/kecamatan` | Admin | Tambah kecamatan |
+| PUT | `/api/v1/wilayah/kecamatan/{id}` | Admin | Update kecamatan |
+| DELETE | `/api/v1/wilayah/kecamatan/{id}` | Admin | Hapus kecamatan |
+| POST | `/api/v1/wilayah/desa` | Admin | Tambah desa |
+| PUT | `/api/v1/wilayah/desa/{id}` | Admin | Update desa |
+| DELETE | `/api/v1/wilayah/desa/{id}` | Admin | Hapus desa |
+
+**Aturan:**
+- Hapus wilayah diblokir (409) jika masih memiliki child atau direferensikan laporan (FK RESTRICT)
+- Setiap mutasi tercatat di `audit_log_wilayah` (admin_id, tabel, record_id, aksi, data_lama, data_baru)
+- Kecamatan wajib filter `kabupaten_id` (422 jika kosong)
+- Desa wajib filter `kecamatan_id` (422 jika kosong)
+
+### OPT (Organisme Pengganggu Tanaman)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/v1/opt` | JWT/Web | List OPT (filter: `jenis`, `q`, `aktif`) |
+| GET | `/api/v1/opt/{id}` | JWT/Web | Detail OPT |
+| POST | `/api/v1/opt` | Admin | Tambah OPT |
+| PUT | `/api/v1/opt/{id}` | Admin | Update OPT |
+| DELETE | `/api/v1/opt/{id}` | Admin | Hapus/nonaktifkan OPT |
+
+**Read filters:**
+- `jenis`: `hama` | `penyakit` | `gulma`
+- `q`: search by nama_opt
+- `aktif`: `1` | `0` (admin only; non-admin hanya melihat aktif)
+
+**Aturan:**
+- Petugas/mobile hanya bisa read OPT aktif
+- Admin full CRUD
+- DELETE: hard delete jika tidak ada referensi laporan; soft deactivate (`aktif=0`) jika masih dirujuk
+- Validasi: nama_opt unique, jenis enum wajib, etl_acuan >= 0
 
 ## Report Endpoints (Planned)
 

@@ -124,6 +124,10 @@ backend/
 | POST | `/api/v1/auth/logout` | JWT | Logout |
 | POST | `/api/v1/auth/change-password` | JWT | Ubah password |
 | GET | `/api/v1/me` | JWT | Profil user saat ini |
+| GET | `/api/v1/wilayah/kabupaten` | JWT | List kabupaten |
+| GET | `/api/v1/wilayah/kecamatan?kabupaten_id=` | JWT | List kecamatan per kabupaten |
+| GET | `/api/v1/wilayah/desa?kecamatan_id=` | JWT | List desa per kecamatan |
+| GET | `/api/v1/opt` | JWT | List OPT (filter: jenis, q, aktif) |
 
 ### Web Routes
 
@@ -135,3 +139,25 @@ backend/
 | GET | `/dashboard` | Session | Dashboard utama |
 | GET | `/password/change` | Session | Form ganti password |
 | POST | `/password/change` | Session | Proses ganti password |
+| GET | `/wilayah` | Admin | Master wilayah (kab/kec/desa) |
+| GET | `/wilayah/kabupaten/create` | Admin | Form tambah kabupaten |
+| POST | `/wilayah/kabupaten/store` | Admin | Simpan kabupaten |
+| GET | `/wilayah/kabupaten/edit/{id}` | Admin | Form edit kabupaten |
+| POST | `/wilayah/kabupaten/update/{id}` | Admin | Update kabupaten |
+| POST | `/wilayah/kabupaten/{id}/delete` | Admin | Hapus kabupaten |
+| GET | `/wilayah/kecamatan/create` | Admin | Form tambah kecamatan |
+| POST | `/wilayah/kecamatan/store` | Admin | Simpan kecamatan |
+| GET | `/wilayah/kecamatan/edit/{id}` | Admin | Form edit kecamatan |
+| POST | `/wilayah/kecamatan/update/{id}` | Admin | Update kecamatan |
+| POST | `/wilayah/kecamatan/{id}/delete` | Admin | Hapus kecamatan |
+| GET | `/wilayah/desa/create` | Admin | Form tambah desa |
+| POST | `/wilayah/desa/store` | Admin | Simpan desa |
+| GET | `/wilayah/desa/edit/{id}` | Admin | Form edit desa |
+| POST | `/wilayah/desa/update/{id}` | Admin | Update desa |
+| POST | `/wilayah/desa/{id}/delete` | Admin | Hapus desa |
+| GET | `/opt` | Admin | Master OPT (list, filter) |
+| GET | `/opt/create` | Admin | Form tambah OPT |
+| POST | `/opt/store` | Admin | Simpan OPT |
+| GET | `/opt/{id}/edit` | Admin | Form edit OPT |
+| POST | `/opt/update/{id}` | Admin | Update OPT |
+| POST | `/opt/{id}/delete` | Admin | Hapus/nonaktifkan OPT |

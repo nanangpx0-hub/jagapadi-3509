@@ -10,6 +10,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Master Data Wilayah & OPT (Tahap 5)
+  - `app/Models/MasterKabupaten.php` — model kabupaten
+  - `app/Models/MasterKecamatan.php` — model kecamatan (findByKabupaten)
+  - `app/Models/MasterDesa.php` — model desa (findByKecamatan)
+  - `app/Models/AuditLogWilayah.php` — audit log wilayah (log INSERT/UPDATE/DELETE)
+  - `app/Models/MasterOpt.php` — model OPT (allActive, allWithFilters)
+  - `app/Services/WilayahService.php` — CRUD wilayah + audit log + FK guard
+  - `app/Services/MasterOptService.php` — CRUD OPT + soft deactivate + validasi
+  - `app/Controllers/Api/WilayahController.php` — API read: auth user, write: admin
+  - `app/Controllers/Api/OptController.php` — API read/write dengan role guard
+  - `app/Controllers/Web/WilayahController.php` — web admin CRUD wilayah
+  - `app/Controllers/Web/OptController.php` — web admin CRUD OPT
+  - `app/Views/wilayah/` — index (cascading tabs), kabupaten_form, kecamatan_form, desa_form
+  - `app/Views/opt/` — index (filter), form (create/edit)
+  - `config/routes.php` — all web + API routes for wilayah & OPT
+  - Updated `docs/API.md` — master data endpoints documented
+  - Updated `docs/TUTORIAL_BUILD.md` — Tahap 5 marked Done, table realigned
+
+### Added
 - Authentication Web & Mobile (Tahap 4)
   - `app/Core/Request.php` — input parsing (JSON/form), bearer token, IP, user agent, isApi, isSecure
   - `app/Core/Security.php` — session management aman (httponly, samesite Lax, regenerate), CSRF token (auto-regenerasi tiap 1 jam)
