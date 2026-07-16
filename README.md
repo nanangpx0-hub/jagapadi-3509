@@ -6,9 +6,11 @@ Sistem pelaporan pertanian (Hama/OPT & Kondisi Irigasi) untuk Kabupaten Jember.
 
 ## Status Proyek
 
-**Tahap 8 — Verifikasi Admin** (Done)
+**v1.0.0 Production Ready** ✅
 
 ---
+
+
 
 ## Stack Teknologi (Direncanakan)
 
@@ -40,7 +42,7 @@ jagapadi/
 ├── .editorconfig
 ```
 
-> **Catatan**: Backend telah memiliki skeleton MVC (entry point, router, PDO, env loader, logger, error handler, health endpoint) dan skema database lengkap (11 tabel). Mobile masih placeholder.
+> **Catatan**: Backend telah memiliki MVC lengkap (auth, master data wilayah & OPT, CRUD laporan hama & irigasi, workflow verifikasi admin, upload foto aman) dan skema database lengkap (11 tabel). Mobile masih placeholder.
 
 ---
 
@@ -49,9 +51,13 @@ jagapadi/
 | File | Deskripsi |
 |------|-----------|
 | `BLUEPRINT.md` | Ringkasan arsitektur, modul v1, status laporan, kebijakan Draf |
-| `TUTORIAL_BUILD.md` | Tahapan pembangunan 0–14 (Tahap 1 = current) |
-| `API.md` | Kontrak API placeholder (`/api/v1`, JSON, JWT, `include_draft`) |
-| `DATABASE.md` | Skema database aktual (11 tabel), migrasi & seed |
+| `TUTORIAL_BUILD.md` | Tahapan pembangunan 0–14 |
+| `API.md` | Kontrak API (`/api/v1`, JSON, JWT, `include_draft`) |
+| `DATABASE.md` | Skema database aktual, migrasi & seed |
+| `DEPLOY.md` | **Panduan deployment production (Nginx, TLS, backup, cron)** |
+| `SMOKE_TEST.md` | Prosedur smoke test post-deploy |
+| `GO_LIVE_CHECKLIST.md` | Checklist go-live |
+| `QA_CHECKLIST.md` | Checklist regresi manual |
 | `Dokumentasi-aplikasi-jagapadi-3509.md` | Dokumen referensi lengkap (blueprint detail) |
 
 ---
@@ -63,7 +69,7 @@ git clone <repository-url>
 cd jagapadi-3509
 ```
 
-> **Catatan**: Instruksi instalasi backend sudah tersedia di `backend/README.md`. Instruksi Flutter akan ditambahkan pada Tahap 10.
+> **Catatan**: Instruksi instalasi backend tersedia di `backend/README.md` (lokal) dan `docs/DEPLOY.md` (production). Instruksi Flutter tersedia di `mobile/README.md`.
 
 ---
 
@@ -75,6 +81,13 @@ cd jagapadi-3509
 - **Tidak commit secret** (`.env`, `.key`, `.pem`, token, password)
 - **Tahap 1-2**: Setup repo & backend skeleton
 - **Tahap 3**: Database migration & seed data lokal
+- **Tahap 4**: Authentication web (Session+CSRF) & mobile (JWT)
+- **Tahap 5**: Master data wilayah & OPT
+- **Tahap 6**: Laporan Hama (CRUD, Draft, Submit)
+- **Tahap 7**: Laporan Irigasi (CRUD, Draft, Submit)
+- **Tahap 8**: Verifikasi Admin (hama & irigasi)
+- **Tahap 9**: Upload Foto Aman (OPT + laporan)
+- **Tahap 10**: Dashboard, Statistik & Cache (KPI, chart, peta, cache file TTL 5 menit)
 - **Tidak commit secret** (`.env`, `.key`, `.pem`, token, password)
 
 ---

@@ -204,7 +204,36 @@ Audit perubahan data wilayah oleh admin.
 | data_lama | JSON NULL | Data sebelum perubahan |
 | data_baru | JSON NULL | Data setelah perubahan |
 
-### 11. `nomor_laporan_counter`
+### 11. `notifications`
+Notifikasi in-app untuk user.
+| Column | Type | Description |
+|--------|------|-------------|
+| id | BIGINT UNSIGNED AI PK | |
+| user_id | INT UNSIGNED FK | FK → users(id) ON DELETE CASCADE |
+| type | VARCHAR(50) | `laporan_submitted`, `laporan_verified`, `laporan_rejected`, `laporan_resubmitted`, `laporan_archived` |
+| title | VARCHAR(200) | Judul notifikasi |
+| body | VARCHAR(500) | Isi notifikasi |
+| data_json | TEXT NULL | JSON payload: entity, laporan_id, nomor_laporan, status, web_path, api_path |
+| read_at | TIMESTAMP NULL | Waktu dibaca (NULL = belum dibaca) |
+| created_at | TIMESTAMP DEFAULT CURRENT_TIMESTAMP | |
+**Indexes**: idx_user_created (user_id, created_at), idx_user_unread (user_id, read_at), idx_type (type)
+
+### 12. `device_tokens`
+Penyimpanan FCM token perangkat user untuk push notification.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | BIGINT UNSIGNED AI PK | |
+| user_id | INT UNSIGNED FK | FK → users(id) ON DELETE CASCADE |
+| token | VARCHAR(512) | Token FCM — UNIQUE |
+| platform | ENUM('android','ios','web') | Default 'android' |
+| user_agent | VARCHAR(500) NULL | HTTP User-Agent |
+| last_seen_at | TIMESTAMP NULL | Terakhir kali token digunakan |
+| created_at | TIMESTAMP | |
+| updated_at | TIMESTAMP | Auto-update |
+**Unique**: uq_device_token (token). **Indexes**: idx_device_tokens_user (user_id)
+
+### 13. `nomor_laporan_counter`
 Counter atomik untuk generate nomor laporan. Bukan AUTO_INCREMENT — dikelola aplikasi.
 
 | Column | Type | Description |
@@ -227,6 +256,29 @@ Counter atomik untuk generate nomor laporan. Bukan AUTO_INCREMENT — dikelola a
 
 ---
 
+## Migration Order
+
+```sql
+-- 1–8: existing tables
+-- 9: notifications
+CREATE TABLE `notifications` (
+    `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    `user_id` INT UNSIGNED NOT NULL,
+    `type` VARCHAR(50) NOT NULL,
+    `title` VARCHAR(200) NOT NULL,
+    `body` VARCHAR(500) NOT NULL,
+    `data_json` TEXT NULL,
+    `read_at` TIMESTAMP NULL DEFAULT NULL,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX `idx_user_created` (`user_id`, `created_at`),
+    INDEX `idx_user_unread` (`user_id`, `read_at`),
+    INDEX `idx_type` (`type`),
+    CONSTRAINT `fk_notifications_user`
+        FOREIGN KEY (`user_id`) REFERENCES `users`(`id`)
+        ON UPDATE CASCADE ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
 ## Aturan `nomor_laporan`
 
 - **NULL** saat laporan masih `Draf`
@@ -245,6 +297,7 @@ master_kabupaten 1──N master_kecamatan 1──N master_desa
                                                     │
 users ──N laporan_hama ──N master_opt               │
 users ──N laporan_irigasi                            │
+users ──N notifications                              │
 users ──N activity_log                               │
 users ──N audit_log_wilayah                          │
 users ──N verified_by (laporan_hama/irigasi)         │

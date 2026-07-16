@@ -13,6 +13,11 @@ credentials
 *.credentials
 *.secret
 *.token
+google-services.json
+**/google-services.json
+*.service_account.json
+*.jks
+key.properties
 
 # --- Backend ---
 backend/vendor/
@@ -75,6 +80,9 @@ coverage/
 
 # --- Docker local overrides ---
 docker-compose.override.yml
+
+# --- Backup artifacts ---
+backups/
 
 # --- Keep these ---
 !.gitignore

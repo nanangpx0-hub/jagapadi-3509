@@ -10,6 +10,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Production Readiness (Go-Live — Tahap 15)
+  - `docs/DEPLOY.md` — Full deployment guide (Ubuntu + Nginx + PHP-FPM + MySQL)
+  - `docs/SMOKE_TEST.md` — Post-deploy smoke test procedure (curl + browser)
+  - `docs/GO_LIVE_CHECKLIST.md` — Pre-flight checklist with sign-off
+  - `scripts/backup-db.sh.example` — Daily DB backup script example
+  - `scripts/backup-uploads.sh.example` — Weekly uploads backup script example
+  - `scripts/prune-notifications.php` — CLI script to prune old notifications (cron-ready)
+  - `backend/public/index.php` — CORS now reads `CORS_ALLOWED_ORIGINS` from env
+  - `backend/.env.example` — Expanded with production comments, CORS_ALLOWED_ORIGINS
+  - `.gitignore` — Added `google-services.json`, `*.service_account.json`, `*.jks`, `key.properties`, `backups/`
+  - `CHANGELOG.md` — v1.0.0 preparation
+  - `README.md` — Status updated, links to DEPLOY.md, SMOKE_TEST.md, GO_LIVE_CHECKLIST.md
+  - `AGENTS.md` — Tahap 15 marked as Done
+  - Mobile release build notes added to DEPLOY.md
+  - Session cookie security already implemented (cookie_secure, httponly, samesite)
+  - ErrorHandler already safe (no stack trace when APP_DEBUG=false)
+
+
+- Notifikasi In-App (Tahap 12)
+  - `database/migrations/009_create_notifications_table.sql` — Tabel notifications (id, user_id, type, title, body, data_json, read_at, created_at)
+  - `app/Models/Notification.php` — Full CRUD model (list, unread count, mark read, mark all, delete, prune, find)
+  - `app/Services/NotificationService.php` — notifyUser, notifyAdmins (query admin ids), listForUser, unreadCount, markRead, markAllRead, deleteForUser, getRecentForUser, pruneOlderThan, truncateBody
+  - `app/Services/Push/PushNotifierInterface.php` — Interface push notification
+  - `app/Services/Push/NullPushNotifier.php` — Default no-op push
+  - `app/Services/Push/FcmPushNotifier.php` — FCM stub (no-op until device tokens implemented)
+  - `app/Controllers/Web/NotificationController.php` — index, unreadCountJson, recentJson, markRead, markAllRead, delete
+  - `app/Controllers/Api/NotificationController.php` — index, unreadCount, markRead, markAllRead, delete
+  - `app/Views/notifications/index.php` — Halaman list notifikasi dengan filter all/unread, pagination, mark read, delete, inline JS mark+redirect
+  - `app/Views/layouts/main.php` — Bell icon + badge unread, polling JS setiap 60 detik
+  - `config/routes.php` — 5 web routes + 5 API routes untuk notifikasi
+  - `.env.example` — FCM_ENABLED, FCM_SERVER_KEY
+  - Notification hooks in `LaporanHamaService` & `LaporanIrigasiService` (submit, resubmit → admins; verify, reject, archive → owner)
+  - Hooks wrapped in try-catch + Logger::warning() — gagal push tidak ganggu alur utama
+  - `tests/Unit/NotificationServiceTest.php` — 12 test cases (truncateBody, list structure, unread count, mark read, mark all, delete, prune, notifyUser no-throw)
+  - Updated docs: API.md (notifikasi section + event matrix), DATABASE.md (notifications table), TUTORIAL_BUILD.md (Tahap 12 Done), CHANGELOG.md
+- Export XLSX/CSV (Tahap 11)
+  - `app/Services/ExportService.php` — Validasi filter, COUNT query, JOIN fetch, stream CSV/XLSX; scope petugas vs admin
+  - `app/Helpers/CsvWriter.php` — Simple CSV writer with UTF-8 BOM
+  - `app/Helpers/XlsxWriter.php` — Pure PHP XLSX generator using PclZip (XML sheets + ZIP)
+  - `app/Controllers/Web/ExportController.php` — Form UI + POST download hama/irigasi
+  - `app/Controllers/Api/ExportController.php` — GET `api/v1/export/hama` & `api/v1/export/irigasi` with JWT
+  - `app/Views/export/index.php` — Form filter (jenis, format, status, kabupaten/kecamatan/desa cascading, tanggal)
+  - `config/routes.php` — 5 new routes (web GET + POST ×2, API ×2)
+  - `app/Views/layouts/main.php` — "Ekspor" nav link added
+  - `composer.json` — Added `pclzip/pclzip` (pure PHP Zip, lightweight)
+  - `tests/Unit/ExportServiceTest.php` — 13 test cases (format, tanggal, status, wilayah, headings)
+  - Updated docs: API.md, TUTORIAL_BUILD.md, backend/README.md, README.md
+  - Export constraints: max 10.000 rows, max 366 days date range, temp file cleaned up
+  - Activity log: export_hama / export_irigasi logged with format, filename, row count
+  - Columns: 22 for hama (nomor, tanggal, status, petugas, OPT, keparahan, wilayah, koordinat, verifikasi, dll), 19 for irigasi
+- Dashboard, Statistik & Cache (Tahap 10)
+  - `app/Core/CacheManager.php` — File-based cache (TTL 300s, atomic write, prefix delete, fallback no-cache)
+  - `app/Services/DashboardService.php` — Agregasi stats/charts/map dengan cache orchestration; scope admin vs petugas
+  - `app/Controllers/Web/DashboardController.php` — index + 5 JSON endpoints (stats, charts hama/irigasi, map hama/irigasi)
+  - `app/Controllers/Api/DashboardController.php` — 5 API endpoints (stats, charts hama/irigasi, map hama/irigasi)
+  - `app/Views/dashboard/index.php` — KPI cards, Chart.js bar charts x2, Leaflet map, top OPT table, status breakdown
+  - `public/assets/js/dashboard.js` — Chart.js init + Leaflet with toggle hama/irigasi layer
+  - `config/routes.php` — 5 web JSON routes + 5 API routes for dashboard
+  - Cache invalidation on write: semua service mutation panggil `invalidateCache()`
+  - `tests/Unit/DashboardServiceTest.php` — 8 test cases
+  - Updated `docs/API.md` — dashboard endpoints documented with examples
+  - Updated `docs/TUTORIAL_BUILD.md` — Tahap 10 marked Done, renumbered subsequent tahaps
+  - Updated `backend/README.md` — new routes added
+- Upload Foto Aman (Tahap 9)
+  - `app/Helpers/SecureImageUploader.php` — Validasi keamanan berlapis: magic bytes (JPEG/PNG/WebP), finfo MIME type, ekstensi file, ukuran (max 10MB), random name (bin2hex 16 bytes), sub-direktori YYYYMM, auto-kompresi >2MB via ImageCompressor, path traversal protection pada delete
+  - `app/Helpers/ImageCompressor.php` — Kompresi gambar via GD library (JPEG quality 75, PNG compression 7, WebP quality 75)
+  - `app/Controllers/Api/OptController.php` — added uploadFoto(), deleteFoto() endpoints
+  - `app/Controllers/Api/LaporanHamaController.php` — added uploadFoto(), deleteFoto() endpoints
+  - `app/Controllers/Api/LaporanIrigasiController.php` — added uploadFoto(), deleteFoto() endpoints
+  - `app/Controllers/Web/OptController.php` — added uploadFoto(), deleteFoto() actions
+  - `app/Controllers/Web/LaporanHamaController.php` — added uploadFoto(), deleteFoto() actions
+  - `app/Controllers/Web/LaporanIrigasiController.php` — added uploadFoto(), deleteFoto() actions
+  - `app/Views/opt/form.php` — foto upload form + existing foto display + delete button
+  - `app/Views/laporan-hama/edit.php` — foto upload form + existing foto display + delete button
+  - `app/Views/laporan-hama/show.php` — existing foto display (inline image)
+  - `app/Views/laporan-irigasi/edit.php` — foto upload form + existing foto display + delete button
+  - `app/Views/laporan-irigasi/show.php` — existing foto display (inline image)
+  - `config/routes.php` — 12 new routes (6 web + 6 API) for foto upload/delete
+  - `tests/Unit/SecureImageUploaderTest.php` — 12 test cases
+  - `tests/Unit/ImageCompressorTest.php` — 4 test cases
+  - Updated `docs/API.md` — foto upload endpoints documented with examples
+  - Updated `docs/TUTORIAL_BUILD.md` — Tahap 9 marked Done
+  - Updated `backend/README.md` — new web/API routes added
 - Verifikasi Admin Laporan Hama & Irigasi (Tahap 8)
   - `app/Helpers/LaporanStatus.php` — status constants + transition matrix (canTransition, assertCanTransition, isEditableByPetugas, dll)
   - `app/Models/LaporanHama.php` — added updateStatusAndVerification(), resetVerification(), verifikator_nama JOIN
