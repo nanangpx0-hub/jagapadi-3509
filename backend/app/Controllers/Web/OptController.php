@@ -7,6 +7,8 @@ namespace App\Controllers\Web;
 use App\Core\Controller;
 use App\Core\Request;
 use App\Core\Security;
+use App\Helpers\SecureImageUploader;
+use App\Models\ActivityLog;
 use App\Models\MasterOpt;
 use App\Services\MasterOptService;
 
@@ -119,5 +121,77 @@ class OptController extends Controller
             $_SESSION['flash_success'] = $result['message'] ?? 'OPT berhasil dihapus.';
         }
         $this->redirect('/opt');
+    }
+
+    public function uploadFoto(array $params): void
+    {
+        $id = (int) ($params['id'] ?? 0);
+        $opt = MasterOpt::find($id);
+        if ($opt === null) {
+            $_SESSION['flash_error'] = 'OPT tidak ditemukan.';
+            $this->redirect('/opt');
+            return;
+        }
+
+        $file = $_FILES['foto'] ?? null;
+        if ($file === null || $file['error'] === UPLOAD_ERR_NO_FILE) {
+            $_SESSION['flash_error'] = 'File foto wajib diupload.';
+            $this->redirect('/opt/' . $id . '/edit');
+            return;
+        }
+
+        $uploadRoot = dirname(__DIR__, 3) . '/public';
+        $destDir = $uploadRoot . '/assets/uploads/opt-photos';
+
+        try {
+            $oldUrl = $opt['foto_url'] ?? '';
+            $result = SecureImageUploader::validateAndStore($file, [
+                'max_bytes' => 5242880,
+                'destination_dir' => $destDir,
+                'relative_base' => 'assets/uploads/opt-photos',
+            ]);
+
+            if ($oldUrl !== '') {
+                SecureImageUploader::deleteOldPhoto($uploadRoot, $oldUrl);
+            }
+
+            MasterOpt::update($id, ['foto_url' => $result['foto_url']]);
+            ActivityLog::log($this->getAdminId(), 'opt_photo_uploaded', 'master_opt', $id, 'Foto OPT diupload: ' . $result['foto_url']);
+
+            $_SESSION['flash_success'] = 'Foto berhasil diunggah.';
+        } catch (\DomainException $e) {
+            $_SESSION['flash_error'] = $e->getMessage();
+        } catch (\RuntimeException $e) {
+            $_SESSION['flash_error'] = 'Gagal menyimpan file.';
+        }
+
+        $this->redirect('/opt/' . $id . '/edit');
+    }
+
+    public function deleteFoto(array $params): void
+    {
+        $id = (int) ($params['id'] ?? 0);
+        $opt = MasterOpt::find($id);
+        if ($opt === null) {
+            $_SESSION['flash_error'] = 'OPT tidak ditemukan.';
+            $this->redirect('/opt');
+            return;
+        }
+
+        $oldUrl = $opt['foto_url'] ?? '';
+        if ($oldUrl === '') {
+            $_SESSION['flash_error'] = 'OPT tidak memiliki foto.';
+            $this->redirect('/opt/' . $id . '/edit');
+            return;
+        }
+
+        $uploadRoot = dirname(__DIR__, 3) . '/public';
+        SecureImageUploader::deleteOldPhoto($uploadRoot, $oldUrl);
+
+        MasterOpt::update($id, ['foto_url' => null]);
+        ActivityLog::log($this->getAdminId(), 'opt_photo_deleted', 'master_opt', $id, 'Foto OPT dihapus');
+
+        $_SESSION['flash_success'] = 'Foto berhasil dihapus.';
+        $this->redirect('/opt/' . $id . '/edit');
     }
 }

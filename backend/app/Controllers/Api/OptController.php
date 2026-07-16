@@ -6,6 +6,8 @@ namespace App\Controllers\Api;
 
 use App\Core\BaseApiController;
 use App\Core\Request;
+use App\Helpers\SecureImageUploader;
+use App\Models\ActivityLog;
 use App\Models\MasterOpt;
 use App\Services\MasterOptService;
 
@@ -105,5 +107,71 @@ class OptController extends BaseApiController
 
         $message = $result['message'] ?? 'OPT berhasil dihapus.';
         $this->success([], $message);
+    }
+
+    public function uploadFoto(array $params): void
+    {
+        $id = (int) ($params['id'] ?? 0);
+        $opt = MasterOpt::find($id);
+        if ($opt === null) {
+            $this->error('NotFound', 'OPT tidak ditemukan.', [], 404);
+            return;
+        }
+
+        $file = $_FILES['foto'] ?? null;
+        if ($file === null || $file['error'] === UPLOAD_ERR_NO_FILE) {
+            $this->error('ValidationError', 'File foto wajib diupload.', [], 422);
+            return;
+        }
+
+        $uploadRoot = dirname(__DIR__, 2) . '/public';
+        $destDir = $uploadRoot . '/assets/uploads/opt-photos';
+
+        try {
+            $oldUrl = $opt['foto_url'] ?? '';
+
+            $result = SecureImageUploader::validateAndStore($file, [
+                'max_bytes' => 5242880,
+                'destination_dir' => $destDir,
+                'relative_base' => 'assets/uploads/opt-photos',
+            ]);
+
+            if ($oldUrl !== '') {
+                SecureImageUploader::deleteOldPhoto($uploadRoot, $oldUrl);
+            }
+
+            MasterOpt::update($id, ['foto_url' => $result['foto_url']]);
+            ActivityLog::log($this->getUserId(), 'opt_photo_uploaded', 'master_opt', $id, 'Foto OPT diupload: ' . $result['foto_url']);
+
+            $this->success(['id' => $id, 'foto_url' => $result['foto_url']], 'Foto berhasil diunggah.');
+        } catch (\DomainException $e) {
+            $this->error('ValidationError', $e->getMessage(), [], 422);
+        } catch (\RuntimeException $e) {
+            $this->error('ServerError', $e->getMessage(), [], 500);
+        }
+    }
+
+    public function deleteFoto(array $params): void
+    {
+        $id = (int) ($params['id'] ?? 0);
+        $opt = MasterOpt::find($id);
+        if ($opt === null) {
+            $this->error('NotFound', 'OPT tidak ditemukan.', [], 404);
+            return;
+        }
+
+        $oldUrl = $opt['foto_url'] ?? '';
+        if ($oldUrl === '') {
+            $this->error('NotFound', 'OPT tidak memiliki foto.', [], 404);
+            return;
+        }
+
+        $uploadRoot = dirname(__DIR__, 2) . '/public';
+        SecureImageUploader::deleteOldPhoto($uploadRoot, $oldUrl);
+
+        MasterOpt::update($id, ['foto_url' => null]);
+        ActivityLog::log($this->getUserId(), 'opt_photo_deleted', 'master_opt', $id, 'Foto OPT dihapus');
+
+        $this->success(['id' => $id, 'foto_url' => null], 'Foto berhasil dihapus.');
     }
 }

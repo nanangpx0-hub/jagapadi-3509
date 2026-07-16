@@ -70,6 +70,16 @@
                 <?= \App\Core\Security::e($_SESSION['nama_lengkap'] ?? '') ?>
                 <span class="role">(<?= \App\Core\Security::e($_SESSION['role'] ?? '') ?>)</span>
             </span>
+            <div style="position:relative">
+                <a href="/notifications" id="bell-btn" style="color:#fff;text-decoration:none;font-size:20px;position:relative;display:inline-flex" title="Notifikasi">&#128276;</a>
+                <span id="bell-badge" style="
+                    display:none;position:absolute;top:-6px;right:-8px;
+                    background:#ea4335;color:#fff;font-size:10px;font-weight:700;
+                    min-width:18px;height:18px;border-radius:9px;text-align:center;line-height:18px;
+                    padding:0 4px;border:2px solid #1a73e8;
+                ">0</span>
+            </div>
+            <a href="/export" class="btn-logout" style="background:rgba(255,255,255,0.08);display:inline-flex;align-items:center;gap:4px;">Ekspor</a>
             <form action="/logout" method="POST" style="display:inline">
                 <?= \App\Core\Security::csrfField() ?>
                 <button type="submit" class="btn-logout">Logout</button>
@@ -95,5 +105,29 @@
 
         <?= $content ?? '' ?>
     </div>
+
+    <script>
+    function updateBellBadge() {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', '/notifications/unread-count.json', true);
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                try {
+                    var res = JSON.parse(xhr.responseText);
+                    var badge = document.getElementById('bell-badge');
+                    if (res.count > 0) {
+                        badge.style.display = 'inline';
+                        badge.textContent = res.count > 99 ? '99+' : res.count;
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                } catch(e) {}
+            }
+        };
+        xhr.send();
+    }
+    updateBellBadge();
+    setInterval(updateBellBadge, 60000);
+    </script>
 </body>
 </html>

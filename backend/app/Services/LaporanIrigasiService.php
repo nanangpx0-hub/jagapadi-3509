@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Core\Database;
+use App\Core\Logger;
 use App\Helpers\LaporanIrigasiValidator;
 use App\Helpers\LaporanStatus;
 use App\Helpers\NomorLaporanGenerator;
 use App\Models\ActivityLog;
 use App\Models\LaporanIrigasi;
+use App\Services\DashboardService;
 
 class LaporanIrigasiService
 {
@@ -43,6 +45,7 @@ class LaporanIrigasiService
 
         $laporan = LaporanIrigasi::findWithRelations((int) $id);
 
+        DashboardService::invalidateCache();
         return ['success' => true, 'message' => 'Draf laporan irigasi berhasil dibuat', 'data' => $laporan, 'code' => 201];
     }
 
@@ -84,6 +87,7 @@ class LaporanIrigasiService
         $laporan = LaporanIrigasi::findWithRelations($id);
 
         $msg = $existing['status'] === 'Draf' ? 'Draf laporan irigasi berhasil diperbarui' : 'Laporan irigasi berhasil diperbarui';
+        DashboardService::invalidateCache();
         return ['success' => true, 'message' => $msg, 'data' => $laporan, 'code' => 200];
     }
 
@@ -105,6 +109,7 @@ class LaporanIrigasiService
 
         ActivityLog::log($userId, 'laporan_irigasi_draft_deleted', 'laporan_irigasi', $id, 'Draf laporan irigasi dihapus', $ip, $userAgent);
 
+        DashboardService::invalidateCache();
         return ['success' => true, 'message' => 'Draf laporan irigasi berhasil dihapus', 'code' => 200];
     }
 
@@ -142,6 +147,8 @@ class LaporanIrigasiService
 
             $laporan = LaporanIrigasi::findWithRelations((int) $id);
 
+            DashboardService::invalidateCache();
+            self::notifyAdminsAboutSubmission('irigasi', (int) $id, $nomor, $userId);
             return ['success' => true, 'message' => 'Laporan irigasi berhasil dikirim', 'data' => $laporan, 'code' => 201];
         } catch (\Throwable $e) {
             $pdo->rollBack();
@@ -196,6 +203,8 @@ class LaporanIrigasiService
 
             $laporan = LaporanIrigasi::findWithRelations($id);
 
+            DashboardService::invalidateCache();
+            self::notifyAdminsAboutSubmission('irigasi', $id, $nomor, $userId);
             return ['success' => true, 'message' => 'Laporan irigasi berhasil dikirim', 'data' => $laporan, 'code' => 200];
         } catch (\Throwable $e) {
             $pdo->rollBack();
@@ -274,6 +283,8 @@ class LaporanIrigasiService
 
         $laporan = LaporanIrigasi::findWithRelations($id);
 
+        DashboardService::invalidateCache();
+        self::notifyOwnerAboutVerification('irigasi', $id, (int) $laporan['user_id'], $laporan['nomor_laporan'] ?? '');
         return ['success' => true, 'message' => 'Laporan irigasi berhasil diverifikasi', 'data' => $laporan, 'code' => 200];
     }
 
@@ -305,6 +316,8 @@ class LaporanIrigasiService
 
         $laporan = LaporanIrigasi::findWithRelations($id);
 
+        DashboardService::invalidateCache();
+        self::notifyOwnerAboutRejection('irigasi', $id, (int) $laporan['user_id'], $laporan['nomor_laporan'] ?? '', $alasan);
         return ['success' => true, 'message' => 'Laporan irigasi berhasil ditolak', 'data' => $laporan, 'code' => 200];
     }
 
@@ -333,6 +346,8 @@ class LaporanIrigasiService
 
         $laporan = LaporanIrigasi::findWithRelations($id);
 
+        DashboardService::invalidateCache();
+        self::notifyOwnerAboutArchive('irigasi', $id, (int) $laporan['user_id'], $laporan['nomor_laporan'] ?? '');
         return ['success' => true, 'message' => 'Laporan irigasi berhasil diarsipkan', 'data' => $laporan, 'code' => 200];
     }
 
@@ -384,10 +399,128 @@ class LaporanIrigasiService
 
             $laporan = LaporanIrigasi::findWithRelations($id);
 
+            DashboardService::invalidateCache();
+            self::notifyAdminsAboutResubmit('irigasi', $id, $nomor, $userId);
             return ['success' => true, 'message' => 'Laporan irigasi berhasil dikirim ulang', 'data' => $laporan, 'code' => 200];
         } catch (\Throwable $e) {
             $pdo->rollBack();
             throw $e;
+        }
+    }
+
+    private static function notifyAdminsAboutSubmission(string $entity, int $laporanId, string $nomor, int $userId): void
+    {
+        try {
+            $ns = new NotificationService();
+            $ns->notifyAdmins(
+                'laporan_submitted',
+                'Laporan baru masuk',
+                "{$nomor} menunggu verifikasi.",
+                [
+                    'entity' => $entity,
+                    'laporan_id' => $laporanId,
+                    'nomor_laporan' => $nomor,
+                    'status' => 'Submitted',
+                    'web_path' => "/laporan-{$entity}/{$laporanId}",
+                    'api_path' => "/api/v1/laporan-{$entity}/{$laporanId}",
+                ],
+                $userId
+            );
+        } catch (\Throwable $e) {
+            Logger::warning('Notification failed on submit', ['error' => $e->getMessage()]);
+        }
+    }
+
+    private static function notifyAdminsAboutResubmit(string $entity, int $laporanId, string $nomor, int $userId): void
+    {
+        try {
+            $ns = new NotificationService();
+            $ns->notifyAdmins(
+                'laporan_resubmitted',
+                'Laporan dikirim ulang',
+                "{$nomor} dikirim ulang untuk verifikasi.",
+                [
+                    'entity' => $entity,
+                    'laporan_id' => $laporanId,
+                    'nomor_laporan' => $nomor,
+                    'status' => 'Submitted',
+                    'web_path' => "/laporan-{$entity}/{$laporanId}",
+                    'api_path' => "/api/v1/laporan-{$entity}/{$laporanId}",
+                ],
+                $userId
+            );
+        } catch (\Throwable $e) {
+            Logger::warning('Notification failed on resubmit', ['error' => $e->getMessage()]);
+        }
+    }
+
+    private static function notifyOwnerAboutVerification(string $entity, int $laporanId, int $ownerId, string $nomor): void
+    {
+        try {
+            $ns = new NotificationService();
+            $ns->notifyUser(
+                $ownerId,
+                'laporan_verified',
+                'Laporan diverifikasi',
+                "{$nomor} telah diverifikasi oleh admin.",
+                [
+                    'entity' => $entity,
+                    'laporan_id' => $laporanId,
+                    'nomor_laporan' => $nomor,
+                    'status' => 'Diverifikasi',
+                    'web_path' => "/laporan-{$entity}/{$laporanId}",
+                    'api_path' => "/api/v1/laporan-{$entity}/{$laporanId}",
+                ]
+            );
+        } catch (\Throwable $e) {
+            Logger::warning('Notification failed on verify', ['error' => $e->getMessage()]);
+        }
+    }
+
+    private static function notifyOwnerAboutRejection(string $entity, int $laporanId, int $ownerId, string $nomor, string $alasan): void
+    {
+        try {
+            $alasanTruncated = mb_strlen($alasan) > 120 ? mb_substr($alasan, 0, 117) . '...' : $alasan;
+            $ns = new NotificationService();
+            $ns->notifyUser(
+                $ownerId,
+                'laporan_rejected',
+                'Laporan ditolak',
+                "{$nomor}: {$alasanTruncated}",
+                [
+                    'entity' => $entity,
+                    'laporan_id' => $laporanId,
+                    'nomor_laporan' => $nomor,
+                    'status' => 'Ditolak',
+                    'web_path' => "/laporan-{$entity}/{$laporanId}",
+                    'api_path' => "/api/v1/laporan-{$entity}/{$laporanId}",
+                ]
+            );
+        } catch (\Throwable $e) {
+            Logger::warning('Notification failed on reject', ['error' => $e->getMessage()]);
+        }
+    }
+
+    private static function notifyOwnerAboutArchive(string $entity, int $laporanId, int $ownerId, string $nomor): void
+    {
+        try {
+            $ns = new NotificationService();
+            $ns->notifyUser(
+                $ownerId,
+                'laporan_archived',
+                'Laporan diarsipkan',
+                "{$nomor} telah diarsipkan.",
+                [
+                    'entity' => $entity,
+                    'laporan_id' => $laporanId,
+                    'nomor_laporan' => $nomor,
+                    'status' => 'Diarsipkan',
+                    'web_path' => "/laporan-{$entity}/{$laporanId}",
+                    'api_path' => "/api/v1/laporan-{$entity}/{$laporanId}",
+                ]
+            );
+        } catch (\Throwable $e) {
+            Logger::warning('Notification failed on archive', ['error' => $e->getMessage()]);
         }
     }
 

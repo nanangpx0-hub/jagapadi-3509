@@ -6,6 +6,10 @@ namespace App\Controllers\Api;
 
 use App\Core\BaseApiController;
 use App\Core\Request;
+use App\Helpers\LaporanStatus;
+use App\Helpers\SecureImageUploader;
+use App\Models\ActivityLog;
+use App\Models\LaporanHama;
 use App\Services\LaporanHamaService;
 
 class LaporanHamaController extends BaseApiController
@@ -168,5 +172,93 @@ class LaporanHamaController extends BaseApiController
         $result = LaporanHamaService::resubmit($id, (int) $currentUser['id'], $input, $ip, $userAgent);
 
         $this->json($result, $result['code']);
+    }
+
+    public function uploadFoto(array $params): void
+    {
+        $currentUser = $GLOBALS['auth_user'];
+        $id = (int) ($params['id'] ?? 0);
+
+        $laporan = LaporanHama::findAccessibleById($id, $currentUser);
+        if ($laporan === null) {
+            $this->error('NotFound', 'Laporan tidak ditemukan.', [], 404);
+            return;
+        }
+
+        $canEdit = $currentUser['role'] === 'admin'
+            ? LaporanStatus::isEditableByPetugas($laporan['status'])
+            : ($laporan['user_id'] == $currentUser['id'] && LaporanStatus::isEditableByPetugas($laporan['status']));
+
+        if (!$canEdit) {
+            $this->error('Conflict', 'Status laporan tidak mengizinkan perubahan foto.', [], 409);
+            return;
+        }
+
+        $file = $_FILES['foto'] ?? null;
+        if ($file === null || $file['error'] === UPLOAD_ERR_NO_FILE) {
+            $this->error('ValidationError', 'File foto wajib diupload.', [], 422);
+            return;
+        }
+
+        $uploadRoot = dirname(__DIR__, 2) . '/public';
+        $destDir = $uploadRoot . '/assets/uploads/laporan-hama';
+
+        try {
+            $oldUrl = $laporan['foto_url'] ?? '';
+
+            $result = SecureImageUploader::validateAndStore($file, [
+                'max_bytes' => 10485760,
+                'destination_dir' => $destDir,
+                'relative_base' => 'assets/uploads/laporan-hama',
+            ]);
+
+            if ($oldUrl !== '') {
+                SecureImageUploader::deleteOldPhoto($uploadRoot, $oldUrl);
+            }
+
+            LaporanHama::update($id, ['foto_url' => $result['foto_url']]);
+            ActivityLog::log((int) $currentUser['id'], 'laporan_hama_photo_uploaded', 'laporan_hama', $id, 'Foto laporan hama diupload: ' . $result['foto_url'], Request::ip(), Request::userAgent());
+
+            $this->success(['id' => $id, 'foto_url' => $result['foto_url']], 'Foto berhasil diunggah.');
+        } catch (\DomainException $e) {
+            $this->error('ValidationError', $e->getMessage(), [], 422);
+        } catch (\RuntimeException $e) {
+            $this->error('ServerError', $e->getMessage(), [], 500);
+        }
+    }
+
+    public function deleteFoto(array $params): void
+    {
+        $currentUser = $GLOBALS['auth_user'];
+        $id = (int) ($params['id'] ?? 0);
+
+        $laporan = LaporanHama::findAccessibleById($id, $currentUser);
+        if ($laporan === null) {
+            $this->error('NotFound', 'Laporan tidak ditemukan.', [], 404);
+            return;
+        }
+
+        $canEdit = $currentUser['role'] === 'admin'
+            ? LaporanStatus::isEditableByPetugas($laporan['status'])
+            : ($laporan['user_id'] == $currentUser['id'] && LaporanStatus::isEditableByPetugas($laporan['status']));
+
+        if (!$canEdit) {
+            $this->error('Conflict', 'Status laporan tidak mengizinkan perubahan foto.', [], 409);
+            return;
+        }
+
+        $oldUrl = $laporan['foto_url'] ?? '';
+        if ($oldUrl === '') {
+            $this->error('NotFound', 'Laporan tidak memiliki foto.', [], 404);
+            return;
+        }
+
+        $uploadRoot = dirname(__DIR__, 2) . '/public';
+        SecureImageUploader::deleteOldPhoto($uploadRoot, $oldUrl);
+
+        LaporanHama::update($id, ['foto_url' => null]);
+        ActivityLog::log((int) $currentUser['id'], 'laporan_hama_photo_deleted', 'laporan_hama', $id, 'Foto laporan hama dihapus', Request::ip(), Request::userAgent());
+
+        $this->success(['id' => $id, 'foto_url' => null], 'Foto berhasil dihapus.');
     }
 }
