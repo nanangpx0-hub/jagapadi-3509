@@ -1,0 +1,27 @@
+# FCM & Firebase
+android/app/google-services.json
+**/google-services.json
+*.service_account.json
+
+# Flutter
+.dart_tool/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+android/.gradle/
+android/local.properties
+.packages
+.pub-cache/
+.pub/
+pubspec.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
