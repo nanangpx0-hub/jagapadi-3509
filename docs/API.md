@@ -249,33 +249,102 @@ Master wilayah berjenjang: Kabupaten → Kecamatan → Desa.
 - DELETE: hard delete jika tidak ada referensi laporan; soft deactivate (`aktif=0`) jika masih dirujuk
 - Validasi: nama_opt unique, jenis enum wajib, etl_acuan >= 0
 
-## Report Endpoints (Planned)
+## Laporan Hama — API (Implemented — Tahap 6)
 
-### Hama/OPT
+### Aturan
+- **Draf**: nomor_laporan NULL, semua field nullable, hanya bisa diedit/dihapus oleh pemilik.
+- **Submitted**: nomor_laporan diisi (LH-YYYYMMDD-XXXX), read-only, tidak bisa diedit/dihapus.
+- **Petugas** hanya melihat dan mengelola laporan sendiri.
+- **Admin** dapat melihat semua laporan.
+- Nomor laporan hanya dibuat saat Submit, atomic via `nomor_laporan_counter`.
+
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| GET | `/reports/hama` | Auth | List (filter: status, date, location, `include_draft`) |
-| POST | `/reports/hama` | Auth (petugas) | Create draft |
-| GET | `/reports/hama/{id}` | Auth (owner/admin) | Detail |
-| PUT | `/reports/hama/{id}` | Auth (owner, draft only) | Update draft |
-| POST | `/reports/hama/{id}/submit` | Auth (owner, draft) | Submit → `submitted` |
-| POST | `/reports/hama/{id}/verify` | Admin | Verify → `verified` |
-| POST | `/reports/hama/{id}/reject` | Admin | Reject → `rejected` |
-| POST | `/reports/hama/{id}/archive` | Admin | Archive → `archived` |
-| DELETE | `/reports/hama/{id}` | Auth (owner, draft) | Delete draft |
+| GET | `/api/v1/laporan-hama` | JWT | List (filter: status, tanggal, wilayah, OPT, q, page, limit, include_draft) |
+| POST | `/api/v1/laporan-hama` | JWT | Create (action=draft|submit, default draft) |
+| GET | `/api/v1/laporan-hama/{id}` | JWT | Detail (owner/admin only) |
+| PUT | `/api/v1/laporan-hama/{id}` | JWT | Update Draf (owner only) |
+| DELETE | `/api/v1/laporan-hama/{id}` | JWT | Delete Draf (owner only) |
+| POST | `/api/v1/laporan-hama/{id}/submit` | JWT | Submit Draf → Submitted |
 
-### Irigasi
+**Request POST /api/v1/laporan-hama:**
+```json
+{
+  "action": "submit",
+  "tanggal": "2026-07-16",
+  "master_opt_id": 1,
+  "kabupaten_id": 1,
+  "kecamatan_id": 1,
+  "desa_id": 1,
+  "tingkat_keparahan": "Sedang",
+  "luas_serangan": 1.25,
+  "populasi": 10,
+  "lokasi": "Blok sawah utara",
+  "latitude": -8.1734,
+  "longitude": 113.7012,
+  "catatan": "Populasi meningkat"
+}
+```
+
+**Response 201 Create Draf:**
+```json
+{
+  "success": true,
+  "message": "Draf laporan hama berhasil dibuat",
+  "data": {
+    "id": 1,
+    "nomor_laporan": null,
+    "status": "Draf",
+    ...
+  }
+}
+```
+
+**Response 201 Create + Submit:**
+```json
+{
+  "success": true,
+  "message": "Laporan hama berhasil dikirim",
+  "data": {
+    "id": 1,
+    "nomor_laporan": "LH-20260716-0001",
+    "status": "Submitted",
+    ...
+  }
+}
+```
+
+**Response 422 Validation Error:**
+```json
+{
+  "success": false,
+  "error": "ValidationError",
+  "message": "Data laporan tidak valid",
+  "errors": {
+    "tanggal": "Tanggal wajib diisi",
+    "luas_serangan": "Luas serangan harus antara 0 dan 9999.99"
+  }
+}
+```
+
+**Response 409 Conflict:**
+```json
+{
+  "success": false,
+  "error": "Conflict",
+  "message": "Hanya laporan dengan status Draf yang dapat diubah."
+}
+```
+
+### Laporan Irigasi (Planned)
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| GET | `/reports/irigasi` | Auth | List (filter: status, date, location, `include_draft`) |
-| POST | `/reports/irigasi` | Auth (petugas) | Create draft |
-| GET | `/reports/irigasi/{id}` | Auth (owner/admin) | Detail |
-| PUT | `/reports/irigasi/{id}` | Auth (owner, draft only) | Update draft |
-| POST | `/reports/irigasi/{id}/submit` | Auth (owner, draft) | Submit → `submitted` |
-| POST | `/reports/irigasi/{id}/verify` | Admin | Verify → `verified` |
-| POST | `/reports/irigasi/{id}/reject` | Admin | Reject → `rejected` |
-| POST | `/reports/irigasi/{id}/archive` | Admin | Archive → `archived` |
-| DELETE | `/reports/irigasi/{id}` | Auth (owner, draft) | Delete draft |
+| GET | `/api/v1/laporan-irigasi` | JWT | List (filter: status, date, location, `include_draft`) |
+| POST | `/api/v1/laporan-irigasi` | JWT | Create draft |
+| GET | `/api/v1/laporan-irigasi/{id}` | JWT | Detail (owner/admin) |
+| PUT | `/api/v1/laporan-irigasi/{id}` | JWT | Update draft (owner) |
+| DELETE | `/api/v1/laporan-irigasi/{id}` | JWT | Delete draft (owner) |
+| POST | `/api/v1/laporan-irigasi/{id}/submit` | JWT | Submit draft → Submitted |
 
 ---
 

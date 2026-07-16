@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Laporan Hama (Tahap 6)
+  - `app/Helpers/NomorLaporanGenerator.php` — atomic nomor LH: prefix `LH`, date, counter via `nomor_laporan_counter`
+  - `app/Helpers/LaporanHamaValidator.php` — validasi Draf (parsial) dan Submit (lengkap)
+  - `app/Models/LaporanHama.php` — model with findAccessibleById, listForPetugas, listForAdmin, deleteDraft
+  - `app/Services/LaporanHamaService.php` — CRUD draft, submit, generate nomor, activity log
+  - `app/Controllers/Api/LaporanHamaController.php` — 6 API endpoints (index, store, show, update, destroy, submit)
+  - `app/Controllers/Web/LaporanHamaController.php` — 8 web endpoints (index, create, store, show, edit, update, submit, delete)
+  - `app/Views/laporan-hama/index.php` — list dengan filter status/tanggal/wilayah/OPT/q + pagination
+  - `app/Views/laporan-hama/create.php` — form dengan cascading dropdown kab/kec/desa
+  - `app/Views/laporan-hama/edit.php` — edit form + submit button
+  - `app/Views/laporan-hama/show.php` — detail dengan action edit/submit/delete (Draf only)
+  - `config/routes.php` — web + API routes with WebAuthMiddleware/ApiAuthMiddleware
+  - `Updated docs/API.md` — laporan hama endpoints documented
+  - `Updated docs/TUTORIAL_BUILD.md` — Tahap 6 marked Done
 - Master Data Wilayah & OPT (Tahap 5)
   - `app/Models/MasterKabupaten.php` — model kabupaten
   - `app/Models/MasterKecamatan.php` — model kecamatan (findByKabupaten)

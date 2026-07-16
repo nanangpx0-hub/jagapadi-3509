@@ -5,10 +5,12 @@ declare(strict_types=1);
 use App\Controllers\Api\AuthController as ApiAuthController;
 use App\Controllers\Api\HealthController;
 use App\Controllers\Api\MeController;
+use App\Controllers\Api\LaporanHamaController as ApiLaporanHamaController;
 use App\Controllers\Api\OptController as ApiOptController;
 use App\Controllers\Api\WilayahController as ApiWilayahController;
 use App\Controllers\Web\AuthController as WebAuthController;
 use App\Controllers\Web\DashboardController;
+use App\Controllers\Web\LaporanHamaController as WebLaporanHamaController;
 use App\Controllers\Web\OptController as WebOptController;
 use App\Controllers\Web\PasswordController;
 use App\Controllers\Web\WilayahController as WebWilayahController;
@@ -117,3 +119,25 @@ $router->get('/api/v1/opt/{id}', [ApiOptController::class, 'show'], [ApiAuthMidd
 $router->post('/api/v1/opt', [ApiOptController::class, 'store'], [ApiAuthMiddleware::class, AdminMiddleware::class]);
 $router->put('/api/v1/opt/{id}', [ApiOptController::class, 'update'], [ApiAuthMiddleware::class, AdminMiddleware::class]);
 $router->delete('/api/v1/opt/{id}', [ApiOptController::class, 'destroy'], [ApiAuthMiddleware::class, AdminMiddleware::class]);
+
+// ================================
+// Web — Laporan Hama (petugas + admin)
+// ================================
+$router->get('/laporan-hama', [WebLaporanHamaController::class, 'index'], [WebAuthMiddleware::class]);
+$router->get('/laporan-hama/create', [WebLaporanHamaController::class, 'create'], [WebAuthMiddleware::class]);
+$router->post('/laporan-hama', [WebLaporanHamaController::class, 'store'], [WebAuthMiddleware::class]);
+$router->get('/laporan-hama/{id}', [WebLaporanHamaController::class, 'show'], [WebAuthMiddleware::class]);
+$router->get('/laporan-hama/{id}/edit', [WebLaporanHamaController::class, 'edit'], [WebAuthMiddleware::class]);
+$router->post('/laporan-hama/{id}', [WebLaporanHamaController::class, 'update'], [WebAuthMiddleware::class]);
+$router->post('/laporan-hama/{id}/submit', [WebLaporanHamaController::class, 'submit'], [WebAuthMiddleware::class]);
+$router->post('/laporan-hama/{id}/delete', [WebLaporanHamaController::class, 'delete'], [WebAuthMiddleware::class]);
+
+// ================================
+// API v1 — Laporan Hama
+// ================================
+$router->get('/api/v1/laporan-hama', [ApiLaporanHamaController::class, 'index'], [ApiAuthMiddleware::class]);
+$router->post('/api/v1/laporan-hama', [ApiLaporanHamaController::class, 'store'], [ApiAuthMiddleware::class]);
+$router->get('/api/v1/laporan-hama/{id}', [ApiLaporanHamaController::class, 'show'], [ApiAuthMiddleware::class]);
+$router->put('/api/v1/laporan-hama/{id}', [ApiLaporanHamaController::class, 'update'], [ApiAuthMiddleware::class]);
+$router->delete('/api/v1/laporan-hama/{id}', [ApiLaporanHamaController::class, 'destroy'], [ApiAuthMiddleware::class]);
+$router->post('/api/v1/laporan-hama/{id}/submit', [ApiLaporanHamaController::class, 'submit'], [ApiAuthMiddleware::class]);

@@ -128,6 +128,12 @@ backend/
 | GET | `/api/v1/wilayah/kecamatan?kabupaten_id=` | JWT | List kecamatan per kabupaten |
 | GET | `/api/v1/wilayah/desa?kecamatan_id=` | JWT | List desa per kecamatan |
 | GET | `/api/v1/opt` | JWT | List OPT (filter: jenis, q, aktif) |
+| GET | `/api/v1/laporan-hama` | JWT | List laporan hama (filter: status, tanggal, wilayah, OPT, q, page, limit, include_draft) |
+| POST | `/api/v1/laporan-hama` | JWT | Create draft/submit laporan hama |
+| GET | `/api/v1/laporan-hama/{id}` | JWT | Detail laporan hama |
+| PUT | `/api/v1/laporan-hama/{id}` | JWT | Update draft (owner only) |
+| DELETE | `/api/v1/laporan-hama/{id}` | JWT | Delete draft (owner only) |
+| POST | `/api/v1/laporan-hama/{id}/submit` | JWT | Submit draft (owner only) |
 
 ### Web Routes
 
@@ -161,3 +167,11 @@ backend/
 | GET | `/opt/{id}/edit` | Admin | Form edit OPT |
 | POST | `/opt/update/{id}` | Admin | Update OPT |
 | POST | `/opt/{id}/delete` | Admin | Hapus/nonaktifkan OPT |
+| GET | `/laporan-hama` | Session | List laporan hama (petugas: own, admin: all) |
+| GET | `/laporan-hama/create` | Session | Form buat laporan hama |
+| POST | `/laporan-hama` | Session | Simpan draft/kirim laporan hama |
+| GET | `/laporan-hama/{id}` | Session | Detail laporan hama |
+| GET | `/laporan-hama/{id}/edit` | Session | Form edit draft |
+| POST | `/laporan-hama/{id}` | Session | Update draft |
+| POST | `/laporan-hama/{id}/submit` | Session | Submit draft |
+| POST | `/laporan-hama/{id}/delete` | Session | Delete draft |
