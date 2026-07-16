@@ -134,12 +134,20 @@ backend/
 | PUT | `/api/v1/laporan-hama/{id}` | JWT | Update draft (owner only) |
 | DELETE | `/api/v1/laporan-hama/{id}` | JWT | Delete draft (owner only) |
 | POST | `/api/v1/laporan-hama/{id}/submit` | JWT | Submit draft (owner only) |
+| POST | `/api/v1/laporan-hama/{id}/verifikasi` | JWT (admin) | Verifikasi laporan Submitted |
+| POST | `/api/v1/laporan-hama/{id}/tolak` | JWT (admin) | Tolak laporan Submitted |
+| POST | `/api/v1/laporan-hama/{id}/archive` | JWT (admin) | Arsipkan laporan Diverifikasi |
+| POST | `/api/v1/laporan-hama/{id}/resubmit` | JWT (petugas) | Kirim ulang laporan Ditolak |
 | GET | `/api/v1/laporan-irigasi` | JWT | List laporan irigasi (filter: status, tanggal, wilayah, kondisi_fisik, debit_air, q, page, limit, include_draft) |
 | POST | `/api/v1/laporan-irigasi` | JWT | Create draft/submit laporan irigasi |
 | GET | `/api/v1/laporan-irigasi/{id}` | JWT | Detail laporan irigasi |
 | PUT | `/api/v1/laporan-irigasi/{id}` | JWT | Update draft (owner only) |
 | DELETE | `/api/v1/laporan-irigasi/{id}` | JWT | Delete draft (owner only) |
 | POST | `/api/v1/laporan-irigasi/{id}/submit` | JWT | Submit draft (owner only) |
+| POST | `/api/v1/laporan-irigasi/{id}/verifikasi` | JWT (admin) | Verifikasi laporan Submitted |
+| POST | `/api/v1/laporan-irigasi/{id}/tolak` | JWT (admin) | Tolak laporan Submitted |
+| POST | `/api/v1/laporan-irigasi/{id}/archive` | JWT (admin) | Arsipkan laporan Diverifikasi |
+| POST | `/api/v1/laporan-irigasi/{id}/resubmit` | JWT (petugas) | Kirim ulang laporan Ditolak |
 
 ### Web Routes
 
@@ -181,6 +189,10 @@ backend/
 | POST | `/laporan-hama/{id}` | Session | Update draft |
 | POST | `/laporan-hama/{id}/submit` | Session | Submit draft |
 | POST | `/laporan-hama/{id}/delete` | Session | Delete draft |
+| POST | `/laporan-hama/{id}/verifikasi` | Session (admin) | Verifikasi laporan |
+| POST | `/laporan-hama/{id}/tolak` | Session (admin) | Tolak laporan |
+| POST | `/laporan-hama/{id}/archive` | Session (admin) | Arsipkan laporan |
+| POST | `/laporan-hama/{id}/resubmit` | Session (petugas) | Kirim ulang laporan |
 | GET | `/laporan-irigasi` | Session | List laporan irigasi (petugas: own, admin: all) |
 | GET | `/laporan-irigasi/create` | Session | Form buat laporan irigasi |
 | POST | `/laporan-irigasi` | Session | Simpan draft/kirim laporan irigasi |
@@ -189,3 +201,7 @@ backend/
 | POST | `/laporan-irigasi/{id}` | Session | Update draft |
 | POST | `/laporan-irigasi/{id}/submit` | Session | Submit draft |
 | POST | `/laporan-irigasi/{id}/delete` | Session | Delete draft |
+| POST | `/laporan-irigasi/{id}/verifikasi` | Session (admin) | Verifikasi laporan |
+| POST | `/laporan-irigasi/{id}/tolak` | Session (admin) | Tolak laporan |
+| POST | `/laporan-irigasi/{id}/archive` | Session (admin) | Arsipkan laporan |
+| POST | `/laporan-irigasi/{id}/resubmit` | Session (petugas) | Kirim ulang laporan |

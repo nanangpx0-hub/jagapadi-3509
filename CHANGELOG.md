@@ -10,6 +10,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Verifikasi Admin Laporan Hama & Irigasi (Tahap 8)
+  - `app/Helpers/LaporanStatus.php` — status constants + transition matrix (canTransition, assertCanTransition, isEditableByPetugas, dll)
+  - `app/Models/LaporanHama.php` — added updateStatusAndVerification(), resetVerification(), verifikator_nama JOIN
+  - `app/Models/LaporanIrigasi.php` — added updateStatusAndVerification(), resetVerification(), verifikator_nama JOIN
+  - `app/Services/LaporanHamaService.php` — added verify(), reject(), archive(), resubmit(); updateDraft now allows Ditolak
+  - `app/Services/LaporanIrigasiService.php` — added verify(), reject(), archive(), resubmit(); updateDraft now allows Ditolak
+  - `app/Controllers/Api/LaporanHamaController.php` — added verify/reject/archive/resubmit endpoints
+  - `app/Controllers/Api/LaporanIrigasiController.php` — added verify/reject/archive/resubmit endpoints
+  - `app/Controllers/Web/LaporanHamaController.php` — added verify/reject/archive/resubmit actions; edit now allows Ditolak
+  - `app/Controllers/Web/LaporanIrigasiController.php` — added verify/reject/archive/resubmit actions; edit now allows Ditolak
+  - `app/Views/laporan-hama/show.php` — verification info panel + action buttons by role & status
+  - `app/Views/laporan-irigasi/show.php` — verification info panel + action buttons by role & status
+  - `app/Views/laporan-hama/index.php` — expanded status filter (Diverifikasi, Ditolak, Diarsipkan)
+  - `app/Views/laporan-irigasi/index.php` — expanded status filter (Diverifikasi, Ditolak, Diarsipkan)
+  - `config/routes.php` — 16 new routes (8 web + 8 API) for verifikasi workflow
+  - `database/migrations/008_create_verifikasi_indexes.sql` — indexes on verified_by, verified_at
+  - `tests/Unit/LaporanStatusTest.php` — 22 test cases for transition matrix + helper methods
+  - Updated `docs/API.md` — verifikasi endpoints documented with examples
+  - Updated `docs/TUTORIAL_BUILD.md` — Tahap 8 marked Done
+  - Updated `backend/README.md` — new web routes table entries
 - Laporan Irigasi (Tahap 7)
   - `app/Helpers/NomorLaporanGenerator.php` — generalized to support LH and LI prefixes
   - `app/Helpers/LaporanIrigasiValidator.php` — validasi Draf (parsial) dan Submit (lengkap) irigasi

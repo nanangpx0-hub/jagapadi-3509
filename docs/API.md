@@ -1,6 +1,6 @@
 # API Contract JAGAPADI
 
-> **Status**: Tahap 7 — Laporan Irigasi telah diimplementasikan. Laporan Hama (Tahap 6) dan Laporan Irigasi (Tahap 7) selesai.
+> **Status**: Tahap 8 — Workflow Verifikasi Admin telah diimplementasikan (hama + irigasi). Submitted → Diverifikasi/Ditolak, Diverifikasi → Diarsipkan, Ditolak → Submitted (resubmit).
 > **Base URL**: `https://domain.tld/api/v1`
 > **Format**: JSON
 > **Auth Mobile**: JWT (`Authorization: Bearer <access_token>`)
@@ -385,6 +385,160 @@ Master wilayah berjenjang: Kabupaten → Kecamatan → Desa.
 
 ---
 
+## Laporan Verifikasi — API (Implemented — Tahap 8)
+
+### Aturan Umum
+
+Status laporan (hama & irigasi) mengikuti state machine berikut:
+
+```
+Draf → Submitted → Diverifikasi → Diarsipkan
+                ↘ Ditolak → Submitted (resubmit)
+```
+
+| Transisi | Pelaku | Kode |
+|----------|--------|------|
+| Submitted → Diverifikasi | Admin | 200 |
+| Submitted → Ditolak | Admin | 200 |
+| Diverifikasi → Diarsipkan | Admin | 200 |
+| Ditolak → Submitted (resubmit) | Petugas (owner) | 200 |
+| Ditolak → Draf (revisi) | Petugas (owner) | 200 |
+
+**Aturan:**
+- Alasan tolak wajib minimal 10 karakter, maksimal 2000 karakter
+- Catatan verifikasi opsional untuk verify/archive
+- Resubmit TIDAK mengubah nomor laporan (tetap pakai nomor yang sudah ada)
+- Resubmit mereset `verified_by`, `verified_at`, `catatan_verifikasi` ke NULL
+- Transisi ilegal → 409 Conflict
+- Petugas melakukan aksi admin → 403 Forbidden
+
+### Laporan Hama — Verifikasi
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/v1/laporan-hama/{id}/verifikasi` | JWT (admin) | Verifikasi laporan Submitted |
+| POST | `/api/v1/laporan-hama/{id}/tolak` | JWT (admin) | Tolak laporan Submitted |
+| POST | `/api/v1/laporan-hama/{id}/archive` | JWT (admin) | Arsipkan laporan Diverifikasi |
+| POST | `/api/v1/laporan-hama/{id}/resubmit` | JWT (petugas) | Kirim ulang laporan Ditolak |
+
+### Laporan Irigasi — Verifikasi
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/v1/laporan-irigasi/{id}/verifikasi` | JWT (admin) | Verifikasi laporan Submitted |
+| POST | `/api/v1/laporan-irigasi/{id}/tolak` | JWT (admin) | Tolak laporan Submitted |
+| POST | `/api/v1/laporan-irigasi/{id}/archive` | JWT (admin) | Arsipkan laporan Diverifikasi |
+| POST | `/api/v1/laporan-irigasi/{id}/resubmit` | JWT (petugas) | Kirim ulang laporan Ditolak |
+
+### Contoh Request & Response
+
+**POST /api/v1/laporan-hama/{id}/verifikasi**
+
+Request:
+```json
+{
+  "catatan": "Data lengkap dan valid"
+}
+```
+
+Response 200:
+```json
+{
+  "success": true,
+  "message": "Laporan hama berhasil diverifikasi",
+  "data": {
+    "id": 42,
+    "status": "Diverifikasi",
+    "verified_by": 1,
+    "verified_at": "2026-07-16 14:00:00",
+    "catatan_verifikasi": "Data lengkap dan valid",
+    "nomor_laporan": "LH-20260716-0001",
+    "verifikator_nama": "Admin Satu"
+  }
+}
+```
+
+**POST /api/v1/laporan-hama/{id}/tolak**
+
+Request:
+```json
+{
+  "alasan": "Lokasi desa tidak sesuai dengan koordinat yang dilaporkan"
+}
+```
+
+Response 200:
+```json
+{
+  "success": true,
+  "message": "Laporan hama berhasil ditolak",
+  "data": {
+    "id": 42,
+    "status": "Ditolak",
+    "verified_by": 1,
+    "verified_at": "2026-07-16 14:05:00",
+    "catatan_verifikasi": "Lokasi desa tidak sesuai dengan koordinat yang dilaporkan",
+    "nomor_laporan": "LH-20260716-0002"
+  }
+}
+```
+
+**POST /api/v1/laporan-irigasi/{id}/resubmit**
+
+Request:
+```json
+{
+  "desa_id": 5,
+  "catatan": "Sudah diperbaiki sesuai arahan"
+}
+```
+
+Response 200:
+```json
+{
+  "success": true,
+  "message": "Laporan irigasi berhasil dikirim ulang",
+  "data": {
+    "id": 15,
+    "status": "Submitted",
+    "verified_by": null,
+    "verified_at": null,
+    "catatan_verifikasi": null,
+    "nomor_laporan": "LI-20260716-0001"
+  }
+}
+```
+
+**Error 409 (transisi ilegal):**
+```json
+{
+  "success": false,
+  "error": "Conflict",
+  "message": "Transisi status tidak diizinkan: 'Draf' -> 'Diverifikasi'"
+}
+```
+
+**Error 422 (alasan tolak pendek):**
+```json
+{
+  "success": false,
+  "error": "ValidationError",
+  "message": "Alasan penolakan minimal 10 karakter."
+}
+```
+
+**Error 403 (petugas coba verifikasi):**
+```json
+{
+  "success": false,
+  "error": "Forbidden",
+  "message": "Aksi ini hanya untuk admin."
+}
+```
+
+---
+
+
 
 
 ## Dashboard & Statistics (Planned)
@@ -518,6 +672,6 @@ Master wilayah berjenjang: Kabupaten → Kecamatan → Desa.
 
 ## Next Steps
 
-- Tahap 8: Workflow Admin Verifikasi / Tolak / Arsip (untuk hama + irigasi)
+- Tahap 9: Upload Foto Aman (OPT + Laporan Hama + Laporan Irigasi)
 - Update `docs/API.md` dengan kontrak final (OpenAPI/Swagger)
 - Generate SDK/client untuk Flutter

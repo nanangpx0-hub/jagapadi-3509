@@ -99,4 +99,74 @@ class LaporanHamaController extends BaseApiController
 
         $this->json($result, $result['code']);
     }
+
+    public function verify(array $params): void
+    {
+        $currentUser = $GLOBALS['auth_user'];
+        if ($currentUser['role'] !== 'admin') {
+            $this->error('Forbidden', 'Aksi ini hanya untuk admin.', [], 403);
+            return;
+        }
+
+        $id = (int) ($params['id'] ?? 0);
+        $input = Request::all();
+        $ip = Request::ip();
+        $userAgent = Request::userAgent();
+
+        $catatan = $input['catatan'] ?? null;
+        $result = LaporanHamaService::verify($id, (int) $currentUser['id'], $catatan, $ip, $userAgent);
+
+        $this->json($result, $result['code']);
+    }
+
+    public function reject(array $params): void
+    {
+        $currentUser = $GLOBALS['auth_user'];
+        if ($currentUser['role'] !== 'admin') {
+            $this->error('Forbidden', 'Aksi ini hanya untuk admin.', [], 403);
+            return;
+        }
+
+        $id = (int) ($params['id'] ?? 0);
+        $input = Request::all();
+        $ip = Request::ip();
+        $userAgent = Request::userAgent();
+
+        $alasan = $input['alasan'] ?? '';
+        $result = LaporanHamaService::reject($id, (int) $currentUser['id'], $alasan, $ip, $userAgent);
+
+        $this->json($result, $result['code']);
+    }
+
+    public function archive(array $params): void
+    {
+        $currentUser = $GLOBALS['auth_user'];
+        if ($currentUser['role'] !== 'admin') {
+            $this->error('Forbidden', 'Aksi ini hanya untuk admin.', [], 403);
+            return;
+        }
+
+        $id = (int) ($params['id'] ?? 0);
+        $input = Request::all();
+        $ip = Request::ip();
+        $userAgent = Request::userAgent();
+
+        $catatan = $input['catatan'] ?? null;
+        $result = LaporanHamaService::archive($id, (int) $currentUser['id'], $catatan, $ip, $userAgent);
+
+        $this->json($result, $result['code']);
+    }
+
+    public function resubmit(array $params): void
+    {
+        $currentUser = $GLOBALS['auth_user'];
+        $id = (int) ($params['id'] ?? 0);
+        $input = Request::all();
+        $ip = Request::ip();
+        $userAgent = Request::userAgent();
+
+        $result = LaporanHamaService::resubmit($id, (int) $currentUser['id'], $input, $ip, $userAgent);
+
+        $this->json($result, $result['code']);
+    }
 }

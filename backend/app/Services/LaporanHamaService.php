@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Core\Database;
 use App\Helpers\LaporanHamaValidator;
+use App\Helpers\LaporanStatus;
 use App\Helpers\NomorLaporanGenerator;
 use App\Models\ActivityLog;
 use App\Models\LaporanHama;
@@ -52,8 +53,8 @@ class LaporanHamaService
             return ['success' => false, 'error' => 'NotFound', 'message' => 'Laporan tidak ditemukan.', 'code' => 404];
         }
 
-        if ($existing['status'] !== 'Draf') {
-            return ['success' => false, 'error' => 'Conflict', 'message' => 'Hanya laporan dengan status Draf yang dapat diubah.', 'code' => 409];
+        if (!LaporanStatus::isEditableByPetugas($existing['status'])) {
+            return ['success' => false, 'error' => 'Conflict', 'message' => 'Laporan dengan status ini tidak dapat diubah.', 'code' => 409];
         }
 
         $errors = LaporanHamaValidator::validateDraft($input);
@@ -74,11 +75,16 @@ class LaporanHamaService
 
         LaporanHama::update($id, $data);
 
-        ActivityLog::log($userId, 'laporan_hama_draft_updated', 'laporan_hama', $id, 'Draf laporan hama diperbarui', $ip, $userAgent);
+        if ($existing['status'] === 'Draf') {
+            ActivityLog::log($userId, 'laporan_hama_draft_updated', 'laporan_hama', $id, 'Draf laporan hama diperbarui', $ip, $userAgent);
+        } else {
+            ActivityLog::log($userId, 'laporan_hama_draft_updated', 'laporan_hama', $id, 'Laporan hama diperbarui sebelum dikirim ulang', $ip, $userAgent);
+        }
 
         $laporan = LaporanHama::findWithRelations($id);
 
-        return ['success' => true, 'message' => 'Draf laporan hama berhasil diperbarui', 'data' => $laporan, 'code' => 200];
+        $msg = $existing['status'] === 'Draf' ? 'Draf laporan hama berhasil diperbarui' : 'Laporan hama berhasil diperbarui';
+        return ['success' => true, 'message' => $msg, 'data' => $laporan, 'code' => 200];
     }
 
     public static function deleteDraft(int $id, int $userId, string $ip, string $userAgent): array
@@ -241,6 +247,148 @@ class LaporanHamaService
             ],
             'code' => 200,
         ];
+    }
+
+    public static function verify(int $id, int $adminId, ?string $catatan, string $ip, string $userAgent): array
+    {
+        $existing = LaporanHama::findAccessibleById($id, ['id' => $adminId, 'role' => 'admin']);
+        if ($existing === null) {
+            return ['success' => false, 'error' => 'NotFound', 'message' => 'Laporan tidak ditemukan.', 'code' => 404];
+        }
+
+        try {
+            LaporanStatus::assertCanTransition($existing['status'], LaporanStatus::DIVERIFIKASI, 'admin');
+        } catch (\DomainException $e) {
+            return ['success' => false, 'error' => 'Conflict', 'message' => $e->getMessage(), 'code' => 409];
+        }
+
+        $catatanTrimmed = $catatan !== null ? trim($catatan) : null;
+
+        LaporanHama::updateStatusAndVerification($id, LaporanStatus::DIVERIFIKASI, $adminId, $catatanTrimmed);
+
+        $desc = 'Laporan hama diverifikasi oleh admin';
+        if ($catatanTrimmed !== null && $catatanTrimmed !== '') {
+            $desc .= ': ' . $catatanTrimmed;
+        }
+        ActivityLog::log($adminId, 'laporan_hama_verified', 'laporan_hama', $id, $desc, $ip, $userAgent);
+
+        $laporan = LaporanHama::findWithRelations($id);
+
+        return ['success' => true, 'message' => 'Laporan hama berhasil diverifikasi', 'data' => $laporan, 'code' => 200];
+    }
+
+    public static function reject(int $id, int $adminId, string $alasan, string $ip, string $userAgent): array
+    {
+        $alasan = trim($alasan);
+        if (mb_strlen($alasan) < 10) {
+            return ['success' => false, 'error' => 'ValidationError', 'message' => 'Alasan penolakan minimal 10 karakter.', 'code' => 422];
+        }
+        if (mb_strlen($alasan) > 2000) {
+            return ['success' => false, 'error' => 'ValidationError', 'message' => 'Alasan penolakan maksimal 2000 karakter.', 'code' => 422];
+        }
+
+        $existing = LaporanHama::findAccessibleById($id, ['id' => $adminId, 'role' => 'admin']);
+        if ($existing === null) {
+            return ['success' => false, 'error' => 'NotFound', 'message' => 'Laporan tidak ditemukan.', 'code' => 404];
+        }
+
+        try {
+            LaporanStatus::assertCanTransition($existing['status'], LaporanStatus::DITOLAK, 'admin');
+        } catch (\DomainException $e) {
+            return ['success' => false, 'error' => 'Conflict', 'message' => $e->getMessage(), 'code' => 409];
+        }
+
+        LaporanHama::updateStatusAndVerification($id, LaporanStatus::DITOLAK, $adminId, $alasan);
+
+        $desc = 'Laporan hama ditolak oleh admin: ' . $alasan;
+        ActivityLog::log($adminId, 'laporan_hama_rejected', 'laporan_hama', $id, $desc, $ip, $userAgent);
+
+        $laporan = LaporanHama::findWithRelations($id);
+
+        return ['success' => true, 'message' => 'Laporan hama berhasil ditolak', 'data' => $laporan, 'code' => 200];
+    }
+
+    public static function archive(int $id, int $adminId, ?string $catatan, string $ip, string $userAgent): array
+    {
+        $existing = LaporanHama::findAccessibleById($id, ['id' => $adminId, 'role' => 'admin']);
+        if ($existing === null) {
+            return ['success' => false, 'error' => 'NotFound', 'message' => 'Laporan tidak ditemukan.', 'code' => 404];
+        }
+
+        try {
+            LaporanStatus::assertCanTransition($existing['status'], LaporanStatus::DIARSIPKAN, 'admin');
+        } catch (\DomainException $e) {
+            return ['success' => false, 'error' => 'Conflict', 'message' => $e->getMessage(), 'code' => 409];
+        }
+
+        $catatanTrimmed = $catatan !== null ? trim($catatan) : null;
+
+        LaporanHama::updateStatusAndVerification($id, LaporanStatus::DIARSIPKAN, $adminId, $catatanTrimmed);
+
+        $desc = 'Laporan hama diarsipkan oleh admin';
+        if ($catatanTrimmed !== null && $catatanTrimmed !== '') {
+            $desc .= ': ' . $catatanTrimmed;
+        }
+        ActivityLog::log($adminId, 'laporan_hama_archived', 'laporan_hama', $id, $desc, $ip, $userAgent);
+
+        $laporan = LaporanHama::findWithRelations($id);
+
+        return ['success' => true, 'message' => 'Laporan hama berhasil diarsipkan', 'data' => $laporan, 'code' => 200];
+    }
+
+    public static function resubmit(int $id, int $userId, array $input, string $ip, string $userAgent): array
+    {
+        $existing = LaporanHama::findAccessibleById($id, ['id' => $userId, 'role' => 'petugas']);
+        if ($existing === null) {
+            return ['success' => false, 'error' => 'NotFound', 'message' => 'Laporan tidak ditemukan.', 'code' => 404];
+        }
+
+        try {
+            LaporanStatus::assertCanTransition($existing['status'], LaporanStatus::SUBMITTED, 'petugas');
+        } catch (\DomainException $e) {
+            return ['success' => false, 'error' => 'Conflict', 'message' => $e->getMessage(), 'code' => 409];
+        }
+
+        $merged = array_merge(array_filter($existing, fn($v) => $v !== null), $input);
+        $errors = LaporanHamaValidator::validateSubmit($merged);
+        if (count($errors) > 0) {
+            return [
+                'success' => false,
+                'error' => 'ValidationError',
+                'message' => 'Data laporan tidak valid',
+                'errors' => $errors,
+                'code' => 422,
+            ];
+        }
+
+        $pdo = \App\Core\Database::connect();
+        $pdo->beginTransaction();
+
+        try {
+            $updateData = ['status' => LaporanStatus::SUBMITTED];
+            foreach (self::DRAFT_ALLOWED as $field) {
+                if (isset($input[$field]) && $input[$field] !== '') {
+                    $updateData[$field] = $input[$field];
+                } elseif (isset($existing[$field]) && $existing[$field] !== null) {
+                    $updateData[$field] = $existing[$field];
+                }
+            }
+
+            LaporanHama::update($id, $updateData);
+            LaporanHama::resetVerification($id);
+
+            $nomor = $existing['nomor_laporan'] ?? '-';
+            ActivityLog::log($userId, 'laporan_hama_resubmitted', 'laporan_hama', $id, 'Laporan hama dikirim ulang: ' . $nomor, $ip, $userAgent);
+
+            $pdo->commit();
+
+            $laporan = LaporanHama::findWithRelations($id);
+
+            return ['success' => true, 'message' => 'Laporan hama berhasil dikirim ulang', 'data' => $laporan, 'code' => 200];
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
     }
 
     private static function whitelistDraftFields(array $input): array

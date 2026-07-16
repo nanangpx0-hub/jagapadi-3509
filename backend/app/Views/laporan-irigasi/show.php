@@ -79,6 +79,10 @@
             <div class="value"><?= \App\Core\Security::e($laporan['pelapor_nama'] ?? '-') ?> (@<?= \App\Core\Security::e($laporan['pelapor_username'] ?? '-') ?>)</div>
         </div>
         <div class="detail-item">
+            <div class="label">Verifikator</div>
+            <div class="value"><?= \App\Core\Security::e($laporan['verifikator_nama'] ?? '-') ?></div>
+        </div>
+        <div class="detail-item">
             <div class="label">Dibuat</div>
             <div class="value"><?= date('d/m/Y H:i', strtotime($laporan['created_at'])) ?></div>
         </div>
@@ -92,8 +96,26 @@
         </div>
     </div>
 
+    <?php if ($laporan['verified_by'] !== null || $laporan['catatan_verifikasi'] !== null): ?>
+    <div style="margin-top:16px;padding:12px 16px;background:#f8f9fa;border-radius:6px;border-left:4px solid #1a73e8;">
+        <div style="font-size:13px;color:#555;font-weight:600;margin-bottom:8px;">INFORMASI VERIFIKASI</div>
+        <?php if ($laporan['verified_at'] !== null): ?>
+        <div style="font-size:13px;margin-bottom:4px;"><strong>Waktu:</strong> <?= date('d/m/Y H:i', strtotime($laporan['verified_at'])) ?></div>
+        <?php endif; ?>
+        <?php if ($laporan['catatan_verifikasi'] !== null && $laporan['catatan_verifikasi'] !== ''): ?>
+        <div style="font-size:13px;margin-bottom:4px;"><strong>Catatan:</strong> <?= \App\Core\Security::e($laporan['catatan_verifikasi']) ?></div>
+        <?php endif; ?>
+        <?php if ($laporan['status'] === 'Ditolak'): ?>
+        <div style="font-size:13px;margin-top:4px;padding:8px 12px;background:#fce4ec;border-radius:4px;color:#c62828;">
+            <strong>Alasan penolakan:</strong> <?= \App\Core\Security::e($laporan['catatan_verifikasi'] ?? '-') ?>
+        </div>
+        <?php endif; ?>
+    </div>
+    <?php endif; ?>
+
     <div class="action-group">
         <a href="/laporan-irigasi" class="btn btn-secondary">Kembali ke Daftar</a>
+
         <?php if ($laporan['status'] === 'Draf' && $currentUser['role'] === 'petugas'): ?>
             <a href="/laporan-irigasi/<?= (int) $laporan['id'] ?>/edit" class="btn btn-primary">Edit</a>
             <form method="POST" action="/laporan-irigasi/<?= (int) $laporan['id'] ?>/submit" style="display:inline">
@@ -103,6 +125,37 @@
             <form method="POST" action="/laporan-irigasi/<?= (int) $laporan['id'] ?>/delete" style="display:inline" onsubmit="return confirm('Hapus draf ini?')">
                 <?= \App\Core\Security::csrfField() ?>
                 <button type="submit" class="btn btn-danger">Hapus</button>
+            </form>
+        <?php endif; ?>
+
+        <?php if ($laporan['status'] === 'Submitted' && $currentUser['role'] === 'admin'): ?>
+            <form method="POST" action="/laporan-irigasi/<?= (int) $laporan['id'] ?>/verifikasi" style="display:inline">
+                <?= \App\Core\Security::csrfField() ?>
+                <input type="hidden" name="catatan_verifikasi" value="">
+                <button type="submit" class="btn btn-success" onclick="return confirm('Verifikasi laporan ini?')">Verifikasi</button>
+            </form>
+            <button type="button" class="btn btn-danger" onclick="document.getElementById('tolak-form-<?= (int) $laporan['id'] ?>').style.display='block'">Tolak</button>
+            <div id="tolak-form-<?= (int) $laporan['id'] ?>" style="display:none;margin-top:8px;width:100%;">
+                <form method="POST" action="/laporan-irigasi/<?= (int) $laporan['id'] ?>/tolak" style="display:flex;gap:8px;align-items:flex-start;">
+                    <?= \App\Core\Security::csrfField() ?>
+                    <textarea name="alasan" placeholder="Alasan penolakan (min. 10 karakter)..." required minlength="10" style="flex:1;padding:8px;border:1px solid #d0d0d0;border-radius:4px;font-size:13px;min-height:60px;"></textarea>
+                    <button type="submit" class="btn btn-danger" style="white-space:nowrap;">Kirim</button>
+                </form>
+            </div>
+        <?php endif; ?>
+
+        <?php if ($laporan['status'] === 'Diverifikasi' && $currentUser['role'] === 'admin'): ?>
+            <form method="POST" action="/laporan-irigasi/<?= (int) $laporan['id'] ?>/archive" style="display:inline">
+                <?= \App\Core\Security::csrfField() ?>
+                <button type="submit" class="btn btn-secondary" onclick="return confirm('Arsipkan laporan ini?')">Arsipkan</button>
+            </form>
+        <?php endif; ?>
+
+        <?php if ($laporan['status'] === 'Ditolak' && $currentUser['role'] === 'petugas'): ?>
+            <a href="/laporan-irigasi/<?= (int) $laporan['id'] ?>/edit" class="btn btn-primary">Edit &amp; Perbaiki</a>
+            <form method="POST" action="/laporan-irigasi/<?= (int) $laporan['id'] ?>/resubmit" style="display:inline">
+                <?= \App\Core\Security::csrfField() ?>
+                <button type="submit" class="btn btn-success" onclick="return confirm('Kirim ulang laporan ini?')">Kirim Ulang</button>
             </form>
         <?php endif; ?>
     </div>

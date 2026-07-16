@@ -7,6 +7,7 @@ namespace App\Controllers\Web;
 use App\Core\Controller;
 use App\Core\Request;
 use App\Core\Security;
+use App\Helpers\LaporanStatus;
 use App\Models\MasterKabupaten;
 use App\Models\MasterOpt;
 use App\Services\LaporanHamaService;
@@ -130,8 +131,8 @@ class LaporanHamaController extends Controller
 
         $laporan = $result['data'];
 
-        if ($laporan['status'] !== 'Draf') {
-            $_SESSION['flash_error'] = 'Hanya laporan dengan status Draf yang dapat diedit.';
+        if (!LaporanStatus::isEditableByPetugas($laporan['status'])) {
+            $_SESSION['flash_error'] = 'Laporan dengan status ini tidak dapat diedit.';
             $this->redirect('/laporan-hama/' . $id);
         }
 
@@ -167,7 +168,7 @@ class LaporanHamaController extends Controller
             $this->redirect('/laporan-hama/' . $id . '/edit');
         }
 
-        $_SESSION['flash_success'] = 'Draf laporan hama berhasil diperbarui.';
+        $_SESSION['flash_success'] = 'Laporan hama berhasil diperbarui.';
         $this->redirect('/laporan-hama/' . $id);
     }
 
@@ -215,5 +216,118 @@ class LaporanHamaController extends Controller
         }
 
         $this->redirect('/laporan-hama');
+    }
+
+    public function verify(array $params): void
+    {
+        $currentUser = [
+            'id' => (int) ($_SESSION['user_id'] ?? 0),
+            'role' => $_SESSION['role'] ?? '',
+        ];
+
+        if ($currentUser['role'] !== 'admin') {
+            $_SESSION['flash_error'] = 'Aksi ini hanya untuk admin.';
+            $this->redirect('/laporan-hama');
+            return;
+        }
+
+        $id = (int) ($params['id'] ?? 0);
+        $input = Request::all();
+        $ip = Request::ip();
+        $userAgent = Request::userAgent();
+
+        $catatan = $input['catatan_verifikasi'] ?? null;
+        $result = LaporanHamaService::verify($id, (int) $currentUser['id'], $catatan, $ip, $userAgent);
+
+        if (!$result['success']) {
+            $_SESSION['flash_error'] = $result['message'];
+        } else {
+            $_SESSION['flash_success'] = 'Laporan hama berhasil diverifikasi.';
+        }
+
+        $this->redirect('/laporan-hama/' . $id);
+    }
+
+    public function reject(array $params): void
+    {
+        $currentUser = [
+            'id' => (int) ($_SESSION['user_id'] ?? 0),
+            'role' => $_SESSION['role'] ?? '',
+        ];
+
+        if ($currentUser['role'] !== 'admin') {
+            $_SESSION['flash_error'] = 'Aksi ini hanya untuk admin.';
+            $this->redirect('/laporan-hama');
+            return;
+        }
+
+        $id = (int) ($params['id'] ?? 0);
+        $input = Request::all();
+        $ip = Request::ip();
+        $userAgent = Request::userAgent();
+
+        $alasan = $input['alasan'] ?? '';
+        $result = LaporanHamaService::reject($id, (int) $currentUser['id'], $alasan, $ip, $userAgent);
+
+        if (!$result['success']) {
+            $_SESSION['flash_error'] = $result['message'];
+        } else {
+            $_SESSION['flash_success'] = 'Laporan hama berhasil ditolak.';
+        }
+
+        $this->redirect('/laporan-hama/' . $id);
+    }
+
+    public function archive(array $params): void
+    {
+        $currentUser = [
+            'id' => (int) ($_SESSION['user_id'] ?? 0),
+            'role' => $_SESSION['role'] ?? '',
+        ];
+
+        if ($currentUser['role'] !== 'admin') {
+            $_SESSION['flash_error'] = 'Aksi ini hanya untuk admin.';
+            $this->redirect('/laporan-hama');
+            return;
+        }
+
+        $id = (int) ($params['id'] ?? 0);
+        $input = Request::all();
+        $ip = Request::ip();
+        $userAgent = Request::userAgent();
+
+        $catatan = $input['catatan_verifikasi'] ?? null;
+        $result = LaporanHamaService::archive($id, (int) $currentUser['id'], $catatan, $ip, $userAgent);
+
+        if (!$result['success']) {
+            $_SESSION['flash_error'] = $result['message'];
+        } else {
+            $_SESSION['flash_success'] = 'Laporan hama berhasil diarsipkan.';
+        }
+
+        $this->redirect('/laporan-hama/' . $id);
+    }
+
+    public function resubmit(array $params): void
+    {
+        $currentUser = [
+            'id' => (int) ($_SESSION['user_id'] ?? 0),
+            'role' => $_SESSION['role'] ?? '',
+        ];
+
+        $id = (int) ($params['id'] ?? 0);
+        $input = Request::all();
+        $ip = Request::ip();
+        $userAgent = Request::userAgent();
+
+        $result = LaporanHamaService::resubmit($id, (int) $currentUser['id'], $input, $ip, $userAgent);
+
+        if (!$result['success']) {
+            $_SESSION['flash_error'] = $result['message'];
+        } else {
+            $_SESSION['flash_success'] = 'Laporan hama berhasil dikirim ulang.';
+        }
+
+        $this->redirect('/laporan-hama/' . $id);
     }
 }

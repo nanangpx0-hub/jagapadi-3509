@@ -16,7 +16,7 @@
 | **5** | **Tahap 5** | Master Data Wilayah & OPT | ✅ **Done** | Master wilayah (kab/kec/desa) + audit log; Master OPT CRUD + soft deactivate; API read auth, write admin; Web admin cascading dropdown
 | 6 | **Tahap 6** | Laporan Hama (Draf, Submit, List, Detail) | ✅ **Done** | CRUD draft, submit, nomor LH-..., validasi field wajib, petugas scoped
 | 7 | **Tahap 7** | Laporan Irigasi (Draf, Submit, List, Detail) | ✅ **Done** | CRUD draft, submit, nomor LI-..., validasi field wajib, petugas scoped
-| 8 | **Tahap 8** | Verifikasi Admin (Hama & Irigasi) | ⏳ Pending | Submitted → Verified/Rejected/Archived, resubmit from Ditolak
+| 8 | **Tahap 8** | Verifikasi Admin (Hama & Irigasi) | ✅ **Done** | Submitted → Diverifikasi/Ditolak, Diverifikasi → Diarsipkan, Ditolak → Submitted (resubmit)
 | 9 | **Tahap 9** | Upload Foto Aman | ⏳ Pending | OPT + Laporan Hama + Laporan Irigasi, magic bytes, random name
 | 10 | **Tahap 10** | Mobile App Flutter | ⏳ Pending | Auth, offline draft, sync, JWT |
 | 11 | **Tahap 11** | Notifikasi & Real-time | ⏳ Pending | Push notif, websocket/polling |

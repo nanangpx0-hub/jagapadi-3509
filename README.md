@@ -6,7 +6,7 @@ Sistem pelaporan pertanian (Hama/OPT & Kondisi Irigasi) untuk Kabupaten Jember.
 
 ## Status Proyek
 
-**Tahap 7 — Laporan Irigasi** (Done)
+**Tahap 8 — Verifikasi Admin** (Done)
 
 ---
 

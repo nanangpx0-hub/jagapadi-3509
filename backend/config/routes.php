@@ -133,6 +133,10 @@ $router->get('/laporan-hama/{id}/edit', [WebLaporanHamaController::class, 'edit'
 $router->post('/laporan-hama/{id}', [WebLaporanHamaController::class, 'update'], [WebAuthMiddleware::class]);
 $router->post('/laporan-hama/{id}/submit', [WebLaporanHamaController::class, 'submit'], [WebAuthMiddleware::class]);
 $router->post('/laporan-hama/{id}/delete', [WebLaporanHamaController::class, 'delete'], [WebAuthMiddleware::class]);
+$router->post('/laporan-hama/{id}/verifikasi', [WebLaporanHamaController::class, 'verify'], [WebAuthMiddleware::class]);
+$router->post('/laporan-hama/{id}/tolak', [WebLaporanHamaController::class, 'reject'], [WebAuthMiddleware::class]);
+$router->post('/laporan-hama/{id}/archive', [WebLaporanHamaController::class, 'archive'], [WebAuthMiddleware::class]);
+$router->post('/laporan-hama/{id}/resubmit', [WebLaporanHamaController::class, 'resubmit'], [WebAuthMiddleware::class]);
 
 // ================================
 // API v1 — Laporan Hama
@@ -143,6 +147,10 @@ $router->get('/api/v1/laporan-hama/{id}', [ApiLaporanHamaController::class, 'sho
 $router->put('/api/v1/laporan-hama/{id}', [ApiLaporanHamaController::class, 'update'], [ApiAuthMiddleware::class]);
 $router->delete('/api/v1/laporan-hama/{id}', [ApiLaporanHamaController::class, 'destroy'], [ApiAuthMiddleware::class]);
 $router->post('/api/v1/laporan-hama/{id}/submit', [ApiLaporanHamaController::class, 'submit'], [ApiAuthMiddleware::class]);
+$router->post('/api/v1/laporan-hama/{id}/verifikasi', [ApiLaporanHamaController::class, 'verify'], [ApiAuthMiddleware::class]);
+$router->post('/api/v1/laporan-hama/{id}/tolak', [ApiLaporanHamaController::class, 'reject'], [ApiAuthMiddleware::class]);
+$router->post('/api/v1/laporan-hama/{id}/archive', [ApiLaporanHamaController::class, 'archive'], [ApiAuthMiddleware::class]);
+$router->post('/api/v1/laporan-hama/{id}/resubmit', [ApiLaporanHamaController::class, 'resubmit'], [ApiAuthMiddleware::class]);
 
 // ================================
 // Web — Laporan Irigasi (petugas + admin)
@@ -155,6 +163,10 @@ $router->get('/laporan-irigasi/{id}/edit', [WebLaporanIrigasiController::class, 
 $router->post('/laporan-irigasi/{id}', [WebLaporanIrigasiController::class, 'update'], [WebAuthMiddleware::class]);
 $router->post('/laporan-irigasi/{id}/submit', [WebLaporanIrigasiController::class, 'submit'], [WebAuthMiddleware::class]);
 $router->post('/laporan-irigasi/{id}/delete', [WebLaporanIrigasiController::class, 'delete'], [WebAuthMiddleware::class]);
+$router->post('/laporan-irigasi/{id}/verifikasi', [WebLaporanIrigasiController::class, 'verify'], [WebAuthMiddleware::class]);
+$router->post('/laporan-irigasi/{id}/tolak', [WebLaporanIrigasiController::class, 'reject'], [WebAuthMiddleware::class]);
+$router->post('/laporan-irigasi/{id}/archive', [WebLaporanIrigasiController::class, 'archive'], [WebAuthMiddleware::class]);
+$router->post('/laporan-irigasi/{id}/resubmit', [WebLaporanIrigasiController::class, 'resubmit'], [WebAuthMiddleware::class]);
 
 // ================================
 // API v1 — Laporan Irigasi
@@ -165,3 +177,7 @@ $router->get('/api/v1/laporan-irigasi/{id}', [ApiLaporanIrigasiController::class
 $router->put('/api/v1/laporan-irigasi/{id}', [ApiLaporanIrigasiController::class, 'update'], [ApiAuthMiddleware::class]);
 $router->delete('/api/v1/laporan-irigasi/{id}', [ApiLaporanIrigasiController::class, 'destroy'], [ApiAuthMiddleware::class]);
 $router->post('/api/v1/laporan-irigasi/{id}/submit', [ApiLaporanIrigasiController::class, 'submit'], [ApiAuthMiddleware::class]);
+$router->post('/api/v1/laporan-irigasi/{id}/verifikasi', [ApiLaporanIrigasiController::class, 'verify'], [ApiAuthMiddleware::class]);
+$router->post('/api/v1/laporan-irigasi/{id}/tolak', [ApiLaporanIrigasiController::class, 'reject'], [ApiAuthMiddleware::class]);
+$router->post('/api/v1/laporan-irigasi/{id}/archive', [ApiLaporanIrigasiController::class, 'archive'], [ApiAuthMiddleware::class]);
+$router->post('/api/v1/laporan-irigasi/{id}/resubmit', [ApiLaporanIrigasiController::class, 'resubmit'], [ApiAuthMiddleware::class]);

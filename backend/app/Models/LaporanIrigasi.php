@@ -20,9 +20,11 @@ class LaporanIrigasi extends Model
     {
         $pdo = self::db();
         $sql = "SELECT li.*, u.nama_lengkap AS pelapor_nama, u.username AS pelapor_username,
+                       v.nama_lengkap AS verifikator_nama,
                        mk.nama_kabupaten, mkc.nama_kecamatan, md.nama_desa
                 FROM `laporan_irigasi` li
                 LEFT JOIN `users` u ON u.id = li.user_id
+                LEFT JOIN `users` v ON v.id = li.verified_by
                 LEFT JOIN `master_kabupaten` mk ON mk.id = li.kabupaten_id
                 LEFT JOIN `master_kecamatan` mkc ON mkc.id = li.kecamatan_id
                 LEFT JOIN `master_desa` md ON md.id = li.desa_id
@@ -87,6 +89,35 @@ class LaporanIrigasi extends Model
         return ['data' => $data, 'total' => $total];
     }
 
+    public static function updateStatusAndVerification(int $id, string $status, ?int $verifiedBy, ?string $catatanVerifikasi): bool
+    {
+        $pdo = self::db();
+        $now = date('Y-m-d H:i:s');
+        $stmt = $pdo->prepare("
+            UPDATE `laporan_irigasi`
+            SET `status` = ?,
+                `verified_by` = ?,
+                `verified_at` = ?,
+                `catatan_verifikasi` = ?
+            WHERE `id` = ?
+        ");
+        $stmt->execute([$status, $verifiedBy, $now, $catatanVerifikasi, $id]);
+        return $stmt->rowCount() > 0;
+    }
+
+    public static function resetVerification(int $id): bool
+    {
+        $pdo = self::db();
+        $stmt = $pdo->prepare("
+            UPDATE `laporan_irigasi`
+            SET `verified_by` = NULL,
+                `verified_at` = NULL,
+                `catatan_verifikasi` = NULL
+            WHERE `id` = ?
+        ");
+        return $stmt->execute([$id]);
+    }
+
     public static function deleteDraft(int $id, int $userId): bool
     {
         $pdo = self::db();
@@ -98,9 +129,11 @@ class LaporanIrigasi extends Model
     private static function buildListQuery(array $conditions, array &$params, array $filters): string
     {
         $sql = "SELECT li.*, u.nama_lengkap AS pelapor_nama, u.username AS pelapor_username,
+                       v.nama_lengkap AS verifikator_nama,
                        mk.nama_kabupaten, mkc.nama_kecamatan, md.nama_desa
                 FROM `laporan_irigasi` li
                 LEFT JOIN `users` u ON u.id = li.user_id
+                LEFT JOIN `users` v ON v.id = li.verified_by
                 LEFT JOIN `master_kabupaten` mk ON mk.id = li.kabupaten_id
                 LEFT JOIN `master_kecamatan` mkc ON mkc.id = li.kecamatan_id
                 LEFT JOIN `master_desa` md ON md.id = li.desa_id";
@@ -169,9 +202,11 @@ class LaporanIrigasi extends Model
         $pdo = self::db();
         $stmt = $pdo->prepare("
             SELECT li.*, u.nama_lengkap AS pelapor_nama, u.username AS pelapor_username,
+                   v.nama_lengkap AS verifikator_nama,
                    mk.nama_kabupaten, mkc.nama_kecamatan, md.nama_desa
             FROM `laporan_irigasi` li
             LEFT JOIN `users` u ON u.id = li.user_id
+            LEFT JOIN `users` v ON v.id = li.verified_by
             LEFT JOIN `master_kabupaten` mk ON mk.id = li.kabupaten_id
             LEFT JOIN `master_kecamatan` mkc ON mkc.id = li.kecamatan_id
             LEFT JOIN `master_desa` md ON md.id = li.desa_id
