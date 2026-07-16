@@ -6,11 +6,13 @@ use App\Controllers\Api\AuthController as ApiAuthController;
 use App\Controllers\Api\HealthController;
 use App\Controllers\Api\MeController;
 use App\Controllers\Api\LaporanHamaController as ApiLaporanHamaController;
+use App\Controllers\Api\LaporanIrigasiController as ApiLaporanIrigasiController;
 use App\Controllers\Api\OptController as ApiOptController;
 use App\Controllers\Api\WilayahController as ApiWilayahController;
 use App\Controllers\Web\AuthController as WebAuthController;
 use App\Controllers\Web\DashboardController;
 use App\Controllers\Web\LaporanHamaController as WebLaporanHamaController;
+use App\Controllers\Web\LaporanIrigasiController as WebLaporanIrigasiController;
 use App\Controllers\Web\OptController as WebOptController;
 use App\Controllers\Web\PasswordController;
 use App\Controllers\Web\WilayahController as WebWilayahController;
@@ -141,3 +143,25 @@ $router->get('/api/v1/laporan-hama/{id}', [ApiLaporanHamaController::class, 'sho
 $router->put('/api/v1/laporan-hama/{id}', [ApiLaporanHamaController::class, 'update'], [ApiAuthMiddleware::class]);
 $router->delete('/api/v1/laporan-hama/{id}', [ApiLaporanHamaController::class, 'destroy'], [ApiAuthMiddleware::class]);
 $router->post('/api/v1/laporan-hama/{id}/submit', [ApiLaporanHamaController::class, 'submit'], [ApiAuthMiddleware::class]);
+
+// ================================
+// Web — Laporan Irigasi (petugas + admin)
+// ================================
+$router->get('/laporan-irigasi', [WebLaporanIrigasiController::class, 'index'], [WebAuthMiddleware::class]);
+$router->get('/laporan-irigasi/create', [WebLaporanIrigasiController::class, 'create'], [WebAuthMiddleware::class]);
+$router->post('/laporan-irigasi', [WebLaporanIrigasiController::class, 'store'], [WebAuthMiddleware::class]);
+$router->get('/laporan-irigasi/{id}', [WebLaporanIrigasiController::class, 'show'], [WebAuthMiddleware::class]);
+$router->get('/laporan-irigasi/{id}/edit', [WebLaporanIrigasiController::class, 'edit'], [WebAuthMiddleware::class]);
+$router->post('/laporan-irigasi/{id}', [WebLaporanIrigasiController::class, 'update'], [WebAuthMiddleware::class]);
+$router->post('/laporan-irigasi/{id}/submit', [WebLaporanIrigasiController::class, 'submit'], [WebAuthMiddleware::class]);
+$router->post('/laporan-irigasi/{id}/delete', [WebLaporanIrigasiController::class, 'delete'], [WebAuthMiddleware::class]);
+
+// ================================
+// API v1 — Laporan Irigasi
+// ================================
+$router->get('/api/v1/laporan-irigasi', [ApiLaporanIrigasiController::class, 'index'], [ApiAuthMiddleware::class]);
+$router->post('/api/v1/laporan-irigasi', [ApiLaporanIrigasiController::class, 'store'], [ApiAuthMiddleware::class]);
+$router->get('/api/v1/laporan-irigasi/{id}', [ApiLaporanIrigasiController::class, 'show'], [ApiAuthMiddleware::class]);
+$router->put('/api/v1/laporan-irigasi/{id}', [ApiLaporanIrigasiController::class, 'update'], [ApiAuthMiddleware::class]);
+$router->delete('/api/v1/laporan-irigasi/{id}', [ApiLaporanIrigasiController::class, 'destroy'], [ApiAuthMiddleware::class]);
+$router->post('/api/v1/laporan-irigasi/{id}/submit', [ApiLaporanIrigasiController::class, 'submit'], [ApiAuthMiddleware::class]);

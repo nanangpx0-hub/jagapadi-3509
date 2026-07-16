@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Laporan Irigasi (Tahap 7)
+  - `app/Helpers/NomorLaporanGenerator.php` — generalized to support LH and LI prefixes
+  - `app/Helpers/LaporanIrigasiValidator.php` — validasi Draf (parsial) dan Submit (lengkap) irigasi
+  - `app/Models/LaporanIrigasi.php` — model with findAccessibleById, listForPetugas, listForAdmin, deleteDraft
+  - `app/Services/LaporanIrigasiService.php` — CRUD draft, submit, generate nomor LI, activity log
+  - `app/Controllers/Api/LaporanIrigasiController.php` — 6 API endpoints (index, store, show, update, destroy, submit)
+  - `app/Controllers/Web/LaporanIrigasiController.php` — 8 web endpoints (index, create, store, show, edit, update, submit, delete)
+  - `app/Views/laporan-irigasi/` — index (filter), create, edit, show views
+  - `config/routes.php` — web + API routes for irigasi
+  - `tests/Unit/LaporanIrigasiValidatorTest.php` — 11 test cases
+  - `tests/Unit/NomorLaporanGeneratorTest.php` — updated with LI prefix + invalid prefix tests
+  - Updated `docs/API.md` — laporan irigasi endpoints documented
+  - Updated `docs/TUTORIAL_BUILD.md` — Tahap 7 marked Done
 - Laporan Hama (Tahap 6)
   - `app/Helpers/NomorLaporanGenerator.php` — atomic nomor LH: prefix `LH`, date, counter via `nomor_laporan_counter`
   - `app/Helpers/LaporanHamaValidator.php` — validasi Draf (parsial) dan Submit (lengkap)

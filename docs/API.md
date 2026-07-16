@@ -1,6 +1,6 @@
 # API Contract JAGAPADI
 
-> **Status**: Tahap 5 — Master Data Wilayah dan Master OPT telah diimplementasikan.
+> **Status**: Tahap 7 — Laporan Irigasi telah diimplementasikan. Laporan Hama (Tahap 6) dan Laporan Irigasi (Tahap 7) selesai.
 > **Base URL**: `https://domain.tld/api/v1`
 > **Format**: JSON
 > **Auth Mobile**: JWT (`Authorization: Bearer <access_token>`)
@@ -336,17 +336,56 @@ Master wilayah berjenjang: Kabupaten → Kecamatan → Desa.
 }
 ```
 
-### Laporan Irigasi (Planned)
+## Laporan Irigasi — API (Implemented — Tahap 7)
+
+### Aturan
+- Sama dengan Laporan Hama, menggunakan prefix nomor `LI`.
+- Field wajib submit: tanggal, kabupaten_id, kecamatan_id, desa_id, nama_saluran, kondisi_fisik, debit_air.
+- Field opsional: daerah_irigasi, latitude, longitude, foto_url, catatan.
+
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| GET | `/api/v1/laporan-irigasi` | JWT | List (filter: status, date, location, `include_draft`) |
-| POST | `/api/v1/laporan-irigasi` | JWT | Create draft |
-| GET | `/api/v1/laporan-irigasi/{id}` | JWT | Detail (owner/admin) |
-| PUT | `/api/v1/laporan-irigasi/{id}` | JWT | Update draft (owner) |
-| DELETE | `/api/v1/laporan-irigasi/{id}` | JWT | Delete draft (owner) |
-| POST | `/api/v1/laporan-irigasi/{id}/submit` | JWT | Submit draft → Submitted |
+| GET | `/api/v1/laporan-irigasi` | JWT | List (filter: status, tanggal, wilayah, kondisi_fisik, debit_air, q, page, limit, include_draft) |
+| POST | `/api/v1/laporan-irigasi` | JWT | Create (action=draft|submit, default draft) |
+| GET | `/api/v1/laporan-irigasi/{id}` | JWT | Detail (owner/admin only) |
+| PUT | `/api/v1/laporan-irigasi/{id}` | JWT | Update Draf (owner only) |
+| DELETE | `/api/v1/laporan-irigasi/{id}` | JWT | Delete Draf (owner only) |
+| POST | `/api/v1/laporan-irigasi/{id}/submit` | JWT | Submit Draf → Submitted |
+
+**Request POST /api/v1/laporan-irigasi:**
+```json
+{
+  "action": "submit",
+  "tanggal": "2026-07-16",
+  "kabupaten_id": 1,
+  "kecamatan_id": 1,
+  "desa_id": 1,
+  "nama_saluran": "Saluran Sekunder Bedadung 1",
+  "daerah_irigasi": "Dam Bedadung",
+  "kondisi_fisik": "Sedang",
+  "debit_air": "Kurang",
+  "latitude": -8.2011,
+  "longitude": 113.6890,
+  "catatan": "Kebocoran kecil di km 2"
+}
+```
+
+**Response 201 Create + Submit:**
+```json
+{
+  "success": true,
+  "message": "Laporan irigasi berhasil dikirim",
+  "data": {
+    "id": 15,
+    "nomor_laporan": "LI-20260716-0001",
+    "status": "Submitted"
+  }
+}
+```
 
 ---
+
+
 
 ## Dashboard & Statistics (Planned)
 
@@ -479,6 +518,6 @@ Master wilayah berjenjang: Kabupaten → Kecamatan → Desa.
 
 ## Next Steps
 
-- Tahap 5: Implement report CRUD endpoints (Hama/OPT & Irigasi)
+- Tahap 8: Workflow Admin Verifikasi / Tolak / Arsip (untuk hama + irigasi)
 - Update `docs/API.md` dengan kontrak final (OpenAPI/Swagger)
 - Generate SDK/client untuk Flutter

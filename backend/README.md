@@ -134,6 +134,12 @@ backend/
 | PUT | `/api/v1/laporan-hama/{id}` | JWT | Update draft (owner only) |
 | DELETE | `/api/v1/laporan-hama/{id}` | JWT | Delete draft (owner only) |
 | POST | `/api/v1/laporan-hama/{id}/submit` | JWT | Submit draft (owner only) |
+| GET | `/api/v1/laporan-irigasi` | JWT | List laporan irigasi (filter: status, tanggal, wilayah, kondisi_fisik, debit_air, q, page, limit, include_draft) |
+| POST | `/api/v1/laporan-irigasi` | JWT | Create draft/submit laporan irigasi |
+| GET | `/api/v1/laporan-irigasi/{id}` | JWT | Detail laporan irigasi |
+| PUT | `/api/v1/laporan-irigasi/{id}` | JWT | Update draft (owner only) |
+| DELETE | `/api/v1/laporan-irigasi/{id}` | JWT | Delete draft (owner only) |
+| POST | `/api/v1/laporan-irigasi/{id}/submit` | JWT | Submit draft (owner only) |
 
 ### Web Routes
 
@@ -175,3 +181,11 @@ backend/
 | POST | `/laporan-hama/{id}` | Session | Update draft |
 | POST | `/laporan-hama/{id}/submit` | Session | Submit draft |
 | POST | `/laporan-hama/{id}/delete` | Session | Delete draft |
+| GET | `/laporan-irigasi` | Session | List laporan irigasi (petugas: own, admin: all) |
+| GET | `/laporan-irigasi/create` | Session | Form buat laporan irigasi |
+| POST | `/laporan-irigasi` | Session | Simpan draft/kirim laporan irigasi |
+| GET | `/laporan-irigasi/{id}` | Session | Detail laporan irigasi |
+| GET | `/laporan-irigasi/{id}/edit` | Session | Form edit draft |
+| POST | `/laporan-irigasi/{id}` | Session | Update draft |
+| POST | `/laporan-irigasi/{id}/submit` | Session | Submit draft |
+| POST | `/laporan-irigasi/{id}/delete` | Session | Delete draft |

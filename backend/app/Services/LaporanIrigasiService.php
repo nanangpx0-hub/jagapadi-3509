@@ -5,22 +5,22 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Core\Database;
-use App\Helpers\LaporanHamaValidator;
+use App\Helpers\LaporanIrigasiValidator;
 use App\Helpers\NomorLaporanGenerator;
 use App\Models\ActivityLog;
-use App\Models\LaporanHama;
+use App\Models\LaporanIrigasi;
 
-class LaporanHamaService
+class LaporanIrigasiService
 {
     private const DRAFT_ALLOWED = [
-        'master_opt_id', 'tanggal', 'kabupaten_id', 'kecamatan_id', 'desa_id',
-        'lokasi', 'alamat_lengkap', 'latitude', 'longitude',
-        'tingkat_keparahan', 'luas_serangan', 'populasi', 'foto_url', 'catatan',
+        'tanggal', 'kabupaten_id', 'kecamatan_id', 'desa_id',
+        'nama_saluran', 'daerah_irigasi', 'latitude', 'longitude',
+        'kondisi_fisik', 'debit_air', 'foto_url', 'catatan',
     ];
 
     public static function createDraft(int $userId, array $input, string $ip, string $userAgent): array
     {
-        $errors = LaporanHamaValidator::validateDraft($input);
+        $errors = LaporanIrigasiValidator::validateDraft($input);
         if (count($errors) > 0) {
             return [
                 'success' => false,
@@ -36,18 +36,18 @@ class LaporanHamaService
         $data['status'] = 'Draf';
         $data['ip_pengirim'] = $ip;
 
-        $id = LaporanHama::insert($data);
+        $id = LaporanIrigasi::insert($data);
 
-        ActivityLog::log($userId, 'laporan_hama_draft_created', 'laporan_hama', (int) $id, 'Draf laporan hama dibuat', $ip, $userAgent);
+        ActivityLog::log($userId, 'laporan_irigasi_draft_created', 'laporan_irigasi', (int) $id, 'Draf laporan irigasi dibuat', $ip, $userAgent);
 
-        $laporan = LaporanHama::findWithRelations((int) $id);
+        $laporan = LaporanIrigasi::findWithRelations((int) $id);
 
-        return ['success' => true, 'message' => 'Draf laporan hama berhasil dibuat', 'data' => $laporan, 'code' => 201];
+        return ['success' => true, 'message' => 'Draf laporan irigasi berhasil dibuat', 'data' => $laporan, 'code' => 201];
     }
 
     public static function updateDraft(int $id, int $userId, array $input, string $ip, string $userAgent): array
     {
-        $existing = LaporanHama::findAccessibleById($id, ['id' => $userId, 'role' => 'petugas']);
+        $existing = LaporanIrigasi::findAccessibleById($id, ['id' => $userId, 'role' => 'petugas']);
         if ($existing === null) {
             return ['success' => false, 'error' => 'NotFound', 'message' => 'Laporan tidak ditemukan.', 'code' => 404];
         }
@@ -56,7 +56,7 @@ class LaporanHamaService
             return ['success' => false, 'error' => 'Conflict', 'message' => 'Hanya laporan dengan status Draf yang dapat diubah.', 'code' => 409];
         }
 
-        $errors = LaporanHamaValidator::validateDraft($input);
+        $errors = LaporanIrigasiValidator::validateDraft($input);
         if (count($errors) > 0) {
             return [
                 'success' => false,
@@ -72,18 +72,18 @@ class LaporanHamaService
             return ['success' => true, 'message' => 'Tidak ada data yang diubah.', 'data' => $existing, 'code' => 200];
         }
 
-        LaporanHama::update($id, $data);
+        LaporanIrigasi::update($id, $data);
 
-        ActivityLog::log($userId, 'laporan_hama_draft_updated', 'laporan_hama', $id, 'Draf laporan hama diperbarui', $ip, $userAgent);
+        ActivityLog::log($userId, 'laporan_irigasi_draft_updated', 'laporan_irigasi', $id, 'Draf laporan irigasi diperbarui', $ip, $userAgent);
 
-        $laporan = LaporanHama::findWithRelations($id);
+        $laporan = LaporanIrigasi::findWithRelations($id);
 
-        return ['success' => true, 'message' => 'Draf laporan hama berhasil diperbarui', 'data' => $laporan, 'code' => 200];
+        return ['success' => true, 'message' => 'Draf laporan irigasi berhasil diperbarui', 'data' => $laporan, 'code' => 200];
     }
 
     public static function deleteDraft(int $id, int $userId, string $ip, string $userAgent): array
     {
-        $existing = LaporanHama::findAccessibleById($id, ['id' => $userId, 'role' => 'petugas']);
+        $existing = LaporanIrigasi::findAccessibleById($id, ['id' => $userId, 'role' => 'petugas']);
         if ($existing === null) {
             return ['success' => false, 'error' => 'NotFound', 'message' => 'Laporan tidak ditemukan.', 'code' => 404];
         }
@@ -92,19 +92,19 @@ class LaporanHamaService
             return ['success' => false, 'error' => 'Conflict', 'message' => 'Hanya laporan dengan status Draf yang dapat dihapus.', 'code' => 409];
         }
 
-        $deleted = LaporanHama::deleteDraft($id, $userId);
+        $deleted = LaporanIrigasi::deleteDraft($id, $userId);
         if (!$deleted) {
             return ['success' => false, 'error' => 'Conflict', 'message' => 'Gagal menghapus laporan.', 'code' => 409];
         }
 
-        ActivityLog::log($userId, 'laporan_hama_draft_deleted', 'laporan_hama', $id, 'Draf laporan hama dihapus', $ip, $userAgent);
+        ActivityLog::log($userId, 'laporan_irigasi_draft_deleted', 'laporan_irigasi', $id, 'Draf laporan irigasi dihapus', $ip, $userAgent);
 
-        return ['success' => true, 'message' => 'Draf laporan hama berhasil dihapus', 'code' => 200];
+        return ['success' => true, 'message' => 'Draf laporan irigasi berhasil dihapus', 'code' => 200];
     }
 
     public static function createAndSubmit(int $userId, array $input, string $ip, string $userAgent): array
     {
-        $errors = LaporanHamaValidator::validateSubmit($input);
+        $errors = LaporanIrigasiValidator::validateSubmit($input);
         if (count($errors) > 0) {
             return [
                 'success' => false,
@@ -120,7 +120,7 @@ class LaporanHamaService
 
         try {
             $tanggal = $input['tanggal'];
-            $nomor = NomorLaporanGenerator::generate('LH', $tanggal);
+            $nomor = NomorLaporanGenerator::generate('LI', $tanggal);
 
             $data = self::whitelistDraftFields($input);
             $data['user_id'] = $userId;
@@ -128,15 +128,15 @@ class LaporanHamaService
             $data['nomor_laporan'] = $nomor;
             $data['ip_pengirim'] = $ip;
 
-            $id = LaporanHama::insert($data);
+            $id = LaporanIrigasi::insert($data);
 
-            ActivityLog::log($userId, 'laporan_hama_submitted', 'laporan_hama', (int) $id, 'Laporan hama dikirim: ' . $nomor, $ip, $userAgent);
+            ActivityLog::log($userId, 'laporan_irigasi_submitted', 'laporan_irigasi', (int) $id, 'Laporan irigasi dikirim: ' . $nomor, $ip, $userAgent);
 
             $pdo->commit();
 
-            $laporan = LaporanHama::findWithRelations((int) $id);
+            $laporan = LaporanIrigasi::findWithRelations((int) $id);
 
-            return ['success' => true, 'message' => 'Laporan hama berhasil dikirim', 'data' => $laporan, 'code' => 201];
+            return ['success' => true, 'message' => 'Laporan irigasi berhasil dikirim', 'data' => $laporan, 'code' => 201];
         } catch (\Throwable $e) {
             $pdo->rollBack();
             throw $e;
@@ -145,7 +145,7 @@ class LaporanHamaService
 
     public static function submitDraft(int $id, int $userId, array $input, string $ip, string $userAgent): array
     {
-        $existing = LaporanHama::findAccessibleById($id, ['id' => $userId, 'role' => 'petugas']);
+        $existing = LaporanIrigasi::findAccessibleById($id, ['id' => $userId, 'role' => 'petugas']);
         if ($existing === null) {
             return ['success' => false, 'error' => 'NotFound', 'message' => 'Laporan tidak ditemukan.', 'code' => 404];
         }
@@ -155,7 +155,7 @@ class LaporanHamaService
         }
 
         $merged = array_merge(array_filter($existing, fn($v) => $v !== null), $input);
-        $errors = LaporanHamaValidator::validateSubmit($merged);
+        $errors = LaporanIrigasiValidator::validateSubmit($merged);
         if (count($errors) > 0) {
             return [
                 'success' => false,
@@ -171,7 +171,7 @@ class LaporanHamaService
 
         try {
             $tanggal = $merged['tanggal'];
-            $nomor = NomorLaporanGenerator::generate('LH', $tanggal);
+            $nomor = NomorLaporanGenerator::generate('LI', $tanggal);
 
             $updateData = ['status' => 'Submitted', 'nomor_laporan' => $nomor];
             foreach (self::DRAFT_ALLOWED as $field) {
@@ -182,15 +182,15 @@ class LaporanHamaService
                 }
             }
 
-            LaporanHama::update($id, $updateData);
+            LaporanIrigasi::update($id, $updateData);
 
-            ActivityLog::log($userId, 'laporan_hama_submitted', 'laporan_hama', $id, 'Laporan hama dikirim: ' . $nomor, $ip, $userAgent);
+            ActivityLog::log($userId, 'laporan_irigasi_submitted', 'laporan_irigasi', $id, 'Laporan irigasi dikirim: ' . $nomor, $ip, $userAgent);
 
             $pdo->commit();
 
-            $laporan = LaporanHama::findWithRelations($id);
+            $laporan = LaporanIrigasi::findWithRelations($id);
 
-            return ['success' => true, 'message' => 'Laporan hama berhasil dikirim', 'data' => $laporan, 'code' => 200];
+            return ['success' => true, 'message' => 'Laporan irigasi berhasil dikirim', 'data' => $laporan, 'code' => 200];
         } catch (\Throwable $e) {
             $pdo->rollBack();
             throw $e;
@@ -199,7 +199,7 @@ class LaporanHamaService
 
     public static function getDetailForCurrentUser(int $id, array $currentUser): array
     {
-        $laporan = LaporanHama::findAccessibleById($id, $currentUser);
+        $laporan = LaporanIrigasi::findAccessibleById($id, $currentUser);
         if ($laporan === null) {
             return ['success' => false, 'error' => 'NotFound', 'message' => 'Laporan tidak ditemukan.', 'code' => 404];
         }
@@ -222,9 +222,9 @@ class LaporanHamaService
         }
 
         if ($currentUser['role'] === 'admin') {
-            $result = LaporanHama::listForAdmin($queryFilters, $page, $limit);
+            $result = LaporanIrigasi::listForAdmin($queryFilters, $page, $limit);
         } else {
-            $result = LaporanHama::listForPetugas((int) $currentUser['id'], $queryFilters, $page, $limit);
+            $result = LaporanIrigasi::listForPetugas((int) $currentUser['id'], $queryFilters, $page, $limit);
         }
 
         $total = $result['total'];
