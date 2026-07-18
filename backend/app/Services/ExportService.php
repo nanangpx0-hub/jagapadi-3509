@@ -20,17 +20,24 @@ class ExportService
     private PDO $db;
     private string $role;
     private ?int $userId;
+    private bool $includeDraft = false;
 
-    public function __construct(string $role, ?int $userId)
+    public function __construct(string $role, ?int $userId, bool $includeDraft = false)
     {
         $this->db = Database::connect();
         $this->role = $role;
         $this->userId = $role === 'petugas' ? $userId : null;
+        $this->includeDraft = $includeDraft;
     }
 
     public static function validateFiltersStatic(array $input): array
     {
         $errors = [];
+
+        $includeDraft = $input['include_draft'] ?? null;
+        if ($includeDraft !== null && $includeDraft !== '' && !in_array($includeDraft, ['true', 'false', '1', '0'], true)) {
+            $errors['include_draft'] = 'include_draft harus true atau false.';
+        }
 
         $format = strtolower(trim($input['format'] ?? ''));
         if (!in_array($format, self::VALID_FORMATS, true)) {
@@ -392,6 +399,8 @@ class ExportService
             foreach ($statuses as $s) {
                 $params[] = trim($s);
             }
+        } elseif (!$this->includeDraft) {
+            $conditions[] = "{$alias}.status IN ('Submitted','Diverifikasi')";
         }
     }
 

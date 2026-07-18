@@ -34,6 +34,9 @@ class CsrfMiddleware
             http_response_code(419);
             $_SESSION['flash_error'] = 'CSRF token tidak valid. Silakan coba lagi.';
             $redirect = $_SERVER['HTTP_REFERER'] ?? '/login';
+            if (!preg_match('#^/[a-z0-9/_-]*$#', $redirect)) {
+                $redirect = '/login';
+            }
             header("Location: $redirect");
             return false;
         }

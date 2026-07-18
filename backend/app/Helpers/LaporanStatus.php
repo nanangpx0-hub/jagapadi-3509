@@ -15,6 +15,9 @@ class LaporanStatus
     private const ALLOWED = [self::DRAF, self::SUBMITTED, self::DIVERIFIKASI, self::DITOLAK, self::DIARSIPKAN];
 
     private const TRANSITIONS = [
+        self::DRAF => [
+            self::SUBMITTED => 'petugas',
+        ],
         self::SUBMITTED => [
             self::DIVERIFIKASI => 'admin',
             self::DITOLAK => 'admin',

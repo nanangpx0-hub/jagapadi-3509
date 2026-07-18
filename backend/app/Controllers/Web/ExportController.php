@@ -54,6 +54,8 @@ class ExportController extends Controller
         }
 
         $format = $input['format'] ?? 'csv';
+        $includeDraft = isset($input['include_draft']) ? filter_var($input['include_draft'], FILTER_VALIDATE_BOOLEAN) : false;
+        $service = new ExportService($role, $userId, $includeDraft);
 
         try {
             while (ob_get_level() > 0) {
@@ -64,12 +66,6 @@ class ExportController extends Controller
                 $service->exportHama($format, $input);
             } else {
                 $service->exportIrigasi($format, $input);
-            }
-
-            if ($_SESSION['role'] === 'admin') {
-                $userId = (int) ($_SESSION['user_id'] ?? 0);
-                $ip = Request::ip();
-                $userAgent = Request::userAgent();
             }
         } catch (\DomainException $e) {
             $kabupaten = MasterKabupaten::all('nama_kabupaten', 'ASC');

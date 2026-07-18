@@ -10,7 +10,6 @@ use PDO;
 
 class DashboardService
 {
-    private const ACTIVE_STATUSES = ['Submitted', 'Diverifikasi'];
     private const ALL_STATUSES = ['Draf', 'Submitted', 'Diverifikasi', 'Ditolak', 'Diarsipkan'];
     private const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
     private const CACHE_TTL = 300;
@@ -19,13 +18,15 @@ class DashboardService
     private string $role;
     private ?int $userId;
     private int $tahun;
+    private bool $includeDraft = false;
 
-    public function __construct(string $role, ?int $userId, int $tahun)
+    public function __construct(string $role, ?int $userId, int $tahun, bool $includeDraft = false)
     {
         $this->db = Database::connect();
         $this->role = $role;
         $this->userId = $role === 'petugas' ? $userId : null;
         $this->tahun = $tahun;
+        $this->includeDraft = $includeDraft;
     }
 
     public static function validateTahun(int $tahun): int
@@ -39,9 +40,11 @@ class DashboardService
 
     public function getStats(): array
     {
-        $cacheKey = "dashboard:stats:{$this->role}:{$this->getUserId()}:{$this->tahun}";
+        $draftFlag = $this->includeDraft ? ':draft' : '';
+        $cacheKey = "dashboard:stats:{$this->role}:{$this->getUserId()}:{$this->tahun}{$draftFlag}";
         $cached = CacheManager::get($cacheKey);
         if ($cached !== null) {
+            $cached['meta']['cached'] = true;
             return $cached;
         }
 
@@ -56,21 +59,23 @@ class DashboardService
         ];
 
         CacheManager::set($cacheKey, $data, self::CACHE_TTL);
-        $data['meta']['cached'] = true;
 
         return $data;
     }
 
     public function getChartsHama(): array
     {
-        $cacheKey = "dashboard:charts:hama:{$this->role}:{$this->getUserId()}:{$this->tahun}";
+        $draftFlag = $this->includeDraft ? ':draft' : '';
+        $cacheKey = "dashboard:charts:hama:{$this->role}:{$this->getUserId()}:{$this->tahun}{$draftFlag}";
         $cached = CacheManager::get($cacheKey);
         if ($cached !== null) {
+            $cached['meta']['cached'] = true;
             return $cached;
         }
 
         $data = [
             'tahun' => $this->tahun,
+            'meta' => ['cached' => false, 'generated_at' => date('Y-m-d H:i:s')],
             'labels' => self::MONTH_LABELS,
             'series' => $this->chartHamaSeries(),
             'by_keparahan_bulanan' => $this->chartHamaByKeparahan(),
@@ -82,7 +87,8 @@ class DashboardService
 
     public function getChartsIrigasi(): array
     {
-        $cacheKey = "dashboard:charts:irigasi:{$this->role}:{$this->getUserId()}:{$this->tahun}";
+        $draftFlag = $this->includeDraft ? ':draft' : '';
+        $cacheKey = "dashboard:charts:irigasi:{$this->role}:{$this->getUserId()}:{$this->tahun}{$draftFlag}";
         $cached = CacheManager::get($cacheKey);
         if ($cached !== null) {
             return $cached;
@@ -155,9 +161,22 @@ class DashboardService
         return $this->userId ?? 0;
     }
 
+    private function activeStatuses(): array
+    {
+        return $this->includeDraft
+            ? ['Draf', 'Submitted', 'Diverifikasi']
+            : ['Submitted', 'Diverifikasi'];
+    }
+
+    private function statusInClause(): string
+    {
+        $statuses = $this->activeStatuses();
+        return "status IN ('" . implode("','", $statuses) . "')";
+    }
+
     private function userCondition(): string
     {
-        return $this->userId !== null ? ' AND lh.user_id = :userId' : '';
+        return $this->userId !== null ? ' AND user_id = :userId' : '';
     }
 
     private function userParam(): array
@@ -223,7 +242,7 @@ class DashboardService
     private function sumLuasSerangan(): float
     {
         $sql = "SELECT COALESCE(SUM(luas_serangan), 0) AS total FROM `laporan_hama`
-                WHERE YEAR(tanggal) = :tahun AND status IN ('Submitted','Diverifikasi')";
+                WHERE YEAR(tanggal) = :tahun AND " . $this->statusInClause();
         $params = ['tahun' => $this->tahun];
 
         $sql .= $this->userCondition();
@@ -237,7 +256,7 @@ class DashboardService
     private function countByKeparahan(): array
     {
         $sql = "SELECT tingkat_keparahan, COUNT(*) AS c FROM `laporan_hama`
-                WHERE YEAR(tanggal) = :tahun AND status IN ('Submitted','Diverifikasi')";
+                WHERE YEAR(tanggal) = :tahun AND " . $this->statusInClause();
         $params = ['tahun' => $this->tahun];
 
         $sql .= $this->userCondition();
@@ -266,7 +285,7 @@ class DashboardService
         $sql = "SELECT o.id AS master_opt_id, o.nama_opt, COUNT(*) AS jumlah
                 FROM `laporan_hama` lh
                 JOIN `master_opt` o ON o.id = lh.master_opt_id
-                WHERE YEAR(lh.tanggal) = :tahun AND lh.status IN ('Submitted','Diverifikasi')";
+                WHERE YEAR(lh.tanggal) = :tahun AND lh." . $this->statusInClause();
         $params = ['tahun' => $this->tahun];
 
         $sql .= $this->userCondition();
@@ -302,7 +321,7 @@ class DashboardService
     private function countByField(string $table, string $field): array
     {
         $sql = "SELECT {$field}, COUNT(*) AS c FROM `{$table}`
-                WHERE YEAR(tanggal) = :tahun AND status IN ('Submitted','Diverifikasi')";
+                WHERE YEAR(tanggal) = :tahun AND " . $this->statusInClause();
         $params = ['tahun' => $this->tahun];
 
         if ($this->userId !== null) {
@@ -328,7 +347,7 @@ class DashboardService
     {
         $sql = "SELECT MONTH(tanggal) AS m, status, COUNT(*) AS c
                 FROM `laporan_hama`
-                WHERE YEAR(tanggal) = :tahun AND status IN ('Submitted','Diverifikasi')";
+                WHERE YEAR(tanggal) = :tahun AND " . $this->statusInClause();
         $params = ['tahun' => $this->tahun];
 
         $sql .= $this->userCondition();
@@ -366,7 +385,7 @@ class DashboardService
     {
         $sql = "SELECT MONTH(tanggal) AS m, tingkat_keparahan, COUNT(*) AS c
                 FROM `laporan_hama`
-                WHERE YEAR(tanggal) = :tahun AND status IN ('Submitted','Diverifikasi')";
+                WHERE YEAR(tanggal) = :tahun AND " . $this->statusInClause();
         $params = ['tahun' => $this->tahun];
 
         $sql .= $this->userCondition();
@@ -403,7 +422,7 @@ class DashboardService
     {
         $sql = "SELECT MONTH(tanggal) AS m, status, COUNT(*) AS c
                 FROM `laporan_irigasi`
-                WHERE YEAR(tanggal) = :tahun AND status IN ('Submitted','Diverifikasi')";
+                WHERE YEAR(tanggal) = :tahun AND " . $this->statusInClause();
         $params = ['tahun' => $this->tahun];
 
         if ($this->userId !== null) {
@@ -446,7 +465,7 @@ class DashboardService
         return match ($statusFilter) {
             'Submitted' => ['Submitted'],
             'Diverifikasi' => ['Diverifikasi'],
-            default => ['Submitted', 'Diverifikasi'],
+            default => $this->activeStatuses(),
         };
     }
 

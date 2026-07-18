@@ -14,8 +14,9 @@ class DashboardController extends BaseApiController
         try {
             $currentUser = $GLOBALS['auth_user'];
             $tahun = DashboardService::validateTahun((int) ($_GET['tahun'] ?? date('Y')));
+            $includeDraft = isset($_GET['include_draft']) ? filter_var($_GET['include_draft'], FILTER_VALIDATE_BOOLEAN) : false;
 
-            $service = new DashboardService($currentUser['role'], (int) $currentUser['id'], $tahun);
+            $service = new DashboardService($currentUser['role'], (int) $currentUser['id'], $tahun, $includeDraft);
             $data = $service->getStats();
 
             $this->success($data['hama'] !== [] || $data['irigasi'] !== [] ? $data : $data, 'Dashboard stats');

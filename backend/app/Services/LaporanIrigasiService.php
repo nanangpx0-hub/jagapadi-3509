@@ -229,11 +229,11 @@ class LaporanIrigasiService
 
         $includeDraft = isset($filters['include_draft'])
             ? filter_var($filters['include_draft'], FILTER_VALIDATE_BOOLEAN)
-            : true;
+            : false;
 
         $queryFilters = $filters;
-        if (!$includeDraft && $currentUser['role'] === 'petugas') {
-            $queryFilters['status'] = 'Submitted';
+        if (!$includeDraft && !isset($queryFilters['status'])) {
+            $queryFilters['status'] = 'Submitted,Diverifikasi';
         }
 
         if ($currentUser['role'] === 'admin') {

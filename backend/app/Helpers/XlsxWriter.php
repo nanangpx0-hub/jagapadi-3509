@@ -198,19 +198,21 @@ class XlsxWriter
 
     private function zipAndCleanup(): void
     {
-        $zip = new \PclZip($this->outputPath);
+        $zip = new \ZipArchive();
+        if ($zip->open($this->outputPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+            throw new \RuntimeException('Cannot create ZIP archive: ' . $this->outputPath);
+        }
 
-        $files = [];
         $iterator = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($this->tmpDir, \RecursiveDirectoryIterator::SKIP_DOTS)
         );
         foreach ($iterator as $file) {
             $localPath = str_replace($this->tmpDir . '/', '', $file->getPathname());
             $localPath = str_replace('\\', '/', $localPath);
-            $files[] = $file->getPathname();
+            $zip->addFile($file->getPathname(), $localPath);
         }
 
-        $zip->create($files, PCLZIP_OPT_REMOVE_PATH, $this->tmpDir, PCLZIP_OPT_TEMP_FILE_OFF);
+        $zip->close();
 
         $this->removeDir($this->tmpDir);
     }
