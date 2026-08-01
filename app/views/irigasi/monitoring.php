@@ -1,1 +1,310 @@
-<?php require_once ROOT_PATH . '/app/helpers/ErrorMessage.php'; require_once ROOT_PATH . '/app/views/layouts/header.php'; $successMsg = ErrorMessage::flashSuccess(); $errorMsg = ErrorMessage::flash(); ?> <link rel="stylesheet" href="<?= BASE_URL ?>public/css/irigasi-monitoring.css"> <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" /> <div class="container-fluid"> <!-- Page Header --> <div class="row mb-3"> <div class="col-md-6"> <h1><i class="fas fa-tachometer-alt text-primary"></i> Monitoring Irigasi</h1> <p class="text-muted mb-0">Real-time monitoring dan kontrol sistem irigasi</p> </div> <div class="col-md-6 text-right"> <div class="btn-group"> <button type="button" class="btn btn-outline-secondary" id="btnRefresh" title="Refresh Data"> <i class="fas fa-sync-alt"></i> Refresh </button> <button type="button" class="btn btn-outline-info" id="btnLightMode" title="Mode Ringan"> <i class="fas fa-feather"></i> Mode Ringan </button> <a href="<?= BASE_URL ?>irigasi" class="btn btn-outline-primary"> <i class="fas fa-list"></i> Data Irigasi </a> </div> </div> </div> <!-- Alert Messages --> <?php if ($successMsg): ?> <div class="alert alert-success alert-dismissible show" role="alert"> <i class="icon fas fa-check"></i> <strong>Sukses!</strong> <?= htmlspecialchars($successMsg ?? '') ?> <button type="button" class="close" data-dismiss="alert">&times;</button> </div> <?php endif; ?> <?php if ($errorMsg): ?> <div class="alert alert-danger alert-dismissible show" role="alert"> <i class="icon fas fa-ban"></i> <strong>Error!</strong> <?= htmlspecialchars($errorMsg ?? '') ?> <button type="button" class="close" data-dismiss="alert">&times;</button> </div> <?php endif; ?> <!-- KPI Cards Row --> <div class="row kpi-row" id="kpiCards"> <div class="col-xl-3 col-md-6 mb-3"> <div class="kpi-card kpi-primary"> <div class="kpi-icon"> <i class="fas fa-water"></i> </div> <div class="kpi-content"> <div class="kpi-value" id="kpiTotalIrigasi">--</div> <div class="kpi-label">Total Irigasi</div> </div> </div> </div> <div class="col-xl-3 col-md-6 mb-3"> <div class="kpi-card kpi-success"> <div class="kpi-icon"> <i class="fas fa-check-circle"></i> </div> <div class="kpi-content"> <div class="kpi-value" id="kpiActiveSensors">--</div> <div class="kpi-label">Sensor Aktif</div> </div> </div> </div> <div class="col-xl-3 col-md-6 mb-3"> <div class="kpi-card kpi-info"> <div class="kpi-icon"> <i class="fas fa-clock"></i> </div> <div class="kpi-content"> <div class="kpi-value" id="kpiTodayOps">--</div> <div class="kpi-label">Operasi Hari Ini</div> </div> </div> </div> <div class="col-xl-3 col-md-6 mb-3"> <div class="kpi-card kpi-warning"> <div class="kpi-icon"> <i class="fas fa-exclamation-triangle"></i> </div> <div class="kpi-content"> <div class="kpi-value" id="kpiAlerts">--</div> <div class="kpi-label">Alert Aktif</div> </div> </div> </div> </div> <!-- Weather Widget Row --> <div class="row mb-3" id="weatherSection"> <div class="col-12"> <div class="card weather-card"> <div class="card-header"> <h5 class="mb-0"> <i class="fas fa-cloud-sun"></i> Prakiraan Cuaca & Rekomendasi Pengairan </h5> </div> <div class="card-body"> <div class="row"> <div class="col-md-4"> <div class="current-weather"> <div class="weather-icon" id="weatherIcon"> <i class="fas fa-sun"></i> </div> <div class="weather-info"> <div class="weather-temp" id="weatherTemp">--°C</div> <div class="weather-desc" id="weatherDesc">Memuat data...</div> </div> </div> </div> <div class="col-md-4"> <div class="weather-details"> <div class="detail-item"> <i class="fas fa-tint"></i> <span>Curah Hujan: <strong id="weatherRain">-- mm</strong></span> </div> <div class="detail-item"> <i class="fas fa-cloud"></i> <span>Kelembaban: <strong id="weatherHumidity">--%</strong></span> </div> <div class="detail-item"> <i class="fas fa-wind"></i> <span>Angin: <strong id="weatherWind">-- km/h</strong></span> </div> </div> </div> <div class="col-md-4"> <div class="irrigation-recommendation"> <div class="recommendation-label">Rekomendasi Pengairan:</div> <div class="recommendation-text" id="irrigationRecommendation"> Memuat rekomendasi... </div> <div class="multiplier-badge" id="irrigationMultiplier"> Faktor: -- </div> </div> </div> </div> <!-- Forecast Days --> <div class="forecast-days mt-3" id="forecastDays"> <!-- Will be populated by JS --> </div> </div> </div> </div> </div> <!-- Main Content Row --> <div class="row"> <!-- Map Section --> <div class="col-lg-8 mb-3"> <div class="card"> <div class="card-header d-flex justify-content-between align-items-center"> <h5 class="mb-0"><i class="fas fa-map-marked-alt"></i> Peta Sebaran Irigasi</h5> <div class="map-controls"> <div class="btn-group btn-group-sm"> <button class="btn btn-outline-secondary active" data-layer="status">Status</button> <button class="btn btn-outline-secondary" data-layer="automation">Otomasi</button> </div> </div> </div> <div class="card-body p-0"> <div id="monitoringMap" style="height: 450px;"></div> </div> </div> </div> <!-- Sidebar - Alerts & Activity --> <div class="col-lg-4 mb-3"> <!-- Active Alerts --> <div class="card mb-3"> <div class="card-header"> <h5 class="mb-0"><i class="fas fa-bell text-warning"></i> Alert Aktif</h5> </div> <div class="card-body alert-list" id="alertList" style="max-height: 200px; overflow-y: auto;"> <div class="text-center text-muted"> <i class="fas ner "></i> Memuat alert... </div> </div> </div> <!-- Recent Activity --> <div class="card"> <div class="card-header"> <h5 class="mb-0"><i class="fas fa-history text-info"></i> Aktivitas Terkini</h5> </div> <div class="card-body activity-list" id="activityList" style="max-height: 200px; overflow-y: auto;"> <div class="text-center text-muted"> <i class="fas ner "></i> Memuat aktivitas... </div> </div> </div> </div> </div> <!-- Charts Row --> <div class="row charts-section" id="chartsSection"> <div class="col-lg-6 mb-3"> <div class="card"> <div class="card-header d-flex justify-content-between align-items-center"> <h5 class="mb-0"><i class="fas fa-chart-line"></i> Trend Sensor</h5> <select class="form-control form-control-sm" style="width: auto;" id="sensorTypeSelect"> <option value="soil_moisture">Kelembaban Tanah</option> <option value="water_ph">pH Air</option> <option value="water_flow">Debit Air</option> <option value="temperature">Suhu</option> </select> </div> <div class="card-body"> <canvas id="sensorTrendChart" height="250"></canvas> </div> </div> </div> <div class="col-lg-6 mb-3"> <div class="card"> <div class="card-header d-flex justify-content-between align-items-center"> <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Aktivitas Pengairan</h5> <select class="form-control form-control-sm" style="width: auto;" id="timeRangeSelect"> <option value="7">7 Hari</option> <option value="14">14 Hari</option> <option value="30" selected>30 Hari</option> </select> </div> <div class="card-body"> <canvas id="irrigationActivityChart" height="250"></canvas> </div> </div> </div> </div> <!-- Rule Automation Status --> <div class="row mb-3"> <div class="col-12"> <div class="card"> <div class="card-header d-flex justify-content-between align-items-center"> <h5 class="mb-0"><i class="fas fa-robot"></i> Status Otomasi</h5> <a href="<?= BASE_URL ?>irigasi/rules" class="btn btn-sm btn-primary"> <i class="fas fa-cog"></i> Kelola Rule </a> </div> <div class="card-body"> <div class="table-responsive"> <table class="table table-sm table-hover" id="rulesTable"> <thead> <tr> <th>Rule</th> <th>Irigasi</th> <th>Prioritas</th> <th>Status</th> <th>Eksekusi Terakhir</th> <th>Total Eksekusi</th> <th>Aksi</th> </tr> </thead> <tbody> <tr> <td colspan="7" class="text-center text-muted"> <i class="fas ner "></i> Memuat data rule... </td> </tr> </tbody> </table> </div> </div> </div> </div> </div> <!-- Last Update Info --> <div class="row"> <div class="col-12 text-right"> <small class="text-muted"> <i class="fas fa-clock"></i> Terakhir diperbarui: <span id="lastUpdate">--</span> <span class="ml-2">|</span> <span class="ml-2">Auto-refresh: <span id="refreshStatus" class="text-success">Aktif</span></span> </small> </div> </div> </div> <!-- Leaflet JS --> <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script> <!-- Chart.js --> <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script> <!-- Monitoring Script --> <script src="<?= BASE_URL ?>public/js/irigasi-monitoring.js"></script> <script> // Initialize monitoring document.addEventListener('DOMContentLoaded', function() { IrigasiMonitoring.init({ baseUrl: '<?= BASE_URL ?>', apiUrl: '<?= BASE_URL ?>api/irigasi/', refreshInterval: 30000, // 30 seconds irigasiData: <?= json_encode($irigasiList ?? []) ?> }); }); </script> <?php require_once ROOT_PATH . '/app/views/layouts/footer.php'; ?> 
+<?php 
+require_once ROOT_PATH . '/app/helpers/ErrorMessage.php';
+require_once ROOT_PATH . '/app/views/layouts/header.php'; 
+
+$successMsg = ErrorMessage::flashSuccess();
+$errorMsg = ErrorMessage::flash();
+?>
+
+<link rel="stylesheet" href="<?= BASE_URL ?>public/css/irigasi-monitoring.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <h1><i class="fas fa-tachometer-alt text-primary"></i> Monitoring Irigasi</h1>
+            <p class="text-muted mb-0">Real-time monitoring dan kontrol sistem irigasi</p>
+        </div>
+        <div class="col-md-6 text-right">
+            <div class="btn-group">
+                <button type="button" class="btn btn-outline-secondary" id="btnRefresh" title="Refresh Data">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+                <button type="button" class="btn btn-outline-info" id="btnLightMode" title="Mode Ringan">
+                    <i class="fas fa-feather"></i> Mode Ringan
+                </button>
+                <a href="<?= BASE_URL ?>irigasi" class="btn btn-outline-primary">
+                    <i class="fas fa-list"></i> Data Irigasi
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Messages -->
+    <?php if ($successMsg): ?>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="icon fas fa-check"></i> <strong>Sukses!</strong> <?= htmlspecialchars($successMsg) ?>
+        <button type="button" class="close" data-dismiss="alert">&times;</button>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($errorMsg): ?>
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="icon fas fa-ban"></i> <strong>Error!</strong> <?= htmlspecialchars($errorMsg) ?>
+        <button type="button" class="close" data-dismiss="alert">&times;</button>
+    </div>
+    <?php endif; ?>
+
+    <!-- KPI Cards Row -->
+    <div class="row kpi-row" id="kpiCards">
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="kpi-card kpi-primary">
+                <div class="kpi-icon">
+                    <i class="fas fa-water"></i>
+                </div>
+                <div class="kpi-content">
+                    <div class="kpi-value" id="kpiTotalIrigasi">--</div>
+                    <div class="kpi-label">Total Irigasi</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="kpi-card kpi-success">
+                <div class="kpi-icon">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="kpi-content">
+                    <div class="kpi-value" id="kpiActiveSensors">--</div>
+                    <div class="kpi-label">Sensor Aktif</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="kpi-card kpi-info">
+                <div class="kpi-icon">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <div class="kpi-content">
+                    <div class="kpi-value" id="kpiTodayOps">--</div>
+                    <div class="kpi-label">Operasi Hari Ini</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="kpi-card kpi-warning">
+                <div class="kpi-icon">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div class="kpi-content">
+                    <div class="kpi-value" id="kpiAlerts">--</div>
+                    <div class="kpi-label">Alert Aktif</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Weather Widget Row -->
+    <div class="row mb-3" id="weatherSection">
+        <div class="col-12">
+            <div class="card weather-card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-cloud-sun"></i> Prakiraan Cuaca & Rekomendasi Pengairan
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="current-weather">
+                                <div class="weather-icon" id="weatherIcon">
+                                    <i class="fas fa-sun"></i>
+                                </div>
+                                <div class="weather-info">
+                                    <div class="weather-temp" id="weatherTemp">--°C</div>
+                                    <div class="weather-desc" id="weatherDesc">Memuat data...</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="weather-details">
+                                <div class="detail-item">
+                                    <i class="fas fa-tint"></i>
+                                    <span>Curah Hujan: <strong id="weatherRain">-- mm</strong></span>
+                                </div>
+                                <div class="detail-item">
+                                    <i class="fas fa-cloud"></i>
+                                    <span>Kelembaban: <strong id="weatherHumidity">--%</strong></span>
+                                </div>
+                                <div class="detail-item">
+                                    <i class="fas fa-wind"></i>
+                                    <span>Angin: <strong id="weatherWind">-- km/h</strong></span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="irrigation-recommendation">
+                                <div class="recommendation-label">Rekomendasi Pengairan:</div>
+                                <div class="recommendation-text" id="irrigationRecommendation">
+                                    Memuat rekomendasi...
+                                </div>
+                                <div class="multiplier-badge" id="irrigationMultiplier">
+                                    Faktor: --
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Forecast Days -->
+                    <div class="forecast-days mt-3" id="forecastDays">
+                        <!-- Will be populated by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Row -->
+    <div class="row">
+        <!-- Map Section -->
+        <div class="col-lg-8 mb-3">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-map-marked-alt"></i> Peta Sebaran Irigasi</h5>
+                    <div class="map-controls">
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-secondary active" data-layer="status">Status</button>
+                            <button class="btn btn-outline-secondary" data-layer="automation">Otomasi</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div id="monitoringMap" style="height: 450px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar - Alerts & Activity -->
+        <div class="col-lg-4 mb-3">
+            <!-- Active Alerts -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-bell text-warning"></i> Alert Aktif</h5>
+                </div>
+                <div class="card-body alert-list" id="alertList" style="max-height: 200px; overflow-y: auto;">
+                    <div class="text-center text-muted">
+                        <i class="fas fa-spinner fa-spin"></i> Memuat alert...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-history text-info"></i> Aktivitas Terkini</h5>
+                </div>
+                <div class="card-body activity-list" id="activityList" style="max-height: 200px; overflow-y: auto;">
+                    <div class="text-center text-muted">
+                        <i class="fas fa-spinner fa-spin"></i> Memuat aktivitas...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="row charts-section" id="chartsSection">
+        <div class="col-lg-6 mb-3">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-chart-line"></i> Trend Sensor</h5>
+                    <select class="form-control form-control-sm" style="width: auto;" id="sensorTypeSelect">
+                        <option value="soil_moisture">Kelembaban Tanah</option>
+                        <option value="water_ph">pH Air</option>
+                        <option value="water_flow">Debit Air</option>
+                        <option value="temperature">Suhu</option>
+                    </select>
+                </div>
+                <div class="card-body">
+                    <canvas id="sensorTrendChart" height="250"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6 mb-3">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Aktivitas Pengairan</h5>
+                    <select class="form-control form-control-sm" style="width: auto;" id="timeRangeSelect">
+                        <option value="7">7 Hari</option>
+                        <option value="14">14 Hari</option>
+                        <option value="30" selected>30 Hari</option>
+                    </select>
+                </div>
+                <div class="card-body">
+                    <canvas id="irrigationActivityChart" height="250"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rule Automation Status -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-robot"></i> Status Otomasi</h5>
+                    <a href="<?= BASE_URL ?>irigasi/rules" class="btn btn-sm btn-primary">
+                        <i class="fas fa-cog"></i> Kelola Rule
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover" id="rulesTable">
+                            <thead>
+                                <tr>
+                                    <th>Rule</th>
+                                    <th>Irigasi</th>
+                                    <th>Prioritas</th>
+                                    <th>Status</th>
+                                    <th>Eksekusi Terakhir</th>
+                                    <th>Total Eksekusi</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted">
+                                        <i class="fas fa-spinner fa-spin"></i> Memuat data rule...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Last Update Info -->
+    <div class="row">
+        <div class="col-12 text-right">
+            <small class="text-muted">
+                <i class="fas fa-clock"></i> Terakhir diperbarui: <span id="lastUpdate">--</span>
+                <span class="ml-2">|</span>
+                <span class="ml-2">Auto-refresh: <span id="refreshStatus" class="text-success">Aktif</span></span>
+            </small>
+        </div>
+    </div>
+</div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+
+<!-- Monitoring Script -->
+<script src="<?= BASE_URL ?>public/js/irigasi-monitoring.js"></script>
+
+<script>
+// Initialize monitoring
+document.addEventListener('DOMContentLoaded', function() {
+    IrigasiMonitoring.init({
+        baseUrl: '<?= BASE_URL ?>',
+        apiUrl: '<?= BASE_URL ?>api/irigasi/',
+        refreshInterval: 30000, // 30 seconds
+        irigasiData: <?= json_encode($irigasiList ?? []) ?>
+    });
+});
+</script>
+
+<?php require_once ROOT_PATH . '/app/views/layouts/footer.php'; ?>

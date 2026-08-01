@@ -1,1 +1,436 @@
-<?php include ROOT_PATH . '/app/views/layouts/header.php'; ?> <style> /* Feedback Index Styles */ .feedback-card { border-left: 4px solid transparent; } .feedback-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); } .feedback-card.prioritas-tinggi { border-left-color: #dc3545; } .feedback-card.prioritas-medium { border-left-color: #ffc107; } .feedback-card.prioritas-rendah { border-left-color: #28a745; } .badge-jenis-bug { background: linear-gradient(135deg, #dc3545, #c82333); color: white; } .badge-jenis-fitur_baru { background: linear-gradient(135deg, #007bff, #0056b3); color: white; } .badge-jenis-peningkatan { background: linear-gradient(135deg, #17a2b8, #117a8b); color: white; } .badge-status-diterima { background-color: #6c757d; color: white; } .badge-status-dalam_proses { background-color: #ffc107; color: #212529; } .badge-status-selesai { background-color: #28a745; color: white; } .badge-status-ditolak { background-color: #dc3545; color: white; } .vote-btn { border-radius: 20px; padding: 5px 15px; } .vote- .vote-btn.voted { background-color: #007bff; color: white; border-color: #007bff; } .stat-card { border-radius: 10px; } .stat- .stat-card .stat-icon { font-size: 2.5rem; opacity: 0.3; position: absolute; right: 15px; top: 15px; } .feedback-meta { font-size: 0.85rem; color: #6c757d; } .popular-feedback-item { padding: 10px; border-bottom: 1px solid #eee; } .popular-feedback-item:hover { background-color: #f8f9fa; } .popular-feedback-item:last-child { border-bottom: none; } </style> <div class="row"> <!-- Statistics Cards --> <div class="col-12 mb-4"> <div class="row"> <div class="col-lg-3 col-6"> <div class="small-box bg-info stat-card"> <div class="inner"> <h3><?= $stats['total'] ?? 0 ?></h3> <p>Total Masukan</p> </div> <div class="icon"> <i class="fas fa-comments"></i> </div> </div> </div> <div class="col-lg-3 col-6"> <div class="small-box bg-warning stat-card"> <div class="inner"> <h3><?= $stats['pending'] ?? 0 ?></h3> <p>Menunggu</p> </div> <div class="icon"> <i class="fas fa-clock"></i> </div> </div> </div> <div class="col-lg-3 col-6"> <div class="small-box bg-primary stat-card"> <div class="inner"> <h3><?= $stats['in_progress'] ?? 0 ?></h3> <p>Dalam Proses</p> </div> <div class="icon"> <i class="fas ner"></i> </div> </div> </div> <div class="col-lg-3 col-6"> <div class="small-box bg-success stat-card"> <div class="inner"> <h3><?= $stats['completed'] ?? 0 ?></h3> <p>Selesai</p> </div> <div class="icon"> <i class="fas fa-check-circle"></i> </div> </div> </div> </div> </div> </div> <div class="row"> <!-- Main Content --> <div class="col-lg-8"> <div class="card"> <div class="card-header"> <h3 class="card-title"> <i class="fas fa-list"></i> Daftar Masukan & Saran </h3> <div class="card-tools"> <a href="<?= BASE_URL ?>feedback/create" class="btn btn-primary btn-sm"> <i class="fas fa-plus"></i> Buat Masukan Baru </a> <?php if ($_SESSION['role'] === 'admin'): ?> <a href="<?= BASE_URL ?>feedback/report" class="btn btn-info btn-sm ml-2"> <i class="fas fa-chart-bar"></i> Laporan </a> <?php endif; ?> </div> </div> <div class="card-body"> <!-- Filters --> <form method="GET" class="mb-4"> <div class="row"> <div class="col-md-3"> <select name="jenis" class="form-control form-control-sm"> <option value="">-- Semua Jenis --</option> <option value="bug" <?= ($filters['jenis'] ?? '') === 'bug' ? 'selected' : '' ?>>Bug Report</option> <option value="fitur_baru" <?= ($filters['jenis'] ?? '') === 'fitur_baru' ? 'selected' : '' ?>>Fitur Baru</option> <option value="peningkatan" <?= ($filters['jenis'] ?? '') === 'peningkatan' ? 'selected' : '' ?>>Peningkatan</option> </select> </div> <div class="col-md-3"> <select name="status" class="form-control form-control-sm"> <option value="">-- Semua Status --</option> <option value="diterima" <?= ($filters['status'] ?? '') === 'diterima' ? 'selected' : '' ?>>Diterima</option> <option value="dalam_proses" <?= ($filters['status'] ?? '') === 'dalam_proses' ? 'selected' : '' ?>>Dalam Proses</option> <option value="selesai" <?= ($filters['status'] ?? '') === 'selesai' ? 'selected' : '' ?>>Selesai</option> <option value="ditolak" <?= ($filters['status'] ?? '') === 'ditolak' ? 'selected' : '' ?>>Ditolak</option> </select> </div> <div class="col-md-3"> <select name="prioritas" class="form-control form-control-sm"> <option value="">-- Semua Prioritas --</option> <option value="tinggi" <?= ($filters['prioritas'] ?? '') === 'tinggi' ? 'selected' : '' ?>>Tinggi</option> <option value="medium" <?= ($filters['prioritas'] ?? '') === 'medium' ? 'selected' : '' ?>>Medium</option> <option value="rendah" <?= ($filters['prioritas'] ?? '') === 'rendah' ? 'selected' : '' ?>>Rendah</option> </select> </div> <div class="col-md-3"> <div class="input-group input-group-sm"> <input type="text" name="search" class="form-control" placeholder="Cari..." value="<?= htmlspecialchars($filters['search'] ?? '') ?>"> <div class="input-group-append"> <button type="submit" class="btn btn-primary"> <i class="fas fa-search"></i> </button> </div> </div> </div> </div> </form> <!-- Feedback List --> <?php if (empty($feedback)): ?> <div class="text-center py-5"> <i class="fas fa-inbox fa-4x text-muted mb-3"></i> <h5 class="text-muted">Belum ada masukan</h5> <p class="text-muted">Jadilah yang pertama memberikan masukan!</p> <a href="<?= BASE_URL ?>feedback/create" class="btn btn-primary"> <i class="fas fa-plus"></i> Buat Masukan </a> </div> <?php else: ?> <?php foreach ($feedback as $item): ?> <div class="card feedback-card prioritas-<?= $item['prioritas'] ?> mb-3"> <div class="card-body"> <div class="d-flex justify-content-between align-items-start"> <div class="flex-grow-1"> <h5 class="mb-1"> <a href="<?= BASE_URL ?>feedback/detail/<?= $item['id'] ?>" class="text-dark"> <?= htmlspecialchars($item['judul'] ?? '') ?> </a> </h5> <div class="mb-2"> <span class="badge badge-jenis-<?= $item['jenis_feedback'] ?>"> <?php $jenisLabels = ['bug' => 'Bug Report', 'fitur_baru' => 'Fitur Baru', 'peningkatan' => 'Peningkatan']; echo $jenisLabels[$item['jenis_feedback']] ?? $item['jenis_feedback']; ?> </span> <span class="badge badge-status-<?= $item['status'] ?>"> <?php $statusLabels = ['diterima' => 'Diterima', 'dalam_proses' => 'Dalam Proses', 'selesai' => 'Selesai', 'ditolak' => 'Ditolak']; echo $statusLabels[$item['status']] ?? $item['status']; ?> </span> <span class="badge badge-<?= $item['prioritas'] === 'tinggi' ? 'danger' : ($item['prioritas'] === 'medium' ? 'warning' : 'success') ?>"> <?= ucfirst($item['prioritas']) ?> </span> </div> <p class="text-muted mb-2" style="max-height: 50px; overflow: hidden;"> <?= htmlspecialchars(substr($item['deskripsi'], 0, 150) ?? '') ?>... </p> <div class="feedback-meta"> <i class="fas fa-user"></i> <?= htmlspecialchars($item['user_nama'] ?? 'Unknown') ?> <span class="mx-2">|</span> <i class="fas fa-clock"></i> <?= date('d M Y H:i', strtotime($item['created_at'])) ?> <?php if ($item['attachment_url']): ?> <span class="mx-2">|</span> <i class="fas fa-paperclip"></i> Lampiran <?php endif; ?> </div> </div> <div class="text-center ml-3"> <?php if ($item['user_id'] != $_SESSION['user_id']): ?> <button type="button" class="btn btn-sm vote-btn <?= $item['has_voted'] ? 'voted' : 'btn-outline-primary' ?>" onclick="toggleVote(<?= $item['id'] ?>, this)" data-feedback-id="<?= $item['id'] ?>"> <i class="fas fa-thumbs-up"></i> <span class="vote-count"><?= $item['vote_count'] ?></span> </button> <?php else: ?> <span class="badge badge-secondary"> <i class="fas fa-thumbs-up"></i> <?= $item['vote_count'] ?> </span> <?php endif; ?> </div> </div> </div> </div> <?php endforeach; ?> <!-- Pagination --> <?php if ($pagination['totalPages'] > 1): ?> <nav class="mt-4"> <ul class="pagination justify-content-center"> <?php if ($pagination['page'] > 1): ?> <li class="page-item"> <a class="page-link" href="?page=<?= $pagination['page'] - 1 ?>&<?= http_build_query(array_filter($filters)) ?>"> <i class="fas fa-chevron-left"></i> </a> </li> <?php endif; ?> <?php for ($i = max(1, $pagination['page'] - 2); $i <= min($pagination['totalPages'], $pagination['page'] + 2); $i++): ?> <li class="page-item <?= $i === $pagination['page'] ? 'active' : '' ?>"> <a class="page-link" href="?page=<?= $i ?>&<?= http_build_query(array_filter($filters)) ?>"><?= $i ?></a> </li> <?php endfor; ?> <?php if ($pagination['page'] < $pagination['totalPages']): ?> <li class="page-item"> <a class="page-link" href="?page=<?= $pagination['page'] + 1 ?>&<?= http_build_query(array_filter($filters)) ?>"> <i class="fas fa-chevron-right"></i> </a> </li> <?php endif; ?> </ul> </nav> <?php endif; ?> <?php endif; ?> </div> </div> </div> <!-- Sidebar --> <div class="col-lg-4"> <!-- Popular Feedback --> <div class="card"> <div class="card-header bg-gradient-info"> <h3 class="card-title"> <i class="fas fa-fire"></i> Saran Populer </h3> </div> <div class="card-body p-0"> <?php if (empty($popularFeedback)): ?> <div class="text-center py-4 text-muted"> <i class="fas fa-star"></i> Belum ada saran populer </div> <?php else: ?> <?php foreach ($popularFeedback as $pop): ?> <div class="popular-feedback-item"> <a href="<?= BASE_URL ?>feedback/detail/<?= $pop['id'] ?>" class="text-dark"> <strong><?= htmlspecialchars(substr($pop['judul'], 0, 40) ?? '') ?><?= strlen($pop['judul']) > 40 ? '...' : '' ?></strong> </a> <div class="d-flex justify-content-between align-items-center mt-1"> <small class="text-muted"> <i class="fas fa-user"></i> <?= htmlspecialchars($pop['user_nama'] ?? 'Unknown') ?> </small> <span class="badge badge-info"> <i class="fas fa-thumbs-up"></i> <?= $pop['vote_count'] ?> </span> </div> </div> <?php endforeach; ?> <?php endif; ?> </div> </div> <!-- Quick Stats by Type --> <div class="card mt-3"> <div class="card-header"> <h3 class="card-title"> <i class="fas fa-chart-pie"></i> Statistik Jenis </h3> </div> <div class="card-body"> <div class="d-flex justify-content-between mb-2"> <span><i class="fas fa-bug text-danger"></i> Bug Report</span> <strong><?= $stats['bugs'] ?? 0 ?></strong> </div> <div class="d-flex justify-content-between mb-2"> <span><i class="fas fa-lightbulb text-primary"></i> Fitur Baru</span> <strong><?= $stats['features'] ?? 0 ?></strong> </div> <div class="d-flex justify-content-between"> <span><i class="fas fa-arrow-up text-info"></i> Peningkatan</span> <strong><?= $stats['improvements'] ?? 0 ?></strong> </div> </div> </div> </div> </div> <script> // Toggle vote function function toggleVote(feedbackId, button) { const csrfToken = '<?= $_SESSION['csrf_token'] ?? '' ?>'; fetch('<?= BASE_URL ?>feedback/vote/' + feedbackId, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrfToken }, body: 'csrf_token=' + encodeURIComponent(csrfToken) }) .then(response => response.json()) .then(data => { if (data.success) { // Update button state if (data.action === 'added') { button.classList.add('voted'); button.classList.remove('btn-outline-primary'); } else { button.classList.remove('voted'); button.classList.add('btn-outline-primary'); } // Update vote count button.querySelector('.vote-count').textContent = data.vote_count; // Show toast toastr.success(data.message); } else { toastr.error(data.error || 'Gagal memproses vote'); } }) .catch(error => { console.error('Error:', error); toastr.error('Terjadi kesalahan'); }); } </script> <?php include ROOT_PATH . '/app/views/layouts/footer.php'; ?> 
+<?php include ROOT_PATH . '/app/views/layouts/header.php'; ?>
+
+<style>
+/* Feedback Index Styles */
+.feedback-card {
+    transition: all 0.2s ease;
+    border-left: 4px solid transparent;
+}
+
+.feedback-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.feedback-card.prioritas-tinggi {
+    border-left-color: #dc3545;
+}
+
+.feedback-card.prioritas-medium {
+    border-left-color: #ffc107;
+}
+
+.feedback-card.prioritas-rendah {
+    border-left-color: #28a745;
+}
+
+.badge-jenis-bug {
+    background: linear-gradient(135deg, #dc3545, #c82333);
+    color: white;
+}
+
+.badge-jenis-fitur_baru {
+    background: linear-gradient(135deg, #007bff, #0056b3);
+    color: white;
+}
+
+.badge-jenis-peningkatan {
+    background: linear-gradient(135deg, #17a2b8, #117a8b);
+    color: white;
+}
+
+.badge-status-diterima {
+    background-color: #6c757d;
+    color: white;
+}
+
+.badge-status-dalam_proses {
+    background-color: #ffc107;
+    color: #212529;
+}
+
+.badge-status-selesai {
+    background-color: #28a745;
+    color: white;
+}
+
+.badge-status-ditolak {
+    background-color: #dc3545;
+    color: white;
+}
+
+.vote-btn {
+    transition: all 0.2s ease;
+    border-radius: 20px;
+    padding: 5px 15px;
+}
+
+.vote-btn:hover {
+    transform: scale(1.05);
+}
+
+.vote-btn.voted {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.stat-card {
+    border-radius: 10px;
+    transition: transform 0.2s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-3px);
+}
+
+.stat-card .stat-icon {
+    font-size: 2.5rem;
+    opacity: 0.3;
+    position: absolute;
+    right: 15px;
+    top: 15px;
+}
+
+.feedback-meta {
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+.popular-feedback-item {
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+    transition: background-color 0.2s;
+}
+
+.popular-feedback-item:hover {
+    background-color: #f8f9fa;
+}
+
+.popular-feedback-item:last-child {
+    border-bottom: none;
+}
+</style>
+
+<div class="row">
+    <!-- Statistics Cards -->
+    <div class="col-12 mb-4">
+        <div class="row">
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-info stat-card">
+                    <div class="inner">
+                        <h3><?= $stats['total'] ?? 0 ?></h3>
+                        <p>Total Masukan</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-comments"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-warning stat-card">
+                    <div class="inner">
+                        <h3><?= $stats['pending'] ?? 0 ?></h3>
+                        <p>Menunggu</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-primary stat-card">
+                    <div class="inner">
+                        <h3><?= $stats['in_progress'] ?? 0 ?></h3>
+                        <p>Dalam Proses</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-spinner"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-success stat-card">
+                    <div class="inner">
+                        <h3><?= $stats['completed'] ?? 0 ?></h3>
+                        <p>Selesai</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Main Content -->
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-list"></i> Daftar Masukan & Saran
+                </h3>
+                <div class="card-tools">
+                    <a href="<?= BASE_URL ?>feedback/create" class="btn btn-primary btn-sm">
+                        <i class="fas fa-plus"></i> Buat Masukan Baru
+                    </a>
+                    <?php if ($_SESSION['role'] === 'admin'): ?>
+                    <a href="<?= BASE_URL ?>feedback/report" class="btn btn-info btn-sm ml-2">
+                        <i class="fas fa-chart-bar"></i> Laporan
+                    </a>
+                    <?php endif; ?>
+                </div>
+            </div>
+            
+            <div class="card-body">
+                <!-- Filters -->
+                <form method="GET" class="mb-4">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <select name="jenis" class="form-control form-control-sm">
+                                <option value="">-- Semua Jenis --</option>
+                                <option value="bug" <?= ($filters['jenis'] ?? '') === 'bug' ? 'selected' : '' ?>>Bug Report</option>
+                                <option value="fitur_baru" <?= ($filters['jenis'] ?? '') === 'fitur_baru' ? 'selected' : '' ?>>Fitur Baru</option>
+                                <option value="peningkatan" <?= ($filters['jenis'] ?? '') === 'peningkatan' ? 'selected' : '' ?>>Peningkatan</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select name="status" class="form-control form-control-sm">
+                                <option value="">-- Semua Status --</option>
+                                <option value="diterima" <?= ($filters['status'] ?? '') === 'diterima' ? 'selected' : '' ?>>Diterima</option>
+                                <option value="dalam_proses" <?= ($filters['status'] ?? '') === 'dalam_proses' ? 'selected' : '' ?>>Dalam Proses</option>
+                                <option value="selesai" <?= ($filters['status'] ?? '') === 'selesai' ? 'selected' : '' ?>>Selesai</option>
+                                <option value="ditolak" <?= ($filters['status'] ?? '') === 'ditolak' ? 'selected' : '' ?>>Ditolak</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select name="prioritas" class="form-control form-control-sm">
+                                <option value="">-- Semua Prioritas --</option>
+                                <option value="tinggi" <?= ($filters['prioritas'] ?? '') === 'tinggi' ? 'selected' : '' ?>>Tinggi</option>
+                                <option value="medium" <?= ($filters['prioritas'] ?? '') === 'medium' ? 'selected' : '' ?>>Medium</option>
+                                <option value="rendah" <?= ($filters['prioritas'] ?? '') === 'rendah' ? 'selected' : '' ?>>Rendah</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="input-group input-group-sm">
+                                <input type="text" name="search" class="form-control" placeholder="Cari..." value="<?= htmlspecialchars($filters['search'] ?? '') ?>">
+                                <div class="input-group-append">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+                
+                <!-- Feedback List -->
+                <?php if (empty($feedback)): ?>
+                <div class="text-center py-5">
+                    <i class="fas fa-inbox fa-4x text-muted mb-3"></i>
+                    <h5 class="text-muted">Belum ada masukan</h5>
+                    <p class="text-muted">Jadilah yang pertama memberikan masukan!</p>
+                    <a href="<?= BASE_URL ?>feedback/create" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Buat Masukan
+                    </a>
+                </div>
+                <?php else: ?>
+                
+                <?php foreach ($feedback as $item): ?>
+                <div class="card feedback-card prioritas-<?= $item['prioritas'] ?> mb-3">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <h5 class="mb-1">
+                                    <a href="<?= BASE_URL ?>feedback/detail/<?= $item['id'] ?>" class="text-dark">
+                                        <?= htmlspecialchars($item['judul']) ?>
+                                    </a>
+                                </h5>
+                                <div class="mb-2">
+                                    <span class="badge badge-jenis-<?= $item['jenis_feedback'] ?>">
+                                        <?php
+                                        $jenisLabels = ['bug' => 'Bug Report', 'fitur_baru' => 'Fitur Baru', 'peningkatan' => 'Peningkatan'];
+                                        echo $jenisLabels[$item['jenis_feedback']] ?? $item['jenis_feedback'];
+                                        ?>
+                                    </span>
+                                    <span class="badge badge-status-<?= $item['status'] ?>">
+                                        <?php
+                                        $statusLabels = ['diterima' => 'Diterima', 'dalam_proses' => 'Dalam Proses', 'selesai' => 'Selesai', 'ditolak' => 'Ditolak'];
+                                        echo $statusLabels[$item['status']] ?? $item['status'];
+                                        ?>
+                                    </span>
+                                    <span class="badge badge-<?= $item['prioritas'] === 'tinggi' ? 'danger' : ($item['prioritas'] === 'medium' ? 'warning' : 'success') ?>">
+                                        <?= ucfirst($item['prioritas']) ?>
+                                    </span>
+                                </div>
+                                <p class="text-muted mb-2" style="max-height: 50px; overflow: hidden;">
+                                    <?= htmlspecialchars(substr($item['deskripsi'], 0, 150)) ?>...
+                                </p>
+                                <div class="feedback-meta">
+                                    <i class="fas fa-user"></i> <?= htmlspecialchars($item['user_nama'] ?? 'Unknown') ?>
+                                    <span class="mx-2">|</span>
+                                    <i class="fas fa-clock"></i> <?= date('d M Y H:i', strtotime($item['created_at'])) ?>
+                                    <?php if ($item['attachment_url']): ?>
+                                    <span class="mx-2">|</span>
+                                    <i class="fas fa-paperclip"></i> Lampiran
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            <div class="text-center ml-3">
+                                <?php if ($item['user_id'] != $_SESSION['user_id']): ?>
+                                <button type="button" 
+                                        class="btn btn-sm vote-btn <?= $item['has_voted'] ? 'voted' : 'btn-outline-primary' ?>"
+                                        onclick="toggleVote(<?= $item['id'] ?>, this)"
+                                        data-feedback-id="<?= $item['id'] ?>">
+                                    <i class="fas fa-thumbs-up"></i>
+                                    <span class="vote-count"><?= $item['vote_count'] ?></span>
+                                </button>
+                                <?php else: ?>
+                                <span class="badge badge-secondary">
+                                    <i class="fas fa-thumbs-up"></i> <?= $item['vote_count'] ?>
+                                </span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+                
+                <!-- Pagination -->
+                <?php if ($pagination['totalPages'] > 1): ?>
+                <nav class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        <?php if ($pagination['page'] > 1): ?>
+                        <li class="page-item">
+                            <a class="page-link" href="?page=<?= $pagination['page'] - 1 ?>&<?= http_build_query(array_filter($filters)) ?>">
+                                <i class="fas fa-chevron-left"></i>
+                            </a>
+                        </li>
+                        <?php endif; ?>
+                        
+                        <?php for ($i = max(1, $pagination['page'] - 2); $i <= min($pagination['totalPages'], $pagination['page'] + 2); $i++): ?>
+                        <li class="page-item <?= $i === $pagination['page'] ? 'active' : '' ?>">
+                            <a class="page-link" href="?page=<?= $i ?>&<?= http_build_query(array_filter($filters)) ?>"><?= $i ?></a>
+                        </li>
+                        <?php endfor; ?>
+                        
+                        <?php if ($pagination['page'] < $pagination['totalPages']): ?>
+                        <li class="page-item">
+                            <a class="page-link" href="?page=<?= $pagination['page'] + 1 ?>&<?= http_build_query(array_filter($filters)) ?>">
+                                <i class="fas fa-chevron-right"></i>
+                            </a>
+                        </li>
+                        <?php endif; ?>
+                    </ul>
+                </nav>
+                <?php endif; ?>
+                
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <!-- Popular Feedback -->
+        <div class="card">
+            <div class="card-header bg-gradient-info">
+                <h3 class="card-title">
+                    <i class="fas fa-fire"></i> Saran Populer
+                </h3>
+            </div>
+            <div class="card-body p-0">
+                <?php if (empty($popularFeedback)): ?>
+                <div class="text-center py-4 text-muted">
+                    <i class="fas fa-star"></i> Belum ada saran populer
+                </div>
+                <?php else: ?>
+                <?php foreach ($popularFeedback as $pop): ?>
+                <div class="popular-feedback-item">
+                    <a href="<?= BASE_URL ?>feedback/detail/<?= $pop['id'] ?>" class="text-dark">
+                        <strong><?= htmlspecialchars(substr($pop['judul'], 0, 40)) ?><?= strlen($pop['judul']) > 40 ? '...' : '' ?></strong>
+                    </a>
+                    <div class="d-flex justify-content-between align-items-center mt-1">
+                        <small class="text-muted">
+                            <i class="fas fa-user"></i> <?= htmlspecialchars($pop['user_nama'] ?? 'Unknown') ?>
+                        </small>
+                        <span class="badge badge-info">
+                            <i class="fas fa-thumbs-up"></i> <?= $pop['vote_count'] ?>
+                        </span>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+        
+        <!-- Quick Stats by Type -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-chart-pie"></i> Statistik Jenis
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-2">
+                    <span><i class="fas fa-bug text-danger"></i> Bug Report</span>
+                    <strong><?= $stats['bugs'] ?? 0 ?></strong>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span><i class="fas fa-lightbulb text-primary"></i> Fitur Baru</span>
+                    <strong><?= $stats['features'] ?? 0 ?></strong>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span><i class="fas fa-arrow-up text-info"></i> Peningkatan</span>
+                    <strong><?= $stats['improvements'] ?? 0 ?></strong>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Toggle vote function
+function toggleVote(feedbackId, button) {
+    const csrfToken = '<?= $_SESSION['csrf_token'] ?? '' ?>';
+    
+    fetch('<?= BASE_URL ?>feedback/vote/' + feedbackId, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-TOKEN': csrfToken
+        },
+        body: 'csrf_token=' + encodeURIComponent(csrfToken)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Update button state
+            if (data.action === 'added') {
+                button.classList.add('voted');
+                button.classList.remove('btn-outline-primary');
+            } else {
+                button.classList.remove('voted');
+                button.classList.add('btn-outline-primary');
+            }
+            
+            // Update vote count
+            button.querySelector('.vote-count').textContent = data.vote_count;
+            
+            // Show toast
+            toastr.success(data.message);
+        } else {
+            toastr.error(data.error || 'Gagal memproses vote');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        toastr.error('Terjadi kesalahan');
+    });
+}
+</script>
+
+<?php include ROOT_PATH . '/app/views/layouts/footer.php'; ?>

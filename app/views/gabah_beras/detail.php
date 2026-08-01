@@ -1,1 +1,198 @@
-<?php /** * Detail Produksi Gabah */ require_once ROOT_PATH . '/app/views/layouts/header.php'; ?> <div class="container-fluid"> <div class="d-sm-flex align-items-center justify-content-between mb-4"> <h1 class="h3 mb-0 text-gray-800"> <i class="fas fa-info-circle text-info"></i> Detail Produksi Gabah </h1> <div> <a href="<?= BASE_URL ?>gabahBeras" class="btn btn-secondary btn-sm"> <i class="fas fa-arrow-left"></i> Kembali </a> <?php if ($_SESSION['role'] !== 'petugas' || $record['user_id'] == $_SESSION['user_id']): ?> <a href="<?= BASE_URL ?>gabahBeras/edit/<?= $record['id'] ?>" class="btn btn-warning btn-sm"> <i class="fas fa-edit"></i> Edit </a> <?php endif; ?> </div> </div> <?php if (isset($_SESSION['flash_message'])): ?> <div class="alert alert-<?= $_SESSION['flash_type'] ?? 'info' ?> alert-dismissible show"> <?= $_SESSION['flash_message'] ?> <button type="button" class="close" data-dismiss="alert">&times;</button> </div> <?php unset($_SESSION['flash_message'], $_SESSION['flash_type']); endif; ?> <div class="row"> <!-- Main Info --> <div class="col-lg-8"> <div class="card shadow mb-4"> <div class="card-header py-3 d-flex justify-content-between"> <h6 class="m-0 font-weight-bold text-primary"> <code><?= htmlspecialchars($record['unique_id'] ?? '') ?></code> </h6> <?php $statusColors = ['draft' => 'secondary', 'pending' => 'warning', 'verified' => 'success', 'rejected' => 'danger']; ?> <span class="badge badge-<?= $statusColors[$record['status']] ?? 'secondary' ?> badge-lg"> <?= ucfirst($record['status']) ?> </span> </div> <div class="card-body"> <table class="table table-borderless"> <tr> <th width="30%">Lokasi</th> <td><?= htmlspecialchars($record['nama_lokasi'] ?? '') ?></td> </tr> <tr> <th>Musim Tanam</th> <td> <span class="badge badge-info"><?= $record['musim_tanam'] ?></span> <?= $musim_list[$record['musim_tanam']] ?? '' ?> </td> </tr> <tr> <th>Tahun</th> <td><?= $record['tahun'] ?></td> </tr> <tr> <th>Varietas</th> <td><?= htmlspecialchars($record['varietas'] ?? '') ?: '-' ?></td> </tr> </table> <hr> <div class="row text-center"> <div class="col-md-3 mb-3"> <div class="border rounded p-3"> <div class="text-xs text-muted">Luas Tanam</div> <div class="h4 text-primary"><?= number_format($record['luas_tanam'], 2) ?></div> <small>Hektar</small> </div> </div> <div class="col-md-3 mb-3"> <div class="border rounded p-3"> <div class="text-xs text-muted">Luas Panen</div> <div class="h4 text-success"><?= number_format($record['luas_panen'], 2) ?></div> <small>Hektar</small> </div> </div> <div class="col-md-3 mb-3"> <div class="border rounded p-3"> <div class="text-xs text-muted">Produksi</div> <div class="h4 text-info"><?= number_format($record['produksi_total'], 2) ?></div> <small>ton GKG</small> </div> </div> <div class="col-md-3 mb-3"> <div class="border rounded p-3 <?= $record['produktivitas'] >= 7 ? 'bg-success text-white' : ($record['produktivitas'] >= 5 ? 'bg-warning' : 'bg-danger text-white') ?>"> <div class="text-xs">Produktivitas</div> <div class="h4"><?= number_format($record['produktivitas'], 2) ?></div> <small>ton/ha</small> </div> </div> </div> <?php if ($record['keterangan']): ?> <hr> <div class="mb-3"> <strong>Keterangan:</strong> <p class="text-muted"><?= nl2br(htmlspecialchars($record['keterangan'] ?? '')) ?></p> </div> <?php endif; ?> </div> </div> </div> <!-- Side Info --> <div class="col-lg-4"> <!-- Quality Card --> <div class="card shadow mb-4"> <div class="card-header py-3 bg-success text-white"> <h6 class="m-0 font-weight-bold"><i class="fas fa-star"></i> Kualitas</h6> </div> <div class="card-body text-center"> <div class="display-4 mb-2"> <span class="badge badge-<?= $record['grade_kualitas'] === 'A' ? 'success' : ($record['grade_kualitas'] === 'B' ? 'primary' : 'warning') ?> p-3"> <?= $record['grade_kualitas'] ?> </span> </div> <p><?= $grade_list[$record['grade_kualitas']] ?? '' ?></p> <?php if ($record['kadar_air']): ?> <div class="border-top pt-3 mt-3"> <small class="text-muted">Kadar Air</small> <div class="h5"><?= number_format($record['kadar_air'], 2) ?>%</div> </div> <?php endif; ?> <?php if ($record['harga_gabah']): ?> <div class="border-top pt-3 mt-3"> <small class="text-muted">Harga Gabah</small> <div class="h5">Rp <?= number_format($record['harga_gabah'], 0, ',', '.') ?>/kg</div> </div> <?php endif; ?> </div> </div> <!-- Photo --> <?php if ($record['foto']): ?> <div class="card shadow mb-4"> <div class="card-header py-3"> <h6 class="m-0 font-weight-bold text-gray-800"><i class="fas fa-image"></i> Foto</h6> </div> <div class="card-body text-center"> <img src="<?= BASE_URL ?>public/uploads/gabah_beras/<?= $record['foto'] ?>" class="img-fluid rounded" alt="Foto produksi"> </div> </div> <?php endif; ?> <!-- Metadata --> <div class="card shadow mb-4"> <div class="card-header py-3"> <h6 class="m-0 font-weight-bold text-gray-800"><i class="fas fa-info"></i> Info Lainnya</h6> </div> <div class="card-body small"> <p><strong>Diinput oleh:</strong> <?= htmlspecialchars($record['user_nama'] ?? '-') ?></p> <p><strong>Tanggal Input:</strong> <?= date('d/m/Y H:i', strtotime($record['created_at'])) ?></p> <?php if ($record['verified_by']): ?> <p><strong>Diverifikasi oleh:</strong> <?= htmlspecialchars($record['verifier_nama'] ?? '-') ?></p> <p><strong>Tanggal Verifikasi:</strong> <?= date('d/m/Y H:i', strtotime($record['verified_at'])) ?></p> <?php endif; ?> </div> </div> <!-- Verification Action --> <?php if (in_array($_SESSION['role'], ['admin', 'operator']) && $record['status'] === 'pending'): ?> <div class="card shadow mb-4 border-left-success"> <div class="card-body"> <h6 class="font-weight-bold">Verifikasi Data</h6> <form method="POST" action="<?= BASE_URL ?>gabahBeras/verify/<?= $record['id'] ?>"> <input type="hidden" name="csrf_token" value="<?= Security::generateCsrfToken() ?>"> <div class="mb-3"> <select name="status" class="form-control"> <option value="verified">✅ Terverifikasi</option> <option value="rejected">❌ Ditolak</option> </select> </div> <button type="submit" class="btn btn-success btn-block"> <i class="fas fa-check"></i> Submit Verifikasi </button> </form> </div> </div> <?php endif; ?> </div> </div> </div> <?php require_once ROOT_PATH . '/app/views/layouts/footer.php'; ?> 
+<?php
+/**
+ * Detail Produksi Gabah
+ */
+
+require_once ROOT_PATH . '/app/views/layouts/header.php';
+?>
+
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">
+            <i class="fas fa-info-circle text-info"></i> Detail Produksi Gabah
+        </h1>
+        <div>
+            <a href="<?= BASE_URL ?>gabahBeras" class="btn btn-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Kembali
+            </a>
+            <?php if ($_SESSION['role'] !== 'petugas' || $record['user_id'] == $_SESSION['user_id']): ?>
+            <a href="<?= BASE_URL ?>gabahBeras/edit/<?= $record['id'] ?>" class="btn btn-warning btn-sm">
+                <i class="fas fa-edit"></i> Edit
+            </a>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <?php if (isset($_SESSION['flash_message'])): ?>
+    <div class="alert alert-<?= $_SESSION['flash_type'] ?? 'info' ?> alert-dismissible fade show">
+        <?= $_SESSION['flash_message'] ?>
+        <button type="button" class="close" data-dismiss="alert">&times;</button>
+    </div>
+    <?php unset($_SESSION['flash_message'], $_SESSION['flash_type']); endif; ?>
+
+    <div class="row">
+        <!-- Main Info -->
+        <div class="col-lg-8">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <code><?= htmlspecialchars($record['unique_id']) ?></code>
+                    </h6>
+                    <?php
+                    $statusColors = ['draft' => 'secondary', 'pending' => 'warning', 'verified' => 'success', 'rejected' => 'danger'];
+                    ?>
+                    <span class="badge badge-<?= $statusColors[$record['status']] ?? 'secondary' ?> badge-lg">
+                        <?= ucfirst($record['status']) ?>
+                    </span>
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless">
+                        <tr>
+                            <th width="30%">Lokasi</th>
+                            <td><?= htmlspecialchars($record['nama_lokasi']) ?></td>
+                        </tr>
+                        <tr>
+                            <th>Musim Tanam</th>
+                            <td>
+                                <span class="badge badge-info"><?= $record['musim_tanam'] ?></span>
+                                <?= $musim_list[$record['musim_tanam']] ?? '' ?>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Tahun</th>
+                            <td><?= $record['tahun'] ?></td>
+                        </tr>
+                        <tr>
+                            <th>Varietas</th>
+                            <td><?= htmlspecialchars($record['varietas']) ?: '-' ?></td>
+                        </tr>
+                    </table>
+                    
+                    <hr>
+                    
+                    <div class="row text-center">
+                        <div class="col-md-3 mb-3">
+                            <div class="border rounded p-3">
+                                <div class="text-xs text-muted">Luas Tanam</div>
+                                <div class="h4 text-primary"><?= number_format($record['luas_tanam'], 2) ?></div>
+                                <small>Hektar</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="border rounded p-3">
+                                <div class="text-xs text-muted">Luas Panen</div>
+                                <div class="h4 text-success"><?= number_format($record['luas_panen'], 2) ?></div>
+                                <small>Hektar</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="border rounded p-3">
+                                <div class="text-xs text-muted">Produksi</div>
+                                <div class="h4 text-info"><?= number_format($record['produksi_total'], 2) ?></div>
+                                <small>ton GKG</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="border rounded p-3 <?= $record['produktivitas'] >= 7 ? 'bg-success text-white' : ($record['produktivitas'] >= 5 ? 'bg-warning' : 'bg-danger text-white') ?>">
+                                <div class="text-xs">Produktivitas</div>
+                                <div class="h4"><?= number_format($record['produktivitas'], 2) ?></div>
+                                <small>ton/ha</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <?php if ($record['keterangan']): ?>
+                    <hr>
+                    <div class="mb-3">
+                        <strong>Keterangan:</strong>
+                        <p class="text-muted"><?= nl2br(htmlspecialchars($record['keterangan'])) ?></p>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Side Info -->
+        <div class="col-lg-4">
+            <!-- Quality Card -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 bg-success text-white">
+                    <h6 class="m-0 font-weight-bold"><i class="fas fa-star"></i> Kualitas</h6>
+                </div>
+                <div class="card-body text-center">
+                    <div class="display-4 mb-2">
+                        <span class="badge badge-<?= $record['grade_kualitas'] === 'A' ? 'success' : ($record['grade_kualitas'] === 'B' ? 'primary' : 'warning') ?> p-3">
+                            <?= $record['grade_kualitas'] ?>
+                        </span>
+                    </div>
+                    <p><?= $grade_list[$record['grade_kualitas']] ?? '' ?></p>
+                    
+                    <?php if ($record['kadar_air']): ?>
+                    <div class="border-top pt-3 mt-3">
+                        <small class="text-muted">Kadar Air</small>
+                        <div class="h5"><?= number_format($record['kadar_air'], 2) ?>%</div>
+                    </div>
+                    <?php endif; ?>
+                    
+                    <?php if ($record['harga_gabah']): ?>
+                    <div class="border-top pt-3 mt-3">
+                        <small class="text-muted">Harga Gabah</small>
+                        <div class="h5">Rp <?= number_format($record['harga_gabah'], 0, ',', '.') ?>/kg</div>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+            
+            <!-- Photo -->
+            <?php if ($record['foto']): ?>
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-gray-800"><i class="fas fa-image"></i> Foto</h6>
+                </div>
+                <div class="card-body text-center">
+                    <img src="<?= BASE_URL ?>public/uploads/gabah_beras/<?= $record['foto'] ?>" 
+                         class="img-fluid rounded" alt="Foto produksi">
+                </div>
+            </div>
+            <?php endif; ?>
+            
+            <!-- Metadata -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-gray-800"><i class="fas fa-info"></i> Info Lainnya</h6>
+                </div>
+                <div class="card-body small">
+                    <p><strong>Diinput oleh:</strong> <?= htmlspecialchars($record['user_nama'] ?? '-') ?></p>
+                    <p><strong>Tanggal Input:</strong> <?= date('d/m/Y H:i', strtotime($record['created_at'])) ?></p>
+                    <?php if ($record['verified_by']): ?>
+                    <p><strong>Diverifikasi oleh:</strong> <?= htmlspecialchars($record['verifier_nama'] ?? '-') ?></p>
+                    <p><strong>Tanggal Verifikasi:</strong> <?= date('d/m/Y H:i', strtotime($record['verified_at'])) ?></p>
+                    <?php endif; ?>
+                </div>
+            </div>
+            
+            <!-- Verification Action -->
+            <?php if (in_array($_SESSION['role'], ['admin', 'operator']) && $record['status'] === 'pending'): ?>
+            <div class="card shadow mb-4 border-left-success">
+                <div class="card-body">
+                    <h6 class="font-weight-bold">Verifikasi Data</h6>
+                    <form method="POST" action="<?= BASE_URL ?>gabahBeras/verify/<?= $record['id'] ?>">
+                        <input type="hidden" name="csrf_token" value="<?= Security::generateCsrfToken() ?>">
+                        <div class="mb-3">
+                            <select name="status" class="form-control">
+                                <option value="verified">✅ Terverifikasi</option>
+                                <option value="rejected">❌ Ditolak</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-success btn-block">
+                            <i class="fas fa-check"></i> Submit Verifikasi
+                        </button>
+                    </form>
+                </div>
+            </div>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+
+<?php require_once ROOT_PATH . '/app/views/layouts/footer.php'; ?>
