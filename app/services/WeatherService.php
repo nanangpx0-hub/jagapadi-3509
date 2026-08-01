@@ -91,14 +91,14 @@ class WeatherService {
     public function getForIrigasi(int $irigasiId): array {
         // Get irigasi coordinates
         $stmt = $this->db->prepare("
-            SELECT koordinat_lat, koordinat_lng, nama_saluran, kecamatan_id
+            SELECT latitude, longitude, nama_saluran, kecamatan_id
             FROM laporan_irigasi
             WHERE id = ?
         ");
         $stmt->execute([$irigasiId]);
         $irigasi = $stmt->fetch(PDO::FETCH_ASSOC);
         
-        if (!$irigasi || !$irigasi['koordinat_lat'] || !$irigasi['koordinat_lng']) {
+        if (!$irigasi || !$irigasi['latitude'] || !$irigasi['longitude']) {
             // Try to get from kecamatan
             if ($irigasi && $irigasi['kecamatan_id']) {
                 return $this->getForKecamatan($irigasi['kecamatan_id']);
@@ -107,8 +107,8 @@ class WeatherService {
         }
         
         return $this->getForecast(
-            (float) $irigasi['koordinat_lat'],
-            (float) $irigasi['koordinat_lng'],
+            (float) $irigasi['latitude'],
+            (float) $irigasi['longitude'],
             7
         );
     }
@@ -229,13 +229,18 @@ class WeatherService {
      */
     public function getAdjustedThresholds(int $irigasiId, string $sensorType): array {
         // Get base thresholds
-        $stmt = $this->db->prepare("
-            SELECT base_threshold_min, base_threshold_max, is_auto_adjust
-            FROM {$this->thresholdsTable}
-            WHERE irigasi_id = ? AND sensor_type = ?
-        ");
-        $stmt->execute([$irigasiId, $sensorType]);
-        $threshold = $stmt->fetch(PDO::FETCH_ASSOC);
+        try {
+            $stmt = $this->db->prepare("
+                SELECT base_threshold_min, base_threshold_max, is_auto_adjust
+                FROM {$this->thresholdsTable}
+                WHERE irigasi_id = ? AND sensor_type = ?
+            ");
+            $stmt->execute([$irigasiId, $sensorType]);
+            $threshold = $stmt->fetch(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->log("irrigation_adaptive_thresholds table unavailable: " . $e->getMessage(), 'WARNING');
+            $threshold = null;
+        }
         
         // Default thresholds if not configured
         if (!$threshold) {
@@ -322,15 +327,20 @@ class WeatherService {
      * @return array
      */
     public function getActiveAlerts(int $irigasiId): array {
-        $stmt = $this->db->prepare("
-            SELECT * FROM {$this->alertsTable}
-            WHERE irigasi_id = ?
-            AND is_dismissed = 0
-            AND (valid_until IS NULL OR valid_until > NOW())
-            ORDER BY severity DESC, created_at DESC
-        ");
-        $stmt->execute([$irigasiId]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        try {
+            $stmt = $this->db->prepare("
+                SELECT * FROM {$this->alertsTable}
+                WHERE irigasi_id = ?
+                AND is_dismissed = 0
+                AND (valid_until IS NULL OR valid_until > NOW())
+                ORDER BY severity DESC, created_at DESC
+            ");
+            $stmt->execute([$irigasiId]);
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->log("weather_alerts table unavailable: " . $e->getMessage(), 'WARNING');
+            return [];
+        }
     }
     
     /**
@@ -340,12 +350,17 @@ class WeatherService {
      * @return bool
      */
     public function dismissAlert(int $alertId): bool {
-        $stmt = $this->db->prepare("
-            UPDATE {$this->alertsTable}
-            SET is_dismissed = 1
-            WHERE id = ?
-        ");
-        return $stmt->execute([$alertId]);
+        try {
+            $stmt = $this->db->prepare("
+                UPDATE {$this->alertsTable}
+                SET is_dismissed = 1
+                WHERE id = ?
+            ");
+            return $stmt->execute([$alertId]);
+        } catch (PDOException $e) {
+            $this->log("weather_alerts table unavailable: " . $e->getMessage(), 'WARNING');
+            return false;
+        }
     }
     
     // =========================================================================
@@ -357,17 +372,22 @@ class WeatherService {
     }
     
     private function getFromCache(string $locationKey, int $days): array {
-        $stmt = $this->db->prepare("
-            SELECT * FROM {$this->cacheTable}
-            WHERE location_key = ?
-            AND forecast_date >= CURDATE()
-            AND forecast_date < DATE_ADD(CURDATE(), INTERVAL ? DAY)
-            AND is_valid = 1
-            AND (expires_at IS NULL OR expires_at > NOW())
-            ORDER BY forecast_date ASC
-        ");
-        $stmt->execute([$locationKey, $days]);
-        $cached = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        try {
+            $stmt = $this->db->prepare("
+                SELECT * FROM {$this->cacheTable}
+                WHERE location_key = ?
+                AND forecast_date >= CURDATE()
+                AND forecast_date < DATE_ADD(CURDATE(), INTERVAL ? DAY)
+                AND is_valid = 1
+                AND (expires_at IS NULL OR expires_at > NOW())
+                ORDER BY forecast_date ASC
+            ");
+            $stmt->execute([$locationKey, $days]);
+            $cached = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->log("weather_cache table unavailable: " . $e->getMessage(), 'WARNING');
+            $cached = [];
+        }
         
         if (empty($cached)) {
             return [];
@@ -398,36 +418,40 @@ class WeatherService {
         
         $expiresAt = date('Y-m-d H:i:s', strtotime('+6 hours'));
         
-        foreach ($data['daily'] as $day) {
-            $stmt = $this->db->prepare("
-                INSERT INTO {$this->cacheTable}
-                (location_key, forecast_date, precipitation_mm, precipitation_probability,
-                 temperature_max, temperature_min, weather_code, weather_description,
-                 source, fetched_at, expires_at, is_valid)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open_meteo', NOW(), ?, 1)
-                ON DUPLICATE KEY UPDATE
-                    precipitation_mm = VALUES(precipitation_mm),
-                    precipitation_probability = VALUES(precipitation_probability),
-                    temperature_max = VALUES(temperature_max),
-                    temperature_min = VALUES(temperature_min),
-                    weather_code = VALUES(weather_code),
-                    weather_description = VALUES(weather_description),
-                    fetched_at = NOW(),
-                    expires_at = VALUES(expires_at),
-                    is_valid = 1
-            ");
-            
-            $stmt->execute([
-                $locationKey,
-                $day['date'] ?? date('Y-m-d'),
-                $day['precipitation_sum'] ?? 0,
-                $day['precipitation_probability'] ?? null,
-                $day['temperature_max'] ?? null,
-                $day['temperature_min'] ?? null,
-                $day['weather_code'] ?? null,
-                $day['description'] ?? null,
-                $expiresAt
-            ]);
+        try {
+            foreach ($data['daily'] as $day) {
+                $stmt = $this->db->prepare("
+                    INSERT INTO {$this->cacheTable}
+                    (location_key, forecast_date, precipitation_mm, precipitation_probability,
+                     temperature_max, temperature_min, weather_code, weather_description,
+                     source, fetched_at, expires_at, is_valid)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open_meteo', NOW(), ?, 1)
+                    ON DUPLICATE KEY UPDATE
+                        precipitation_mm = VALUES(precipitation_mm),
+                        precipitation_probability = VALUES(precipitation_probability),
+                        temperature_max = VALUES(temperature_max),
+                        temperature_min = VALUES(temperature_min),
+                        weather_code = VALUES(weather_code),
+                        weather_description = VALUES(weather_description),
+                        fetched_at = NOW(),
+                        expires_at = VALUES(expires_at),
+                        is_valid = 1
+                ");
+                
+                $stmt->execute([
+                    $locationKey,
+                    $day['date'] ?? date('Y-m-d'),
+                    $day['precipitation_sum'] ?? 0,
+                    $day['precipitation_probability'] ?? null,
+                    $day['temperature_max'] ?? null,
+                    $day['temperature_min'] ?? null,
+                    $day['weather_code'] ?? null,
+                    $day['description'] ?? null,
+                    $expiresAt
+                ]);
+            }
+        } catch (PDOException $e) {
+            $this->log("weather_cache table unavailable: " . $e->getMessage(), 'WARNING');
         }
     }
     
@@ -497,20 +521,24 @@ class WeatherService {
         float $max, 
         float $multiplier
     ): void {
-        $stmt = $this->db->prepare("
-            UPDATE {$this->thresholdsTable}
-            SET current_threshold_min = ?,
-                current_threshold_max = ?,
-                adjustment_factor = ?,
-                adjustment_reason = ?,
-                last_adjusted_at = NOW()
-            WHERE irigasi_id = ? AND sensor_type = ?
-        ");
-        
-        $reason = $multiplier < 1 ? 'Prakiraan hujan - threshold diturunkan' :
-                 ($multiplier > 1 ? 'Cuaca panas/kering - threshold normal' : 'Cuaca normal');
-        
-        $stmt->execute([$min, $max, $multiplier, $reason, $irigasiId, $sensorType]);
+        try {
+            $stmt = $this->db->prepare("
+                UPDATE {$this->thresholdsTable}
+                SET current_threshold_min = ?,
+                    current_threshold_max = ?,
+                    adjustment_factor = ?,
+                    adjustment_reason = ?,
+                    last_adjusted_at = NOW()
+                WHERE irigasi_id = ? AND sensor_type = ?
+            ");
+            
+            $reason = $multiplier < 1 ? 'Prakiraan hujan - threshold diturunkan' :
+                     ($multiplier > 1 ? 'Cuaca panas/kering - threshold normal' : 'Cuaca normal');
+            
+            $stmt->execute([$min, $max, $multiplier, $reason, $irigasiId, $sensorType]);
+        } catch (PDOException $e) {
+            $this->log("irrigation_adaptive_thresholds table unavailable: " . $e->getMessage(), 'WARNING');
+        }
     }
     
     private function createAlert(
@@ -521,40 +549,45 @@ class WeatherService {
         string $message,
         array $weatherData
     ): array {
-        // Check if similar alert already exists
-        $stmt = $this->db->prepare("
-            SELECT id FROM {$this->alertsTable}
-            WHERE irigasi_id = ? AND alert_type = ? AND is_dismissed = 0
-            AND created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
-        ");
-        $stmt->execute([$irigasiId, $type]);
-        
-        if ($stmt->fetch()) {
-            return []; // Alert already exists
+        try {
+            // Check if similar alert already exists
+            $stmt = $this->db->prepare("
+                SELECT id FROM {$this->alertsTable}
+                WHERE irigasi_id = ? AND alert_type = ? AND is_dismissed = 0
+                AND created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
+            ");
+            $stmt->execute([$irigasiId, $type]);
+            
+            if ($stmt->fetch()) {
+                return []; // Alert already exists
+            }
+            
+            $stmt = $this->db->prepare("
+                INSERT INTO {$this->alertsTable}
+                (irigasi_id, alert_type, severity, title, message, weather_data, valid_until)
+                VALUES (?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 24 HOUR))
+            ");
+            
+            $stmt->execute([
+                $irigasiId,
+                $type,
+                $severity,
+                $title,
+                $message,
+                json_encode($weatherData)
+            ]);
+            
+            return [
+                'id' => $this->db->lastInsertId(),
+                'type' => $type,
+                'severity' => $severity,
+                'title' => $title,
+                'message' => $message
+            ];
+        } catch (PDOException $e) {
+            $this->log("weather_alerts table unavailable: " . $e->getMessage(), 'WARNING');
+            return [];
         }
-        
-        $stmt = $this->db->prepare("
-            INSERT INTO {$this->alertsTable}
-            (irigasi_id, alert_type, severity, title, message, weather_data, valid_until)
-            VALUES (?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 24 HOUR))
-        ");
-        
-        $stmt->execute([
-            $irigasiId,
-            $type,
-            $severity,
-            $title,
-            $message,
-            json_encode($weatherData)
-        ]);
-        
-        return [
-            'id' => $this->db->lastInsertId(),
-            'type' => $type,
-            'severity' => $severity,
-            'title' => $title,
-            'message' => $message
-        ];
     }
     
     private function log(string $message, string $level = 'INFO'): void {
@@ -591,12 +624,17 @@ class WeatherService {
      * Clear expired cache entries
      */
     public function clearExpiredCache(): int {
-        $stmt = $this->db->prepare("
-            DELETE FROM {$this->cacheTable}
-            WHERE expires_at < NOW()
-            OR forecast_date < DATE_SUB(CURDATE(), INTERVAL 7 DAY)
-        ");
-        $stmt->execute();
-        return $stmt->rowCount();
+        try {
+            $stmt = $this->db->prepare("
+                DELETE FROM {$this->cacheTable}
+                WHERE expires_at < NOW()
+                OR forecast_date < DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+            ");
+            $stmt->execute();
+            return $stmt->rowCount();
+        } catch (PDOException $e) {
+            $this->log("weather_cache table unavailable: " . $e->getMessage(), 'WARNING');
+            return 0;
+        }
     }
 }

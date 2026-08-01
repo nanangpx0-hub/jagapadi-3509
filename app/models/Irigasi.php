@@ -5,7 +5,7 @@
  */
 class Irigasi extends Model {
     protected $table = 'data_irigasi';
-    protected $fillable = ['user_id', 'desa_id', 'tanggal', 'status_kondisi', 'debit_air', 'luas_lahan', 'catatan'];
+    protected $fillable = ['tanggal', 'daerah_irigasi', 'kecamatan', 'luas_sawah', 'debit_air', 'status_pintu', 'keterangan'];
     
     /**
      * Get irrigation by ID
@@ -15,16 +15,8 @@ class Irigasi extends Model {
             $qb = new QueryBuilder();
             return $qb->table('data_irigasi di')
                 ->select([
-                    'di.*',
-                    'u.nama_lengkap as pelapor',
-                    'md.nama_desa',
-                    'mk.nama_kecamatan',
-                    'mkab.nama_kabupaten'
+                    'di.*'
                 ])
-                ->leftJoin('users u', 'di.user_id = u.id')
-                ->leftJoin('master_desa md', 'di.desa_id = md.id')
-                ->leftJoin('master_kecamatan mk', 'md.kecamatan_id = mk.id')
-                ->leftJoin('master_kabupaten mkab', 'mk.kabupaten_id = mkab.id')
                 ->where('di.id', $id)
                 ->first();
         } catch (\PDOException $e) {
@@ -41,50 +33,30 @@ class Irigasi extends Model {
             $qb = new QueryBuilder();
             $qb->table('data_irigasi di')
                 ->select([
-                    'di.*',
-                    'u.nama_lengkap as pelapor',
-                    'md.nama_desa',
-                    'mk.nama_kecamatan',
-                    'mkab.nama_kabupaten'
-                ])
-                ->leftJoin('users u', 'di.user_id = u.id')
-                ->leftJoin('master_desa md', 'di.desa_id = md.id')
-                ->leftJoin('master_kecamatan mk', 'md.kecamatan_id = mk.id')
-                ->leftJoin('master_kabupaten mkab', 'mk.kabupaten_id = mkab.id');
+                    'di.*'
+                ]);
             
-            if (!empty($filters['status_kondisi'])) {
-                $qb->where('di.status_kondisi', $filters['status_kondisi']);
+            if (!empty($filters['status_pintu'])) {
+                $qb->where('di.status_pintu', $filters['status_pintu']);
             }
             
-            if (!empty($filters['kabupaten_id'])) {
-                $qb->where('di.kabupaten_id', $filters['kabupaten_id']);
+            if (!empty($filters['kecamatan'])) {
+                $qb->where('di.kecamatan', $filters['kecamatan']);
             }
             
-            if (!empty($filters['kecamatan_id'])) {
-                $qb->where('di.kecamatan_id', $filters['kecamatan_id']);
-            }
-            
-            if (!empty($filters['desa_id'])) {
-                $qb->where('di.desa_id', $filters['desa_id']);
-            }
-            
-            if (!empty($filters['jenis_irigasi'])) {
-                $qb->where('di.jenis_irigasi', $filters['jenis_irigasi']);
-            }
-            
-            if (!empty($filters['user_id'])) {
-                $qb->where('di.user_id', $filters['user_id']);
+            if (!empty($filters['daerah_irigasi'])) {
+                $qb->where('di.daerah_irigasi', $filters['daerah_irigasi']);
             }
             
             if (!empty($filters['date_from'])) {
-                $qb->where('di.created_at', $filters['date_from'], '>=');
+                $qb->where('di.tanggal', $filters['date_from'], '>=');
             }
             
             if (!empty($filters['date_to'])) {
-                $qb->where('di.created_at', $filters['date_to'], '<=');
+                $qb->where('di.tanggal', $filters['date_to'], '<=');
             }
             
-            $qb->orderBy('di.created_at', 'DESC')
+            $qb->orderBy('di.tanggal', 'DESC')
                 ->limit($limit)
                 ->offset($offset);
             
@@ -103,36 +75,24 @@ class Irigasi extends Model {
             $qb = new QueryBuilder();
             $qb->table('data_irigasi di');
             
-            if (!empty($filters['status_kondisi'])) {
-                $qb->where('di.status_kondisi', $filters['status_kondisi']);
+            if (!empty($filters['status_pintu'])) {
+                $qb->where('di.status_pintu', $filters['status_pintu']);
             }
             
-            if (!empty($filters['kabupaten_id'])) {
-                $qb->where('di.kabupaten_id', $filters['kabupaten_id']);
+            if (!empty($filters['kecamatan'])) {
+                $qb->where('di.kecamatan', $filters['kecamatan']);
             }
             
-            if (!empty($filters['kecamatan_id'])) {
-                $qb->where('di.kecamatan_id', $filters['kecamatan_id']);
-            }
-            
-            if (!empty($filters['desa_id'])) {
-                $qb->where('di.desa_id', $filters['desa_id']);
-            }
-            
-            if (!empty($filters['jenis_irigasi'])) {
-                $qb->where('di.jenis_irigasi', $filters['jenis_irigasi']);
-            }
-            
-            if (!empty($filters['user_id'])) {
-                $qb->where('di.user_id', $filters['user_id']);
+            if (!empty($filters['daerah_irigasi'])) {
+                $qb->where('di.daerah_irigasi', $filters['daerah_irigasi']);
             }
             
             if (!empty($filters['date_from'])) {
-                $qb->where('di.created_at', $filters['date_from'], '>=');
+                $qb->where('di.tanggal', $filters['date_from'], '>=');
             }
             
             if (!empty($filters['date_to'])) {
-                $qb->where('di.created_at', $filters['date_to'], '<=');
+                $qb->where('di.tanggal', $filters['date_to'], '<=');
             }
             
             return $qb->count();
@@ -150,20 +110,12 @@ class Irigasi extends Model {
             $qb = new QueryBuilder();
             $qb->table('data_irigasi');
             
-            if ($userId) {
-                $qb->where('user_id', $userId);
-            }
-            
             $total = $qb->count();
             
             $qb2 = new QueryBuilder();
             $qb2->table('data_irigasi')
-                ->select(['status_kondisi', 'COUNT(*) as count'])
-                ->groupBy(['status_kondisi']);
-            
-            if ($userId) {
-                $qb2->where('user_id', $userId);
-            }
+                ->select(['status_pintu', 'COUNT(*) as count'])
+                ->groupBy(['status_pintu']);
             
             $statusBreakdown = $qb2->get();
             
@@ -181,9 +133,6 @@ class Irigasi extends Model {
         try {
             $qb = new QueryBuilder();
             $qb->table('data_irigasi');
-            if ($userId !== null) {
-                $qb->where('user_id', $userId);
-            }
             return $qb->count();
         } catch (\PDOException $e) {
             error_log('Irigasi::getTotalCount - ' . $e->getMessage());
@@ -194,10 +143,7 @@ class Irigasi extends Model {
     public function getCountByStatus($status, $userId = null) {
         try {
             $qb = new QueryBuilder();
-            $qb->table('data_irigasi')->where('status_kondisi', $status);
-            if ($userId !== null) {
-                $qb->where('user_id', $userId);
-            }
+            $qb->table('data_irigasi')->where('status_pintu', $status);
             return $qb->count();
         } catch (\PDOException $e) {
             error_log('Irigasi::getCountByStatus - ' . $e->getMessage());
@@ -209,11 +155,8 @@ class Irigasi extends Model {
         try {
             $qb = new QueryBuilder();
             $qb->table('data_irigasi')
-                ->select(['status_kondisi', 'COUNT(*) as total'])
-                ->groupBy(['status_kondisi']);
-            if ($userId !== null) {
-                $qb->where('user_id', $userId);
-            }
+                ->select(['status_pintu', 'COUNT(*) as total'])
+                ->groupBy(['status_pintu']);
             return $qb->get();
         } catch (\PDOException $e) {
             error_log('Irigasi::getStatusDistribution - ' . $e->getMessage());
@@ -224,16 +167,11 @@ class Irigasi extends Model {
     public function getRecentActivities($limit = 10, $userId = null) {
         try {
             $sql = "
-                SELECT di.*, u.nama_lengkap as user_name
+                SELECT di.*
                 FROM data_irigasi di
-                LEFT JOIN users u ON di.user_id = u.id
                 WHERE 1=1
             ";
             $params = [];
-            if ($userId !== null) {
-                $sql .= " AND di.user_id = ?";
-                $params[] = $userId;
-            }
             $sql .= " ORDER BY di.updated_at DESC, di.created_at DESC LIMIT ?";
             $params[] = (int)$limit;
 
@@ -252,17 +190,12 @@ class Irigasi extends Model {
     public function getAlerts($userId = null) {
         try {
             $sql = "
-                SELECT di.id, di.nama_irigasi, di.status_kondisi, di.updated_at
+                SELECT di.id, di.daerah_irigasi, di.status_pintu, di.updated_at
                 FROM data_irigasi di
-                WHERE di.status_kondisi IN ('Rusak', 'Kritis', 'Butuh Perbaikan')
+                WHERE di.status_pintu IN ('Tertutup', 'Sebagian')
             ";
-            $params = [];
-            if ($userId !== null) {
-                $sql .= " AND di.user_id = ?";
-                $params[] = $userId;
-            }
             $sql .= " ORDER BY di.updated_at DESC LIMIT 20";
-            return $this->query($sql, $params);
+            return $this->query($sql, []);
         } catch (\PDOException $e) {
             error_log('Irigasi::getAlerts - ' . $e->getMessage());
             return [];

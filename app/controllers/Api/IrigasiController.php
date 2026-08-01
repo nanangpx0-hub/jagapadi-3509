@@ -247,21 +247,20 @@ class IrigasiController extends BaseApiController {
             // Get sensor data
             $db = Database::getInstance()->getConnection();
             $stmt = $db->prepare("
-                SELECT sensor_type, sensor_value, threshold_min, threshold_max, 
-                       status, last_reading, battery_level, signal_strength
-                FROM pengairan_otomatis
-                WHERE irigasi_id = ?
-                ORDER BY sensor_type
+                SELECT po.id, po.status, po.triggered_by, po.started_at, po.ended_at, po.created_at
+                FROM pengairan_otomatis po
+                WHERE po.irigasi_id = ?
+                ORDER BY po.created_at DESC
             ");
             $stmt->execute([$id]);
             $sensors = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
             // Get recent activity logs
             $stmt = $db->prepare("
-                SELECT action_type, action_data, triggered_by, created_at
-                FROM irrigation_logs
-                WHERE irigasi_id = ?
-                ORDER BY created_at DESC
+                SELECT il.action, il.status, il.message, il.created_at
+                FROM irrigation_logs il
+                WHERE il.irigasi_id = ?
+                ORDER BY il.created_at DESC
                 LIMIT 10
             ");
             $stmt->execute([$id]);
@@ -270,32 +269,26 @@ class IrigasiController extends BaseApiController {
             // Get active alerts count
             $stmt = $db->prepare("
                 SELECT COUNT(*) as alert_count
-                FROM weather_alerts
-                WHERE irigasi_id = ? AND is_dismissed = 0
+                FROM irrigation_rule_logs
+                WHERE irigasi_id = ? AND execution_status = 'error'
             ");
             $stmt->execute([$id]);
             $alertCount = $stmt->fetch(PDO::FETCH_ASSOC)['alert_count'] ?? 0;
             
             // Calculate KPIs
-            $avgMoisture = 0;
-            $moistureCount = 0;
-            foreach ($sensors as $sensor) {
-                if ($sensor['sensor_type'] === 'soil_moisture') {
-                    $avgMoisture += $sensor['sensor_value'];
-                    $moistureCount++;
-                }
-            }
+            $activeSensors = array_filter($sensors, function ($sensor) {
+                return $sensor['status'] === 'active';
+            });
             
             $response = [
                 'irigasi' => $irigasi,
                 'sensors' => $sensors,
                 'recent_logs' => $logs,
                 'kpi' => [
-                    'avg_moisture' => $moistureCount > 0 ? round($avgMoisture / $moistureCount, 2) : null,
-                    'active_sensors' => count(array_filter($sensors, fn($s) => $s['status'] === 'active')),
+                    'active_sensors' => count($activeSensors),
                     'total_sensors' => count($sensors),
                     'alert_count' => $alertCount,
-                    'last_update' => $sensors[0]['last_reading'] ?? null
+                    'last_update' => $sensors[0]['created_at'] ?? null
                 ],
                 'timestamp' => date('Y-m-d H:i:s')
             ];
@@ -321,19 +314,19 @@ class IrigasiController extends BaseApiController {
             $weatherService = new WeatherService();
             
             // Get forecast
-            $forecast = $weatherService->getForIrigasi($id);
+            $forecast = $weatherService->getForIrigasi((int) $id);
             
             // Get current conditions
-            $current = $weatherService->getCurrentConditions($id);
+            $current = $weatherService->getCurrentConditions((int) $id);
             
             // Get adaptive multiplier
-            $multiplier = $weatherService->getAdaptiveMultiplier($id);
+            $multiplier = $weatherService->getAdaptiveMultiplier((int) $id);
             
             // Get active alerts
-            $alerts = $weatherService->getActiveAlerts($id);
+            $alerts = $weatherService->getActiveAlerts((int) $id);
             
             // Check and create new alerts if needed
-            $newAlerts = $weatherService->checkAndCreateAlerts($id);
+            $newAlerts = $weatherService->checkAndCreateAlerts((int) $id);
             
             $response = [
                 'current' => $current,
@@ -595,16 +588,16 @@ class IrigasiController extends BaseApiController {
                     COUNT(*) as total,
                     SUM(CASE WHEN status = 'Diverifikasi' THEN 1 ELSE 0 END) as verified,
                     SUM(CASE WHEN status = 'Submitted' THEN 1 ELSE 0 END) as pending,
-                    SUM(CASE WHEN status_perbaikan = 'Belum Ditangani' THEN 1 ELSE 0 END) as needs_repair
+                    SUM(CASE WHEN kondisi_fisik = 'Rusak' THEN 1 ELSE 0 END) as needs_repair
                 FROM laporan_irigasi
             ");
             $stats = $stmt->fetch(PDO::FETCH_ASSOC);
             
             // Get status distribution
             $stmt = $db->query("
-                SELECT status_kondisi, COUNT(*) as count
-                FROM irigasi
-                GROUP BY status_kondisi
+                SELECT status, COUNT(*) as count
+                FROM laporan_irigasi
+                GROUP BY status
             ");
             $statusDist = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
@@ -633,16 +626,16 @@ class IrigasiController extends BaseApiController {
                 SELECT COUNT(*) as today_operations
                 FROM irrigation_logs
                 WHERE DATE(created_at) = CURDATE()
-                AND action_type IN ('irrigation_start', 'irrigation_stop')
+                AND action IN ('irrigation_start', 'irrigation_stop')
             ");
             $todayOps = $stmt->fetch(PDO::FETCH_ASSOC)['today_operations'] ?? 0;
             
             // Get active alerts
             $stmt = $db->query("
                 SELECT COUNT(*) as active_alerts
-                FROM weather_alerts
-                WHERE is_dismissed = 0
-                AND (valid_until IS NULL OR valid_until > NOW())
+                FROM irrigation_rule_logs
+                WHERE execution_status = 'error'
+                AND triggered_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
             ");
             $alerts = $stmt->fetch(PDO::FETCH_ASSOC)['active_alerts'] ?? 0;
             
@@ -679,31 +672,30 @@ class IrigasiController extends BaseApiController {
             // Get sensor trends
             $stmt = $db->prepare("
                 SELECT 
-                    DATE(created_at) as date,
-                    sensor_type,
-                    AVG(sensor_value) as avg_value,
-                    MIN(sensor_value) as min_value,
-                    MAX(sensor_value) as max_value
-                FROM pengairan_otomatis
-                WHERE irigasi_id = ?
-                AND created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-                GROUP BY DATE(created_at), sensor_type
+                    DATE(ps.waktu_baca) as date,
+                    sp.tipe_sensor as sensor_type,
+                    AVG(ps.nilai) as avg_value,
+                    MIN(ps.nilai) as min_value,
+                    MAX(ps.nilai) as max_value
+                FROM pembacaan_sensor ps
+                JOIN sensor_pengairan sp ON ps.sensor_id = sp.id
+                WHERE ps.waktu_baca >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+                GROUP BY DATE(ps.waktu_baca), sp.tipe_sensor
                 ORDER BY date ASC
             ");
-            $stmt->execute([$id, $days]);
+            $stmt->execute([$days]);
             $sensorTrends = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
             // Get irrigation history
             $stmt = $db->prepare("
                 SELECT 
                     DATE(created_at) as date,
-                    action_type,
-                    COUNT(*) as count,
-                    SUM(duration_minutes) as total_duration
+                    action as action_type,
+                    COUNT(*) as count
                 FROM irrigation_logs
                 WHERE irigasi_id = ?
                 AND created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-                GROUP BY DATE(created_at), action_type
+                GROUP BY DATE(created_at), action
                 ORDER BY date ASC
             ");
             $stmt->execute([$id, $days]);
