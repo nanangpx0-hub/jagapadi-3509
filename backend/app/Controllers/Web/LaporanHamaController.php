@@ -46,6 +46,7 @@ class LaporanHamaController extends Controller
     {
         $kabupaten = MasterKabupaten::all('nama_kabupaten', 'ASC');
         $optList = MasterOpt::allActive();
+        $jember = MasterKabupaten::findByKode('3509');
 
         $this->view('laporan-hama/create', [
             'pageTitle' => 'Buat Laporan Hama',
@@ -54,6 +55,7 @@ class LaporanHamaController extends Controller
             'data' => [],
             'errors' => [],
             'oldInput' => [],
+            'jemberId' => $jember ? (int) $jember['id'] : 0,
         ]);
     }
 
@@ -79,6 +81,7 @@ class LaporanHamaController extends Controller
             $errors = $result['errors'] ?? [];
             $kabupaten = MasterKabupaten::all('nama_kabupaten', 'ASC');
             $optList = MasterOpt::allActive();
+            $jember = MasterKabupaten::findByKode('3509');
             $this->view('laporan-hama/create', [
                 'pageTitle' => 'Buat Laporan Hama',
                 'kabupaten' => $kabupaten,
@@ -86,6 +89,7 @@ class LaporanHamaController extends Controller
                 'data' => [],
                 'errors' => $errors,
                 'oldInput' => $input,
+                'jemberId' => $jember ? (int) $jember['id'] : 0,
             ]);
             return;
         }
@@ -141,6 +145,7 @@ class LaporanHamaController extends Controller
 
         $kabupaten = MasterKabupaten::all('nama_kabupaten', 'ASC');
         $optList = MasterOpt::allActive();
+        $jember = MasterKabupaten::findByKode('3509');
 
         $this->view('laporan-hama/edit', [
             'pageTitle' => 'Edit Laporan Hama',
@@ -149,6 +154,7 @@ class LaporanHamaController extends Controller
             'data' => $laporan,
             'errors' => [],
             'oldInput' => [],
+            'jemberId' => $jember ? (int) $jember['id'] : 0,
         ]);
     }
 

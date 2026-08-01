@@ -143,7 +143,7 @@ document.getElementById('kabupaten').addEventListener('change', function() {
     kecamatan.innerHTML = '<option value="">Memuat...</option>';
     desa.innerHTML = '<option value="">Semua Desa</option>';
 
-    fetch('/api/v1/wilayah/kecamatan?kabupaten_id=' + kabId)
+    fetch('/wilayah/kecamatan-json?kabupaten_id=' + kabId)
         .then(function(r) { return r.json(); })
         .then(function(data) {
             kecamatan.innerHTML = '<option value="">Semua Kecamatan</option>';
@@ -169,7 +169,7 @@ document.getElementById('kecamatan').addEventListener('change', function() {
 
     desa.innerHTML = '<option value="">Memuat...</option>';
 
-    fetch('/api/v1/wilayah/desa?kecamatan_id=' + kecId)
+    fetch('/wilayah/desa-json?kecamatan_id=' + kecId)
         .then(function(r) { return r.json(); })
         .then(function(data) {
             desa.innerHTML = '<option value="">Semua Desa</option>';

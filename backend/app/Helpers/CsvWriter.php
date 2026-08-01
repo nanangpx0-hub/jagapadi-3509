@@ -25,7 +25,11 @@ class CsvWriter
 
     public function writeRow(array $row): void
     {
-        fputcsv($this->handle, $row, $this->separator);
+        $safe = [];
+        foreach ($row as $cell) {
+            $safe[] = \App\Core\Security::sanitizeCell($cell);
+        }
+        fputcsv($this->handle, $safe, $this->separator);
     }
 
     public function close(): void

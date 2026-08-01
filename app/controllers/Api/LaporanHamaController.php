@@ -1,11 +1,12 @@
 <?php
+declare(strict_types=1);
 
 require_once ROOT_PATH . '/app/controllers/Api/BaseApiController.php';
 require_once ROOT_PATH . '/app/models/LaporanHama.php';
 
 class LaporanHamaController extends BaseApiController {
     
-    private $laporanModel;
+    private LaporanHama $laporanModel;
     
     public function __construct() {
         $this->laporanModel = new LaporanHama();
@@ -103,18 +104,30 @@ class LaporanHamaController extends BaseApiController {
                 $this->sendError('Validation failed', 422, $errors);
             }
             
+            // Validate status if provided
+            $requestedStatus = $data['status'] ?? 'Draf';
+            $allowedStatuses = ['Draf', 'Submitted'];
+            if (!in_array($requestedStatus, $allowedStatuses, true)) {
+                $this->sendError('Status tidak valid. Hanya Draf atau Submitted yang diperbolehkan.', 422);
+            }
+            
             // Set user_id from session
             $data['user_id'] = $_SESSION['user_id'];
             
             // Set default values
             $data['populasi'] = $data['populasi'] ?? 0;
             $data['luas_serangan'] = $data['luas_serangan'] ?? 0;
-            $data['status'] = 'Submitted';
+            $data['status'] = $requestedStatus;
             $data['created_at'] = date('Y-m-d H:i:s');
             
             // Handle file upload if present
             if (isset($_FILES['foto']) && $_FILES['foto']['error'] === UPLOAD_ERR_OK) {
-                $data['foto'] = $this->handleFileUpload($_FILES['foto']);
+                $data['foto'] = $this->handleFileUpload($_FILES['foto'], 'laporan');
+            }
+            
+            // Generate nomor_laporan only when status is Submitted
+            if ($data['status'] === 'Submitted') {
+                $data['nomor_laporan'] = $this->laporanModel->generateNomorLaporan();
             }
             
             $laporanId = $this->laporanModel->create($data);
@@ -128,6 +141,52 @@ class LaporanHamaController extends BaseApiController {
             
         } catch (Exception $e) {
             $this->sendError('Failed to create laporan hama: ' . $e->getMessage(), 500);
+        }
+    }
+    
+    /**
+     * Submit a draft laporan hama (change status from Draf to Submitted)
+     * POST /api/laporan-hama/{id}/submit
+     */
+    public function submit($id) {
+        try {
+            if (!$id || !is_numeric($id)) {
+                $this->sendError('Invalid laporan ID', 400);
+            }
+            
+            $existingLaporan = $this->laporanModel->getById($id);
+            if (!$existingLaporan) {
+                $this->sendError('Laporan not found', 404);
+            }
+            
+            // Only allow submit if status is Draf
+            if ($existingLaporan['status'] !== 'Draf') {
+                $this->sendError('Hanya laporan berstatus Draf yang dapat disubmit', 422);
+            }
+            
+            // Only the owner or admin can submit
+            if ($_SESSION['role'] === 'petugas' && $existingLaporan['user_id'] != $_SESSION['user_id']) {
+                $this->sendError('Forbidden', 403);
+            }
+            
+            // Generate nomor laporan
+            $nomorLaporan = $this->laporanModel->generateNomorLaporan();
+            
+            $success = $this->laporanModel->update($id, [
+                'status' => 'Submitted',
+                'nomor_laporan' => $nomorLaporan,
+                'updated_at' => date('Y-m-d H:i:s')
+            ]);
+            
+            if ($success) {
+                $laporan = $this->laporanModel->getById($id);
+                $this->sendResponse($laporan, 'Laporan berhasil disubmit');
+            } else {
+                $this->sendError('Failed to submit laporan', 500);
+            }
+            
+        } catch (Exception $e) {
+            $this->sendError('Failed to submit laporan: ' . $e->getMessage(), 500);
         }
     }
     
@@ -154,12 +213,17 @@ class LaporanHamaController extends BaseApiController {
             $data = $this->getRequestData();
             $data = $this->sanitizeData($data);
             
+            // Petugas cannot change status, verified_by, verified_at
+            if ($_SESSION['role'] === 'petugas') {
+                unset($data['status'], $data['verified_by'], $data['verified_at'], $data['catatan_verifikasi']);
+            }
+            
             // Set updated timestamp
             $data['updated_at'] = date('Y-m-d H:i:s');
             
             // Handle file upload if present
             if (isset($_FILES['foto']) && $_FILES['foto']['error'] === UPLOAD_ERR_OK) {
-                $data['foto'] = $this->handleFileUpload($_FILES['foto']);
+                $data['foto'] = $this->handleFileUpload($_FILES['foto'], 'laporan');
             }
             
             $success = $this->laporanModel->update($id, $data);
@@ -239,37 +303,48 @@ class LaporanHamaController extends BaseApiController {
     }
     
     /**
-     * Handle file upload
+     * Submit a draft laporan hama (change status from Draf to Submitted)
+     * POST /api/laporan-hama/{id}/submit
      */
-    private function handleFileUpload($file) {
-        $uploadDir = ROOT_PATH . '/public/uploads/laporan/';
-        
-        // Create directory if it doesn't exist
-        if (!is_dir($uploadDir)) {
-            mkdir($uploadDir, 0755, true);
-        }
-        
-        // Generate unique filename
-        $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
-        $filename = uniqid() . '_' . time() . '.' . $extension;
-        $filepath = $uploadDir . $filename;
-        
-        // Validate file type
-        $allowedTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-        if (!in_array(strtolower($extension), $allowedTypes)) {
-            throw new Exception('Invalid file type. Only JPG, PNG, GIF, and WEBP are allowed.');
-        }
-        
-        // Validate file size (max 10MB)
-        if ($file['size'] > 10 * 1024 * 1024) {
-            throw new Exception('File size too large. Maximum 10MB allowed.');
-        }
-        
-        // Move uploaded file
-        if (move_uploaded_file($file['tmp_name'], $filepath)) {
-            return 'uploads/laporan/' . $filename;
-        } else {
-            throw new Exception('Failed to upload file.');
+    public function submit($id) {
+        try {
+            if (!$id || !is_numeric($id)) {
+                $this->sendError('Invalid laporan ID', 400);
+            }
+            
+            $existingLaporan = $this->laporanModel->getById($id);
+            if (!$existingLaporan) {
+                $this->sendError('Laporan not found', 404);
+            }
+            
+            // Only allow submit if status is Draf
+            if ($existingLaporan['status'] !== 'Draf') {
+                $this->sendError('Hanya laporan berstatus Draf yang dapat disubmit', 422);
+            }
+            
+            // Only the owner or admin can submit
+            if ($_SESSION['role'] === 'petugas' && $existingLaporan['user_id'] != $_SESSION['user_id']) {
+                $this->sendError('Forbidden', 403);
+            }
+            
+            // Generate nomor laporan
+            $nomorLaporan = $this->laporanModel->generateNomorLaporan();
+            
+            $success = $this->laporanModel->update($id, [
+                'status' => 'Submitted',
+                'nomor_laporan' => $nomorLaporan,
+                'updated_at' => date('Y-m-d H:i:s')
+            ]);
+            
+            if ($success) {
+                $laporan = $this->laporanModel->getById($id);
+                $this->sendResponse($laporan, 'Laporan berhasil disubmit');
+            } else {
+                $this->sendError('Failed to submit laporan', 500);
+            }
+            
+        } catch (Exception $e) {
+            $this->sendError('Failed to submit laporan: ' . $e->getMessage(), 500);
         }
     }
 }

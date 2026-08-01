@@ -453,14 +453,18 @@ class DashboardDataAggregator {
      */
     public function getIrrigationByArea() {
         $sql = "SELECT 
-                    daerah_irigasi,
-                    AVG(debit_air) as avg_debit,
-                    MAX(debit_air) as max_debit,
-                    MIN(debit_air) as min_debit,
-                    COUNT(*) as total_records
-                FROM data_irigasi 
-                WHERE tanggal >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-                GROUP BY daerah_irigasi
+                    di.daerah_irigasi,
+                    di.kecamatan,
+                    AVG(di.debit_air) as avg_debit,
+                    MAX(di.debit_air) as max_debit,
+                    MIN(di.debit_air) as min_debit,
+                    COUNT(*) as total_records,
+                    AVG(mk.latitude) as latitude,
+                    AVG(mk.longitude) as longitude
+                FROM data_irigasi di
+                LEFT JOIN master_kecamatan mk ON di.kecamatan = mk.nama_kecamatan
+                WHERE di.tanggal >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+                GROUP BY di.daerah_irigasi, di.kecamatan
                 ORDER BY avg_debit DESC";
         
         $stmt = $this->db->prepare($sql);
@@ -604,6 +608,8 @@ class DashboardDataAggregator {
      */
     public function getHamaMapData($filters = []) {
         $year = $filters['year'] ?? date('Y');
+        $status = $filters['status'] ?? '';
+        
         $sql = "SELECT 
                     lh.id,
                     lh.tanggal,
@@ -620,11 +626,21 @@ class DashboardDataAggregator {
                 WHERE YEAR(lh.tanggal) = :year
                 AND lh.status IN ('Submitted', 'Diverifikasi')
                 AND lh.latitude IS NOT NULL
-                AND lh.longitude IS NOT NULL
-                ORDER BY lh.tanggal DESC";
+                AND lh.longitude IS NOT NULL";
+        
+        if ($status === 'Submitted' || $status === 'Diverifikasi') {
+            $sql .= " AND lh.status = :status";
+        }
+        
+        $sql .= " ORDER BY lh.tanggal DESC";
+        
+        $params = [':year' => $year];
+        if ($status === 'Submitted' || $status === 'Diverifikasi') {
+            $params[':status'] = $status;
+        }
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([':year' => $year]);
+        $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     

@@ -234,7 +234,7 @@
                             <td><?= $idx + 1 ?></td>
                             <td>
                                 <a href="<?= BASE_URL ?>feedback/detail/<?= $pop['id'] ?>">
-                                    <?= htmlspecialchars($pop['judul']) ?>
+                                    <?= htmlspecialchars($pop['judul'] ?? '') ?>
                                 </a>
                             </td>
                             <td>

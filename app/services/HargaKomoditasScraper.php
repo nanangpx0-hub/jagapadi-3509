@@ -202,9 +202,8 @@ class HargaKomoditasScraper {
         try {
             $db = Database::getInstance()->getConnection();
             $stmt = $db->prepare(
-                "SELECT id, nama_kecamatan, latitude, longitude, kode_bps, kode_bmkg_adm4 
-                 FROM kecamatan_jember 
-                 WHERE is_active = 1 
+                "SELECT id, nama_kecamatan, kode 
+                 FROM master_kecamatan 
                  ORDER BY nama_kecamatan
                  LIMIT 10" // Limit to major areas for price data
             );

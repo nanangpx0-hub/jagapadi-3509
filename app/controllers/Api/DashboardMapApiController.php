@@ -14,7 +14,6 @@ class DashboardMapApiController extends BaseApiController {
     private $aggregator;
     
     public function __construct() {
-        parent::__construct();
         $this->aggregator = new DashboardDataAggregator();
     }
     
@@ -76,7 +75,8 @@ class DashboardMapApiController extends BaseApiController {
     public function hama() {
         try {
             $filters = [
-                'year' => $_GET['year'] ?? date('Y')
+                'year' => $_GET['year'] ?? date('Y'),
+                'status' => $_GET['status'] ?? ''
             ];
             
             $data = $this->aggregator->getHamaMapData($filters);

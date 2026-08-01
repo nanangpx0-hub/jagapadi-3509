@@ -84,6 +84,20 @@ $users = [
         'nama_lengkap' => 'Petugas Lapangan 01',
         'role' => 'petugas',
     ],
+    [
+        'username' => 'operator01',
+        'password' => 'ChangeMeOperator!123',
+        'email' => 'operator01@jagapadi.local',
+        'nama_lengkap' => 'Operator Irigasi 01',
+        'role' => 'operator',
+    ],
+    [
+        'username' => 'statistisi01',
+        'password' => 'ChangeMeStatistisi!123',
+        'email' => 'statistisi01@jagapadi.local',
+        'nama_lengkap' => 'Statistisi 01',
+        'role' => 'statistisi',
+    ],
 ];
 
 foreach ($users as $user) {
@@ -97,9 +111,10 @@ foreach ($users as $user) {
 
     $hash = password_hash($user['password'], PASSWORD_BCRYPT, ['cost' => 12]);
 
+    $mustChange = in_array($user['role'], ['operator', 'statistisi']) ? 0 : 1;
     $insert = $pdo->prepare("
         INSERT INTO `users` (`username`, `password`, `email`, `nama_lengkap`, `role`, `aktif`, `must_change_password`)
-        VALUES (?, ?, ?, ?, ?, 1, 1)
+        VALUES (?, ?, ?, ?, ?, 1, ?)
     ");
     $insert->execute([
         $user['username'],
@@ -107,6 +122,7 @@ foreach ($users as $user) {
         $user['email'],
         $user['nama_lengkap'],
         $user['role'],
+        $mustChange,
     ]);
 
     echo "  [OK]   {$user['username']} created (role: {$user['role']})" . PHP_EOL;
@@ -115,7 +131,7 @@ foreach ($users as $user) {
 echo PHP_EOL;
 echo "=== Summary ===" . PHP_EOL;
 echo "  SQL seed files executed: $seedCount" . PHP_EOL;
-echo "  Users seeded: " . count($users) . PHP_EOL;
+echo "  Users seeded: " . count($users) . " (admin, petugas01, operator01, statistisi01)" . PHP_EOL;
 
 $stmt = $pdo->query("SELECT COUNT(*) FROM `users`");
 $totalUsers = $stmt->fetchColumn();

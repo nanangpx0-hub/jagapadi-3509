@@ -73,6 +73,24 @@ cd jagapadi-3509
 
 ---
 
+## Mulai Cepat
+
+### Akses web backend
+- Panduan lokal & production: [docs/AKSES_WEB_BACKEND.md](docs/AKSES_WEB_BACKEND.md)
+- Jalankan web lokal:
+  1. `cd backend`
+  2. `composer install`
+  3. `php -S localhost:8080 -t public`
+
+### Build APK
+- Panduan build debug/release: [docs/BUILD_APK.md](docs/BUILD_APK.md)
+- Build debug cepat:
+  1. `cd mobile`
+  2. `flutter pub get`
+  3. `flutter build apk --debug`
+
+---
+
 ## Aturan Kerja (Ringkas)
 
 - **Branch per task/issue** → Pull Request → Review → Merge

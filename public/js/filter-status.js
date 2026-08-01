@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Update URL dengan filter parameter
             const url = new URL(window.location.href);
-            if (filter === 'semua') {
+            if (filter === 'semua' || filter === 'aktif') {
                 url.searchParams.delete('status');
             } else {
                 url.searchParams.set('status', filter);
@@ -94,9 +94,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const urlParams = new URLSearchParams(window.location.search);
     const currentStatus = urlParams.get('status') || 'semua';
     
+    // 'aktif' is not a real status; treat it as 'semua'
+    const activeStatus = (currentStatus === 'aktif') ? 'semua' : currentStatus;
+    
     filterButtons.forEach(function(button) {
         const buttonFilter = button.getAttribute('data-filter');
-        if (buttonFilter === currentStatus) {
+        if (buttonFilter === activeStatus) {
             button.classList.add('active');
             button.setAttribute('aria-pressed', 'true');
         }

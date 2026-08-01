@@ -43,8 +43,16 @@ class RateLimitMiddleware
                 ]);
             } else {
                 $_SESSION['flash_error'] = 'Terlalu banyak permintaan. Silakan coba beberapa saat lagi.';
-                $redirect = $_SERVER['HTTP_REFERER'] ?? '/dashboard';
-                header("Location: $redirect");
+                $currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+                $referer = parse_url($_SERVER['HTTP_REFERER'] ?? '', PHP_URL_PATH);
+                // Prevent redirect loop: only redirect to a referrer that differs from the current
+                // (rate-limited) path. Otherwise emit a plain 429 response to avoid infinite redirects.
+                if ($referer !== null && $referer !== '' && $referer !== $currentPath) {
+                    header("Location: $referer");
+                } else {
+                    header('Content-Type: text/plain; charset=utf-8');
+                    echo '429 - Terlalu banyak permintaan. Silakan coba beberapa saat lagi.';
+                }
             }
             return false;
         }

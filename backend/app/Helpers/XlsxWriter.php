@@ -142,9 +142,10 @@ class XlsxWriter
             $xml .= '    <row r="1">';
             $col = 'A';
             foreach ($this->headers as $header) {
+                $safe = \App\Core\Security::sanitizeCell($header);
                 $xml .= '<c r="' . $col . '1" t="s" s="1"><v>' . $stringIndex . '</v></c>';
-                $sharedStrings[] = $this->escapeXml($header);
-                $stringMap[$header] = $stringIndex;
+                $sharedStrings[] = $this->escapeXml($safe);
+                $stringMap[$safe] = $stringIndex;
                 $stringIndex++;
                 $col++;
             }
@@ -156,7 +157,7 @@ class XlsxWriter
             $xml .= '    <row r="' . $rowNum . '">';
             $col = 'A';
             foreach ($row as $cellValue) {
-                $cellStr = (string) ($cellValue ?? '');
+                $cellStr = (string) \App\Core\Security::sanitizeCell($cellValue ?? '');
                 if (!isset($stringMap[$cellStr])) {
                     $sharedStrings[] = $this->escapeXml($cellStr);
                     $stringMap[$cellStr] = $stringIndex;
@@ -206,10 +207,18 @@ class XlsxWriter
         $iterator = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($this->tmpDir, \RecursiveDirectoryIterator::SKIP_DOTS)
         );
+        // Normalize both base and entry to forward slashes so the prefix strip
+        // works regardless of OS directory separator (Windows mixes both).
+        $baseNorm = rtrim(str_replace('\\', '/', $this->tmpDir), '/');
         foreach ($iterator as $file) {
-            $localPath = str_replace($this->tmpDir . '/', '', $file->getPathname());
-            $localPath = str_replace('\\', '/', $localPath);
-            $zip->addFile($file->getPathname(), $localPath);
+            $full = $file->getPathname();
+            $fullNorm = str_replace('\\', '/', $full);
+            $localPath = $fullNorm;
+            if (str_starts_with($fullNorm, $baseNorm . '/')) {
+                $localPath = substr($fullNorm, strlen($baseNorm . '/'));
+            }
+            $localPath = ltrim($localPath, '/');
+            $zip->addFile($full, $localPath);
         }
 
         $zip->close();
@@ -219,17 +228,43 @@ class XlsxWriter
 
     private function removeDir(string $dir): void
     {
+        $files = [];
+        $dirs = [];
         $iterator = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),
             \RecursiveIteratorIterator::CHILD_FIRST
         );
         foreach ($iterator as $file) {
             if ($file->isDir()) {
-                rmdir($file->getPathname());
+                $dirs[] = $file->getPathname();
             } else {
-                unlink($file->getPathname());
+                $files[] = $file->getPathname();
             }
         }
-        rmdir($dir);
+        // Tutup iterator sebelum menghapus agar handle direktori dilepas (Windows).
+        unset($iterator);
+
+        foreach ($files as $f) {
+            @unlink($f);
+        }
+        foreach ($dirs as $d) {
+            @rmdir($d);
+        }
+        @rmdir($dir);
+    }
+
+    /**
+     * Pastikan direktori tmp sementara selalu dibersihkan meski save() melempar
+     * exception sebelum zipAndCleanup() sempat berjalan.
+     */
+    public function __destruct()
+    {
+        if (isset($this->tmpDir) && is_dir($this->tmpDir)) {
+            try {
+                $this->removeDir($this->tmpDir);
+            } catch (\Throwable $e) {
+                // abaikan kegagalan cleanup
+            }
+        }
     }
 }

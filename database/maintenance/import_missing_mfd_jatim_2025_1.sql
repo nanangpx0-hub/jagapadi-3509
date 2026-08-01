@@ -24,8 +24,8 @@
 --   Script ini INSERT-only untuk data yang kodenya belum ada.
 --   Script ini tidak UPDATE nama yang sudah ada.
 --   Script ini tidak mengubah kode yang sudah ada.
---   Script ini tidak soft-delete atau delete data lama.
---   Untuk kode yang sudah ada tetapi soft-delete, script ini tidak membuat duplikat.
+--   Skema master_*: tidak ada kolom deleted_at (tidak ada soft-delete).
+--   Untuk kode yang sudah ada, script ini tidak membuat duplikat.
 --   Review SELECT BEFORE dan SELECT AFTER sebelum COMMIT.
 --
 -- Cara menjalankan manual:
@@ -35,10 +35,10 @@
 --        SET GLOBAL local_infile = 1;
 --
 --   2. Keluar dari MySQL, lalu masuk ulang dari PowerShell:
---        mysql --local-infile=1 -u root bpsjembe_jagapadi
+--        mysql --local-infile=1 -u root jagapadi_local
 --
 --   3. Jalankan script:
---        SOURCE C:/laragon/www/jagapadi/database/maintenance/import_missing_mfd_jatim_2025_1.sql;
+--        SOURCE C:/laragon/www/jagapadi-3509/database/maintenance/import_missing_mfd_jatim_2025_1.sql;
 --
 --   4. Review semua hasil SELECT AFTER.
 --
@@ -57,6 +57,10 @@
 -- =========================================================
 
 SET @maintenance_run_id = 'import_missing_mfd_jatim_2025_1';
+
+-- Staging menggunakan GROUP BY pada ekspresi TRIM(); nonaktifkan ONLY_FULL_GROUP_BY
+-- untuk session ini agar pembuatan temporary table tidak gagal.
+SET SESSION sql_mode = REPLACE(@@sql_mode, 'ONLY_FULL_GROUP_BY', '');
 
 DROP TEMPORARY TABLE IF EXISTS tmp_mfd_jatim_2025_1_raw;
 DROP TEMPORARY TABLE IF EXISTS tmp_mfd_jatim_2025_1_kabupaten;
@@ -79,7 +83,7 @@ CREATE TEMPORARY TABLE tmp_mfd_jatim_2025_1_raw (
     scraped_at VARCHAR(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-LOAD DATA LOCAL INFILE 'C:/laragon/www/jagapadi/data/mfd/mfd_jawa_timur_2025_1.csv'
+LOAD DATA LOCAL INFILE 'C:/laragon/www/jagapadi-3509/data/mfd/mfd_jawa_timur_2025_1.csv'
 INTO TABLE tmp_mfd_jatim_2025_1_raw
 CHARACTER SET utf8mb4
 FIELDS TERMINATED BY ',' ENCLOSED BY '"' ESCAPED BY '"'
@@ -105,7 +109,7 @@ CREATE TEMPORARY TABLE tmp_mfd_jatim_2025_1_kabupaten
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 AS
 SELECT
-    TRIM(kode_kabupaten_bps) COLLATE utf8mb4_0900_ai_ci AS kode_kabupaten,
+    TRIM(kode_kabupaten_bps) COLLATE utf8mb4_0900_ai_ci AS kode,
     MAX(TRIM(nama_kabupaten)) COLLATE utf8mb4_0900_ai_ci AS nama_kabupaten
 FROM tmp_mfd_jatim_2025_1_raw
 WHERE TRIM(periode) = '2025_1.2025'
@@ -114,15 +118,15 @@ WHERE TRIM(periode) = '2025_1.2025'
 GROUP BY TRIM(kode_kabupaten_bps);
 
 ALTER TABLE tmp_mfd_jatim_2025_1_kabupaten
-    MODIFY kode_kabupaten VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+    MODIFY kode VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
     MODIFY nama_kabupaten VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
-    ADD PRIMARY KEY (kode_kabupaten);
+    ADD PRIMARY KEY (kode);
 
 CREATE TEMPORARY TABLE tmp_mfd_jatim_2025_1_kecamatan
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 AS
 SELECT
-    TRIM(kode_kecamatan_bps) COLLATE utf8mb4_0900_ai_ci AS kode_kecamatan,
+    TRIM(kode_kecamatan_bps) COLLATE utf8mb4_0900_ai_ci AS kode,
     MAX(TRIM(nama_kecamatan)) COLLATE utf8mb4_0900_ai_ci AS nama_kecamatan,
     LEFT(TRIM(kode_kecamatan_bps), 4) COLLATE utf8mb4_0900_ai_ci AS kode_kabupaten
 FROM tmp_mfd_jatim_2025_1_raw
@@ -135,17 +139,17 @@ GROUP BY
     LEFT(TRIM(kode_kecamatan_bps), 4);
 
 ALTER TABLE tmp_mfd_jatim_2025_1_kecamatan
-    MODIFY kode_kecamatan VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+    MODIFY kode VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
     MODIFY nama_kecamatan VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
     MODIFY kode_kabupaten VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
-    ADD PRIMARY KEY (kode_kecamatan),
+    ADD PRIMARY KEY (kode),
     ADD INDEX idx_tmp_mfd_kec_kabupaten (kode_kabupaten);
 
 CREATE TEMPORARY TABLE tmp_mfd_jatim_2025_1_desa
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 AS
 SELECT
-    TRIM(kode_desa_bps) COLLATE utf8mb4_0900_ai_ci AS kode_desa,
+    TRIM(kode_desa_bps) COLLATE utf8mb4_0900_ai_ci AS kode,
     MAX(TRIM(nama_desa_bps)) COLLATE utf8mb4_0900_ai_ci AS nama_desa,
     LEFT(TRIM(kode_desa_bps), 7) COLLATE utf8mb4_0900_ai_ci AS kode_kecamatan
 FROM tmp_mfd_jatim_2025_1_raw
@@ -158,10 +162,10 @@ GROUP BY
     LEFT(TRIM(kode_desa_bps), 7);
 
 ALTER TABLE tmp_mfd_jatim_2025_1_desa
-    MODIFY kode_desa VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+    MODIFY kode VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
     MODIFY nama_desa VARCHAR(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
     MODIFY kode_kecamatan VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
-    ADD PRIMARY KEY (kode_desa),
+    ADD PRIMARY KEY (kode),
     ADD INDEX idx_tmp_mfd_desa_kecamatan (kode_kecamatan);
 
 
@@ -182,18 +186,17 @@ SELECT
     SUM(CASE WHEN EXISTS (
         SELECT 1
         FROM master_kabupaten mk
-        WHERE mk.kode_kabupaten COLLATE utf8mb4_0900_ai_ci = t.kode_kabupaten
+        WHERE mk.kode COLLATE utf8mb4_0900_ai_ci = t.kode
     ) THEN 1 ELSE 0 END) AS kode_sudah_ada,
     SUM(CASE WHEN EXISTS (
         SELECT 1
         FROM master_kabupaten mk
-        WHERE mk.kode_kabupaten COLLATE utf8mb4_0900_ai_ci = t.kode_kabupaten
-          AND mk.deleted_at IS NULL
+        WHERE mk.kode COLLATE utf8mb4_0900_ai_ci = t.kode
     ) THEN 1 ELSE 0 END) AS aktif_sudah_ada,
     SUM(CASE WHEN NOT EXISTS (
         SELECT 1
         FROM master_kabupaten mk
-        WHERE mk.kode_kabupaten COLLATE utf8mb4_0900_ai_ci = t.kode_kabupaten
+        WHERE mk.kode COLLATE utf8mb4_0900_ai_ci = t.kode
     ) THEN 1 ELSE 0 END) AS kandidat_insert
 FROM tmp_mfd_jatim_2025_1_kabupaten t
 UNION ALL
@@ -203,18 +206,17 @@ SELECT
     SUM(CASE WHEN EXISTS (
         SELECT 1
         FROM master_kecamatan mk
-        WHERE mk.kode_kecamatan COLLATE utf8mb4_0900_ai_ci = t.kode_kecamatan
+        WHERE mk.kode COLLATE utf8mb4_0900_ai_ci = t.kode
     ) THEN 1 ELSE 0 END) AS kode_sudah_ada,
     SUM(CASE WHEN EXISTS (
         SELECT 1
         FROM master_kecamatan mk
-        WHERE mk.kode_kecamatan COLLATE utf8mb4_0900_ai_ci = t.kode_kecamatan
-          AND mk.deleted_at IS NULL
+        WHERE mk.kode COLLATE utf8mb4_0900_ai_ci = t.kode
     ) THEN 1 ELSE 0 END) AS aktif_sudah_ada,
     SUM(CASE WHEN NOT EXISTS (
         SELECT 1
         FROM master_kecamatan mk
-        WHERE mk.kode_kecamatan COLLATE utf8mb4_0900_ai_ci = t.kode_kecamatan
+        WHERE mk.kode COLLATE utf8mb4_0900_ai_ci = t.kode
     ) THEN 1 ELSE 0 END) AS kandidat_insert
 FROM tmp_mfd_jatim_2025_1_kecamatan t
 UNION ALL
@@ -224,23 +226,22 @@ SELECT
     SUM(CASE WHEN EXISTS (
         SELECT 1
         FROM master_desa md
-        WHERE md.kode_desa COLLATE utf8mb4_0900_ai_ci = t.kode_desa
+        WHERE md.kode COLLATE utf8mb4_0900_ai_ci = t.kode
     ) THEN 1 ELSE 0 END) AS kode_sudah_ada,
     SUM(CASE WHEN EXISTS (
         SELECT 1
         FROM master_desa md
-        WHERE md.kode_desa COLLATE utf8mb4_0900_ai_ci = t.kode_desa
-          AND md.deleted_at IS NULL
+        WHERE md.kode COLLATE utf8mb4_0900_ai_ci = t.kode
     ) THEN 1 ELSE 0 END) AS aktif_sudah_ada,
     SUM(CASE WHEN NOT EXISTS (
         SELECT 1
         FROM master_desa md
-        WHERE md.kode_desa COLLATE utf8mb4_0900_ai_ci = t.kode_desa
+        WHERE md.kode COLLATE utf8mb4_0900_ai_ci = t.kode
     ) THEN 1 ELSE 0 END) AS kandidat_insert
 FROM tmp_mfd_jatim_2025_1_desa t;
 
 SELECT
-    t.kode_desa,
+    t.kode AS kode_desa,
     t.nama_desa,
     t.kode_kecamatan AS kode_kecamatan_parent_mfd,
     k.id AS kecamatan_id_jagapadi,
@@ -252,81 +253,76 @@ SELECT
     END AS status_rencana
 FROM tmp_mfd_jatim_2025_1_desa t
 LEFT JOIN master_desa d
-  ON d.kode_desa COLLATE utf8mb4_0900_ai_ci = t.kode_desa
+  ON d.kode COLLATE utf8mb4_0900_ai_ci = t.kode
 LEFT JOIN master_kecamatan k
-  ON k.kode_kecamatan COLLATE utf8mb4_0900_ai_ci = LEFT(t.kode_desa, 7)
- AND k.deleted_at IS NULL
-WHERE t.kode_desa IN ('3509100008', '3509730008')
-ORDER BY t.kode_desa;
+  ON k.kode COLLATE utf8mb4_0900_ai_ci = LEFT(t.kode, 7)
+WHERE t.kode IN ('3509100008', '3509730008')
+ORDER BY t.kode;
 
 SELECT
-    t.kode_kabupaten,
+    t.kode AS kode_kabupaten,
     t.nama_kabupaten
 FROM tmp_mfd_jatim_2025_1_kabupaten t
 WHERE NOT EXISTS (
     SELECT 1
     FROM master_kabupaten mk
-    WHERE mk.kode_kabupaten COLLATE utf8mb4_0900_ai_ci = t.kode_kabupaten
+    WHERE mk.kode COLLATE utf8mb4_0900_ai_ci = t.kode
 )
-ORDER BY t.kode_kabupaten;
+ORDER BY t.kode;
 
 SELECT
-    t.kode_kecamatan,
+    t.kode AS kode_kecamatan,
     t.nama_kecamatan,
     t.kode_kabupaten,
     kab.id AS kabupaten_id_jagapadi,
     kab.nama_kabupaten AS nama_kabupaten_jagapadi
 FROM tmp_mfd_jatim_2025_1_kecamatan t
 LEFT JOIN master_kecamatan k
-  ON k.kode_kecamatan COLLATE utf8mb4_0900_ai_ci = t.kode_kecamatan
+  ON k.kode COLLATE utf8mb4_0900_ai_ci = t.kode
 LEFT JOIN master_kabupaten kab
-  ON kab.kode_kabupaten COLLATE utf8mb4_0900_ai_ci = LEFT(t.kode_kecamatan, 4)
- AND kab.deleted_at IS NULL
+  ON kab.kode COLLATE utf8mb4_0900_ai_ci = LEFT(t.kode, 4)
 WHERE k.id IS NULL
-ORDER BY t.kode_kecamatan;
+ORDER BY t.kode;
 
 SELECT
-    t.kode_desa,
+    t.kode AS kode_desa,
     t.nama_desa,
     t.kode_kecamatan,
     kec.id AS kecamatan_id_jagapadi,
     kec.nama_kecamatan AS nama_kecamatan_jagapadi
 FROM tmp_mfd_jatim_2025_1_desa t
 LEFT JOIN master_desa d
-  ON d.kode_desa COLLATE utf8mb4_0900_ai_ci = t.kode_desa
+  ON d.kode COLLATE utf8mb4_0900_ai_ci = t.kode
 LEFT JOIN master_kecamatan kec
-  ON kec.kode_kecamatan COLLATE utf8mb4_0900_ai_ci = LEFT(t.kode_desa, 7)
- AND kec.deleted_at IS NULL
+  ON kec.kode COLLATE utf8mb4_0900_ai_ci = LEFT(t.kode, 7)
 WHERE d.id IS NULL
-ORDER BY t.kode_desa;
+ORDER BY t.kode;
 
 SELECT
-    t.kode_kecamatan,
+    t.kode AS kode_kecamatan,
     t.nama_kecamatan,
     t.kode_kabupaten
 FROM tmp_mfd_jatim_2025_1_kecamatan t
 LEFT JOIN master_kecamatan k
-  ON k.kode_kecamatan COLLATE utf8mb4_0900_ai_ci = t.kode_kecamatan
+  ON k.kode COLLATE utf8mb4_0900_ai_ci = t.kode
 LEFT JOIN master_kabupaten kab
-  ON kab.kode_kabupaten COLLATE utf8mb4_0900_ai_ci = LEFT(t.kode_kecamatan, 4)
- AND kab.deleted_at IS NULL
+  ON kab.kode COLLATE utf8mb4_0900_ai_ci = LEFT(t.kode, 4)
 WHERE k.id IS NULL
   AND kab.id IS NULL
-ORDER BY t.kode_kecamatan;
+ORDER BY t.kode;
 
 SELECT
-    t.kode_desa,
+    t.kode AS kode_desa,
     t.nama_desa,
     t.kode_kecamatan
 FROM tmp_mfd_jatim_2025_1_desa t
 LEFT JOIN master_desa d
-  ON d.kode_desa COLLATE utf8mb4_0900_ai_ci = t.kode_desa
+  ON d.kode COLLATE utf8mb4_0900_ai_ci = t.kode
 LEFT JOIN master_kecamatan kec
-  ON kec.kode_kecamatan COLLATE utf8mb4_0900_ai_ci = LEFT(t.kode_desa, 7)
- AND kec.deleted_at IS NULL
+  ON kec.kode COLLATE utf8mb4_0900_ai_ci = LEFT(t.kode, 7)
 WHERE d.id IS NULL
   AND kec.id IS NULL
-ORDER BY t.kode_desa;
+ORDER BY t.kode;
 
 
 -- =========================================================
@@ -365,166 +361,158 @@ CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
 START TRANSACTION;
 
--- 3.1 Kabupaten/kota: insert hanya jika kode_kabupaten belum ada.
+-- 3.1 Kabupaten/kota: insert hanya jika kode belum ada.
 INSERT INTO backup_import_missing_mfd_jatim_2025_1
     (run_id, tipe, kode, nama, kode_parent)
 SELECT
     @maintenance_run_id,
     'kabupaten',
-    t.kode_kabupaten,
+    t.kode,
     t.nama_kabupaten,
     '35'
 FROM tmp_mfd_jatim_2025_1_kabupaten t
 WHERE NOT EXISTS (
     SELECT 1
     FROM master_kabupaten mk
-    WHERE mk.kode_kabupaten COLLATE utf8mb4_0900_ai_ci = t.kode_kabupaten
+    WHERE mk.kode COLLATE utf8mb4_0900_ai_ci = t.kode
 )
   AND NOT EXISTS (
     SELECT 1
     FROM backup_import_missing_mfd_jatim_2025_1 b
     WHERE b.run_id = @maintenance_run_id
       AND b.tipe = 'kabupaten'
-      AND b.kode = t.kode_kabupaten
+      AND b.kode = t.kode
 );
 
 INSERT INTO master_kabupaten
-    (kode_kabupaten, nama_kabupaten, created_by)
+    (kode, nama_kabupaten)
 SELECT
-    t.kode_kabupaten,
-    t.nama_kabupaten,
-    NULL
+    t.kode,
+    t.nama_kabupaten
 FROM tmp_mfd_jatim_2025_1_kabupaten t
 JOIN backup_import_missing_mfd_jatim_2025_1 b
   ON b.run_id = @maintenance_run_id
  AND b.tipe = 'kabupaten'
- AND b.kode = t.kode_kabupaten
+ AND b.kode = t.kode
 WHERE NOT EXISTS (
     SELECT 1
     FROM master_kabupaten mk
-    WHERE mk.kode_kabupaten COLLATE utf8mb4_0900_ai_ci = t.kode_kabupaten
+    WHERE mk.kode COLLATE utf8mb4_0900_ai_ci = t.kode
 );
 
 SELECT ROW_COUNT() AS inserted_kabupaten;
 
 UPDATE backup_import_missing_mfd_jatim_2025_1 b
 JOIN master_kabupaten mk
-  ON mk.kode_kabupaten COLLATE utf8mb4_0900_ai_ci = b.kode
+  ON mk.kode COLLATE utf8mb4_0900_ai_ci = b.kode
 SET b.record_id = mk.id
 WHERE b.run_id = @maintenance_run_id
   AND b.tipe = 'kabupaten'
   AND b.record_id IS NULL;
 
--- 3.2 Kecamatan: parent kabupaten dicari dari LEFT(kode_kecamatan, 4).
+-- 3.2 Kecamatan: parent kabupaten dicari dari LEFT(kode, 4).
 INSERT INTO backup_import_missing_mfd_jatim_2025_1
     (run_id, tipe, kode, nama, kode_parent)
 SELECT
     @maintenance_run_id,
     'kecamatan',
-    t.kode_kecamatan,
+    t.kode,
     t.nama_kecamatan,
-    LEFT(t.kode_kecamatan, 4)
+    LEFT(t.kode, 4)
 FROM tmp_mfd_jatim_2025_1_kecamatan t
 JOIN master_kabupaten kab
-  ON kab.kode_kabupaten COLLATE utf8mb4_0900_ai_ci = LEFT(t.kode_kecamatan, 4)
- AND kab.deleted_at IS NULL
+  ON kab.kode COLLATE utf8mb4_0900_ai_ci = LEFT(t.kode, 4)
 WHERE NOT EXISTS (
     SELECT 1
     FROM master_kecamatan mk
-    WHERE mk.kode_kecamatan COLLATE utf8mb4_0900_ai_ci = t.kode_kecamatan
+    WHERE mk.kode COLLATE utf8mb4_0900_ai_ci = t.kode
 )
   AND NOT EXISTS (
     SELECT 1
     FROM backup_import_missing_mfd_jatim_2025_1 b
     WHERE b.run_id = @maintenance_run_id
       AND b.tipe = 'kecamatan'
-      AND b.kode = t.kode_kecamatan
+      AND b.kode = t.kode
 );
 
 INSERT INTO master_kecamatan
-    (kabupaten_id, nama_kecamatan, kode_kecamatan, created_by)
+    (kabupaten_id, nama_kecamatan, kode)
 SELECT
     kab.id,
     t.nama_kecamatan,
-    t.kode_kecamatan,
-    NULL
+    t.kode
 FROM tmp_mfd_jatim_2025_1_kecamatan t
 JOIN master_kabupaten kab
-  ON kab.kode_kabupaten COLLATE utf8mb4_0900_ai_ci = LEFT(t.kode_kecamatan, 4)
- AND kab.deleted_at IS NULL
+  ON kab.kode COLLATE utf8mb4_0900_ai_ci = LEFT(t.kode, 4)
 JOIN backup_import_missing_mfd_jatim_2025_1 b
   ON b.run_id = @maintenance_run_id
  AND b.tipe = 'kecamatan'
- AND b.kode = t.kode_kecamatan
+ AND b.kode = t.kode
 WHERE NOT EXISTS (
     SELECT 1
     FROM master_kecamatan mk
-    WHERE mk.kode_kecamatan COLLATE utf8mb4_0900_ai_ci = t.kode_kecamatan
+    WHERE mk.kode COLLATE utf8mb4_0900_ai_ci = t.kode
 );
 
 SELECT ROW_COUNT() AS inserted_kecamatan;
 
 UPDATE backup_import_missing_mfd_jatim_2025_1 b
 JOIN master_kecamatan mk
-  ON mk.kode_kecamatan COLLATE utf8mb4_0900_ai_ci = b.kode
+  ON mk.kode COLLATE utf8mb4_0900_ai_ci = b.kode
 SET b.record_id = mk.id
 WHERE b.run_id = @maintenance_run_id
   AND b.tipe = 'kecamatan'
   AND b.record_id IS NULL;
 
--- 3.3 Desa: parent kecamatan dicari dari LEFT(kode_desa, 7).
+-- 3.3 Desa: parent kecamatan dicari dari LEFT(kode, 7).
 INSERT INTO backup_import_missing_mfd_jatim_2025_1
     (run_id, tipe, kode, nama, kode_parent)
 SELECT
     @maintenance_run_id,
     'desa',
-    t.kode_desa,
+    t.kode,
     t.nama_desa,
-    LEFT(t.kode_desa, 7)
+    LEFT(t.kode, 7)
 FROM tmp_mfd_jatim_2025_1_desa t
 JOIN master_kecamatan kec
-  ON kec.kode_kecamatan COLLATE utf8mb4_0900_ai_ci = LEFT(t.kode_desa, 7)
- AND kec.deleted_at IS NULL
+  ON kec.kode COLLATE utf8mb4_0900_ai_ci = LEFT(t.kode, 7)
 WHERE NOT EXISTS (
     SELECT 1
     FROM master_desa md
-    WHERE md.kode_desa COLLATE utf8mb4_0900_ai_ci = t.kode_desa
+    WHERE md.kode COLLATE utf8mb4_0900_ai_ci = t.kode
 )
   AND NOT EXISTS (
     SELECT 1
     FROM backup_import_missing_mfd_jatim_2025_1 b
     WHERE b.run_id = @maintenance_run_id
       AND b.tipe = 'desa'
-      AND b.kode = t.kode_desa
+      AND b.kode = t.kode
 );
 
 INSERT INTO master_desa
-    (kecamatan_id, nama_desa, kode_desa, kode_pos, created_by)
+    (kecamatan_id, nama_desa, kode)
 SELECT
     kec.id,
     t.nama_desa,
-    t.kode_desa,
-    NULL,
-    NULL
+    t.kode
 FROM tmp_mfd_jatim_2025_1_desa t
 JOIN master_kecamatan kec
-  ON kec.kode_kecamatan COLLATE utf8mb4_0900_ai_ci = LEFT(t.kode_desa, 7)
- AND kec.deleted_at IS NULL
+  ON kec.kode COLLATE utf8mb4_0900_ai_ci = LEFT(t.kode, 7)
 JOIN backup_import_missing_mfd_jatim_2025_1 b
   ON b.run_id = @maintenance_run_id
  AND b.tipe = 'desa'
- AND b.kode = t.kode_desa
+ AND b.kode = t.kode
 WHERE NOT EXISTS (
     SELECT 1
     FROM master_desa md
-    WHERE md.kode_desa COLLATE utf8mb4_0900_ai_ci = t.kode_desa
+    WHERE md.kode COLLATE utf8mb4_0900_ai_ci = t.kode
 );
 
 SELECT ROW_COUNT() AS inserted_desa;
 
 UPDATE backup_import_missing_mfd_jatim_2025_1 b
 JOIN master_desa md
-  ON md.kode_desa COLLATE utf8mb4_0900_ai_ci = b.kode
+  ON md.kode COLLATE utf8mb4_0900_ai_ci = b.kode
 SET b.record_id = md.id
 WHERE b.run_id = @maintenance_run_id
   AND b.tipe = 'desa'
@@ -547,28 +535,25 @@ GROUP BY tipe
 ORDER BY tipe;
 
 SELECT
-    'kabupaten_kota_aktif' AS metrik,
+    'kabupaten_kota' AS metrik,
     COUNT(*) AS jumlah
 FROM master_kabupaten
-WHERE deleted_at IS NULL
 UNION ALL
 SELECT
-    'kecamatan_aktif' AS metrik,
+    'kecamatan' AS metrik,
     COUNT(*) AS jumlah
 FROM master_kecamatan
-WHERE deleted_at IS NULL
 UNION ALL
 SELECT
-    'desa_aktif' AS metrik,
+    'desa' AS metrik,
     COUNT(*) AS jumlah
-FROM master_desa
-WHERE deleted_at IS NULL;
+FROM master_desa;
 
 SELECT
-    kab.kode_kabupaten,
+    kab.kode,
     kab.nama_kabupaten,
-    COUNT(DISTINCT k.id) AS jumlah_kecamatan_aktif,
-    COUNT(DISTINCT d.id) AS jumlah_desa_aktif,
+    COUNT(DISTINCT k.id) AS jumlah_kecamatan,
+    COUNT(DISTINCT d.id) AS jumlah_desa,
     CASE
         WHEN COUNT(DISTINCT d.id) = 248 THEN 'OK'
         ELSE 'CHECK'
@@ -576,71 +561,63 @@ SELECT
 FROM master_kabupaten kab
 LEFT JOIN master_kecamatan k
   ON k.kabupaten_id = kab.id
- AND k.deleted_at IS NULL
 LEFT JOIN master_desa d
   ON d.kecamatan_id = k.id
- AND d.deleted_at IS NULL
-WHERE kab.kode_kabupaten = '3509'
-  AND kab.deleted_at IS NULL
+WHERE kab.kode = '3509'
 GROUP BY
-    kab.kode_kabupaten,
+    kab.kode,
     kab.nama_kabupaten;
 
 SELECT
     d.id,
-    d.kode_desa,
+    d.kode,
     d.nama_desa,
-    k.kode_kecamatan,
+    k.kode AS kode_kecamatan,
     k.nama_kecamatan,
-    kab.kode_kabupaten,
+    kab.kode AS kode_kabupaten,
     kab.nama_kabupaten
 FROM master_desa d
 JOIN master_kecamatan k
   ON k.id = d.kecamatan_id
 JOIN master_kabupaten kab
   ON kab.id = k.kabupaten_id
-WHERE d.kode_desa IN ('3509100008', '3509730008')
-ORDER BY d.kode_desa;
+WHERE d.kode IN ('3509100008', '3509730008')
+ORDER BY d.kode;
 
--- Harus empty set: kecamatan aktif yang parent kabupatennya salah/tidak aktif.
+-- Harus empty set: kecamatan yang parent kabupatennya salah/tidak ada.
 SELECT
     k.id,
-    k.kode_kecamatan,
+    k.kode AS kode_kecamatan,
     k.nama_kecamatan,
     k.kabupaten_id,
-    kab.kode_kabupaten,
+    kab.kode AS kode_kabupaten,
     kab.nama_kabupaten,
     CASE
         WHEN kab.id IS NULL THEN 'PARENT_KABUPATEN_TIDAK_ADA'
-        WHEN kab.deleted_at IS NOT NULL THEN 'PARENT_KABUPATEN_SOFT_DELETE'
-        WHEN LEFT(k.kode_kecamatan, 4) <> kab.kode_kabupaten THEN 'PARENT_KABUPATEN_SALAH'
+        WHEN LEFT(k.kode, 4) <> kab.kode THEN 'PARENT_KABUPATEN_SALAH'
         ELSE 'OK'
     END AS status_relasi
 FROM master_kecamatan k
 LEFT JOIN master_kabupaten kab
   ON kab.id = k.kabupaten_id
-WHERE k.deleted_at IS NULL
-  AND (
-      kab.id IS NULL
-      OR kab.deleted_at IS NOT NULL
-      OR LEFT(k.kode_kecamatan, 4) <> kab.kode_kabupaten
-  )
-ORDER BY k.kode_kecamatan;
+WHERE
+    kab.id IS NULL
+    OR LEFT(k.kode, 4) <> kab.kode
+ORDER BY k.kode;
 
--- Harus empty set: desa aktif yang parent kecamatannya salah/tidak aktif.
+-- Harus empty set: desa yang parent kecamatannya salah/tidak ada.
 SELECT
     d.id,
-    d.kode_desa,
+    d.kode AS kode_desa,
     d.nama_desa,
     d.kecamatan_id,
-    k.kode_kecamatan,
+    k.kode AS kode_kecamatan,
     k.nama_kecamatan,
-    kab.kode_kabupaten,
+    kab.kode AS kode_kabupaten,
     kab.nama_kabupaten,
     CASE
         WHEN k.id IS NULL THEN 'PARENT_KECAMATAN_TIDAK_ADA'
-        WHEN k.deleted_at IS NOT NULL THEN 'PARENT_KECAMATAN_SOFT_DELETE'
-        WHEN LEFT(d.kode_desa, 7) <> k.kode_kecamatan THEN 'PARENT_KECAMATAN_SALAH'
+        WHEN LEFT(d.kode, 7) <> k.kode THEN 'PARENT_KECAMATAN_SALAH'
         ELSE 'OK'
     END AS status_relasi
 FROM master_desa d
@@ -648,13 +625,10 @@ LEFT JOIN master_kecamatan k
   ON k.id = d.kecamatan_id
 LEFT JOIN master_kabupaten kab
   ON kab.id = k.kabupaten_id
-WHERE d.deleted_at IS NULL
-  AND (
-      k.id IS NULL
-      OR k.deleted_at IS NOT NULL
-      OR LEFT(d.kode_desa, 7) <> k.kode_kecamatan
-  )
-ORDER BY d.kode_desa;
+WHERE
+    k.id IS NULL
+    OR LEFT(d.kode, 7) <> k.kode
+ORDER BY d.kode;
 
 -- Jika semua SELECT AFTER benar, jalankan manual:
 -- COMMIT;
@@ -689,7 +663,7 @@ ORDER BY d.kode_desa;
 -- FROM master_desa d
 -- JOIN backup_import_missing_mfd_jatim_2025_1 b
 --   ON b.record_id = d.id
---  AND b.kode = d.kode_desa
+--  AND b.kode = d.kode
 -- WHERE b.run_id = @maintenance_run_id
 --   AND b.tipe = 'desa';
 --
@@ -699,7 +673,7 @@ ORDER BY d.kode_desa;
 -- FROM master_kecamatan k
 -- JOIN backup_import_missing_mfd_jatim_2025_1 b
 --   ON b.record_id = k.id
---  AND b.kode = k.kode_kecamatan
+--  AND b.kode = k.kode
 -- WHERE b.run_id = @maintenance_run_id
 --   AND b.tipe = 'kecamatan';
 --
@@ -709,7 +683,7 @@ ORDER BY d.kode_desa;
 -- FROM master_kabupaten kab
 -- JOIN backup_import_missing_mfd_jatim_2025_1 b
 --   ON b.record_id = kab.id
---  AND b.kode = kab.kode_kabupaten
+--  AND b.kode = kab.kode
 -- WHERE b.run_id = @maintenance_run_id
 --   AND b.tipe = 'kabupaten';
 --

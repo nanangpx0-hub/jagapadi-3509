@@ -1,0 +1,9 @@
+{
+  "name": "JAGAPADI - Pelaporan Pertanian",
+  "short_name": "JAGAPADI",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#1a73e8",
+  "theme_color": "#1a73e8",
+  "icons": []
+}

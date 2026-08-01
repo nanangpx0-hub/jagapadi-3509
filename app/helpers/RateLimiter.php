@@ -1,11 +1,13 @@
 <?php
 /**
  * Rate Limiter Helper
- * Provides advanced rate limiting for API endpoints using file-based cache
+ * Provides advanced rate limiting for API endpoints using CacheManager
  * 
- * @version 1.0.0
+ * @version 1.1.0
  * @author JAGAPADI System
  */
+
+require_once ROOT_PATH . '/app/core/CacheManager.php';
 
 class RateLimiter {
     
@@ -32,10 +34,10 @@ class RateLimiter {
         $config = self::getLimitConfig($endpoint);
         $cacheKey = self::getCacheKey($endpoint, $identifier);
         
-        Cache::init();
+        $cache = CacheManager::getInstance();
         
         // Get current request count
-        $data = Cache::get($cacheKey);
+        $data = $cache->get($cacheKey);
         
         if ($data === null) {
             $data = [
@@ -64,7 +66,7 @@ class RateLimiter {
         $resetIn = max(0, $resetTime - time());
         
         // Save updated count
-        Cache::set($cacheKey, $data, $config['window']);
+        $cache->set($cacheKey, $data, $config['window']);
         
         // Check if limit exceeded
         $exceeded = $data['count'] > $config['requests'];
@@ -237,7 +239,8 @@ class RateLimiter {
      */
     public static function reset(string $endpoint, string $identifier): bool {
         $cacheKey = self::getCacheKey($endpoint, $identifier);
-        return Cache::delete($cacheKey);
+        $cache = CacheManager::getInstance();
+        return $cache->delete($cacheKey);
     }
     
     /**
@@ -249,9 +252,9 @@ class RateLimiter {
      */
     public static function getUsage(string $endpoint, string $identifier): ?array {
         $cacheKey = self::getCacheKey($endpoint, $identifier);
-        Cache::init();
+        $cache = CacheManager::getInstance();
         
-        $data = Cache::get($cacheKey);
+        $data = $cache->get($cacheKey);
         
         if ($data === null) {
             return null;

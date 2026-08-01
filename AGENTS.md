@@ -88,8 +88,7 @@
 |-------|------|--------|
 | 1 | Repository & Standar Kerja | **Done** |
 | 2 | Backend Skeleton | **Done** |
-| 3 | Database Schema & Migration | **IN PROGRESS** |
-| 3 | Database Schema & Migration | Pending |
+| 3 | Database Schema, Migration & Seed | **Done** |
 | 4 | Auth Web & Mobile | Pending |
 | 5 | Modul Laporan (CRUD, Draft, Submit) | Pending |
 | 6 | Modul Verifikasi (Admin) | Pending |

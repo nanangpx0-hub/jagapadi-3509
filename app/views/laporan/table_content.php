@@ -106,7 +106,7 @@
                         <br>
                         <small class="text-danger">
                             <i class="fas fa-comment"></i> 
-                            <strong>Alasan:</strong> <?= htmlspecialchars(substr($row['catatan_verifikasi'], 0, 30)) ?><?= strlen($row['catatan_verifikasi']) > 30 ? '...' : '' ?>
+                            <strong>Alasan:</strong> <?= htmlspecialchars(substr($row['catatan_verifikasi'], 0, 30) ?? '') ?><?= strlen($row['catatan_verifikasi']) > 30 ? '...' : '' ?>
                         </small>
                         <?php endif; ?>
                         

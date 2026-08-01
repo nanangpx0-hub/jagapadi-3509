@@ -243,8 +243,8 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                         <?php else: ?>
                         <?php foreach ($recent_data as $row): ?>
                         <tr>
-                            <td><code><?= htmlspecialchars($row['unique_id']) ?></code></td>
-                            <td><?= htmlspecialchars($row['nama_lokasi']) ?></td>
+                            <td><code><?= htmlspecialchars($row['unique_id'] ?? '') ?></code></td>
+                            <td><?= htmlspecialchars($row['nama_lokasi'] ?? '') ?></td>
                             <td><span class="badge badge-info"><?= $row['musim_tanam'] ?></span></td>
                             <td><?= $row['tahun'] ?></td>
                             <td><?= number_format($row['luas_panen'], 2) ?> Ha</td>

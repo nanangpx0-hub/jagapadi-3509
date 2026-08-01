@@ -20,9 +20,6 @@
 <script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js"></script>
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
-<!-- Leaflet JS -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
 <!-- Custom JavaScript -->
 <script src="<?= BASE_URL ?>public/js/validation.js"></script>
 <script src="<?= BASE_URL ?>public/js/loading.js"></script>

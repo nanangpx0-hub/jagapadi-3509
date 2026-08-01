@@ -376,7 +376,6 @@
                 z-index: 10000;
                 max-width: 350px;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                animation: slideIn 0.3s ease;
                 background: ${style.bg};
                 color: ${style.text};
                 border: 1px solid ${style.border};
@@ -385,23 +384,9 @@
 
             document.body.appendChild(toast);
 
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                toast.style.transition = 'opacity 0.3s';
-                setTimeout(() => toast.remove(), 300);
-            }, 4000);
+            setTimeout(() => toast.remove(), 4000);
         }
     }
-
-    // Add animation keyframes
-    const style = document.createElement('style');
-    style.textContent = `
-        @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-    `;
-    document.head.appendChild(style);
 
     // Initialize when DOM is ready
     document.addEventListener('DOMContentLoaded', function () {

@@ -62,10 +62,10 @@ if (Request::method() === 'OPTIONS') {
 }
 
 $csp = "default-src 'self'; "
-    . "img-src 'self' data: blob:; "
+    . "img-src 'self' data: blob: https://*.tile.openstreetmap.org; "
     . "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
     . "style-src 'self' 'unsafe-inline'; "
-    . "connect-src 'self'; "
+    . "connect-src 'self' http://localhost:8080; "
     . "font-src 'self' data:; "
     . "object-src 'none'; "
     . "frame-ancestors 'none';";

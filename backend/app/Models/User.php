@@ -53,6 +53,12 @@ class User extends Model
         return (bool) ($user['aktif'] ?? false);
     }
 
+    public static function withoutSensitiveFields(array $user): array
+    {
+        unset($user['password']);
+        return $user;
+    }
+
     public static function toPublicArray(array $user): array
     {
         return [

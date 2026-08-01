@@ -10,15 +10,24 @@ import '../features/irigasi/screens/irigasi_detail_screen.dart';
 import '../features/irigasi/screens/irigasi_form_screen.dart';
 import '../features/notifications/screens/notification_screen.dart';
 import '../features/profile/screens/profile_screen.dart';
+import 'secure_storage.dart';
 
 class AppRouter {
   final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
   late final GoRouter router;
+  final ChangeNotifier _authNotifier = ChangeNotifier();
+  String? _tokenCache;
 
   AppRouter() {
+    AppSecureStorage.getToken().then((token) {
+      _tokenCache = token;
+      _authNotifier.notifyListeners();
+    });
     router = GoRouter(
       navigatorKey: navigatorKey,
       initialLocation: '/login',
+      redirect: _guard,
+      refreshListenable: _authNotifier,
       routes: [
         GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
         GoRoute(
@@ -85,6 +94,28 @@ class AppRouter {
         ),
       ],
     );
+  }
+
+  // Auth guard: arahkan pengguna tanpa token ke /login, dan pengguna yang
+  // sudah login menjauh dari /login ke /home. Deep-link aman karena hanya
+  // mengecek keberadaan token, bukan validitasnya (divalidasi oleh API 401).
+  String? _guard(BuildContext context, GoRouterState state) {
+    final location = state.matchedLocation;
+    final hasToken = _tokenCache != null;
+    final onLogin = location == '/login';
+
+    if (!hasToken && !onLogin) {
+      return '/login';
+    }
+    if (hasToken && onLogin) {
+      return '/home';
+    }
+    return null;
+  }
+
+  void setToken(String? token) {
+    _tokenCache = token;
+    _authNotifier.notifyListeners();
   }
 
   void redirectToLogin() {

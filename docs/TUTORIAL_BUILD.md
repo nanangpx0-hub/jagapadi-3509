@@ -2,6 +2,13 @@
 
 > Referensi: `docs/Dokumentasi-aplikasi-jagapadi-3509.md` (blueprint lengkap)
 
+## Panduan Praktis Baru
+
+Untuk petunjuk operasional harian, gunakan:
+
+- [docs/AKSES_WEB_BACKEND.md](AKSES_WEB_BACKEND.md) — akses web backend lokal dan production
+- [docs/BUILD_APK.md](BUILD_APK.md) — build debug/release APK Flutter
+
 ---
 
 ## Daftar Tahap

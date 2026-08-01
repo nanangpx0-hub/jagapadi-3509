@@ -5,36 +5,36 @@ class MasterDesa extends Model {
     protected $table = 'master_desa';
     
     public function getByKecamatan($kecamatanId, $q = null, $limit = 200) {
-        // Sort by kode_desa ascending for consistent ordering
+        // Sort by kode ascending for consistent ordering
         $cacheKey = 'master_desa_kec_by_kode_' . $kecamatanId;
         
         if (!$q) {
             return Cache::remember($cacheKey, function() use ($kecamatanId) {
-                $stmt = $this->db->prepare("SELECT * FROM master_desa WHERE kecamatan_id = ? AND deleted_at IS NULL ORDER BY kode_desa ASC");
+                $stmt = $this->db->prepare("SELECT * FROM master_desa WHERE kecamatan_id = ? ORDER BY kode ASC");
                 $stmt->execute([$kecamatanId]);
                 return $stmt->fetchAll();
             }, 3600); // Cache for 1 hour
         }
         
         $limit = (int)$limit;
-        $stmt = $this->db->prepare("SELECT * FROM master_desa WHERE kecamatan_id = ? AND nama_desa LIKE ? AND deleted_at IS NULL ORDER BY kode_desa ASC LIMIT $limit");
+        $stmt = $this->db->prepare("SELECT * FROM master_desa WHERE kecamatan_id = ? AND nama_desa LIKE ? ORDER BY kode ASC LIMIT $limit");
         $stmt->execute([$kecamatanId, '%'.$q.'%']);
         return $stmt->fetchAll();
     }
     
     public function findById($id) {
-        $stmt = $this->db->prepare("SELECT * FROM master_desa WHERE id = ? AND deleted_at IS NULL");
+        $stmt = $this->db->prepare("SELECT * FROM master_desa WHERE id = ?");
         $stmt->execute([$id]);
         return $stmt->fetch();
     }
     
     // Admin CRUD Methods
     public function getAllWithHierarchy($kecamatanId = null, $search = '', $limit = 20, $offset = 0) {
-        $sql = "SELECT d.*, kc.nama_kecamatan, kb.nama_kabupaten, kc.kabupaten_id
+        $sql = "SELECT d.*, d.kode as kode_desa, kc.nama_kecamatan, kb.nama_kabupaten, kc.kabupaten_id
                 FROM master_desa d
                 LEFT JOIN master_kecamatan kc ON d.kecamatan_id = kc.id
                 LEFT JOIN master_kabupaten kb ON kc.kabupaten_id = kb.id
-                WHERE d.deleted_at IS NULL";
+                WHERE 1=1";
         $params = [];
         
         if ($kecamatanId) {
@@ -43,7 +43,7 @@ class MasterDesa extends Model {
         }
         
         if ($search) {
-            $sql .= " AND (d.nama_desa LIKE ? OR d.kode_desa LIKE ? OR kc.nama_kecamatan LIKE ? OR kb.nama_kabupaten LIKE ?)";
+            $sql .= " AND (d.nama_desa LIKE ? OR d.kode LIKE ? OR kc.nama_kecamatan LIKE ? OR kb.nama_kabupaten LIKE ?)";
             $params[] = "%$search%";
             $params[] = "%$search%";
             $params[] = "%$search%";
@@ -64,7 +64,7 @@ class MasterDesa extends Model {
                 FROM master_desa d
                 LEFT JOIN master_kecamatan kc ON d.kecamatan_id = kc.id
                 LEFT JOIN master_kabupaten kb ON kc.kabupaten_id = kb.id
-                WHERE d.deleted_at IS NULL";
+                WHERE 1=1";
         $params = [];
         
         if ($kecamatanId) {
@@ -73,7 +73,7 @@ class MasterDesa extends Model {
         }
         
         if ($search) {
-            $sql .= " AND (d.nama_desa LIKE ? OR d.kode_desa LIKE ? OR kc.nama_kecamatan LIKE ? OR kb.nama_kabupaten LIKE ?)";
+            $sql .= " AND (d.nama_desa LIKE ? OR d.kode LIKE ? OR kc.nama_kecamatan LIKE ? OR kb.nama_kabupaten LIKE ?)";
             $params[] = "%$search%";
             $params[] = "%$search%";
             $params[] = "%$search%";
@@ -86,9 +86,9 @@ class MasterDesa extends Model {
     }
     
     public function create($data) {
-        $sql = "INSERT INTO master_desa (kecamatan_id, nama_desa, kode_desa, kode_pos, created_by) VALUES (?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO master_desa (kecamatan_id, nama_desa, kode) VALUES (?, ?, ?)";
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$data['kecamatan_id'], $data['nama_desa'], $data['kode_desa'], $data['kode_pos'], $data['created_by']]);
+        $stmt->execute([$data['kecamatan_id'], $data['nama_desa'], $data['kode_desa']]);
         Cache::delete('master_desa_kec_' . $data['kecamatan_id']);
         return $this->db->lastInsertId();
     }
@@ -97,9 +97,9 @@ class MasterDesa extends Model {
         // Get old data to clear cache
         $old = $this->findById($id);
         
-        $sql = "UPDATE master_desa SET kecamatan_id = ?, nama_desa = ?, kode_desa = ?, kode_pos = ?, updated_by = ? WHERE id = ?";
+        $sql = "UPDATE master_desa SET kecamatan_id = ?, nama_desa = ?, kode = ? WHERE id = ?";
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$data['kecamatan_id'], $data['nama_desa'], $data['kode_desa'], $data['kode_pos'], $data['updated_by'], $id]);
+        $stmt->execute([$data['kecamatan_id'], $data['nama_desa'], $data['kode_desa'], $id]);
         
         // Clear cache for both old and new kecamatan
         if ($old) {
@@ -114,9 +114,9 @@ class MasterDesa extends Model {
         // Get data to clear cache
         $data = $this->findById($id);
         
-        $sql = "UPDATE master_desa SET deleted_at = NOW(), deleted_by = ? WHERE id = ?";
+        $sql = "DELETE FROM master_desa WHERE id = ?";
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$userId, $id]);
+        $stmt->execute([$id]);
         
         if ($data) {
             Cache::delete('master_desa_kec_' . $data['kecamatan_id']);
@@ -126,7 +126,7 @@ class MasterDesa extends Model {
     }
     
     public function checkKodeExists($kode, $excludeId = null) {
-        $sql = "SELECT COUNT(*) as c FROM master_desa WHERE kode_desa = ? AND deleted_at IS NULL";
+        $sql = "SELECT COUNT(*) as c FROM master_desa WHERE kode = ?";
         $params = [$kode];
         
         if ($excludeId) {
@@ -140,17 +140,17 @@ class MasterDesa extends Model {
     }
     
     public function countByKecamatan($kecamatanId) {
-        $stmt = $this->db->prepare("SELECT COUNT(*) as c FROM master_desa WHERE kecamatan_id = ? AND deleted_at IS NULL");
+        $stmt = $this->db->prepare("SELECT COUNT(*) as c FROM master_desa WHERE kecamatan_id = ?");
         $stmt->execute([$kecamatanId]);
         return $stmt->fetch()['c'] ?? 0;
     }
     
     public function findByIdWithHierarchy($id) {
-        $sql = "SELECT d.*, kc.nama_kecamatan, kb.nama_kabupaten, kc.kabupaten_id
+        $sql = "SELECT d.*, d.kode as kode_desa, kc.nama_kecamatan, kb.nama_kabupaten, kc.kabupaten_id
                 FROM master_desa d
                 LEFT JOIN master_kecamatan kc ON d.kecamatan_id = kc.id
                 LEFT JOIN master_kabupaten kb ON kc.kabupaten_id = kb.id
-                WHERE d.id = ? AND d.deleted_at IS NULL";
+                WHERE d.id = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$id]);
         return $stmt->fetch();
@@ -168,11 +168,11 @@ class MasterDesa extends Model {
      * @return array List of desa with hierarchy data
      */
     public function getAllWithHierarchyAndKabupaten($kabupatenId = null, $kecamatanId = null, $search = '', $limit = 20, $offset = 0, $sortBy = 'kode_kecamatan', $sortDir = 'asc') {
-        $sql = "SELECT d.*, kc.nama_kecamatan, kc.kode_kecamatan, kb.nama_kabupaten, kc.kabupaten_id
+        $sql = "SELECT d.*, d.kode as kode_desa, kc.nama_kecamatan, kc.kode as kode_kecamatan, kb.nama_kabupaten, kc.kabupaten_id
                 FROM master_desa d
                 LEFT JOIN master_kecamatan kc ON d.kecamatan_id = kc.id
                 LEFT JOIN master_kabupaten kb ON kc.kabupaten_id = kb.id
-                WHERE d.deleted_at IS NULL";
+                WHERE 1=1";
         $params = [];
         
         // Filter by kabupaten (via kecamatan join)
@@ -189,31 +189,30 @@ class MasterDesa extends Model {
         
         // Search filter
         if ($search) {
-            $sql .= " AND (d.nama_desa LIKE ? OR d.kode_desa LIKE ? OR d.kode_pos LIKE ?)";
-            $params[] = "%$search%";
+            $sql .= " AND (d.nama_desa LIKE ? OR d.kode LIKE ?)";
             $params[] = "%$search%";
             $params[] = "%$search%";
         }
         
         // Validate and build ORDER BY clause
         $allowedSortColumns = [
-            'kode_kecamatan' => 'kc.kode_kecamatan',
-            'kode_desa' => 'd.kode_desa',
+            'kode_kecamatan' => 'kc.kode',
+            'kode_desa' => 'd.kode',
             'nama_desa' => 'd.nama_desa',
             'nama_kecamatan' => 'kc.nama_kecamatan',
             'nama_kabupaten' => 'kb.nama_kabupaten'
         ];
         
         $sortDir = strtoupper($sortDir) === 'DESC' ? 'DESC' : 'ASC';
-        $sortColumn = $allowedSortColumns[$sortBy] ?? 'kc.kode_kecamatan';
+        $sortColumn = $allowedSortColumns[$sortBy] ?? 'kc.kode';
         
-        // Default: sort by kode_kecamatan first, then kode_desa
+        // Default: sort by kode kecamatan first, then kode desa
         if ($sortBy === 'kode_kecamatan') {
-            $sql .= " ORDER BY kc.kode_kecamatan $sortDir, d.kode_desa ASC";
+            $sql .= " ORDER BY kc.kode $sortDir, d.kode ASC";
         } elseif ($sortBy === 'kode_desa') {
-            $sql .= " ORDER BY d.kode_desa $sortDir";
+            $sql .= " ORDER BY d.kode $sortDir";
         } else {
-            $sql .= " ORDER BY $sortColumn $sortDir, kc.kode_kecamatan ASC, d.kode_desa ASC";
+            $sql .= " ORDER BY $sortColumn $sortDir, kc.kode ASC, d.kode ASC";
         }
         
         $limit = (int)$limit;
@@ -237,7 +236,7 @@ class MasterDesa extends Model {
                 FROM master_desa d
                 LEFT JOIN master_kecamatan kc ON d.kecamatan_id = kc.id
                 LEFT JOIN master_kabupaten kb ON kc.kabupaten_id = kb.id
-                WHERE d.deleted_at IS NULL";
+                WHERE 1=1";
         $params = [];
         
         if ($kabupatenId) {
@@ -251,8 +250,7 @@ class MasterDesa extends Model {
         }
         
         if ($search) {
-            $sql .= " AND (d.nama_desa LIKE ? OR d.kode_desa LIKE ? OR d.kode_pos LIKE ?)";
-            $params[] = "%$search%";
+            $sql .= " AND (d.nama_desa LIKE ? OR d.kode LIKE ?)";
             $params[] = "%$search%";
             $params[] = "%$search%";
         }
@@ -275,11 +273,11 @@ class MasterDesa extends Model {
             return [];
         }
         
-        $sql = "SELECT d.id, d.nama_desa, d.kode_desa, kc.nama_kecamatan, kb.nama_kabupaten
+        $sql = "SELECT d.id, d.nama_desa, d.kode, d.kode as kode_desa, kc.nama_kecamatan, kb.nama_kabupaten
                 FROM master_desa d
                 LEFT JOIN master_kecamatan kc ON d.kecamatan_id = kc.id
                 LEFT JOIN master_kabupaten kb ON kc.kabupaten_id = kb.id
-                WHERE d.deleted_at IS NULL AND d.nama_desa LIKE ?";
+                WHERE d.nama_desa LIKE ?";
         $params = ["%$search%"];
         
         if ($kabupatenId) {
@@ -307,7 +305,7 @@ class MasterDesa extends Model {
      * @return bool True if kecamatan belongs to kabupaten
      */
     public function validateKecamatanInKabupaten($kecamatanId, $kabupatenId) {
-        $sql = "SELECT COUNT(*) as c FROM master_kecamatan WHERE id = ? AND kabupaten_id = ? AND deleted_at IS NULL";
+        $sql = "SELECT COUNT(*) as c FROM master_kecamatan WHERE id = ? AND kabupaten_id = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$kecamatanId, $kabupatenId]);
         return ($stmt->fetch()['c'] ?? 0) > 0;

@@ -138,6 +138,32 @@ class SecureImageUploaderTest extends TestCase
         unlink($tmpFile);
     }
 
+    public function testRejectOversizedDimension(): void
+    {
+        $tmpFile = tempnam(sys_get_temp_dir(), 'test_') . '.jpg';
+        copy($this->fixturesDir . '/1x1.jpg', $tmpFile);
+
+        $file = [
+            'name' => 'big_dim.jpg',
+            'type' => 'image/jpeg',
+            'tmp_name' => $tmpFile,
+            'error' => UPLOAD_ERR_OK,
+            'size' => filesize($tmpFile),
+        ];
+
+        $this->expectException(\DomainException::class);
+        $this->expectExceptionMessage('Dimensi gambar');
+
+        SecureImageUploader::validateAndStore($file, [
+            'max_bytes' => 10485760,
+            'destination_dir' => $this->destDir,
+            'relative_base' => $this->relativeBase,
+            'max_dimension' => 0,
+        ]);
+
+        unlink($tmpFile);
+    }
+
     public function testRejectOversizedFile(): void
     {
         $tmpFile = tempnam(sys_get_temp_dir(), 'test_') . '.jpg';

@@ -1,6 +1,6 @@
 <?php
 class UserController extends Controller {
-    private $userModel;
+    private User $userModel;
     
     public function __construct() {
         $this->userModel = $this->model('User');
@@ -99,7 +99,7 @@ class UserController extends Controller {
             $errors[] = 'Konfirmasi password tidak cocok';
         }
         
-        if (empty($role) || !in_array($role, ['admin', 'operator', 'viewer', 'petugas'])) {
+        if (empty($role) || !in_array($role, ['admin', 'petugas'])) {
             $errors[] = 'Role tidak valid';
         }
         
@@ -208,7 +208,7 @@ class UserController extends Controller {
     /**
      * Edit - Show edit form
      */
-    public function edit($id) {
+    public function edit(int $id) {
         $this->checkAuth();
         $this->checkAdmin();
         
@@ -231,7 +231,7 @@ class UserController extends Controller {
     /**
      * Update - Save user changes
      */
-    public function update($id) {
+    public function update(int $id) {
         $this->checkAuth();
         $this->checkAdmin();
         $this->requireStateChangingRequest(['POST']);
@@ -297,7 +297,7 @@ class UserController extends Controller {
             }
         }
         
-        if (empty($role) || !in_array($role, ['admin', 'operator', 'viewer', 'petugas'])) {
+        if (empty($role) || !in_array($role, ['admin', 'petugas'])) {
             $errors[] = 'Role tidak valid';
         }
         
@@ -343,7 +343,7 @@ class UserController extends Controller {
     /**
      * Delete - Remove user
      */
-    public function delete($id) {
+    public function delete(int $id) {
         $this->checkAuth();
         $this->checkAdmin();
         $this->requireStateChangingRequest(['POST', 'DELETE']);
@@ -385,7 +385,7 @@ class UserController extends Controller {
     /**
      * Toggle Status - Activate/Deactivate user
      */
-    public function toggleStatus($id) {
+    public function toggleStatus(int $id) {
         $this->checkAuth();
         $this->checkAdmin();
         $this->requireStateChangingRequest(['POST', 'PATCH']);

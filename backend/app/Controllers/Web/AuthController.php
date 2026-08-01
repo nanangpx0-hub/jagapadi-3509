@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers\Web;
 
+use App\Core\Env;
 use App\Core\Security;
 use App\Core\Request;
 use App\Core\Controller;
@@ -18,7 +19,7 @@ class AuthController extends Controller
     {
         if (isset($_SESSION['user_id'])) {
             header('Location: /dashboard');
-            return;
+            exit;
         }
         $this->view('auth/login', ['pageTitle' => 'Login'], 'auth');
     }
@@ -26,17 +27,19 @@ class AuthController extends Controller
     public function login(): void
     {
         $ip = Request::ip();
-        $maxAttempts = (int) ($_ENV['LOGIN_MAX_ATTEMPTS'] ?? 5);
-        $decay = (int) ($_ENV['LOGIN_DECAY_SECONDS'] ?? 900);
+        $username = Request::input('username', '');
+        $maxAttempts = (int) Env::get('LOGIN_MAX_ATTEMPTS', '5');
+        $decay = (int) Env::get('LOGIN_DECAY_SECONDS', '900');
 
-        if (!RateLimiter::attempt('login', "web_$ip", $maxAttempts, $decay)) {
-            $availableIn = RateLimiter::availableIn('login', "web_$ip", $decay);
+        $rlKey = 'web_' . $ip . ($username !== '' ? '_' . mb_strtolower($username) : '');
+
+        if (!RateLimiter::attempt('login', $rlKey, $maxAttempts, $decay)) {
+            $availableIn = RateLimiter::availableIn('login', $rlKey, $decay);
             $_SESSION['flash_error'] = "Terlalu banyak percobaan login. Coba lagi dalam $availableIn detik.";
             header('Location: /login');
             return;
         }
 
-        $username = Request::input('username', '');
         $password = Request::input('password', '');
 
         if ($username === '' || $password === '') {
@@ -56,7 +59,7 @@ class AuthController extends Controller
 
         if (!User::isActive($user)) {
             ActivityLog::log((int) $user['id'], 'login_failed', 'users', $user['id'], 'Akun tidak aktif');
-            $_SESSION['flash_error'] = 'Akun Anda tidak aktif. Hubungi administrator.';
+            $_SESSION['flash_error'] = 'Username atau password salah.';
             header('Location: /login');
             return;
         }
@@ -71,7 +74,7 @@ class AuthController extends Controller
         $_SESSION['must_change_password'] = (bool) ($user['must_change_password'] ?? false);
         $_SESSION['login_at'] = time();
 
-        RateLimiter::reset('login', "web_$ip");
+        RateLimiter::reset('login', $rlKey);
         ActivityLog::log((int) $user['id'], 'login_success', 'users', (int) $user['id'], 'Login web berhasil');
 
         if ($_SESSION['must_change_password']) {
@@ -92,5 +95,6 @@ class AuthController extends Controller
         Security::destroySession();
 
         header('Location: /login');
+        exit;
     }
 }

@@ -115,4 +115,24 @@ class Security
     {
         return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
     }
+
+    /**
+     * Mitigasi spreadsheet/formula injection (CSV / XLSX).
+     * Sel yang diawali karakter berbahaya (= + - @ tab CR) diprefix
+     * tanda kutip satu agar tidak dieksekusi sebagai formula oleh
+     * Excel/LibreOffice saat file hasil ekspor dibuka.
+     */
+    public static function sanitizeCell(mixed $value): string
+    {
+        $str = (string) $value;
+        if ($str === '') {
+            return $str;
+        }
+        $first = $str[0];
+        if ($first === '=' || $first === '+' || $first === '-'
+            || $first === '@' || $first === "\t" || $first === "\r") {
+            return "'" . $str;
+        }
+        return $str;
+    }
 }

@@ -1,0 +1,95 @@
+/* Disable Leaflet animations & transitions for map sebaran */
+.leaflet-fade-anim .leaflet-tile,
+.leaflet-zoom-anim .leaflet-zoom-animated,
+.leaflet-container,
+.leaflet-marker-icon,
+.leaflet-popup,
+.leaflet-zoom-box,
+.leaflet-tile-container,
+.map-container,
+.map-container * {
+  transition: none !important;
+  animation: none !important;
+  -webkit-transition: none !important;
+  -webkit-animation: none !important;
+}
+
+.map-filter-panel {
+  background: #fff;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 12px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.map-filter-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a73e8;
+  cursor: pointer;
+  user-select: none;
+}
+.map-filter-body {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+}
+.map-filter-panel.collapsed .map-filter-body {
+  display: none;
+}
+.map-filter-group {
+  flex: 1;
+  min-width: 140px;
+}
+.map-filter-group label {
+  display: block;
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 2px;
+}
+.map-filter-group select,
+.map-filter-group input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  font-size: 13px;
+}
+.map-legend {
+  position: absolute;
+  bottom: 20px;
+  right: 10px;
+  background: rgba(255,255,255,0.95);
+  padding: 8px 12px;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  z-index: 1000;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.map-legend-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #555;
+}
+.map-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.2);
+}
+@media (max-width: 600px) {
+  .map-filter-body {
+    flex-direction: column;
+  }
+  .map-filter-group {
+    min-width: 100%;
+  }
+}

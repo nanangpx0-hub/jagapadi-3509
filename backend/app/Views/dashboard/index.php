@@ -23,129 +23,27 @@
 .quick-links a:hover { background:#1557b0; }
 .quick-links a.secondary { background:#fff; color:#1a73e8; border:1px solid #1a73e8; }
 .quick-links a.secondary:hover { background:#f0f5ff; }
-@media (max-width:768px) {
-  .charts-grid { grid-template-columns:1fr; }
-  .kpi-grid { grid-template-columns:repeat(2, 1fr); }
+@media (max-width:768px) { .charts-grid { grid-template-columns:1fr; } .kpi-grid { grid-template-columns:repeat(2, 1fr); }
 }
-</style>
-
-<div class="dashboard-header">
-    <h1>Dashboard</h1>
-    <div>
-        <label for="tahun" style="font-size:14px;margin-right:8px;">Tahun:</label>
-        <select id="tahun" onchange="refreshDashboard(this.value)">
-            <?php for ($y = (int) date('Y'); $y >= 2020; $y--): ?>
-            <option value="<?= $y ?>" <?= $y === $tahun ? 'selected' : '' ?>><?= $y ?></option>
-            <?php endfor; ?>
-        </select>
-    </div>
-</div>
-
-<!-- KPI Cards -->
-<div class="kpi-grid">
-    <div class="kpi-card">
-        <div class="kpi-value"><?= \App\Core\Security::e((string) ($stats['hama']['total_aktif'] ?? 0)) ?></div>
-        <div class="kpi-label">Laporan Hama Aktif</div>
-    </div>
-    <div class="kpi-card">
-        <div class="kpi-value"><?= \App\Core\Security::e((string) ($stats['irigasi']['total_aktif'] ?? 0)) ?></div>
-        <div class="kpi-label">Laporan Irigasi Aktif</div>
-    </div>
-    <?php if ($role === 'admin'): ?>
-    <div class="kpi-card kpi-warning">
-        <div class="kpi-value"><?= \App\Core\Security::e((string) ($stats['hama']['total_submitted'] + $stats['irigasi']['total_submitted'])) ?></div>
-        <div class="kpi-label">Menunggu Verifikasi</div>
-    </div>
-    <?php else: ?>
-    <div class="kpi-card kpi-danger">
-        <div class="kpi-value"><?= \App\Core\Security::e((string) ($stats['hama']['total_ditolak'] + $stats['irigasi']['total_ditolak'])) ?></div>
-        <div class="kpi-label">Ditolak</div>
-    </div>
-    <div class="kpi-card kpi-warning">
-        <div class="kpi-value"><?= \App\Core\Security::e((string) ($stats['hama']['total_draf'] + $stats['irigasi']['total_draf'])) ?></div>
-        <div class="kpi-label">Draf Saya</div>
-    </div>
-    <?php endif; ?>
-    <div class="kpi-card kpi-success">
-        <div class="kpi-value"><?= \App\Core\Security::e((string) ($stats['hama']['luas_serangan_total'] ?? 0)) ?></div>
-        <div class="kpi-label">Luas Serangan (Ha)</div>
-    </div>
-</div>
-
-<!-- Charts -->
-<div class="charts-grid">
-    <div class="card"><h2>Laporan Hama per Bulan</h2><canvas id="chartHama" height="200"></canvas></div>
-    <div class="card"><h2>Laporan Irigasi per Bulan</h2><canvas id="chartIrigasi" height="200"></canvas></div>
-</div>
-
-<!-- Map -->
-<div class="card">
-    <h2>Peta Laporan</h2>
-    <div class="map-toggle">
-        <button id="toggleHama" class="active" onclick="switchMapLayer('hama')">Hama</button>
-        <button id="toggleIrigasi" onclick="switchMapLayer('irigasi')">Irigasi</button>
-    </div>
-    <div id="map" class="map-container"></div>
-</div>
-
-<!-- Top OPT + Quick Links -->
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;">
-    <div class="card">
-        <h2>Top OPT</h2>
-        <?php $topOpt = $stats['hama']['top_opt'] ?? []; ?>
-        <?php if (count($topOpt) > 0): ?>
-        <table class="top-opt-table">
-            <thead><tr><th>OPT</th><th>Laporan</th></tr></thead>
-            <tbody>
-                <?php foreach ($topOpt as $opt): ?>
-                <tr>
-                    <td><?= \App\Core\Security::e($opt['nama_opt'] ?? '-') ?></td>
-                    <td><?= (int) ($opt['jumlah'] ?? 0) ?></td>
-                </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
-        <?php else: ?>
-        <p style="color:#888;font-size:14px;">Belum ada data.</p>
-        <?php endif; ?>
-    </div>
-    <div class="card">
-        <h2>Status Laporan</h2>
-        <table class="top-opt-table">
-            <thead><tr><th>Status</th><th>Hama</th><th>Irigasi</th></tr></thead>
-            <tbody>
-                <tr><td>Submitted</td><td><?= (int) ($stats['hama']['total_submitted'] ?? 0) ?></td><td><?= (int) ($stats['irigasi']['total_submitted'] ?? 0) ?></td></tr>
-                <tr><td>Diverifikasi</td><td><?= (int) ($stats['hama']['total_diverifikasi'] ?? 0) ?></td><td><?= (int) ($stats['irigasi']['total_diverifikasi'] ?? 0) ?></td></tr>
-                <tr><td>Ditolak</td><td><?= (int) ($stats['hama']['total_ditolak'] ?? 0) ?></td><td><?= (int) ($stats['irigasi']['total_ditolak'] ?? 0) ?></td></tr>
-                <tr><td>Draf</td><td><?= (int) ($stats['hama']['total_draf'] ?? 0) ?></td><td><?= (int) ($stats['irigasi']['total_draf'] ?? 0) ?></td></tr>
-                <tr><td>Diarsipkan</td><td><?= (int) ($stats['hama']['total_diarsipkan'] ?? 0) ?></td><td><?= (int) ($stats['irigasi']['total_diarsipkan'] ?? 0) ?></td></tr>
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<!-- Quick Links -->
-<div class="quick-links">
-    <?php if ($role === 'admin'): ?>
-    <a href="/laporan-hama?status=Submitted">Verifikasi Laporan Hama</a>
-    <a href="/laporan-irigasi?status=Submitted">Verifikasi Laporan Irigasi</a>
-    <?php else: ?>
-    <a href="/laporan-hama/create">Buat Laporan Hama</a>
-    <a href="/laporan-irigasi/create">Buat Laporan Irigasi</a>
-    <?php endif; ?>
-    <a href="/laporan-hama" class="secondary">Semua Laporan Hama</a>
-    <a href="/laporan-irigasi" class="secondary">Semua Laporan Irigasi</a>
-</div>
-
-<script>
+</style> <div class="dashboard-header"> <h1>Dashboard</h1> <div> <label for="tahun" style="font-size:14px;margin-right:8px;">Tahun:</label> <select id="tahun" onchange="refreshDashboard(this.value)"> <?php for ($y = (int) date('Y'); $y >= 2020; $y--): ?> <option value="<?= $y ?>" <?= $y === $tahun ? 'selected' : '' ?>><?= $y ?></option> <?php endfor; ?> </select> </div>
+</div> <!-- KPI Cards -->
+<div class="kpi-grid"> <div class="kpi-card"> <div class="kpi-value"><?= \App\Core\Security::e((string) ($stats['hama']['total_aktif'] ?? 0)) ?></div> <div class="kpi-label">Laporan Hama Aktif</div> </div> <div class="kpi-card"> <div class="kpi-value"><?= \App\Core\Security::e((string) ($stats['irigasi']['total_aktif'] ?? 0)) ?></div> <div class="kpi-label">Laporan Irigasi Aktif</div> </div> <?php if ($role === 'admin'): ?> <div class="kpi-card kpi-warning"> <div class="kpi-value"><?= \App\Core\Security::e((string) ($stats['hama']['total_submitted'] + $stats['irigasi']['total_submitted'])) ?></div> <div class="kpi-label">Menunggu Verifikasi</div> </div> <?php else: ?> <div class="kpi-card kpi-danger"> <div class="kpi-value"><?= \App\Core\Security::e((string) ($stats['hama']['total_ditolak'] + $stats['irigasi']['total_ditolak'])) ?></div> <div class="kpi-label">Ditolak</div> </div> <div class="kpi-card kpi-warning"> <div class="kpi-value"><?= \App\Core\Security::e((string) ($stats['hama']['total_draf'] + $stats['irigasi']['total_draf'])) ?></div> <div class="kpi-label">Draf Saya</div> </div> <?php endif; ?> <div class="kpi-card kpi-success"> <div class="kpi-value"><?= \App\Core\Security::e((string) ($stats['hama']['luas_serangan_total'] ?? 0)) ?></div> <div class="kpi-label">Luas Serangan (Ha)</div> </div>
+</div> <!-- Charts -->
+<div class="charts-grid"> <div class="card"><h2>Laporan Hama per Bulan</h2><canvas id="chartHama" height="200"></canvas></div> <div class="card"><h2>Laporan Irigasi per Bulan</h2><canvas id="chartIrigasi" height="200"></canvas></div>
+</div> <!-- Map -->
+<div class="card"> <h2>Peta Laporan</h2> <div class="map-toggle"> <button id="toggleHama" class="active" onclick="switchMapLayer('hama')">Hama</button> <button id="toggleIrigasi" onclick="switchMapLayer('irigasi')">Irigasi</button> </div> <div id="map" class="map-container"></div>
+</div> <!-- Top OPT + Quick Links -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;"> <div class="card"> <h2>Top OPT</h2> <?php $topOpt = $stats['hama']['top_opt'] ?? []; ?> <?php if (count($topOpt) > 0): ?> <table class="top-opt-table"> <thead><tr><th>OPT</th><th>Laporan</th></tr></thead> <tbody> <?php foreach ($topOpt as $opt): ?> <tr> <td><?= \App\Core\Security::e($opt['nama_opt'] ?? '-') ?></td> <td><?= (int) ($opt['jumlah'] ?? 0) ?></td> </tr> <?php endforeach; ?> </tbody> </table> <?php else: ?> <p style="color:#888;font-size:14px;">Belum ada data.</p> <?php endif; ?> </div> <div class="card"> <h2>Status Laporan</h2> <table class="top-opt-table"> <thead><tr><th>Status</th><th>Hama</th><th>Irigasi</th></tr></thead> <tbody> <tr><td>Submitted</td><td><?= (int) ($stats['hama']['total_submitted'] ?? 0) ?></td><td><?= (int) ($stats['irigasi']['total_submitted'] ?? 0) ?></td></tr> <tr><td>Diverifikasi</td><td><?= (int) ($stats['hama']['total_diverifikasi'] ?? 0) ?></td><td><?= (int) ($stats['irigasi']['total_diverifikasi'] ?? 0) ?></td></tr> <tr><td>Ditolak</td><td><?= (int) ($stats['hama']['total_ditolak'] ?? 0) ?></td><td><?= (int) ($stats['irigasi']['total_ditolak'] ?? 0) ?></td></tr> <tr><td>Draf</td><td><?= (int) ($stats['hama']['total_draf'] ?? 0) ?></td><td><?= (int) ($stats['irigasi']['total_draf'] ?? 0) ?></td></tr> <tr><td>Diarsipkan</td><td><?= (int) ($stats['hama']['total_diarsipkan'] ?? 0) ?></td><td><?= (int) ($stats['irigasi']['total_diarsipkan'] ?? 0) ?></td></tr> </tbody> </table> </div>
+</div> <!-- Quick Links -->
+<div class="quick-links"> <?php if ($role === 'admin'): ?> <a href="/laporan-hama?status=Submitted">Verifikasi Laporan Hama</a> <a href="/laporan-irigasi?status=Submitted">Verifikasi Laporan Irigasi</a> <?php else: ?> <a href="/laporan-hama/create-light" style="background:#2e7d32;">+ Cepat</a> <a href="/laporan-hama/create">+ Buat Laporan Hama</a> <a href="/laporan-irigasi/create">+ Buat Laporan Irigasi</a> <?php endif; ?> <a href="/laporan-hama" class="secondary">Semua Laporan Hama</a> <a href="/laporan-irigasi" class="secondary">Semua Laporan Irigasi</a>
+</div> <script>
 const currentTahun = <?= (int) $tahun ?>;
-const role = '<?= \App\Core\Security::e($role) ?>';
-
-function refreshDashboard(tahun) {
-    window.location.href = '/dashboard?tahun=' + tahun;
+const role = '<?= \App\Core\Security::e($role) ?>'; function refreshDashboard(tahun) { window.location.href = '/dashboard?tahun=' + tahun;
 }
 </script>
 <script src="/assets/js/chart.umd.min.js"></script>
 <script src="/assets/js/leaflet.js"></script>
 <link rel="stylesheet" href="/assets/css/leaflet.css"/>
+<link rel="stylesheet" href="/assets/css/map-enhancements.css"/>
 <script src="/assets/js/dashboard.js"></script>
+<script src="/assets/js/map-enhancements.js"></script>

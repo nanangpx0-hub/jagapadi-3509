@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Helpers;
 
+use App\Core\Logger;
+
 class SecureImageUploader
 {
     private const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'];
+    public const MAX_DIMENSION = 4096;
 
     public static bool $testMode = false;
     private const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -66,6 +69,16 @@ class SecureImageUploader
             throw new \DomainException('MIME type file tidak sesuai.');
         }
 
+        $maxDim = $options['max_dimension'] ?? self::MAX_DIMENSION;
+        $dimensions = @getimagesize($file['tmp_name']);
+        if ($dimensions === false) {
+            throw new \DomainException('Gagal membaca dimensi gambar.');
+        }
+        [$imgW, $imgH] = $dimensions;
+        if ($imgW > $maxDim || $imgH > $maxDim) {
+            throw new \DomainException('Dimensi gambar maksimal ' . $maxDim . 'x' . $maxDim . ' piksel.');
+        }
+
         $clientExt = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
         if (!in_array($clientExt, self::ALLOWED_EXTENSIONS, true)) {
             throw new \DomainException('Ekstensi file tidak diizinkan.');
@@ -98,6 +111,10 @@ class SecureImageUploader
                 ImageCompressor::compress($destPath);
                 $finalSize = filesize($destPath);
             } catch (\Throwable $e) {
+                Logger::error('Kompresi gambar gagal, file tetap disimpan', [
+                    'path' => $destPath,
+                    'error' => $e->getMessage(),
+                ]);
             }
         }
 

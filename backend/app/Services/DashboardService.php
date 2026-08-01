@@ -104,17 +104,28 @@ class DashboardService
         return $data;
     }
 
-    public function getMapHama(string $statusFilter = 'aktif', int $limit = 500): array
-    {
+    public function getMapHama(
+        string $statusFilter = 'aktif',
+        int $limit = 500,
+        ?int $masterOptId = null,
+        ?int $kecamatanId = null,
+        ?int $desaId = null
+    ): array {
         $allowedStatuses = $this->resolveMapStatuses($statusFilter);
-        $cacheKey = "dashboard:map:hama:{$this->role}:{$this->getUserId()}:{$this->tahun}:" . md5(implode(',', $allowedStatuses));
+        $filterKey = md5(
+            implode(',', $allowedStatuses) .
+            ($masterOptId ? ":opt{$masterOptId}" : '') .
+            ($kecamatanId ? ":kec{$kecamatanId}" : '') .
+            ($desaId ? ":des{$desaId}" : '')
+        );
+        $cacheKey = "dashboard:map:hama:{$this->role}:{$this->getUserId()}:{$this->tahun}:{$filterKey}";
 
         $cached = CacheManager::get($cacheKey);
         if ($cached !== null) {
             return $cached;
         }
 
-        $features = $this->mapQueryHama($allowedStatuses, min($limit, 1000));
+        $features = $this->mapQueryHama($allowedStatuses, min($limit, 1000), $masterOptId, $kecamatanId, $desaId);
 
         $data = [
             'type' => 'FeatureCollection',
@@ -130,17 +141,28 @@ class DashboardService
         return $data;
     }
 
-    public function getMapIrigasi(string $statusFilter = 'aktif', int $limit = 500): array
-    {
+    public function getMapIrigasi(
+        string $statusFilter = 'aktif',
+        int $limit = 500,
+        ?int $kecamatanId = null,
+        ?int $desaId = null,
+        ?string $kondisiFisik = null
+    ): array {
         $allowedStatuses = $this->resolveMapStatuses($statusFilter);
-        $cacheKey = "dashboard:map:irigasi:{$this->role}:{$this->getUserId()}:{$this->tahun}:" . md5(implode(',', $allowedStatuses));
+        $filterKey = md5(
+            implode(',', $allowedStatuses) .
+            ($kecamatanId ? ":kec{$kecamatanId}" : '') .
+            ($desaId ? ":des{$desaId}" : '') .
+            ($kondisiFisik ? ":kon{$kondisiFisik}" : '')
+        );
+        $cacheKey = "dashboard:map:irigasi:{$this->role}:{$this->getUserId()}:{$this->tahun}:{$filterKey}";
 
         $cached = CacheManager::get($cacheKey);
         if ($cached !== null) {
             return $cached;
         }
 
-        $features = $this->mapQueryIrigasi($allowedStatuses, min($limit, 1000));
+        $features = $this->mapQueryIrigasi($allowedStatuses, min($limit, 1000), $kecamatanId, $desaId, $kondisiFisik);
 
         $data = [
             'type' => 'FeatureCollection',
@@ -469,8 +491,13 @@ class DashboardService
         };
     }
 
-    private function mapQueryHama(array $statuses, int $limit): array
-    {
+    private function mapQueryHama(
+        array $statuses,
+        int $limit,
+        ?int $masterOptId = null,
+        ?int $kecamatanId = null,
+        ?int $desaId = null
+    ): array {
         $placeholders = implode(',', array_fill(0, count($statuses), '?'));
         $sql = "SELECT lh.id, lh.nomor_laporan, lh.status, lh.tanggal,
                        lh.latitude, lh.longitude, lh.tingkat_keparahan,
@@ -480,11 +507,27 @@ class DashboardService
                 LEFT JOIN `master_desa` md ON md.id = lh.desa_id
                 LEFT JOIN `master_kecamatan` mkc ON mkc.id = lh.kecamatan_id
                 WHERE lh.latitude IS NOT NULL AND lh.longitude IS NOT NULL
+                  AND lh.latitude != 0 AND lh.longitude != 0
                   AND YEAR(lh.tanggal) = ?
                   AND lh.status IN ({$placeholders})";
 
         $params = [$this->tahun];
         $params = array_merge($params, $statuses);
+
+        if ($masterOptId !== null) {
+            $sql .= ' AND lh.master_opt_id = ?';
+            $params[] = $masterOptId;
+        }
+
+        if ($kecamatanId !== null) {
+            $sql .= ' AND lh.kecamatan_id = ?';
+            $params[] = $kecamatanId;
+        }
+
+        if ($desaId !== null) {
+            $sql .= ' AND lh.desa_id = ?';
+            $params[] = $desaId;
+        }
 
         if ($this->userId !== null) {
             $sql .= ' AND lh.user_id = ?';
@@ -525,8 +568,13 @@ class DashboardService
         return $features;
     }
 
-    private function mapQueryIrigasi(array $statuses, int $limit): array
-    {
+    private function mapQueryIrigasi(
+        array $statuses,
+        int $limit,
+        ?int $kecamatanId = null,
+        ?int $desaId = null,
+        ?string $kondisiFisik = null
+    ): array {
         $placeholders = implode(',', array_fill(0, count($statuses), '?'));
         $sql = "SELECT li.id, li.nomor_laporan, li.status, li.tanggal,
                        li.latitude, li.longitude, li.nama_saluran,
@@ -536,11 +584,27 @@ class DashboardService
                 LEFT JOIN `master_desa` md ON md.id = li.desa_id
                 LEFT JOIN `master_kecamatan` mkc ON mkc.id = li.kecamatan_id
                 WHERE li.latitude IS NOT NULL AND li.longitude IS NOT NULL
+                  AND li.latitude != 0 AND li.longitude != 0
                   AND YEAR(li.tanggal) = ?
                   AND li.status IN ({$placeholders})";
 
         $params = [$this->tahun];
         $params = array_merge($params, $statuses);
+
+        if ($kecamatanId !== null) {
+            $sql .= ' AND li.kecamatan_id = ?';
+            $params[] = $kecamatanId;
+        }
+
+        if ($desaId !== null) {
+            $sql .= ' AND li.desa_id = ?';
+            $params[] = $desaId;
+        }
+
+        if ($kondisiFisik !== null && $kondisiFisik !== '') {
+            $sql .= ' AND li.kondisi_fisik = ?';
+            $params[] = $kondisiFisik;
+        }
 
         if ($this->userId !== null) {
             $sql .= ' AND li.user_id = ?';
