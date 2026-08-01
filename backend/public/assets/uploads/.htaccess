@@ -1,0 +1,6 @@
+php_flag engine off
+AddType text/plain .php .php5 .phtml .phar .cgi .pl .shtml
+Options -Indexes
+<FilesMatch "\.(php|phtml|php5|phar|cgi|pl|shtml)$">
+  Require all denied
+</FilesMatch>

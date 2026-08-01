@@ -90,6 +90,12 @@
             <div class="label">Diperbarui</div>
             <div class="value"><?= date('d/m/Y H:i', strtotime($laporan['updated_at'])) ?></div>
         </div>
+        <?php if (!empty($laporan['foto_url'])): ?>
+        <div class="detail-full">
+            <div class="label">Foto</div>
+            <div class="value" style="font-weight:400;"><img src="/<?= \App\Core\Security::e($laporan['foto_url']) ?>" alt="Foto Laporan" style="max-width:400px;max-height:300px;border-radius:6px;border:1px solid #e0e0e0;"></div>
+        </div>
+        <?php endif; ?>
         <div class="detail-full">
             <div class="label">Catatan</div>
             <div class="value" style="font-weight:400;white-space:pre-wrap;"><?= \App\Core\Security::e($laporan['catatan'] ?? '-') ?></div>

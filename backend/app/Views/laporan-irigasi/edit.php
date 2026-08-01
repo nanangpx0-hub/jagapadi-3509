@@ -117,6 +117,30 @@
             <a href="/laporan-irigasi/<?= (int) $data['id'] ?>" class="btn-secondary">Batal</a>
         </div>
     </form>
+
+    <?php if (isset($data['id'])): ?>
+    <hr style="margin:24px 0;">
+    <h3 style="margin-bottom:12px;">Foto Laporan</h3>
+
+    <?php if (!empty($data['foto_url'])): ?>
+        <div style="margin-bottom:12px;">
+            <img src="/<?= \App\Core\Security::e($data['foto_url']) ?>" alt="Foto laporan" style="max-width:300px;max-height:200px;border-radius:6px;border:1px solid #e0e0e0;">
+            <form method="POST" action="/laporan-irigasi/<?= (int) $data['id'] ?>/foto/delete" style="margin-top:8px;">
+                <?= \App\Core\Security::csrfField() ?>
+                <button type="submit" class="btn btn-danger" style="padding:6px 16px;font-size:13px;" onclick="return confirm('Hapus foto ini?')">Hapus Foto</button>
+            </form>
+        </div>
+    <?php endif; ?>
+
+    <form method="POST" action="/laporan-irigasi/<?= (int) $data['id'] ?>/foto" enctype="multipart/form-data">
+        <?= \App\Core\Security::csrfField() ?>
+        <div class="form-group">
+            <label for="foto">Upload Foto Baru (maks. 10 MB, JPEG/PNG/WebP)</label>
+            <input type="file" id="foto" name="foto" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
+        </div>
+        <button type="submit" class="btn btn-primary">Upload</button>
+    </form>
+    <?php endif; ?>
 </div>
 
 <script>

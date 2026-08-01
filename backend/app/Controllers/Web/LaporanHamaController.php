@@ -8,6 +8,9 @@ use App\Core\Controller;
 use App\Core\Request;
 use App\Core\Security;
 use App\Helpers\LaporanStatus;
+use App\Helpers\SecureImageUploader;
+use App\Models\ActivityLog;
+use App\Models\LaporanHama;
 use App\Models\MasterKabupaten;
 use App\Models\MasterOpt;
 use App\Services\LaporanHamaService;
@@ -329,5 +332,107 @@ class LaporanHamaController extends Controller
         }
 
         $this->redirect('/laporan-hama/' . $id);
+    }
+
+    public function uploadFoto(array $params): void
+    {
+        $currentUser = [
+            'id' => (int) ($_SESSION['user_id'] ?? 0),
+            'role' => $_SESSION['role'] ?? '',
+        ];
+
+        $id = (int) ($params['id'] ?? 0);
+        $laporan = LaporanHama::findAccessibleById($id, $currentUser);
+        if ($laporan === null) {
+            $_SESSION['flash_error'] = 'Laporan tidak ditemukan.';
+            $this->redirect('/laporan-hama');
+            return;
+        }
+
+        $canEdit = $currentUser['role'] === 'admin'
+            ? LaporanStatus::isEditableByPetugas($laporan['status'])
+            : ($laporan['user_id'] == $currentUser['id'] && LaporanStatus::isEditableByPetugas($laporan['status']));
+
+        if (!$canEdit) {
+            $_SESSION['flash_error'] = 'Status laporan tidak mengizinkan perubahan foto.';
+            $this->redirect('/laporan-hama/' . $id);
+            return;
+        }
+
+        $file = $_FILES['foto'] ?? null;
+        if ($file === null || $file['error'] === UPLOAD_ERR_NO_FILE) {
+            $_SESSION['flash_error'] = 'File foto wajib diupload.';
+            $this->redirect('/laporan-hama/' . $id . '/edit');
+            return;
+        }
+
+        $uploadRoot = dirname(__DIR__, 3) . '/public';
+        $destDir = $uploadRoot . '/assets/uploads/laporan-hama';
+
+        try {
+            $oldUrl = $laporan['foto_url'] ?? '';
+            $result = SecureImageUploader::validateAndStore($file, [
+                'max_bytes' => 10485760,
+                'destination_dir' => $destDir,
+                'relative_base' => 'assets/uploads/laporan-hama',
+            ]);
+
+            if ($oldUrl !== '') {
+                SecureImageUploader::deleteOldPhoto($uploadRoot, $oldUrl);
+            }
+
+            LaporanHama::update($id, ['foto_url' => $result['foto_url']]);
+            ActivityLog::log((int) $currentUser['id'], 'laporan_hama_photo_uploaded', 'laporan_hama', $id, 'Foto laporan hama diupload: ' . $result['foto_url'], Request::ip(), Request::userAgent());
+
+            $_SESSION['flash_success'] = 'Foto berhasil diunggah.';
+        } catch (\DomainException $e) {
+            $_SESSION['flash_error'] = $e->getMessage();
+        } catch (\RuntimeException $e) {
+            $_SESSION['flash_error'] = 'Gagal menyimpan file.';
+        }
+
+        $this->redirect('/laporan-hama/' . $id . '/edit');
+    }
+
+    public function deleteFoto(array $params): void
+    {
+        $currentUser = [
+            'id' => (int) ($_SESSION['user_id'] ?? 0),
+            'role' => $_SESSION['role'] ?? '',
+        ];
+
+        $id = (int) ($params['id'] ?? 0);
+        $laporan = LaporanHama::findAccessibleById($id, $currentUser);
+        if ($laporan === null) {
+            $_SESSION['flash_error'] = 'Laporan tidak ditemukan.';
+            $this->redirect('/laporan-hama');
+            return;
+        }
+
+        $canEdit = $currentUser['role'] === 'admin'
+            ? LaporanStatus::isEditableByPetugas($laporan['status'])
+            : ($laporan['user_id'] == $currentUser['id'] && LaporanStatus::isEditableByPetugas($laporan['status']));
+
+        if (!$canEdit) {
+            $_SESSION['flash_error'] = 'Status laporan tidak mengizinkan perubahan foto.';
+            $this->redirect('/laporan-hama/' . $id);
+            return;
+        }
+
+        $oldUrl = $laporan['foto_url'] ?? '';
+        if ($oldUrl === '') {
+            $_SESSION['flash_error'] = 'Laporan tidak memiliki foto.';
+            $this->redirect('/laporan-hama/' . $id . '/edit');
+            return;
+        }
+
+        $uploadRoot = dirname(__DIR__, 3) . '/public';
+        SecureImageUploader::deleteOldPhoto($uploadRoot, $oldUrl);
+
+        LaporanHama::update($id, ['foto_url' => null]);
+        ActivityLog::log((int) $currentUser['id'], 'laporan_hama_photo_deleted', 'laporan_hama', $id, 'Foto laporan hama dihapus', Request::ip(), Request::userAgent());
+
+        $_SESSION['flash_success'] = 'Foto berhasil dihapus.';
+        $this->redirect('/laporan-hama/' . $id . '/edit');
     }
 }

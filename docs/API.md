@@ -1,6 +1,6 @@
 # API Contract JAGAPADI
 
-> **Status**: Tahap 8 — Workflow Verifikasi Admin telah diimplementasikan (hama + irigasi). Submitted → Diverifikasi/Ditolak, Diverifikasi → Diarsipkan, Ditolak → Submitted (resubmit).
+> **Status**: Tahap 12 — Notifikasi in-app telah diimplementasikan. NotificationService, Migration 009, Web bell badge + polling, API endpoints, NullPushNotifier default.
 > **Base URL**: `https://domain.tld/api/v1`
 > **Format**: JSON
 > **Auth Mobile**: JWT (`Authorization: Bearer <access_token>`)
@@ -538,47 +538,288 @@ Response 200:
 
 ---
 
+## Upload Foto — API (Implemented — Tahap 9)
 
+### Aturan Umum
 
+- Upload menggunakan `multipart/form-data` dengan field name `foto`.
+- Format yang diizinkan: JPEG, PNG, WebP (validasi magic bytes + MIME + ekstensi).
+- Ukuran maksimal: 10 MB (dikompresi otomatis jika > 2 MB via GD library).
+- File disimpan di `assets/uploads/{context}/YYYYMM/` dengan nama random (bin2hex(16)).
+- Foto lama otomatis dihapus saat upload baru (di direktori yang sama).
+- Path traversal dicegah: validasi realpath + prefix check.
+- Aktivitas upload/hapus foto dicatat di `activity_log`.
 
-## Dashboard & Statistics (Planned)
+### Aturan Per-Entitas
+
+| Entitas | Upload | Hapus | Batasan Status |
+|---------|--------|-------|----------------|
+| OPT (master_opt) | Admin | Admin | Tidak ada batasan status |
+| Laporan Hama | Owner/Admin | Owner/Admin | Hanya `Draf` atau `Ditolak` |
+| Laporan Irigasi | Owner/Admin | Owner/Admin | Hanya `Draf` atau `Ditolak` |
+
+### Endpoints
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| GET | `/dashboard/stats` | Auth | Summary counts (filter `include_draft`) |
-| GET | `/dashboard/trends` | Auth | Time-series (filter `include_draft`) |
-| GET | `/dashboard/by-location` | Auth | Aggregated by kecamatan/desa (filter `include_draft`) |
-| GET | `/dashboard/by-pest` | Auth | Hama breakdown (filter `include_draft`) |
-| GET | `/dashboard/by-channel` | Auth | Irigasi channel breakdown (filter `include_draft`) |
+| POST | `/api/v1/opt/{id}/foto` | JWT (admin) | Upload foto OPT |
+| POST | `/api/v1/opt/{id}/foto/delete` | JWT (admin) | Hapus foto OPT |
+| POST | `/api/v1/laporan-hama/{id}/foto` | JWT | Upload foto laporan hama (Draf/Ditolak only) |
+| POST | `/api/v1/laporan-hama/{id}/foto/delete` | JWT | Hapus foto laporan hama (Draf/Ditolak only) |
+| POST | `/api/v1/laporan-irigasi/{id}/foto` | JWT | Upload foto laporan irigasi (Draf/Ditolak only) |
+| POST | `/api/v1/laporan-irigasi/{id}/foto/delete` | JWT | Hapus foto laporan irigasi (Draf/Ditolak only) |
+
+### POST /api/v1/laporan-hama/{id}/foto
+
+**Request:** `multipart/form-data`
+```
+foto: <binary file>
+```
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "message": "Foto berhasil diunggah.",
+  "data": {
+    "id": 42,
+    "foto_url": "assets/uploads/laporan-hama/202607/ab12cd34ef56ab78cd90ef12.jpg"
+  }
+}
+```
+
+**Response 422 (validasi gagal):**
+```json
+{
+  "success": false,
+  "error": "ValidationError",
+  "message": "File bukan gambar yang diizinkan (JPEG/PNG/WebP)."
+}
+```
+
+**Response 409 (status tidak sesuai):**
+```json
+{
+  "success": false,
+  "error": "Conflict",
+  "message": "Status laporan tidak mengizinkan perubahan foto."
+}
+```
+
+### POST /api/v1/laporan-hama/{id}/foto/delete
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "message": "Foto berhasil dihapus.",
+  "data": {
+    "id": 42,
+    "foto_url": null
+  }
+}
+```
+
+**Response 404 (tidak ada foto):**
+```json
+{
+  "success": false,
+  "error": "NotFound",
+  "message": "Laporan tidak memiliki foto."
+}
+```
+
+### Catatan Implementasi
+
+- Upload foto OPT hanya untuk **admin** (master data).
+- Upload foto laporan hanya untuk **pemilik laporan** atau **admin**.
+- Foto hanya bisa diupload/dihapus saat laporan berstatus `Draf` atau `Ditolak`.
+- Gunakan `SecureImageUploader` helper untuk validasi keamanan berlapis:
+  1. Magic bytes detection (JPEG `FF D8 FF`, PNG `89 50 4E 47...`, WebP `RIFF...WEBP`)
+  2. `finfo` MIME type check
+  3. Ekstensi file check
+  4. Ukuran file check
+  5. Nama file random (bin2hex(random_bytes(16)))
+  6. Sub-direktori per bulan (`YYYYMM`)
+- Gunakan `ImageCompressor` helper (GD library) untuk kompresi otomatis jika file > 2 MB (quality 75).
 
 ---
 
-## Map / Geospatial (Planned)
+
+
+
+## Export — API (Implemented — Tahap 11)
+
+### Aturan Umum
+
+- Semua endpoint export: **authenticated** (JWT atau Session).
+- **Admin**: global (semua data). **Petugas**: hanya data miliknya (`user_id = current`).
+- Format: `csv` atau `xlsx`. Default: `csv`.
+- Maksimal 10.000 baris per export. Jika lebih → 422 "Perketat filter."
+- Maksimal rentang tanggal: 366 hari.
+- File di-stream langsung ke browser (tidak disimpan permanen).
+- Temp file XLSX dihapus setelah di-download (`storage/tmp/`).
+- Aktivitas export dicatat di `activity_log` dengan action `export_hama` / `export_irigasi`.
+
+### Endpoints
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| GET | `/map/reports` | Auth | GeoJSON points (filter: status, type, date, `include_draft`) |
-| GET | `/map/clusters` | Auth | Clustered points for zoom levels |
+| GET | `/api/v1/export/hama` | JWT | Export laporan hama (format csv/xlsx) |
+| GET | `/api/v1/export/irigasi` | JWT | Export laporan irigasi (format csv/xlsx) |
+
+### Web Endpoints (Session)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/export` | Form filter UI |
+| POST | `/export/hama` | Unduh file hama (CSRF protected) |
+| POST | `/export/irigasi` | Unduh file irigasi (CSRF protected) |
+
+### Query Parameters
+
+| Parameter | Tipe | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `format` | string | No | `csv` | Format file: `csv` atau `xlsx` |
+| `status` | string | No | (all) | Filter status, comma-separated: `Draf,Submitted,Diverifikasi,Ditolak,Diarsipkan` |
+| `kabupaten_id` | int | No | (all) | Filter kabupaten |
+| `kecamatan_id` | int | No | (all) | Filter kecamatan |
+| `desa_id` | int | No | (all) | Filter desa |
+| `tanggal_dari` | date | No | (all) | Filter tanggal awal (YYYY-MM-DD) |
+| `tanggal_sampai` | date | No | (all) | Filter tanggal akhir (YYYY-MM-DD) |
+
+### GET /api/v1/export/hama?format=csv&status=Submitted,Diverifikasi
+
+**Response 200:** Binary file download
+
+Headers:
+```
+Content-Type: text/csv; charset=UTF-8
+Content-Disposition: attachment; filename="laporan-hama-20260716-153000.csv"
+Cache-Control: no-store
+```
+
+**Response 200 (XLSX):**
+```
+Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+Content-Disposition: attachment; filename="laporan-hama-20260716-153000.xlsx"
+Cache-Control: no-store
+```
+
+**Response 422 (too many rows):**
+```json
+{
+  "success": false,
+  "error": "ValidationError",
+  "message": "Data terlalu banyak (15000 baris). Maksimal 10000 baris. Perketat filter."
+}
+```
+
+**Response 422 (validasi filter):**
+```json
+{
+  "success": false,
+  "error": "ValidationError",
+  "message": "Validasi gagal.",
+  "errors": {
+    "tanggal_sampai": "Rentang tanggal maksimal 366 hari.",
+    "format": "Format harus csv atau xlsx."
+  }
+}
+```
+
+### Kolom Export
+
+#### Laporan Hama (22 kolom)
+
+| No | Label | Sumber |
+|----|-------|--------|
+| 1 | Nomor Laporan | `lh.nomor_laporan` |
+| 2 | Tanggal | `lh.tanggal` |
+| 3 | Status | `lh.status` |
+| 4 | Nama Petugas | `users.nama_lengkap` (pelapor) |
+| 5 | Nama OPT | `master_opt.nama_opt` |
+| 6 | Jenis OPT | `master_opt.jenis` |
+| 7 | Tingkat Keparahan | `lh.tingkat_keparahan` |
+| 8 | Luas Serangan | `lh.luas_serangan` |
+| 9 | Populasi | `lh.populasi` |
+| 10 | Kabupaten | `master_kabupaten.nama_kabupaten` |
+| 11 | Kecamatan | `master_kecamatan.nama_kecamatan` |
+| 12 | Desa | `master_desa.nama_desa` |
+| 13 | Lokasi | `lh.lokasi` |
+| 14 | Alamat Lengkap | `lh.alamat_lengkap` |
+| 15 | Latitude | `lh.latitude` |
+| 16 | Longitude | `lh.longitude` |
+| 17 | Catatan | `lh.catatan` |
+| 18 | Diverifikasi Oleh | `verifikator.nama_lengkap` |
+| 19 | Tanggal Verifikasi | `lh.verified_at` |
+| 20 | Catatan Verifikasi | `lh.catatan_verifikasi` |
+| 21 | Dibuat Pada | `lh.created_at` |
+| 22 | Diperbarui Pada | `lh.updated_at` |
+
+#### Laporan Irigasi (19 kolom)
+
+| No | Label | Sumber |
+|----|-------|--------|
+| 1 | Nomor Laporan | `li.nomor_laporan` |
+| 2 | Tanggal | `li.tanggal` |
+| 3 | Status | `li.status` |
+| 4 | Nama Petugas | `users.nama_lengkap` (pelapor) |
+| 5 | Nama Saluran | `li.nama_saluran` |
+| 6 | Daerah Irigasi | `li.daerah_irigasi` |
+| 7 | Kondisi Fisik | `li.kondisi_fisik` |
+| 8 | Debit Air | `li.debit_air` |
+| 9 | Kabupaten | `master_kabupaten.nama_kabupaten` |
+| 10 | Kecamatan | `master_kecamatan.nama_kecamatan` |
+| 11 | Desa | `master_desa.nama_desa` |
+| 12 | Latitude | `li.latitude` |
+| 13 | Longitude | `li.longitude` |
+| 14 | Catatan | `li.catatan` |
+| 15 | Diverifikasi Oleh | `verifikator.nama_lengkap` |
+| 16 | Tanggal Verifikasi | `li.verified_at` |
+| 17 | Catatan Verifikasi | `li.catatan_verifikasi` |
+| 18 | Dibuat Pada | `li.created_at` |
+| 19 | Diperbarui Pada | `li.updated_at` |
+
+### Contoh Curl
+
+```bash
+# Export CSV laporan hama (JWT)
+curl -H "Authorization: Bearer $TOKEN" \
+  -o laporan-hama.csv \
+  "http://localhost:8080/api/v1/export/hama?format=csv&status=Submitted,Diverifikasi&tanggal_dari=2026-01-01&tanggal_sampai=2026-06-30"
+
+# Export XLSX laporan irigasi petugas (JWT)
+curl -H "Authorization: Bearer $TOKEN" \
+  -o laporan-irigasi.xlsx \
+  "http://localhost:8080/api/v1/export/irigasi?format=xlsx&kabupaten_id=1"
+
+# Export via web (session)
+curl -c cookies.txt -b cookies.txt \
+  -X POST \
+  -d "format=csv&_csrf_token=..." \
+  -o laporan.csv \
+  "http://localhost:8080/export/hama"
+```
+
+### Batasan
+
+| Aturan | Nilai |
+|--------|-------|
+| Maks baris | 10.000 |
+| Maks rentang tanggal | 366 hari |
+| Format valid | `csv`, `xlsx` |
+| Status valid | `Draf`, `Submitted`, `Diverifikasi`, `Ditolak`, `Diarsipkan` |
+| Role admin | Export semua data |
+| Role petugas | Export data sendiri (`user_id` scope) |
+| Temp file | XLSX: `storage/tmp/export_{random}.xlsx`, dihapus setelah download |
+| Aktivitas dicatat | action: `export_hama` / `export_irigasi`, format, filename, row count |
 
 ---
 
-## Analysis (Planned)
+## Dashboard & Statistik — API (Implemented — Tahap 10)
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| GET | `/analysis/hama` | Auth | Hama analysis (only `analysis_ready=true`, filter `include_draft`) |
-| GET | `/analysis/irigasi` | Auth | Irigasi analysis (only `analysis_ready=true`, filter `include_draft`) |
-| GET | `/analysis/comparison` | Auth | Period comparison |
-
----
-
-## Export (Planned)
-
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| GET | `/export/hama` | Admin | CSV/Excel/PDF (filter `include_draft`) |
-| GET | `/export/irigasi` | Admin | CSV/Excel/PDF (filter `include_draft`) |
-| GET | `/export/dashboard` | Admin | Dashboard summary export |
+- (existing content unchanged after this point)
 
 ---
 
@@ -663,15 +904,378 @@ Response 200:
 
 ---
 
+## Dashboard & Statistik — API (Implemented — Tahap 10)
+
+### Aturan Umum
+
+- Semua endpoint dashboard: **authenticated** (JWT atau Session).
+- **Admin**: agregat global. **Petugas**: hanya data miliknya (`user_id = current`).
+- Statistik aktif = **Submitted + Diverifikasi** (Draf, Ditolak, Diarsipkan tidak masuk).
+- Cache file TTL 5 menit di `storage/cache/`. Cache diinvalidate otomatis saat laporan dibuat/diverifikasi/ditolak/diarsipkan.
+- Filter `tahun` (YYYY, default tahun berjalan). Range: 2020..(current+1).
+
+### Endpoints
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/v1/dashboard/stats` | JWT | Ringkasan statistik hama + irigasi |
+| GET | `/api/v1/dashboard/charts/hama` | JWT | Data chart bulanan hama (12 bucket) |
+| GET | `/api/v1/dashboard/charts/irigasi` | JWT | Data chart bulanan irigasi (12 bucket) |
+| GET | `/api/v1/dashboard/map/hama` | JWT | GeoJSON titik laporan hama |
+| GET | `/api/v1/dashboard/map/irigasi` | JWT | GeoJSON titik laporan irigasi |
+
+### Web JSON Endpoints (Session)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/dashboard/stats.json` | Stats (sama dengan API) |
+| GET | `/dashboard/charts/hama.json` | Chart hama bulanan |
+| GET | `/dashboard/charts/irigasi.json` | Chart irigasi bulanan |
+| GET | `/dashboard/map/hama.json` | GeoJSON hama |
+| GET | `/dashboard/map/irigasi.json` | GeoJSON irigasi |
+
+### GET /api/v1/dashboard/stats
+
+**Query params:** `tahun=2026`
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "tahun": 2026,
+    "hama": {
+      "total_submitted": 12,
+      "total_diverifikasi": 40,
+      "total_aktif": 52,
+      "total_ditolak": 3,
+      "total_draf": 2,
+      "total_diarsipkan": 5,
+      "luas_serangan_total": 123.45,
+      "by_keparahan": {
+        "Ringan": 20,
+        "Sedang": 22,
+        "Berat": 10
+      },
+      "top_opt": [
+        {"master_opt_id": 3, "nama_opt": "Wereng Batang Coklat", "jumlah": 15}
+      ]
+    },
+    "irigasi": {
+      "total_submitted": 8,
+      "total_diverifikasi": 25,
+      "total_aktif": 33,
+      "total_ditolak": 1,
+      "total_draf": 0,
+      "total_diarsipkan": 2,
+      "by_kondisi_fisik": {"Bagus": 10, "Sedang": 12, "Tidak Bagus": 7, "Rusak": 4},
+      "by_debit_air": {"Cukup": 15, "Kurang": 12, "Kering": 6}
+    },
+    "meta": {"cached": true, "generated_at": "2026-07-16 15:00:00"}
+  }
+}
+```
+
+### GET /api/v1/dashboard/charts/hama
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "tahun": 2026,
+    "labels": ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"],
+    "series": {
+      "submitted": [1,2,0,4,0,0,0,0,0,0,0,0],
+      "diverifikasi": [3,5,2,6,0,0,0,0,0,0,0,0],
+      "aktif": [4,7,2,10,0,0,0,0,0,0,0,0]
+    },
+    "by_keparahan_bulanan": {
+      "Ringan": [1,0,0,0,0,0,0,0,0,0,0,0],
+      "Sedang": [0,0,0,0,0,0,0,0,0,0,0,0],
+      "Berat": [0,0,0,0,0,0,0,0,0,0,0,0]
+    }
+  }
+}
+```
+
+### GET /api/v1/dashboard/map/hama
+
+**Query params:** `tahun=2026&status=aktif&limit=500`
+
+**Response (GeoJSON FeatureCollection):**
+```json
+{
+  "success": true,
+  "data": {
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "geometry": {"type": "Point", "coordinates": [113.7012, -8.1734]},
+        "properties": {
+          "id": 42,
+          "nomor_laporan": "LH-20260716-0001",
+          "status": "Diverifikasi",
+          "tanggal": "2026-07-16",
+          "desa": "Sumbersari",
+          "kecamatan": "Sumbersari",
+          "opt": "Wereng Batang Coklat",
+          "tingkat_keparahan": "Sedang",
+          "popup": "LH-20260716-0001 · Wereng · Sedang"
+        }
+      }
+    ],
+    "meta": {"count": 1, "limit": 500, "tahun": 2026}
+  }
+}
+```
+
+### Cache Design
+
+| Aspek | Detail |
+|-------|--------|
+| Driver | File-based (`storage/cache/`) |
+| TTL default | 300 detik (5 menit) |
+| Key pattern | `dashboard:{type}:{role}:{userId}:{tahun}[:hash]` |
+| Invalidation | Otomatis via `DashboardService::invalidateCache()` pada create/submit/verify/reject/archive/resubmit |
+| Atomic write | Temp file + rename |
+| Fallback | Jika cache tidak writable, query tetap jalan (no-cache) |
+
+---
+
+## Notifikasi — API (Implemented — Tahap 12)
+
+### Aturan Umum
+
+- Semua endpoint notifikasi: **authenticated** (JWT atau Session).
+- Setiap user hanya melihat notifikasi miliknya sendiri (enforced di query).
+- Notifikasi dibuat otomatis oleh hook di `LaporanHamaService` & `LaporanIrigasiService` pada event:
+  - `laporan_submitted` → admin mendapat notifikasi laporan baru
+  - `laporan_resubmitted` → admin mendapat notifikasi laporan dikirim ulang
+  - `laporan_verified` → pemilik laporan mendapat notifikasi verifikasi
+  - `laporan_rejected` → pemilik laporan mendapat notifikasi penolakan (+ cuplikan alasan)
+  - `laporan_archived` → pemilik laporan mendapat notifikasi pengarsipan
+- Body notifikasi reject: alasan di-truncate ~120 karakter.
+- Kegagalan push (FCM) tidak mengganggu alur utama (catch + Logger::warning).
+
+### Endpoints
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/v1/notifications` | JWT | List notifikasi (pagination + filter unread) |
+| GET | `/api/v1/notifications/unread-count` | JWT | Jumlah notifikasi belum dibaca |
+| POST | `/api/v1/notifications/{id}/read` | JWT | Tandai satu notifikasi telah dibaca |
+| POST | `/api/v1/notifications/read-all` | JWT | Tandai semua notifikasi telah dibaca |
+| DELETE | `/api/v1/notifications/{id}` | JWT | Hapus notifikasi |
+
+### Web Endpoints (Session)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/notifications` | Halaman list notifikasi |
+| GET | `/notifications/unread-count.json` | JSON unread count (untuk badge) |
+| GET | `/notifications/recent.json` | JSON 5 notifikasi terbaru |
+| POST | `/notifications/{id}/read` | Tandai baca + redirect (CSRF) |
+| POST | `/notifications/read-all` | Tandai semua baca (CSRF) |
+| POST | `/notifications/{id}/delete` | Hapus notifikasi (CSRF) |
+
+### GET /api/v1/notifications
+
+**Query params:** `page=1&limit=20&unread=1`
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "message": "Daftar notifikasi",
+  "data": [
+    {
+      "id": 1,
+      "user_id": 2,
+      "type": "laporan_verified",
+      "title": "Laporan diverifikasi",
+      "body": "LH-20260716-0001 telah diverifikasi oleh admin.",
+      "data": {
+        "entity": "hama",
+        "laporan_id": 1,
+        "nomor_laporan": "LH-20260716-0001",
+        "status": "Diverifikasi",
+        "web_path": "/laporan-hama/1",
+        "api_path": "/api/v1/laporan-hama/1"
+      },
+      "read_at": null,
+      "created_at": "2026-07-16 14:00:00"
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "limit": 20,
+    "total": 1,
+    "unread": 1
+  }
+}
+```
+
+### GET /api/v1/notifications/unread-count
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "message": "Unread count",
+  "data": {
+    "count": 3
+  }
+}
+```
+
+### POST /api/v1/notifications/{id}/read
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "message": "Notifikasi ditandai telah dibaca.",
+  "data": {
+    "id": 1
+  }
+}
+```
+
+**Response 404 (bukan milik user atau tidak ditemukan):**
+```json
+{
+  "success": false,
+  "error": "NotFound",
+  "message": "Notifikasi tidak ditemukan."
+}
+```
+
+### POST /api/v1/notifications/read-all
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "message": "Semua notifikasi ditandai telah dibaca.",
+  "data": {
+    "count": 3
+  }
+}
+```
+
+### DELETE /api/v1/notifications/{id}
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "message": "Notifikasi berhasil dihapus.",
+  "data": {
+    "id": 1
+  }
+}
+```
+
+### Event Matrix Notifikasi
+
+| Event | Trigger | Penerima | Type |
+|-------|---------|----------|------|
+| Petugas submit laporan baru | `createAndSubmit()` / `submitDraft()` | Semua admin (kecuali aktor) | `laporan_submitted` |
+| Petugas resubmit laporan | `resubmit()` | Semua admin (kecuali aktor) | `laporan_resubmitted` |
+| Admin verifikasi laporan | `verify()` | Pemilik laporan | `laporan_verified` |
+| Admin tolak laporan | `reject()` | Pemilik laporan | `laporan_rejected` |
+| Admin arsip laporan | `archive()` | Pemilik laporan | `laporan_archived` |
+
+### Notifikasi Push (Stub)
+
+| Komponen | Detail |
+|----------|--------|
+| Interface | `PushNotifierInterface::send(userId, title, body, data)` |
+| Default | `NullPushNotifier` (no-op) |
+| FCM | `FcmPushNotifier` stub — aktif jika `FCM_ENABLED=true` dan `FCM_SERVER_KEY` terisi |
+| Env | `FCM_ENABLED=false`, `FCM_SERVER_KEY=` |
+
+---
+
+## Device Tokens — API (Implemented — FCM)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/v1/device-tokens` | JWT | Register/upsert FCM token |
+| DELETE | `/api/v1/device-tokens` | JWT | Hapus token milik current user |
+| DELETE | `/api/v1/device-tokens/all` | JWT | Hapus semua token user |
+
+### POST /api/v1/device-tokens
+
+**Request:**
+```json
+{
+  "token": "fcm_token_here",
+  "platform": "android"
+}
+```
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "message": "Token berhasil didaftarkan.",
+  "data": { "id": 1 }
+}
+```
+
+**Perilaku:**
+- Upsert: jika token sudah ada (milik user lain) → pindahkan ke user sekarang
+- Update `last_seen_at` setiap kali register
+- `platform`: `android`, `ios`, `web` (default `android`)
+
+### DELETE /api/v1/device-tokens
+
+**Request:**
+```json
+{
+  "token": "fcm_token_here"
+}
+```
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "message": "Token berhasil dihapus."
+}
+```
+
+Hanya menghapus token milik current user.
+
+### Push Payload (FCM Data)
+
+```json
+{
+  "type": "laporan_rejected",
+  "entity": "hama",
+  "laporan_id": "42",
+  "notification_id": "10",
+  "nomor_laporan": "LH-20260716-0001",
+  "status": "Ditolak"
+}
+```
+
+Semua value FCM data adalah **string**.
+
+---
+
 ## Webhook / Callback (Future)
 
-- Notifikasi push ke mobile (FCM)
 - Webhook verifikasi ke sistem eksternal
 
 ---
 
 ## Next Steps
 
-- Tahap 9: Upload Foto Aman (OPT + Laporan Hama + Laporan Irigasi)
-- Update `docs/API.md` dengan kontrak final (OpenAPI/Swagger)
+- Tahap 13: Mobile App Flutter (auth, offline draft, sync, JWT)
+- Push FCM production (device token registration + FcmPushNotifier)
+- OpenAPI/Swagger docs final
 - Generate SDK/client untuk Flutter

@@ -96,10 +96,10 @@
 | 7 | Dashboard & Statistik | Pending |
 | 8 | Peta & Geospasial | Pending |
 | 9 | Analisis & Ekspor | Pending |
-| 10 | Mobile App Flutter | Pending |
-| 11 | Notifikasi & Real-time | Pending |
+| 10 | Mobile App Flutter | **DONE** |
+| 11 | Notifikasi & Real-time (FCM) | **DONE** |
 | 12 | Testing & QA | Pending |
-| 13 | Deployment & CI/CD | Pending |
+| 13 | Deployment & CI/CD | **DONE** |
 | 14 | Dokumentasi Akhir & Handover | Pending |
 
 ---

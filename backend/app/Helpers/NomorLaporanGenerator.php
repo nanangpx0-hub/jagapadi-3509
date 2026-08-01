@@ -17,7 +17,10 @@ class NomorLaporanGenerator
         }
 
         $pdo = Database::connect();
-        $pdo->beginTransaction();
+        $ownTransaction = !$pdo->inTransaction();
+        if ($ownTransaction) {
+            $pdo->beginTransaction();
+        }
 
         try {
             $stmt = $pdo->prepare("
@@ -39,11 +42,15 @@ class NomorLaporanGenerator
             $datePart = str_replace('-', '', $tanggal);
             $nomor = sprintf('%s-%s-%04d', $prefix, $datePart, $counter);
 
-            $pdo->commit();
+            if ($ownTransaction) {
+                $pdo->commit();
+            }
 
             return $nomor;
         } catch (\Throwable $e) {
-            $pdo->rollBack();
+            if ($ownTransaction) {
+                $pdo->rollBack();
+            }
             throw $e;
         }
     }

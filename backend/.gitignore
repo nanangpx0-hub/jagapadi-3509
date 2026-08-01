@@ -1,0 +1,10 @@
+vendor/
+storage/cache/
+storage/logs/
+public/uploads/
+.phpunit.cache/
+google-services.json
+*.service_account.json
+!storage/cache/.gitkeep
+!storage/logs/.gitkeep
+!public/uploads/.gitkeep
