@@ -17,7 +17,7 @@ module.exports = defineConfig({
     ['junit', { outputFile: 'reports/junit.xml' }],
   ],
   use: {
-    baseURL: 'http://localhost:8080',
+    baseURL: 'http://localhost/jagapadi-3509',
     headless: false,
     viewport: { width: 1280, height: 720 },
     actionTimeout: 20000,
@@ -26,7 +26,7 @@ module.exports = defineConfig({
     video: 'retain-on-failure',
     trace: 'on-first-retry',
     launchOptions: {
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-web-security'],
     },
   },
   projects: [

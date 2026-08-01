@@ -108,6 +108,7 @@ backend/public/assets/uploads/
 
 # --- Test output artifacts ---
 test-results/
+e2e/reports/
 e2e/junit.xml
 e2e/test-output.json
 e2e/*.png

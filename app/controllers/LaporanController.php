@@ -1211,6 +1211,11 @@ class LaporanController extends Controller {
             $search  = trim($_GET['search'] ?? '');
             $status  = trim($_GET['status'] ?? '');
             $sortCol = trim($_GET['sort_col'] ?? 'tanggal');
+            $sortCol = preg_replace('/^[a-z_]+\./i', '', $sortCol);
+            $allowedSortCols = ['id', 'tanggal', 'tingkat_keparahan', 'status', 'created_at', 'populasi', 'luas_serangan'];
+            if (!in_array($sortCol, $allowedSortCols, true)) {
+                $sortCol = 'tanggal';
+            }
             $sortDir = trim($_GET['sort_dir'] ?? 'desc');
 
             $statusMap = [
