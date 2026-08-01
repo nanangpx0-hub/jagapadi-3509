@@ -79,14 +79,21 @@ foreach ($migrationFiles as $file) {
     }
 
     try {
+        $pdo->beginTransaction();
         $pdo->exec($sql);
 
         $insert = $pdo->prepare("INSERT INTO `schema_migrations` (`migration`, `batch`) VALUES (?, ?)");
         $insert->execute([$filename, $batch]);
 
+        $pdo->commit();
+
         echo "  [OK]   $filename" . PHP_EOL;
         $ran++;
     } catch (\PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
         echo "  [FAIL] $filename" . PHP_EOL;
         echo "         " . $e->getMessage() . PHP_EOL;
         echo PHP_EOL;

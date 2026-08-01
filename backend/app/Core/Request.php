@@ -50,12 +50,37 @@ class Request
 
     public static function ip(): string
     {
-        $forwarded = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '';
-        if ($forwarded !== '') {
-            $ips = explode(',', $forwarded);
-            return trim($ips[0]);
+        $remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+        $trustedProxies = self::trustedProxyIps();
+
+        if ($trustedProxies === [] || !in_array($remoteAddr, $trustedProxies, true)) {
+            return $remoteAddr;
         }
-        return $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+
+        $forwarded = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '';
+        if ($forwarded === '') {
+            return $remoteAddr;
+        }
+
+        $forwardedIps = array_map('trim', explode(',', $forwarded));
+        foreach ($forwardedIps as $ip) {
+            if ($ip !== '' && filter_var($ip, FILTER_VALIDATE_IP) !== false) {
+                return $ip;
+            }
+        }
+
+        return $remoteAddr;
+    }
+
+    private static function trustedProxyIps(): array
+    {
+        $trustedConfig = Env::get('TRUSTED_PROXIES', '');
+        if (!is_string($trustedConfig) || trim($trustedConfig) === '') {
+            return [];
+        }
+
+        $trusted = array_map('trim', explode(',', $trustedConfig));
+        return array_values(array_filter($trusted, static fn (string $ip): bool => $ip !== ''));
     }
 
     public static function userAgent(): string

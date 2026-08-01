@@ -19,6 +19,7 @@ backend/vendor/
 backend/storage/cache/
 backend/storage/logs/
 backend/public/uploads/
+backend/public/assets/uploads/
 backend/.phpunit.cache/
 !backend/storage/cache/.gitkeep
 !backend/storage/logs/.gitkeep

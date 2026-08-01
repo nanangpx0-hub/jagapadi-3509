@@ -59,7 +59,7 @@
 
         <div class="form-group">
             <label>
-                <input type="checkbox" name="aktif" value="1" <?= (($data['aktif'] ?? 1) == 1) ? 'checked' : ?>>
+                <input type="checkbox" name="aktif" value="1" <?= (($data['aktif'] ?? 1) == 1) ? 'checked' : '' ?>>
                 Aktif
             </label>
         </div>

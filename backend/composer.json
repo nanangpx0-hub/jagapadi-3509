@@ -25,7 +25,7 @@
             "@test",
             "@lint"
         ],
-        "lint": "php -l app/ config/ public/index.php"
+        "lint": "php scripts/lint.php"
     },
     "config": {
         "optimize-autoloader": true,
