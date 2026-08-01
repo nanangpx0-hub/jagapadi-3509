@@ -9,8 +9,9 @@ class Jwt
     private static function getSecret(): string
     {
         $secret = Env::get('JWT_SECRET', '');
-        if ($secret === '' || $secret === 'GANTI_DENGAN_SECRET_MINIMAL_64_KARAKTER_ACAK') {
-            Logger::warning('JWT_SECRET is empty or using placeholder. Use a strong secret in production.');
+        $placeholder = 'GANTI_DENGAN_SECRET_MINIMAL_64_KARAKTER_ACAK';
+        if ($secret === '' || $secret === $placeholder || strlen($secret) < 32) {
+            throw new \RuntimeException('JWT_SECRET tidak dikonfigurasi dengan benar.');
         }
         return $secret;
     }
@@ -24,6 +25,10 @@ class Jwt
 
         $payload['iat'] = $payload['iat'] ?? time();
         $payload['exp'] = $payload['exp'] ?? time() + (int) Env::get('JWT_EXPIRY', '3600');
+
+        if (!isset($payload['jti']) || $payload['jti'] === '' || $payload['jti'] === null) {
+            $payload['jti'] = bin2hex(random_bytes(16));
+        }
 
         $segments = [];
         $segments[] = self::base64UrlEncode(json_encode($header));

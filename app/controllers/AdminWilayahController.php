@@ -347,11 +347,11 @@ class AdminWilayahController extends Controller {
 
         // Map DataTables order column to database column
         $orderColumnMap = [
-            2 => 'kode_kecamatan',
+            2 => 'kode',
             3 => 'nama_kecamatan',
             4 => 'kode_kabupaten'
         ];
-        $orderColumn = $orderColumnMap[$_GET['order_column'] ?? 2] ?? 'kode_kecamatan';
+        $orderColumn = $orderColumnMap[$_GET['order_column'] ?? 2] ?? 'kode';
         $orderDir = strtoupper($_GET['order_dir'] ?? 'asc') === 'DESC' ? 'desc' : 'asc';
 
         try {
@@ -386,7 +386,7 @@ class AdminWilayahController extends Controller {
                 SELECT COUNT(*) as invalid_count
                 FROM master_kecamatan k
                 LEFT JOIN master_kabupaten kb ON k.kabupaten_id = kb.id
-                WHERE k.deleted_at IS NULL AND (kb.id IS NULL OR kb.deleted_at IS NOT NULL)
+                WHERE kb.id IS NULL
             ");
             $stmt->execute();
             $result = $stmt->fetch();
@@ -616,7 +616,7 @@ class AdminWilayahController extends Controller {
                 $errors[] = 'Kode wilayah wajib diisi';
             } elseif (!preg_match('/^[0-9]{6,7}$/', $data['kode_kecamatan'])) {
                 $errors[] = 'Format kode kecamatan harus 6–7 digit angka';
-            } elseif ($data['kode_kecamatan'] != $kecamatan['kode_kecamatan'] && 
+            } elseif ($data['kode_kecamatan'] != $kecamatan['kode'] && 
                       $this->kecModel->checkKodeExists($data['kode_kecamatan'])) {
                 $errors[] = 'Kode wilayah sudah digunakan';
             }
@@ -789,7 +789,7 @@ class AdminWilayahController extends Controller {
         
         $data = [
             'nama_kecamatan' => trim($input['nama_kecamatan'] ?? ''),
-            'kode_kecamatan' => $kecamatan['kode_kecamatan'],
+            'kode_kecamatan' => $kecamatan['kode'],
             'kabupaten_id' => (int)$kecamatan['kabupaten_id'],
             'updated_by' => $_SESSION['user_id']
         ];
@@ -801,7 +801,7 @@ class AdminWilayahController extends Controller {
         }
 
         // Prevent changing kode_kecamatan or kabupaten_id via edit (must stay as existing)
-        if (isset($input['kode_kecamatan']) && trim($input['kode_kecamatan']) !== $kecamatan['kode_kecamatan']) {
+        if (isset($input['kode_kecamatan']) && trim($input['kode_kecamatan']) !== $kecamatan['kode']) {
             $errors[] = 'Kode wilayah (BPS) tidak boleh diubah melalui edit ini';
         }
         if (isset($input['kabupaten_id']) && (string)$input['kabupaten_id'] !== (string)$kecamatan['kabupaten_id']) {
@@ -961,7 +961,7 @@ class AdminWilayahController extends Controller {
                     $row['kode_desa_highlighted'] = preg_replace(
                         '/(' . preg_quote($search, '/') . ')/i',
                         '<mark class="search-highlight">$1</mark>',
-                        htmlspecialchars($row['kode_desa'] ?? '')
+                        htmlspecialchars($row['kode'] ?? '')
                     );
                 }
                 unset($row);
@@ -1024,7 +1024,7 @@ class AdminWilayahController extends Controller {
                     'id' => $row['id'],
                     'value' => $row['nama_desa'],
                     'label' => $row['nama_desa'] . ' - ' . ($row['nama_kecamatan'] ?? '') . ', ' . ($row['nama_kabupaten'] ?? ''),
-                    'kode_desa' => $row['kode_desa'],
+                    'kode_desa' => $row['kode'],
                     'nama_kecamatan' => $row['nama_kecamatan'],
                     'nama_kabupaten' => $row['nama_kabupaten']
                 ];
@@ -1131,7 +1131,7 @@ class AdminWilayahController extends Controller {
             }
             if (empty($data['kode_desa'])) {
                 $errors[] = 'Kode desa wajib diisi';
-            } elseif ($data['kode_desa'] != $desa['kode_desa'] && 
+            } elseif ($data['kode_desa'] != $desa['kode'] && 
                       $this->desaModel->checkKodeExists($data['kode_desa'])) {
                 $errors[] = 'Kode desa sudah digunakan';
             }

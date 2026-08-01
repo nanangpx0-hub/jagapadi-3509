@@ -73,6 +73,7 @@ class Router {
         $this->get('/api/laporan-hama', 'Api\LaporanHamaController@index', ['auth']);
         $this->get('/api/laporan-hama/{id}', 'Api\LaporanHamaController@show', ['auth']);
         $this->post('/api/laporan-hama', 'Api\LaporanHamaController@store', ['auth']);
+        $this->post('/api/laporan-hama/{id}/submit', 'Api\LaporanHamaController@submit', ['auth']);
         $this->post('/api/laporan-hama/{id}/archive', 'Api\LaporanHamaController@archive', ['auth']);
         $this->put('/api/laporan-hama/{id}', 'Api\LaporanHamaController@update', ['auth']);
         $this->delete('/api/laporan-hama/{id}', 'Api\LaporanHamaController@destroy', ['auth', 'admin']);
@@ -153,27 +154,30 @@ class Router {
 
         // User API Routes
         $this->get('/api/users', 'Api\UserController@index', ['auth', 'admin']);
-        $this->get('/api/users/{id}', 'Api\UserController@show', ['auth']);
         $this->post('/api/users', 'Api\UserController@store', ['auth', 'admin']);
-        $this->put('/api/users/{id}', 'Api\UserController@update', ['auth']);
-        $this->delete('/api/users/{id}', 'Api\UserController@destroy', ['auth', 'admin']);
-        $this->post('/api/users/{id}/toggle-status', 'Api\UserController@toggleStatus', ['auth', 'admin']);
         $this->get('/api/users/profile', 'Api\UserController@getProfile', ['auth']);
         $this->put('/api/users/profile', 'Api\UserController@updateProfile', ['auth']);
         $this->post('/api/users/change-password', 'Api\UserController@changePassword', ['auth']);
         $this->post('/api/users/force-change-password', 'Api\UserController@forceChangePassword', ['auth']);
         $this->get('/api/users/check-password-change', 'Api\UserController@checkPasswordChange', ['auth']);
-        $this->post('/api/users/{id}/force-password-change', 'Api\UserController@setForcePasswordChange', ['auth', 'admin']);
         $this->get('/api/users/needing-password-change', 'Api\UserController@getUsersNeedingPasswordChange', ['auth', 'admin']);
+        $this->get('/api/users/{id}', 'Api\UserController@show', ['auth']);
+        $this->put('/api/users/{id}', 'Api\UserController@update', ['auth']);
+        $this->delete('/api/users/{id}', 'Api\UserController@destroy', ['auth', 'admin']);
+        $this->post('/api/users/{id}/toggle-status', 'Api\UserController@toggleStatus', ['auth', 'admin']);
+        $this->post('/api/users/{id}/force-password-change', 'Api\UserController@setForcePasswordChange', ['auth', 'admin']);
 
         // OPT API Routes
         $this->get('/api/opt', 'Api\OptController@index', ['auth']);
-        $this->get('/api/opt/{id}', 'Api\OptController@show', ['auth']);
         $this->post('/api/opt', 'Api\OptController@store', ['auth', 'admin']);
+        $this->get('/api/opt/stats', 'Api\OptController@getStats', ['auth']);
+        $this->get('/api/opt/search', 'Api\OptController@search', ['auth']);
+        $this->get('/api/opt/by-category/{category}', 'Api\OptController@getByCategory', ['auth']);
+        $this->get('/api/opt/by-type/{type}', 'Api\OptController@getByType', ['auth']);
+        $this->get('/api/opt/{id}', 'Api\OptController@show', ['auth']);
         $this->put('/api/opt/{id}', 'Api\OptController@update', ['auth', 'admin']);
         $this->delete('/api/opt/{id}', 'Api\OptController@destroy', ['auth', 'admin']);
         $this->post('/api/opt/{id}/toggle-status', 'Api\OptController@toggleStatus', ['auth', 'admin']);
-        $this->get('/api/opt/stats', 'Api\OptController@getStats', ['auth']);
 
         // Data Storytelling API Routes (NEW)
         $this->get('/api/storytelling/analyses', 'Api\StorytellingController@getAnalyses', ['auth', 'statistisi']);
@@ -183,9 +187,6 @@ class Router {
         $this->post('/api/storytelling/publish/{id}', 'Api\StorytellingController@publishAnalysis', ['auth', 'statistisi']);
         $this->get('/api/storytelling/chart-data', 'Api\StorytellingController@getChartData', ['auth', 'statistisi']);
         $this->get('/api/storytelling/stats', 'Api\StorytellingController@getStats', ['auth', 'statistisi']);
-        $this->get('/api/opt/search', 'Api\OptController@search', ['auth']);
-        $this->get('/api/opt/by-category/{category}', 'Api\OptController@getByCategory', ['auth']);
-        $this->get('/api/opt/by-type/{type}', 'Api\OptController@getByType', ['auth']);
 
         // Laporan Hama Analytics Page Routes
         $this->get('/laporan-hama/analytics', 'LaporanHamaController@analytics', ['auth']);
@@ -203,8 +204,11 @@ class Router {
         $method = $_SERVER['REQUEST_METHOD'];
         $uri = $_SERVER['REQUEST_URI'];
 
-        // Remove base path and query string
-        $uri = str_replace('/jagapadi', '', $uri);
+        // Remove base path (based on script location) and query string
+        $scriptDir = dirname($_SERVER['SCRIPT_NAME'] ?? '');
+        if ($scriptDir !== '/' && $scriptDir !== '\\' && str_starts_with($uri, $scriptDir)) {
+            $uri = substr($uri, strlen($scriptDir));
+        }
         $uri = strtok($uri, '?');
         $uri = rtrim($uri, '/');
 

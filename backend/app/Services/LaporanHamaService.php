@@ -227,16 +227,19 @@ class LaporanHamaService
         $page = max(1, (int) ($filters['page'] ?? 1));
         $limit = min(100, max(1, (int) ($filters['limit'] ?? 20)));
 
+        $role = strtolower((string) ($currentUser['role'] ?? ''));
+        $isPetugas = $role === 'petugas';
+
         $includeDraft = isset($filters['include_draft'])
             ? filter_var($filters['include_draft'], FILTER_VALIDATE_BOOLEAN)
-            : true;
+            : $isPetugas;
 
         $queryFilters = $filters;
-        if (!$includeDraft && $currentUser['role'] === 'petugas') {
-            $queryFilters['status'] = 'Submitted';
+        if (!$includeDraft && !isset($queryFilters['status'])) {
+            $queryFilters['status'] = 'Submitted,Diverifikasi';
         }
 
-        if ($currentUser['role'] === 'admin') {
+        if ($role === 'admin') {
             $result = LaporanHama::listForAdmin($queryFilters, $page, $limit);
         } else {
             $result = LaporanHama::listForPetugas((int) $currentUser['id'], $queryFilters, $page, $limit);

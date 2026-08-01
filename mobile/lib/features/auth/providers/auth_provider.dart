@@ -60,6 +60,7 @@ class AuthProvider extends ChangeNotifier {
         _user = User.fromJson(userData);
         await AppSecureStorage.saveToken(token);
         await AppSecureStorage.saveUser(json.encode(userData));
+        _router.setToken(token);
         notifyListeners();
         FcmService.api = api;
         FcmService.registerToken();
@@ -81,6 +82,7 @@ class AuthProvider extends ChangeNotifier {
     await _api!.post('/auth/logout');
     await AppSecureStorage.clearAll();
     _user = null;
+    _router.setToken(null);
     _router.redirectToLogin();
     notifyListeners();
   }

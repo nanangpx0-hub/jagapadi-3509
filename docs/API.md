@@ -687,6 +687,7 @@ foto: <binary file>
 | `desa_id` | int | No | (all) | Filter desa |
 | `tanggal_dari` | date | No | (all) | Filter tanggal awal (YYYY-MM-DD) |
 | `tanggal_sampai` | date | No | (all) | Filter tanggal akhir (YYYY-MM-DD) |
+| `include_draft` | bool | No | `false` | Sertakan laporan `Draf` (hanya berlaku bila `status` tidak diisi; bila `status` diisi, gunakan nilai tersebuat) |
 
 ### GET /api/v1/export/hama?format=csv&status=Submitted,Diverifikasi
 
@@ -931,8 +932,8 @@ curl -c cookies.txt -b cookies.txt \
 | GET | `/dashboard/stats.json` | Stats (sama dengan API) |
 | GET | `/dashboard/charts/hama.json` | Chart hama bulanan |
 | GET | `/dashboard/charts/irigasi.json` | Chart irigasi bulanan |
-| GET | `/dashboard/map/hama.json` | GeoJSON hama |
-| GET | `/dashboard/map/irigasi.json` | GeoJSON irigasi |
+| GET | `/dashboard/map/hama` | GeoJSON hama |
+| GET | `/dashboard/map/irigasi` | GeoJSON irigasi |
 
 ### GET /api/v1/dashboard/stats
 

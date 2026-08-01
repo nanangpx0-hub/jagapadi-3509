@@ -207,10 +207,10 @@ $jsonData = json_encode($data, JSON_UNESCAPED_UNICODE);
                                             <?= strtoupper($rec['priority']) ?>
                                         </span>
                                     </td>
-                                    <td><?= htmlspecialchars($rec['category']) ?></td>
-                                    <td><strong><?= htmlspecialchars($rec['title']) ?></strong></td>
-                                    <td><?= htmlspecialchars($rec['description']) ?></td>
-                                    <td><?= htmlspecialchars($rec['action']) ?></td>
+                                    <td><?= htmlspecialchars($rec['category'] ?? '') ?></td>
+                                    <td><strong><?= htmlspecialchars($rec['title'] ?? '') ?></strong></td>
+                                    <td><?= htmlspecialchars($rec['description'] ?? '') ?></td>
+                                    <td><?= htmlspecialchars($rec['action'] ?? '') ?></td>
                                 </tr>
                                 <?php endforeach; ?>
                                 <?php if (empty($data['recommendations'])): ?>

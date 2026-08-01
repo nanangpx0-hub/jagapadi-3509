@@ -39,6 +39,7 @@ class LaporanIrigasiController extends Controller
     public function create(): void
     {
         $kabupaten = MasterKabupaten::all('nama_kabupaten', 'ASC');
+        $jember = MasterKabupaten::findByKode('3509');
 
         $this->view('laporan-irigasi/create', [
             'pageTitle' => 'Buat Laporan Irigasi',
@@ -46,6 +47,7 @@ class LaporanIrigasiController extends Controller
             'data' => [],
             'errors' => [],
             'oldInput' => [],
+            'jemberId' => $jember ? (int) $jember['id'] : 0,
         ]);
     }
 
@@ -70,12 +72,14 @@ class LaporanIrigasiController extends Controller
         if (!$result['success']) {
             $errors = $result['errors'] ?? [];
             $kabupaten = MasterKabupaten::all('nama_kabupaten', 'ASC');
+            $jember = MasterKabupaten::findByKode('3509');
             $this->view('laporan-irigasi/create', [
                 'pageTitle' => 'Buat Laporan Irigasi',
                 'kabupaten' => $kabupaten,
                 'data' => [],
                 'errors' => $errors,
                 'oldInput' => $input,
+                'jemberId' => $jember ? (int) $jember['id'] : 0,
             ]);
             return;
         }
@@ -130,6 +134,7 @@ class LaporanIrigasiController extends Controller
         }
 
         $kabupaten = MasterKabupaten::all('nama_kabupaten', 'ASC');
+        $jember = MasterKabupaten::findByKode('3509');
 
         $this->view('laporan-irigasi/edit', [
             'pageTitle' => 'Edit Laporan Irigasi',
@@ -137,6 +142,7 @@ class LaporanIrigasiController extends Controller
             'data' => $laporan,
             'errors' => [],
             'oldInput' => [],
+            'jemberId' => $jember ? (int) $jember['id'] : 0,
         ]);
     }
 

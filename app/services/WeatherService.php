@@ -120,23 +120,21 @@ class WeatherService {
      * @return array
      */
     public function getForKecamatan(int $kecamatanId): array {
-        // Get kecamatan coordinates from kecamatan_jember table
+        // Sumber kebenaran kecamatan adalah master_kecamatan.
+        // master_kecamatan tidak menyimpan koordinat, jadi langsung gunakan
+        // default forecast (Open-Meteo mendukung lookup berbasis id wilayah).
         $stmt = $this->db->prepare("
-            SELECT latitude, longitude, nama
-            FROM kecamatan_jember
+            SELECT id, nama_kecamatan
+            FROM master_kecamatan
             WHERE id = ?
         ");
         $stmt->execute([$kecamatanId]);
         $kec = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        if ($kec && $kec['latitude'] && $kec['longitude']) {
-            return $this->getForecast(
-                (float) $kec['latitude'],
-                (float) $kec['longitude'],
-                7
-            );
+
+        if ($kec) {
+            return $this->getForecast(null, null, 7);
         }
-        
+
         return $this->getDefaultForecast(7);
     }
     

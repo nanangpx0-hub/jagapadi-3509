@@ -127,17 +127,17 @@ class MasterKecamatan extends Model {
         $limit = (int)$limit;
         
         if (!$q) {
-            $sql = "SELECT id, kode_kecamatan, nama_kecamatan, kabupaten_id 
+            $sql = "SELECT id, kode, nama_kecamatan, kabupaten_id 
                     FROM {$this->table} 
-                    WHERE kabupaten_id = ? AND deleted_at IS NULL 
+                    WHERE kabupaten_id = ? 
                     ORDER BY nama_kecamatan ASC 
                     LIMIT $limit";
             $stmt = $this->db->prepare($sql);
             $stmt->execute([$kabupatenId]);
         } else {
-            $sql = "SELECT id, kode_kecamatan, nama_kecamatan, kabupaten_id 
+            $sql = "SELECT id, kode, nama_kecamatan, kabupaten_id 
                     FROM {$this->table} 
-                    WHERE kabupaten_id = ? AND nama_kecamatan LIKE ? AND deleted_at IS NULL 
+                    WHERE kabupaten_id = ? AND nama_kecamatan LIKE ? 
                     ORDER BY nama_kecamatan ASC 
                     LIMIT $limit";
             $stmt = $this->db->prepare($sql);
@@ -163,6 +163,20 @@ class MasterKecamatan extends Model {
     }
     
     /**
+     * Get kecamatan by kabupaten for dropdown (id + nama_kecamatan only)
+     * Used by AdminWilayahController for desa/kecamatan filter dropdowns
+     */
+    public function getByKabupatenForDropdown($kabupatenId): array {
+        if (empty($kabupatenId)) {
+            return [];
+        }
+        $sql = "SELECT id, nama_kecamatan FROM {$this->table} WHERE kabupaten_id = ? ORDER BY nama_kecamatan ASC";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$kabupatenId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
      * Get all kecamatan with kabupaten filter and pagination
      * Used by AdminWilayahController::kecamatan
      */
@@ -170,10 +184,11 @@ class MasterKecamatan extends Model {
         $sql = "
             SELECT 
                 k.*,
-                kb.nama_kabupaten
+                kb.nama_kabupaten,
+                kb.kode as kode_kabupaten
             FROM {$this->table} k
             LEFT JOIN master_kabupaten kb ON k.kabupaten_id = kb.id
-            WHERE k.deleted_at IS NULL
+            WHERE 1=1
         ";
         
         $params = [];
@@ -184,7 +199,7 @@ class MasterKecamatan extends Model {
         }
         
         if (!empty($search)) {
-            $sql .= " AND (k.nama_kecamatan LIKE ? OR k.kode_kecamatan LIKE ?)";
+            $sql .= " AND (k.nama_kecamatan LIKE ? OR k.kode LIKE ?)";
             $params[] = "%$search%";
             $params[] = "%$search%";
         }
@@ -213,16 +228,17 @@ class MasterKecamatan extends Model {
         $sql = "
             SELECT 
                 k.*,
-                kb.nama_kabupaten
+                kb.nama_kabupaten,
+                kb.kode as kode_kabupaten
             FROM {$this->table} k
             LEFT JOIN master_kabupaten kb ON k.kabupaten_id = kb.id
-            WHERE k.deleted_at IS NULL
+            WHERE 1=1
         ";
         
         $params = [];
         
         if (!empty($search)) {
-            $sql .= " AND (k.nama_kecamatan LIKE ? OR k.kode_kecamatan LIKE ? OR kb.nama_kabupaten LIKE ?)";
+            $sql .= " AND (k.nama_kecamatan LIKE ? OR k.kode LIKE ? OR kb.nama_kabupaten LIKE ?)";
             $params[] = "%$search%";
             $params[] = "%$search%";
             $params[] = "%$search%";
@@ -234,14 +250,19 @@ class MasterKecamatan extends Model {
         }
         
         // Allowed columns for ordering
-        $allowedColumns = ['id', 'nama_kecamatan', 'kode_kecamatan', 'kabupaten_id', 'kode_kabupaten'];
+        $allowedColumns = ['id', 'nama_kecamatan', 'kode', 'kabupaten_id', 'kode_kabupaten'];
         if (!in_array($orderColumn, $allowedColumns)) {
             $orderColumn = 'nama_kecamatan';
         }
         
         // Fix for kode_kabupaten sorting if joined
         if ($orderColumn === 'kode_kabupaten') {
-            $orderColumn = 'kb.kode_kabupaten';
+            $orderColumn = 'kb.kode';
+        }
+        
+        // Fix kode column reference
+        if ($orderColumn === 'kode') {
+            $orderColumn = 'k.kode';
         }
 
         $sql .= " ORDER BY {$orderColumn} " . ($orderDir === 'desc' ? 'DESC' : 'ASC');
@@ -261,13 +282,13 @@ class MasterKecamatan extends Model {
             SELECT COUNT(*) 
             FROM {$this->table} k
             LEFT JOIN master_kabupaten kb ON k.kabupaten_id = kb.id
-            WHERE k.deleted_at IS NULL
+            WHERE 1=1
         ";
         
         $params = [];
         
         if (!empty($search)) {
-            $sql .= " AND (k.nama_kecamatan LIKE ? OR k.kode_kecamatan LIKE ? OR kb.nama_kabupaten LIKE ?)";
+            $sql .= " AND (k.nama_kecamatan LIKE ? OR k.kode LIKE ? OR kb.nama_kabupaten LIKE ?)";
             $params[] = "%$search%";
             $params[] = "%$search%";
             $params[] = "%$search%";
@@ -292,10 +313,10 @@ class MasterKecamatan extends Model {
             SELECT 
                 k.*,
                 kb.nama_kabupaten,
-                kb.kode_kabupaten
+                kb.kode
             FROM {$this->table} k
             LEFT JOIN master_kabupaten kb ON k.kabupaten_id = kb.id
-            WHERE k.id = ? AND k.deleted_at IS NULL
+            WHERE k.id = ?
         ";
         
         $stmt = $this->db->prepare($sql);
@@ -308,7 +329,7 @@ class MasterKecamatan extends Model {
      * Check if name exists in kabupaten
      */
     public function checkNameExists($kabupatenId, $namaKecamatan) {
-        $sql = "SELECT COUNT(*) FROM {$this->table} WHERE kabupaten_id = ? AND nama_kecamatan = ? AND deleted_at IS NULL";
+        $sql = "SELECT COUNT(*) FROM {$this->table} WHERE kabupaten_id = ? AND nama_kecamatan = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$kabupatenId, $namaKecamatan]);
         return $stmt->fetchColumn() > 0;
@@ -318,7 +339,7 @@ class MasterKecamatan extends Model {
      * Check if kode exists
      */
     public function checkKodeExists($kodeKecamatan) {
-        $sql = "SELECT COUNT(*) FROM {$this->table} WHERE kode_kecamatan = ? AND deleted_at IS NULL";
+        $sql = "SELECT COUNT(*) FROM {$this->table} WHERE kode = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$kodeKecamatan]);
         return $stmt->fetchColumn() > 0;
@@ -335,11 +356,10 @@ class MasterKecamatan extends Model {
      * Soft delete
      */
     public function softDelete($id, $userId) {
-        $data = [
-            'deleted_at' => date('Y-m-d H:i:s'),
-            'deleted_by' => $userId
-        ];
-        return $this->update($id, $data);
+        $sql = "DELETE FROM {$this->table} WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$id]);
+        return $stmt->rowCount();
     }
     
     /**
@@ -354,7 +374,7 @@ class MasterKecamatan extends Model {
      * Count by kabupaten
      */
     public function countByKabupaten($kabupatenId) {
-        $sql = "SELECT COUNT(*) FROM {$this->table} WHERE kabupaten_id = ? AND deleted_at IS NULL";
+        $sql = "SELECT COUNT(*) FROM {$this->table} WHERE kabupaten_id = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$kabupatenId]);
         return $stmt->fetchColumn();

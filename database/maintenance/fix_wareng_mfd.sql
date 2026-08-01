@@ -16,7 +16,11 @@
 --     Kode Kec   : 3501020
 --
 -- Catatan penting:
---   Jangan mengubah kode_desa menjadi kode Jember.
+--   Skema: master_desa(id, kecamatan_id, kode, nama_desa, created_at, updated_at)
+--          master_kecamatan(id, kabupaten_id, kode, nama_kecamatan, ...)
+--          master_kabupaten(id, kode, nama_kabupaten, ...)
+--   Tidak ada kolom kode_desa/kode_kecamatan/kode_kabupaten atau deleted_at.
+--   Jangan mengubah kode desa menjadi kode Jember.
 --   Jangan mencampur kode_bps 3501020008 dengan kode_dagri 35.01.03.2007.
 --   Di database lokal yang sudah diperbaiki, WARENG harus memiliki kecamatan_id yang menunjuk ke PUNUNG.
 --
@@ -52,14 +56,14 @@ WHERE id = 41;
 SELECT
     d.id,
     d.nama_desa,
-    d.kode_desa,
+    d.kode,
     d.kecamatan_id,
-    k.kode_kecamatan,
+    k.kode AS kode_kecamatan,
     k.nama_kecamatan,
-    kab.kode_kabupaten,
+    kab.kode AS kode_kabupaten,
     kab.nama_kabupaten,
     CASE
-        WHEN LEFT(d.kode_desa, 7) = k.kode_kecamatan THEN 'MATCH'
+        WHEN LEFT(d.kode, 7) = k.kode THEN 'MATCH'
         ELSE 'MISMATCH'
     END AS prefix_status
 FROM master_desa d
@@ -78,20 +82,17 @@ START TRANSACTION;
 
 UPDATE master_desa d
 JOIN master_kecamatan k
-  ON k.kode_kecamatan = '3501020'
+  ON k.kode = '3501020'
  AND k.nama_kecamatan = 'PUNUNG'
- AND k.deleted_at IS NULL
 JOIN master_kabupaten kab
   ON kab.id = k.kabupaten_id
- AND kab.kode_kabupaten = '3501'
- AND kab.deleted_at IS NULL
+ AND kab.kode = '3501'
 SET
     d.kecamatan_id = k.id,
     d.updated_at = CURRENT_TIMESTAMP
 WHERE d.id = 41
   AND d.nama_desa = 'WARENG'
-  AND d.kode_desa = '3501020008'
-  AND d.deleted_at IS NULL
+  AND d.kode = '3501020008'
   AND d.kecamatan_id <> k.id;
 
 SELECT ROW_COUNT() AS rows_changed;
@@ -110,14 +111,14 @@ SELECT ROW_COUNT() AS rows_changed;
 SELECT
     d.id,
     d.nama_desa,
-    d.kode_desa,
+    d.kode,
     d.kecamatan_id,
-    k.kode_kecamatan,
+    k.kode AS kode_kecamatan,
     k.nama_kecamatan,
-    kab.kode_kabupaten,
+    kab.kode AS kode_kabupaten,
     kab.nama_kabupaten,
     CASE
-        WHEN LEFT(d.kode_desa, 7) = k.kode_kecamatan THEN 'MATCH'
+        WHEN LEFT(d.kode, 7) = k.kode THEN 'MATCH'
         ELSE 'MISMATCH'
     END AS prefix_status
 FROM master_desa d
@@ -138,15 +139,10 @@ WHERE d.id = 41
 -- JOIN backup_master_desa_wareng_41_20260502 b ON b.id = d.id
 -- SET
 --     d.kecamatan_id = b.kecamatan_id,
---     d.kode_desa = b.kode_desa,
+--     d.kode = b.kode,
 --     d.nama_desa = b.nama_desa,
---     d.kode_pos = b.kode_pos,
 --     d.created_at = b.created_at,
---     d.updated_at = b.updated_at,
---     d.deleted_at = b.deleted_at,
---     d.created_by = b.created_by,
---     d.updated_by = b.updated_by,
---     d.deleted_by = b.deleted_by
+--     d.updated_at = b.updated_at
 -- WHERE d.id = 41
 --   AND d.nama_desa = 'WARENG';
 --

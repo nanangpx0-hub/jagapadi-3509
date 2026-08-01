@@ -37,13 +37,14 @@ class ExportController extends BaseApiController
         }
 
         $format = $input['format'] ?? 'csv';
+        $includeDraft = isset($input['include_draft']) ? filter_var($input['include_draft'], FILTER_VALIDATE_BOOLEAN) : false;
 
         try {
             while (ob_get_level() > 0) {
                 ob_end_clean();
             }
 
-            $service = new ExportService($currentUser['role'], (int)$currentUser['id']);
+            $service = new ExportService($currentUser['role'], (int)$currentUser['id'], $includeDraft);
             if ($jenis === 'hama') {
                 $service->exportHama($format, $input);
             } else {

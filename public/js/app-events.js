@@ -323,14 +323,9 @@
             toast.textContent = message;
             
             container.appendChild(toast);
-            
-            requestAnimationFrame(() => {
-                toast.classList.add('show');
-            });
 
             setTimeout(() => {
-                toast.classList.remove('show');
-                setTimeout(() => toast.remove(), 300);
+                toast.remove();
             }, 3000);
         },
 

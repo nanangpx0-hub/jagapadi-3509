@@ -10,16 +10,18 @@
 --   Periode: 2025_1.2025
 --
 -- Target perubahan:
---   kode_kabupaten 3574 -> KOTA PROBOLINGGO
---   kode_kabupaten 3575 -> KOTA PASURUAN
---   kode_kabupaten 3578 -> KOTA SURABAYA
---   kode_kabupaten 3579 -> KOTA BATU
+--   kode 3574 -> KOTA PROBOLINGGO
+--   kode 3575 -> KOTA PASURUAN
+--   kode 3578 -> KOTA SURABAYA
+--   kode 3579 -> KOTA BATU
 --
 -- Catatan penting:
+--   Skema master_kabupaten: id, kode, nama_kabupaten, created_at, updated_at.
+--   Tidak ada kolom kode_kabupaten atau deleted_at (tidak ada soft-delete).
 --   Script ini hanya menyamakan nama kab/kota dengan MFD BPS resmi.
 --   Script ini tidak mengubah struktur wilayah.
 --   Script ini tidak mengubah id.
---   Script ini tidak mengubah kode_kabupaten.
+--   Script ini tidak mengubah kode.
 --   Script ini tidak menyentuh master_kecamatan atau master_desa.
 --   Jalankan backup database sebelum eksekusi di environment penting.
 
@@ -30,22 +32,21 @@
 
 SELECT
     mk.id,
-    mk.kode_kabupaten,
+    mk.kode,
     mk.nama_kabupaten AS nama_sekarang,
     target.nama_mfd_2025_1 AS nama_seharusnya,
-    mk.deleted_at,
     CASE
         WHEN UPPER(TRIM(mk.nama_kabupaten)) = target.nama_mfd_2025_1 THEN 'MATCH'
         ELSE 'MISMATCH'
     END AS status_validasi
 FROM master_kabupaten mk
 JOIN (
-    SELECT '3574' AS kode_kabupaten, 'KOTA PROBOLINGGO' AS nama_mfd_2025_1
+    SELECT '3574' AS kode, 'KOTA PROBOLINGGO' AS nama_mfd_2025_1
     UNION ALL SELECT '3575', 'KOTA PASURUAN'
     UNION ALL SELECT '3578', 'KOTA SURABAYA'
     UNION ALL SELECT '3579', 'KOTA BATU'
-) target ON target.kode_kabupaten = mk.kode_kabupaten
-ORDER BY mk.kode_kabupaten;
+) target ON target.kode = mk.kode
+ORDER BY mk.kode;
 
 
 -- =========================================================
@@ -59,38 +60,36 @@ CREATE TABLE IF NOT EXISTS backup_master_kabupaten_fix_nama_kota_mfd_2025_1 LIKE
 INSERT IGNORE INTO backup_master_kabupaten_fix_nama_kota_mfd_2025_1
 SELECT mk.*
 FROM master_kabupaten mk
-WHERE mk.kode_kabupaten IN ('3574', '3575', '3578', '3579');
+WHERE mk.kode IN ('3574', '3575', '3578', '3579');
 
 SELECT
     id,
-    kode_kabupaten,
-    nama_kabupaten,
-    deleted_at
+    kode,
+    nama_kabupaten
 FROM backup_master_kabupaten_fix_nama_kota_mfd_2025_1
-WHERE kode_kabupaten IN ('3574', '3575', '3578', '3579')
-ORDER BY kode_kabupaten;
+WHERE kode IN ('3574', '3575', '3578', '3579')
+ORDER BY kode;
 
 
 -- =========================================================
 -- 3. UPDATE TERARAH
 -- Hanya menyentuh master_kabupaten untuk 4 kode target.
--- Tidak mengubah id atau kode_kabupaten.
+-- Tidak mengubah id atau kode.
 -- =========================================================
 
 START TRANSACTION;
 
 UPDATE master_kabupaten
 SET
-    nama_kabupaten = CASE kode_kabupaten
+    nama_kabupaten = CASE kode
         WHEN '3574' THEN 'KOTA PROBOLINGGO'
         WHEN '3575' THEN 'KOTA PASURUAN'
         WHEN '3578' THEN 'KOTA SURABAYA'
         WHEN '3579' THEN 'KOTA BATU'
     END,
     updated_at = CURRENT_TIMESTAMP
-WHERE kode_kabupaten IN ('3574', '3575', '3578', '3579')
-  AND deleted_at IS NULL
-  AND UPPER(TRIM(nama_kabupaten)) <> CASE kode_kabupaten
+WHERE kode IN ('3574', '3575', '3578', '3579')
+  AND UPPER(TRIM(nama_kabupaten)) <> CASE kode
         WHEN '3574' THEN 'KOTA PROBOLINGGO'
         WHEN '3575' THEN 'KOTA PASURUAN'
         WHEN '3578' THEN 'KOTA SURABAYA'
@@ -107,22 +106,21 @@ SELECT ROW_COUNT() AS rows_changed;
 
 SELECT
     mk.id,
-    mk.kode_kabupaten,
+    mk.kode,
     mk.nama_kabupaten AS nama_setelah_update,
     target.nama_mfd_2025_1 AS nama_seharusnya,
-    mk.deleted_at,
     CASE
         WHEN UPPER(TRIM(mk.nama_kabupaten)) = target.nama_mfd_2025_1 THEN 'MATCH'
         ELSE 'MISMATCH'
     END AS status_validasi
 FROM master_kabupaten mk
 JOIN (
-    SELECT '3574' AS kode_kabupaten, 'KOTA PROBOLINGGO' AS nama_mfd_2025_1
+    SELECT '3574' AS kode, 'KOTA PROBOLINGGO' AS nama_mfd_2025_1
     UNION ALL SELECT '3575', 'KOTA PASURUAN'
     UNION ALL SELECT '3578', 'KOTA SURABAYA'
     UNION ALL SELECT '3579', 'KOTA BATU'
-) target ON target.kode_kabupaten = mk.kode_kabupaten
-ORDER BY mk.kode_kabupaten;
+) target ON target.kode = mk.kode
+ORDER BY mk.kode;
 
 -- Jika hasil SELECT AFTER sudah benar, jalankan:
 -- COMMIT;
@@ -140,16 +138,16 @@ ORDER BY mk.kode_kabupaten;
 -- SELECT
 --     COUNT(*) AS target_rows
 -- FROM master_kabupaten
--- WHERE kode_kabupaten IN ('3574', '3575', '3578', '3579');
+-- WHERE kode IN ('3574', '3575', '3578', '3579');
 --
 -- SELECT
 --     mk.id,
---     mk.kode_kabupaten,
+--     mk.kode,
 --     mk.nama_kabupaten,
 --     mk.updated_at
 -- FROM master_kabupaten mk
--- WHERE mk.kode_kabupaten IN ('3574', '3575', '3578', '3579')
--- ORDER BY mk.kode_kabupaten;
+-- WHERE mk.kode IN ('3574', '3575', '3578', '3579')
+-- ORDER BY mk.kode;
 
 
 -- =========================================================
@@ -163,29 +161,24 @@ ORDER BY mk.kode_kabupaten;
 -- UPDATE master_kabupaten mk
 -- JOIN backup_master_kabupaten_fix_nama_kota_mfd_2025_1 b
 --   ON b.id = mk.id
---  AND b.kode_kabupaten = mk.kode_kabupaten
+--  AND b.kode = mk.kode
 -- SET
 --     mk.nama_kabupaten = b.nama_kabupaten,
---     mk.updated_at = b.updated_at,
---     mk.deleted_at = b.deleted_at,
---     mk.created_by = b.created_by,
---     mk.updated_by = b.updated_by,
---     mk.deleted_by = b.deleted_by
--- WHERE mk.kode_kabupaten IN ('3574', '3575', '3578', '3579');
+--     mk.updated_at = b.updated_at
+-- WHERE mk.kode IN ('3574', '3575', '3578', '3579');
 --
 -- SELECT ROW_COUNT() AS rows_rolled_back;
 --
 -- SELECT
 --     mk.id,
---     mk.kode_kabupaten,
+--     mk.kode,
 --     mk.nama_kabupaten AS nama_setelah_rollback,
---     b.nama_kabupaten AS nama_backup,
---     mk.deleted_at
+--     b.nama_kabupaten AS nama_backup
 -- FROM master_kabupaten mk
 -- JOIN backup_master_kabupaten_fix_nama_kota_mfd_2025_1 b
 --   ON b.id = mk.id
---  AND b.kode_kabupaten = mk.kode_kabupaten
--- WHERE mk.kode_kabupaten IN ('3574', '3575', '3578', '3579')
--- ORDER BY mk.kode_kabupaten;
+--  AND b.kode = mk.kode
+-- WHERE mk.kode IN ('3574', '3575', '3578', '3579')
+-- ORDER BY mk.kode;
 --
 -- COMMIT;

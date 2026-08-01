@@ -190,13 +190,18 @@ class IrrigationRule extends Model {
      * @return array
      */
     public function getExecutionHistory(int $ruleId, int $limit = 50): array {
-        $qb = new QueryBuilder();
-        return $qb->table('irrigation_rule_logs')
-            ->select(['*'])
-            ->where('rule_id', $ruleId)
-            ->orderBy('triggered_at', 'DESC')
-            ->limit($limit)
-            ->get();
+        try {
+            $qb = new QueryBuilder();
+            return $qb->table('irrigation_rule_logs')
+                ->select(['*'])
+                ->where('rule_id', $ruleId)
+                ->orderBy('triggered_at', 'DESC')
+                ->limit($limit)
+                ->get();
+        } catch (\PDOException $e) {
+            error_log('IrrigationRule::getExecutionHistory - ' . $e->getMessage());
+            return [];
+        }
     }
     
     /**
@@ -222,7 +227,12 @@ class IrrigationRule extends Model {
         ?string $error = null,
         ?array $weatherData = null
     ): int|false {
-        $db = Database::getInstance()->getConnection();
+        try {
+            $db = Database::getInstance()->getConnection();
+        } catch (\Throwable $e) {
+            error_log('IrrigationRule::logExecution - ' . $e->getMessage());
+            return false;
+        }
         $stmt = $db->prepare("
             INSERT INTO irrigation_rule_logs 
             (rule_id, irigasi_id, conditions_snapshot, actions_executed, 
@@ -354,35 +364,49 @@ class IrrigationRule extends Model {
      * @return array
      */
     public function getStatistics(?int $irigasiId = null): array {
-        $db = Database::getInstance()->getConnection();
+        try {
+            $db = Database::getInstance()->getConnection();
+        } catch (\Throwable $e) {
+            error_log('IrrigationRule::getStatistics - ' . $e->getMessage());
+            return [];
+        }
         
         $whereClause = $irigasiId ? "WHERE irigasi_id = ?" : "";
         $params = $irigasiId ? [$irigasiId] : [];
         
-        $stmt = $db->prepare("
-            SELECT 
-                COUNT(*) as total_rules,
-                SUM(is_active) as active_rules,
-                SUM(execution_count) as total_executions,
-                MAX(last_executed_at) as last_execution
-            FROM {$this->table}
-            {$whereClause}
-        ");
-        $stmt->execute($params);
-        $stats = $stmt->fetch(PDO::FETCH_ASSOC);
+        try {
+            $stmt = $db->prepare("
+                SELECT 
+                    COUNT(*) as total_rules,
+                    SUM(is_active) as active_rules,
+                    SUM(execution_count) as total_executions,
+                    MAX(last_executed_at) as last_execution
+                FROM {$this->table}
+                {$whereClause}
+            ");
+            $stmt->execute($params);
+            $stats = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        } catch (\PDOException $e) {
+            error_log('IrrigationRule::getStatistics(rules) - ' . $e->getMessage());
+            $stats = [];
+        }
         
-        // Get execution stats for last 24 hours
-        $stmt = $db->prepare("
-            SELECT 
-                COUNT(*) as executions_24h,
-                SUM(CASE WHEN execution_status = 'success' THEN 1 ELSE 0 END) as successful,
-                SUM(CASE WHEN execution_status = 'failed' THEN 1 ELSE 0 END) as failed
-            FROM irrigation_rule_logs
-            WHERE triggered_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
-            " . ($irigasiId ? "AND irigasi_id = ?" : "")
-        );
-        $stmt->execute($params);
-        $execStats = $stmt->fetch(PDO::FETCH_ASSOC);
+        try {
+            $stmt = $db->prepare("
+                SELECT 
+                    COUNT(*) as executions_24h,
+                    SUM(CASE WHEN execution_status = 'success' THEN 1 ELSE 0 END) as successful,
+                    SUM(CASE WHEN execution_status = 'failed' THEN 1 ELSE 0 END) as failed
+                FROM irrigation_rule_logs
+                WHERE triggered_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+                " . ($irigasiId ? "AND irigasi_id = ?" : "")
+            );
+            $stmt->execute($params);
+            $execStats = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        } catch (\PDOException $e) {
+            error_log('IrrigationRule::getStatistics(logs) - ' . $e->getMessage());
+            $execStats = [];
+        }
         
         return array_merge($stats, $execStats);
     }

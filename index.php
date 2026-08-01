@@ -1,7 +1,57 @@
 <?php
+// Define ROOT_PATH
+define('ROOT_PATH', __DIR__);
+
+// Define BASE_URL
+$protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+$host = $_SERVER['HTTP_HOST'];
+$script = dirname($_SERVER['SCRIPT_NAME']);
+$baseUrl = $protocol . '://' . $host . ($script !== '/' ? $script : '') . '/';
+define('BASE_URL', $baseUrl);
+
+// Load .env file (base), then .env.local (overrides)
+$envPaths = [ROOT_PATH . '/.env', ROOT_PATH . '/.env.local'];
+$loadedKeys = [];
+foreach ($envPaths as $envPath) {
+    if (!file_exists($envPath)) continue;
+    $lines = file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if ($lines !== false) {
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (empty($line) || str_starts_with($line, '#')) {
+                continue;
+            }
+            $eqPos = strpos($line, '=');
+            if ($eqPos === false) {
+                continue;
+            }
+            $key = trim(substr($line, 0, $eqPos));
+            $value = trim(substr($line, $eqPos + 1));
+            if (empty($key)) {
+                continue;
+            }
+            // Remove quotes if present
+            if ((str_starts_with($value, '"') && str_ends_with($value, '"')) || 
+                (str_starts_with($value, "'") && str_ends_with($value, "'"))) {
+                $value = substr($value, 1, -1);
+            }
+            // Always override: .env.local takes precedence over .env
+            putenv("$key=$value");
+            $_ENV[$key] = $value;
+        }
+    }
+}
+
 // Load configuration before starting the session so session ini settings can be applied.
-require_once __DIR__ . '/config/config.php';
-require_once __DIR__ . '/config/database.php';
+// Note: config/config.php and config/database.php might not exist; skip if missing
+$configPath = ROOT_PATH . '/config/config.php';
+if (file_exists($configPath)) {
+    require_once $configPath;
+}
+$dbConfigPath = ROOT_PATH . '/config/database.php';
+if (file_exists($dbConfigPath)) {
+    require_once $dbConfigPath;
+}
 
 ini_set('session.use_strict_mode', '1');
 ini_set('session.cookie_httponly', '1');
@@ -69,9 +119,13 @@ $container->singleton(PDO::class, fn() => Database::getInstance()->getConnection
 $container->singleton(CacheManager::class, fn() => CacheManager::getInstance());
 $container->singleton(Logger::class, fn() => new Logger());
 
-// Get request URI
+// Get request URI and strip base path dynamically
 $request = $_SERVER['REQUEST_URI'];
-$request = str_replace('/jagapadi/', '', $request);
+$scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
+$baseDir = dirname($scriptName);
+if ($baseDir !== '/' && $baseDir !== '\\') {
+    $request = substr($request, strlen($baseDir));
+}
 $request = strtok($request, '?'); // Remove query string
 
 // Check if this is an API request
@@ -108,7 +162,7 @@ if ($request == '' || $request == '/') {
 
 // Parse route
 $parts = explode('/', trim($request, '/'));
-$controllerPart = $parts[0] ?? 'dashboard';
+$controllerPart = (!empty($parts[0])) ? $parts[0] : 'dashboard';
 // Handle camelCase and dash/underscore in route names
 $controllerName = str_replace(' ', '', ucwords(str_replace(['-', '_'], ' ', $controllerPart))) . 'Controller';
 $method = $parts[1] ?? 'index';
@@ -126,7 +180,7 @@ if (!file_exists($controllerFile)) {
 require_once $controllerFile;
         $controller = $container->make($controllerName);
 
-if (!method_exists($controller, $method)) {
+if (!is_callable([$controller, $method])) {
     http_response_code(404);
     echo "404 - Method Not Found";
     exit;

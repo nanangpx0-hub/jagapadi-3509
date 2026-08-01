@@ -5,15 +5,15 @@ class MasterKabupaten extends Model {
     protected $table = 'master_kabupaten';
     
     public function getAllOrdered() {
-        // Sort by kode_kabupaten ascending for consistent ordering
+        // Sort by kode ascending for consistent ordering
         return Cache::remember('master_kabupaten_all_by_kode', function() {
-            $stmt = $this->db->query("SELECT * FROM master_kabupaten WHERE deleted_at IS NULL ORDER BY kode_kabupaten ASC");
+            $stmt = $this->db->query("SELECT * FROM master_kabupaten ORDER BY kode ASC");
             return $stmt->fetchAll();
         }, 3600); // Cache for 1 hour
     }
     
     public function findById($id) {
-        $stmt = $this->db->prepare("SELECT * FROM master_kabupaten WHERE id = ? AND deleted_at IS NULL");
+        $stmt = $this->db->prepare("SELECT * FROM master_kabupaten WHERE id = ?");
         $stmt->execute([$id]);
         return $stmt->fetch();
     }
@@ -33,15 +33,15 @@ class MasterKabupaten extends Model {
         $idOrKode = (string)$idOrKode;
         
         // Step 1: Try exact ID match (as string - for IDs like '09')
-        $stmt = $this->db->prepare("SELECT * FROM master_kabupaten WHERE id = ? AND deleted_at IS NULL");
+        $stmt = $this->db->prepare("SELECT * FROM master_kabupaten WHERE id = ?");
         $stmt->execute([$idOrKode]);
         $result = $stmt->fetch();
         if ($result) {
             return $result;
         }
         
-        // Step 2: Try exact kode_kabupaten match (e.g., "3509")
-        $stmt = $this->db->prepare("SELECT * FROM master_kabupaten WHERE kode_kabupaten = ? AND deleted_at IS NULL");
+        // Step 2: Try exact kode match (e.g., "3509")
+        $stmt = $this->db->prepare("SELECT * FROM master_kabupaten WHERE kode = ?");
         $stmt->execute([$idOrKode]);
         $result = $stmt->fetch();
         if ($result) {
@@ -54,7 +54,7 @@ class MasterKabupaten extends Model {
             $numericPart = (int)$idOrKode;
             $bpsKode = '35' . str_pad($numericPart, 2, '0', STR_PAD_LEFT);
             
-            $stmt = $this->db->prepare("SELECT * FROM master_kabupaten WHERE kode_kabupaten = ? AND deleted_at IS NULL");
+            $stmt = $this->db->prepare("SELECT * FROM master_kabupaten WHERE kode = ?");
             $stmt->execute([$bpsKode]);
             $result = $stmt->fetch();
             if ($result) {
@@ -69,7 +69,7 @@ class MasterKabupaten extends Model {
             
             // Extract the numeric part and convert to BPS format
             $bpsKode = '35' . str_pad((int)$idOrKode, 2, '0', STR_PAD_LEFT);
-            $stmt = $this->db->prepare("SELECT * FROM master_kabupaten WHERE kode_kabupaten = ? AND deleted_at IS NULL");
+            $stmt = $this->db->prepare("SELECT * FROM master_kabupaten WHERE kode = ?");
             $stmt->execute([$bpsKode]);
             $result = $stmt->fetch();
             if ($result) {
@@ -82,24 +82,24 @@ class MasterKabupaten extends Model {
     
     public function search($q, $limit = 50) {
         $limit = (int)$limit;
-        $stmt = $this->db->prepare("SELECT * FROM master_kabupaten WHERE nama_kabupaten LIKE ? AND deleted_at IS NULL ORDER BY nama_kabupaten LIMIT $limit");
+        $stmt = $this->db->prepare("SELECT * FROM master_kabupaten WHERE nama_kabupaten LIKE ? ORDER BY nama_kabupaten LIMIT $limit");
         $stmt->execute(['%'.$q.'%']);
         return $stmt->fetchAll();
     }
 
     public function findByName($nama) {
-        $stmt = $this->db->prepare("SELECT * FROM master_kabupaten WHERE nama_kabupaten = ? AND deleted_at IS NULL LIMIT 1");
+        $stmt = $this->db->prepare("SELECT * FROM master_kabupaten WHERE nama_kabupaten = ? LIMIT 1");
         $stmt->execute([$nama]);
         return $stmt->fetch();
     }
     
     // Admin CRUD Methods
     public function getAllWithPagination($search = '', $limit = 20, $offset = 0) {
-        $sql = "SELECT * FROM master_kabupaten WHERE deleted_at IS NULL";
+        $sql = "SELECT * FROM master_kabupaten WHERE 1=1";
         $params = [];
         
         if ($search) {
-            $sql .= " AND (nama_kabupaten LIKE ? OR kode_kabupaten LIKE ?)";
+            $sql .= " AND (nama_kabupaten LIKE ? OR kode LIKE ?)";
             $params[] = "%$search%";
             $params[] = "%$search%";
         }
@@ -114,11 +114,11 @@ class MasterKabupaten extends Model {
     }
     
     public function count($search = '') {
-        $sql = "SELECT COUNT(*) as total FROM master_kabupaten WHERE deleted_at IS NULL";
+        $sql = "SELECT COUNT(*) as total FROM master_kabupaten WHERE 1=1";
         $params = [];
         
         if ($search) {
-            $sql .= " AND (nama_kabupaten LIKE ? OR kode_kabupaten LIKE ?)";
+            $sql .= " AND (nama_kabupaten LIKE ? OR kode LIKE ?)";
             $params[] = "%$search%";
             $params[] = "%$search%";
         }
@@ -129,34 +129,34 @@ class MasterKabupaten extends Model {
     }
     
     public function create($data) {
-        $sql = "INSERT INTO master_kabupaten (nama_kabupaten, kode_kabupaten, created_by) VALUES (?, ?, ?)";
+        $sql = "INSERT INTO master_kabupaten (nama_kabupaten, kode) VALUES (?, ?)";
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$data['nama_kabupaten'], $data['kode_kabupaten'], $data['created_by']]);
+        $stmt->execute([$data['nama_kabupaten'], $data['kode_kabupaten']]);
         Cache::delete('master_kabupaten_all');
         Cache::delete('master_kabupaten_dropdown');
         return $this->db->lastInsertId();
     }
     
     public function update($id, $data) {
-        $sql = "UPDATE master_kabupaten SET nama_kabupaten = ?, kode_kabupaten = ?, updated_by = ? WHERE id = ?";
+        $sql = "UPDATE master_kabupaten SET nama_kabupaten = ?, kode = ? WHERE id = ?";
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$data['nama_kabupaten'], $data['kode_kabupaten'], $data['updated_by'], $id]);
+        $stmt->execute([$data['nama_kabupaten'], $data['kode_kabupaten'], $id]);
         Cache::delete('master_kabupaten_all');
         Cache::delete('master_kabupaten_dropdown');
         return $stmt->rowCount();
     }
     
     public function softDelete($id, $userId) {
-        $sql = "UPDATE master_kabupaten SET deleted_at = NOW(), deleted_by = ? WHERE id = ?";
+        $sql = "DELETE FROM master_kabupaten WHERE id = ?";
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$userId, $id]);
+        $stmt->execute([$id]);
         Cache::delete('master_kabupaten_all');
         Cache::delete('master_kabupaten_dropdown');
         return $stmt->rowCount();
     }
     
     public function checkKodeExists($kode, $excludeId = null) {
-        $sql = "SELECT COUNT(*) as c FROM master_kabupaten WHERE kode_kabupaten = ? AND deleted_at IS NULL";
+        $sql = "SELECT COUNT(*) as c FROM master_kabupaten WHERE kode = ?";
         $params = [$kode];
         
         if ($excludeId) {
@@ -171,14 +171,10 @@ class MasterKabupaten extends Model {
     
     public function getAllForDropdown() {
         return Cache::remember('master_kabupaten_dropdown', function() {
-            // Only show kabupaten that exist in kabupaten table (JT-01 to JT-38)
-            // Order by kode_kabupaten to match kabupaten page order
             $stmt = $this->db->query("
-                SELECT m.id, m.nama_kabupaten, m.kode_kabupaten 
+                SELECT m.id, m.nama_kabupaten, m.kode 
                 FROM master_kabupaten m
-                INNER JOIN kabupaten k ON k.kode_kabupaten = m.kode_kabupaten
-                WHERE m.deleted_at IS NULL 
-                ORDER BY m.kode_kabupaten ASC
+                ORDER BY m.kode ASC
             ");
             return $stmt->fetchAll();
         }, 3600); // Cache for 1 hour

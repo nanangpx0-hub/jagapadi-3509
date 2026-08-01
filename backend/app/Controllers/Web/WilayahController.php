@@ -278,6 +278,42 @@ class WilayahController extends Controller
         $this->redirect('/wilayah');
     }
 
+    public function kecamatanJson(): void
+    {
+        $kabupatenId = (int) (Request::input('kabupaten_id', 0));
+        if ($kabupatenId <= 0) {
+            http_response_code(422);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'error' => 'ValidationError', 'message' => 'Parameter kabupaten_id wajib diisi.']);
+            return;
+        }
+        $jember = MasterKabupaten::findByKode('3509');
+        $jemberId = $jember ? (int) $jember['id'] : 0;
+        if ($kabupatenId !== $jemberId) {
+            http_response_code(422);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'error' => 'ValidationError', 'message' => 'Hanya Kabupaten Jember yang didukung.']);
+            return;
+        }
+        $data = MasterKecamatan::findByKabupaten($kabupatenId);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['success' => true, 'message' => 'OK', 'data' => $data], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    public function desaJson(): void
+    {
+        $kecamatanId = (int) (Request::input('kecamatan_id', 0));
+        if ($kecamatanId <= 0) {
+            http_response_code(422);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'error' => 'ValidationError', 'message' => 'Parameter kecamatan_id wajib diisi.']);
+            return;
+        }
+        $data = MasterDesa::findByKecamatan($kecamatanId);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['success' => true, 'message' => 'OK', 'data' => $data], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
     private function validateSimple(array $data, array $fields): array
     {
         $errors = [];

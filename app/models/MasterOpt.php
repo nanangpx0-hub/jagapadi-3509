@@ -219,9 +219,8 @@ class MasterOpt extends Model {
             // Tingkat Bahaya
             $options['tingkat_bahaya'] = ['Rendah', 'Sedang', 'Tinggi', 'Sangat Tinggi'];
             
-            // Kingdom (get from existing data)
-            $stmt = $this->db->query("SELECT DISTINCT kingdom FROM master_opt WHERE kingdom IS NOT NULL AND kingdom != '' ORDER BY kingdom");
-            $options['kingdom'] = array_column($stmt->fetchAll(), 'kingdom');
+            // Kingdom (static options — column not present in table)
+            $options['kingdom'] = [];
             
             return $options;
         }, 3600);

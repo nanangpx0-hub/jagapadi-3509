@@ -4,11 +4,15 @@
  */
 
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
+
+$allowedOrigins = ['https://bpsjember.my.id', 'https://jagapadi.yourdomain.com', 'http://localhost:8080'];
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (in_array($origin, $allowedOrigins, true)) {
+    header("Access-Control-Allow-Origin: {$origin}");
+}
 header('Access-Control-Allow-Methods: GET');
 header('Access-Control-Allow-Headers: Content-Type');
 
-// Security check
 session_start();
 if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'] ?? '', ['admin'])) {
     http_response_code(403);
@@ -16,8 +20,7 @@ if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'] ?? '', ['admin']
     exit;
 }
 
-require_once __DIR__ . '/../config/config.php';
-require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../app/core/Database.php';
 require_once __DIR__ . '/../app/core/Model.php';
 require_once __DIR__ . '/../app/models/MasterDesa.php';
 require_once __DIR__ . '/../app/models/MasterKabupaten.php';
@@ -67,10 +70,11 @@ try {
     ]);
     
 } catch (Exception $e) {
+    error_log('[API] desa_autocomplete error: ' . $e->getMessage());
     http_response_code(500);
     echo json_encode([
         'success' => false,
-        'error' => 'Terjadi kesalahan'
+        'error' => 'Terjadi kesalahan internal.'
     ]);
 }
 ?>

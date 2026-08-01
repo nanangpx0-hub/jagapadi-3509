@@ -39,17 +39,19 @@ $router->addGlobalMiddleware(RateLimitMiddleware::class);
 // ====================
 $router->get('/login', [WebAuthController::class, 'showLoginForm']);
 $router->post('/login', [WebAuthController::class, 'login']);
+$router->get('/logout', [WebAuthController::class, 'logout']);
 $router->post('/logout', [WebAuthController::class, 'logout']);
 
 // ========================
 // Web — Protected (session)
 // ========================
 $router->get('/dashboard', [DashboardController::class, 'index'], [WebAuthMiddleware::class]);
+$router->get('/dashboard/map', [DashboardController::class, 'index'], [WebAuthMiddleware::class]);
 $router->get('/dashboard/stats.json', [DashboardController::class, 'statsJson'], [WebAuthMiddleware::class]);
 $router->get('/dashboard/charts/hama.json', [DashboardController::class, 'chartsHamaJson'], [WebAuthMiddleware::class]);
 $router->get('/dashboard/charts/irigasi.json', [DashboardController::class, 'chartsIrigasiJson'], [WebAuthMiddleware::class]);
-$router->get('/dashboard/map/hama.json', [DashboardController::class, 'mapHamaJson'], [WebAuthMiddleware::class]);
-$router->get('/dashboard/map/irigasi.json', [DashboardController::class, 'mapIrigasiJson'], [WebAuthMiddleware::class]);
+$router->get('/dashboard/map/hama', [DashboardController::class, 'mapHamaJson'], [WebAuthMiddleware::class]);
+$router->get('/dashboard/map/irigasi', [DashboardController::class, 'mapIrigasiJson'], [WebAuthMiddleware::class]);
 $router->get('/password/change', [PasswordController::class, 'showChangeForm'], [WebAuthMiddleware::class]);
 $router->post('/password/change', [PasswordController::class, 'change'], [WebAuthMiddleware::class]);
 
@@ -73,6 +75,9 @@ $router->post('/wilayah/kabupaten/store', [WebWilayahController::class, 'kabupat
 $router->get('/wilayah/kabupaten/edit/{id}', [WebWilayahController::class, 'kabupatenEdit'], [WebAuthMiddleware::class, AdminMiddleware::class]);
 $router->post('/wilayah/kabupaten/update/{id}', [WebWilayahController::class, 'kabupatenUpdate'], [WebAuthMiddleware::class, AdminMiddleware::class]);
 $router->post('/wilayah/kabupaten/{id}/delete', [WebWilayahController::class, 'kabupatenDelete'], [WebAuthMiddleware::class, AdminMiddleware::class]);
+
+$router->get('/wilayah/kecamatan-json', [WebWilayahController::class, 'kecamatanJson'], [WebAuthMiddleware::class]);
+$router->get('/wilayah/desa-json', [WebWilayahController::class, 'desaJson'], [WebAuthMiddleware::class]);
 
 // Kecamatan
 $router->get('/wilayah/kecamatan/create', [WebWilayahController::class, 'kecamatanCreate'], [WebAuthMiddleware::class, AdminMiddleware::class]);
@@ -175,35 +180,39 @@ $router->post('/api/v1/opt/{id}/foto/delete', [ApiOptController::class, 'deleteF
 $router->post('/api/v1/opt/{id}/foto', [ApiOptController::class, 'uploadFoto'], [ApiAuthMiddleware::class, AdminMiddleware::class]);
 
 // ================================
-// Web — Laporan Hama (petugas + admin)
+// Web — Laporan (petugas + admin)
 // ================================
+$router->get('/laporan', [WebLaporanHamaController::class, 'index'], [WebAuthMiddleware::class]);
 $router->get('/laporan-hama', [WebLaporanHamaController::class, 'index'], [WebAuthMiddleware::class]);
 $router->get('/laporan-hama/create', [WebLaporanHamaController::class, 'create'], [WebAuthMiddleware::class]);
+$router->get('/laporan-hama/create-light', [\App\Controllers\Web\LaporanHamaLightController::class, 'create'], [WebAuthMiddleware::class]);
+$router->post('/laporan-hama/light/store', [\App\Controllers\Web\LaporanHamaLightController::class, 'store'], [WebAuthMiddleware::class]);
 $router->post('/laporan-hama', [WebLaporanHamaController::class, 'store'], [WebAuthMiddleware::class]);
 $router->get('/laporan-hama/{id}', [WebLaporanHamaController::class, 'show'], [WebAuthMiddleware::class]);
 $router->get('/laporan-hama/{id}/edit', [WebLaporanHamaController::class, 'edit'], [WebAuthMiddleware::class]);
 $router->post('/laporan-hama/{id}', [WebLaporanHamaController::class, 'update'], [WebAuthMiddleware::class]);
 $router->post('/laporan-hama/{id}/submit', [WebLaporanHamaController::class, 'submit'], [WebAuthMiddleware::class]);
 $router->post('/laporan-hama/{id}/delete', [WebLaporanHamaController::class, 'delete'], [WebAuthMiddleware::class]);
-$router->post('/laporan-hama/{id}/verifikasi', [WebLaporanHamaController::class, 'verify'], [WebAuthMiddleware::class]);
-$router->post('/laporan-hama/{id}/tolak', [WebLaporanHamaController::class, 'reject'], [WebAuthMiddleware::class]);
-$router->post('/laporan-hama/{id}/archive', [WebLaporanHamaController::class, 'archive'], [WebAuthMiddleware::class]);
+$router->post('/laporan-hama/{id}/verifikasi', [WebLaporanHamaController::class, 'verify'], [WebAuthMiddleware::class, AdminMiddleware::class]);
+$router->post('/laporan-hama/{id}/tolak', [WebLaporanHamaController::class, 'reject'], [WebAuthMiddleware::class, AdminMiddleware::class]);
+$router->post('/laporan-hama/{id}/archive', [WebLaporanHamaController::class, 'archive'], [WebAuthMiddleware::class, AdminMiddleware::class]);
 $router->post('/laporan-hama/{id}/resubmit', [WebLaporanHamaController::class, 'resubmit'], [WebAuthMiddleware::class]);
 $router->post('/laporan-hama/{id}/foto/delete', [WebLaporanHamaController::class, 'deleteFoto'], [WebAuthMiddleware::class]);
 $router->post('/laporan-hama/{id}/foto', [WebLaporanHamaController::class, 'uploadFoto'], [WebAuthMiddleware::class]);
 
 // ================================
-// API v1 — Laporan Hama
+// API v1 — Laporan Hama & General
 // ================================
+$router->get('/api/v1/laporan', [ApiLaporanHamaController::class, 'index'], [ApiAuthMiddleware::class]);
 $router->get('/api/v1/laporan-hama', [ApiLaporanHamaController::class, 'index'], [ApiAuthMiddleware::class]);
 $router->post('/api/v1/laporan-hama', [ApiLaporanHamaController::class, 'store'], [ApiAuthMiddleware::class]);
 $router->get('/api/v1/laporan-hama/{id}', [ApiLaporanHamaController::class, 'show'], [ApiAuthMiddleware::class]);
 $router->put('/api/v1/laporan-hama/{id}', [ApiLaporanHamaController::class, 'update'], [ApiAuthMiddleware::class]);
 $router->delete('/api/v1/laporan-hama/{id}', [ApiLaporanHamaController::class, 'destroy'], [ApiAuthMiddleware::class]);
 $router->post('/api/v1/laporan-hama/{id}/submit', [ApiLaporanHamaController::class, 'submit'], [ApiAuthMiddleware::class]);
-$router->post('/api/v1/laporan-hama/{id}/verifikasi', [ApiLaporanHamaController::class, 'verify'], [ApiAuthMiddleware::class]);
-$router->post('/api/v1/laporan-hama/{id}/tolak', [ApiLaporanHamaController::class, 'reject'], [ApiAuthMiddleware::class]);
-$router->post('/api/v1/laporan-hama/{id}/archive', [ApiLaporanHamaController::class, 'archive'], [ApiAuthMiddleware::class]);
+$router->post('/api/v1/laporan-hama/{id}/verifikasi', [ApiLaporanHamaController::class, 'verify'], [ApiAuthMiddleware::class, AdminMiddleware::class]);
+$router->post('/api/v1/laporan-hama/{id}/tolak', [ApiLaporanHamaController::class, 'reject'], [ApiAuthMiddleware::class, AdminMiddleware::class]);
+$router->post('/api/v1/laporan-hama/{id}/archive', [ApiLaporanHamaController::class, 'archive'], [ApiAuthMiddleware::class, AdminMiddleware::class]);
 $router->post('/api/v1/laporan-hama/{id}/resubmit', [ApiLaporanHamaController::class, 'resubmit'], [ApiAuthMiddleware::class]);
 $router->post('/api/v1/laporan-hama/{id}/foto/delete', [ApiLaporanHamaController::class, 'deleteFoto'], [ApiAuthMiddleware::class]);
 $router->post('/api/v1/laporan-hama/{id}/foto', [ApiLaporanHamaController::class, 'uploadFoto'], [ApiAuthMiddleware::class]);
@@ -219,9 +228,9 @@ $router->get('/laporan-irigasi/{id}/edit', [WebLaporanIrigasiController::class, 
 $router->post('/laporan-irigasi/{id}', [WebLaporanIrigasiController::class, 'update'], [WebAuthMiddleware::class]);
 $router->post('/laporan-irigasi/{id}/submit', [WebLaporanIrigasiController::class, 'submit'], [WebAuthMiddleware::class]);
 $router->post('/laporan-irigasi/{id}/delete', [WebLaporanIrigasiController::class, 'delete'], [WebAuthMiddleware::class]);
-$router->post('/laporan-irigasi/{id}/verifikasi', [WebLaporanIrigasiController::class, 'verify'], [WebAuthMiddleware::class]);
-$router->post('/laporan-irigasi/{id}/tolak', [WebLaporanIrigasiController::class, 'reject'], [WebAuthMiddleware::class]);
-$router->post('/laporan-irigasi/{id}/archive', [WebLaporanIrigasiController::class, 'archive'], [WebAuthMiddleware::class]);
+$router->post('/laporan-irigasi/{id}/verifikasi', [WebLaporanIrigasiController::class, 'verify'], [WebAuthMiddleware::class, AdminMiddleware::class]);
+$router->post('/laporan-irigasi/{id}/tolak', [WebLaporanIrigasiController::class, 'reject'], [WebAuthMiddleware::class, AdminMiddleware::class]);
+$router->post('/laporan-irigasi/{id}/archive', [WebLaporanIrigasiController::class, 'archive'], [WebAuthMiddleware::class, AdminMiddleware::class]);
 $router->post('/laporan-irigasi/{id}/resubmit', [WebLaporanIrigasiController::class, 'resubmit'], [WebAuthMiddleware::class]);
 $router->post('/laporan-irigasi/{id}/foto/delete', [WebLaporanIrigasiController::class, 'deleteFoto'], [WebAuthMiddleware::class]);
 $router->post('/laporan-irigasi/{id}/foto', [WebLaporanIrigasiController::class, 'uploadFoto'], [WebAuthMiddleware::class]);
@@ -235,9 +244,9 @@ $router->get('/api/v1/laporan-irigasi/{id}', [ApiLaporanIrigasiController::class
 $router->put('/api/v1/laporan-irigasi/{id}', [ApiLaporanIrigasiController::class, 'update'], [ApiAuthMiddleware::class]);
 $router->delete('/api/v1/laporan-irigasi/{id}', [ApiLaporanIrigasiController::class, 'destroy'], [ApiAuthMiddleware::class]);
 $router->post('/api/v1/laporan-irigasi/{id}/submit', [ApiLaporanIrigasiController::class, 'submit'], [ApiAuthMiddleware::class]);
-$router->post('/api/v1/laporan-irigasi/{id}/verifikasi', [ApiLaporanIrigasiController::class, 'verify'], [ApiAuthMiddleware::class]);
-$router->post('/api/v1/laporan-irigasi/{id}/tolak', [ApiLaporanIrigasiController::class, 'reject'], [ApiAuthMiddleware::class]);
-$router->post('/api/v1/laporan-irigasi/{id}/archive', [ApiLaporanIrigasiController::class, 'archive'], [ApiAuthMiddleware::class]);
+$router->post('/api/v1/laporan-irigasi/{id}/verifikasi', [ApiLaporanIrigasiController::class, 'verify'], [ApiAuthMiddleware::class, AdminMiddleware::class]);
+$router->post('/api/v1/laporan-irigasi/{id}/tolak', [ApiLaporanIrigasiController::class, 'reject'], [ApiAuthMiddleware::class, AdminMiddleware::class]);
+$router->post('/api/v1/laporan-irigasi/{id}/archive', [ApiLaporanIrigasiController::class, 'archive'], [ApiAuthMiddleware::class, AdminMiddleware::class]);
 $router->post('/api/v1/laporan-irigasi/{id}/resubmit', [ApiLaporanIrigasiController::class, 'resubmit'], [ApiAuthMiddleware::class]);
 $router->post('/api/v1/laporan-irigasi/{id}/foto/delete', [ApiLaporanIrigasiController::class, 'deleteFoto'], [ApiAuthMiddleware::class]);
 $router->post('/api/v1/laporan-irigasi/{id}/foto', [ApiLaporanIrigasiController::class, 'uploadFoto'], [ApiAuthMiddleware::class]);

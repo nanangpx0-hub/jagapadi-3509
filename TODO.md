@@ -10,7 +10,7 @@
 - [x] 3. Update `app/controllers/Api/QwenController.php` - Add error handling
 - [x] 4. Update `public/js/qwen-editor-token.js` - Better error messages
 - [x] 5. Add Qwen configuration variables to documentation
-- [ ] 6. Test the token endpoint
+- [x] 6. Test the token endpoint
 
 ## Notes
 - User needs to add real Qwen API credentials to `.env` file

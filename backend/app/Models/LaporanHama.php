@@ -53,7 +53,7 @@ class LaporanHama extends Model
 
         $sql = self::buildListQuery($conditions, $params, $filters);
 
-        $countSql = preg_replace('/SELECT lh\.\*.*?FROM/', 'SELECT COUNT(*) FROM', $sql);
+        $countSql = preg_replace('/^SELECT lh\.\*.*?\bFROM\b/s', 'SELECT COUNT(*) FROM', $sql);
         $countSql = preg_replace('/\s+ORDER BY.*/i', '', $countSql);
         $countStmt = $pdo->prepare($countSql);
         $countStmt->execute($params);
@@ -76,7 +76,7 @@ class LaporanHama extends Model
 
         $sql = self::buildListQuery($conditions, $params, $filters);
 
-        $countSql = preg_replace('/SELECT lh\.\*.*?FROM/', 'SELECT COUNT(*) FROM', $sql);
+        $countSql = preg_replace('/^SELECT lh\.\*.*?\bFROM\b/s', 'SELECT COUNT(*) FROM', $sql);
         $countSql = preg_replace('/\s+ORDER BY.*/i', '', $countSql);
         $countStmt = $pdo->prepare($countSql);
         $countStmt->execute($params);
@@ -152,8 +152,15 @@ class LaporanHama extends Model
 
             switch ($key) {
                 case 'status':
-                    $conditions[] = 'lh.status = ?';
-                    $params[] = $val;
+                    $statuses = explode(',', (string) $val);
+                    $statuses = array_filter(array_map('trim', $statuses), static fn($s) => $s !== '');
+                    if (count($statuses) > 0) {
+                        $placeholders = implode(', ', array_fill(0, count($statuses), '?'));
+                        $conditions[] = "lh.status IN ($placeholders)";
+                        foreach ($statuses as $s) {
+                            $params[] = $s;
+                        }
+                    }
                     break;
                 case 'tanggal_from':
                     $conditions[] = 'lh.tanggal >= ?';

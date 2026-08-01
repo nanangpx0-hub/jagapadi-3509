@@ -93,7 +93,7 @@ $statusClasses = [
                         <option value="">Semua Kecamatan</option>
                         <?php foreach ($kecamatanList as $kecamatan): ?>
                             <option value="<?= (int) $kecamatan['id'] ?>" <?= (int) ($selectedKecamatanId ?? 0) === (int) $kecamatan['id'] ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($kecamatan['nama_kecamatan']) ?>
+                                <?= htmlspecialchars($kecamatan['nama_kecamatan'] ?? '') ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -116,7 +116,7 @@ $statusClasses = [
                 <strong>Sumber ringkasan:</strong>
                 <?= htmlspecialchars($summary['source_label'] ?? '-') ?>
                 <?php if (!empty($selectedKecamatan)): ?>
-                    untuk Kecamatan <?= htmlspecialchars($selectedKecamatan['nama_kecamatan']) ?>
+                    untuk Kecamatan <?= htmlspecialchars($selectedKecamatan['nama_kecamatan'] ?? '') ?>
                 <?php else: ?>
                     untuk Kabupaten Jember
                 <?php endif; ?>

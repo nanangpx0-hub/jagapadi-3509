@@ -30,9 +30,27 @@ class LaporanController extends Controller {
             }
         }
 
+        // Compute counts for filter badges (always from ALL reports, unfiltered)
+        $userId = $user['role'] === 'petugas' ? (int)$user['id'] : null;
+        if ($userId !== null) {
+            $countAll = $this->laporanModel->getCountByStatus('Draf', $userId)
+                + $this->laporanModel->getCountByStatus('Submitted', $userId)
+                + $this->laporanModel->getCountByStatus('Diverifikasi', $userId)
+                + $this->laporanModel->getCountByStatus('Ditolak', $userId)
+                + $this->laporanModel->getCountByStatus('Diarsipkan', $userId);
+        } else {
+            $countAll = $this->laporanModel->count();
+        }
+        $countDraft = $this->laporanModel->getCountByStatus('Draf', $userId);
+        $countActive = $this->laporanModel->getCountByStatus('Submitted', $userId)
+            + $this->laporanModel->getCountByStatus('Diverifikasi', $userId);
+
         $data = [
             'title' => 'Daftar Laporan',
             'laporan' => $laporan,
+            'countAll' => $countAll,
+            'countDraft' => $countDraft,
+            'countActive' => $countActive,
             'status' => $status,
             'currentUser' => $user,
             'rejectedCount' => 0
@@ -1194,6 +1212,21 @@ class LaporanController extends Controller {
             $status  = trim($_GET['status'] ?? '');
             $sortCol = trim($_GET['sort_col'] ?? 'tanggal');
             $sortDir = trim($_GET['sort_dir'] ?? 'desc');
+
+            $statusMap = [
+                'draft' => 'Draf',
+                'draf' => 'Draf',
+                'submitted' => 'Submitted',
+                'diverifikasi' => 'Diverifikasi',
+                'verified' => 'Diverifikasi',
+                'ditolak' => 'Ditolak',
+                'rejected' => 'Ditolak',
+                'diarsipkan' => 'Diarsipkan',
+                'archived' => 'Diarsipkan',
+            ];
+            if ($status !== '' && isset($statusMap[strtolower($status)])) {
+                $status = $statusMap[strtolower($status)];
+            }
 
             error_log("[LaporanController::fetch] Parsed params: page=$page, perPage=$perPage, search='$search', status='$status', sortCol='$sortCol', sortDir='$sortDir'");
 

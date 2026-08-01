@@ -1,7 +1,7 @@
 <?php
 class LaporanHama extends Model {
     protected $table = 'laporan_hama';
-    protected $fillable = [
+protected $fillable = [
         'user_id',
         'master_opt_id',
         'tanggal',
@@ -24,6 +24,7 @@ class LaporanHama extends Model {
         'kabupaten_id',
         'kecamatan_id',
         'desa_id',
+        'nomor_laporan',
     ];
     protected array $relations = [
         'user' => [
@@ -31,7 +32,7 @@ class LaporanHama extends Model {
             'table' => 'users',
             'local_key' => 'user_id',
             'foreign_key' => 'id',
-            'columns' => ['id', 'username', 'nama_lengkap', 'role', 'email', 'phone'],
+            'columns' => ['id', 'username', 'nama_lengkap', 'role', 'email'],
             'result_key' => 'user',
         ],
         'masterOpt' => [
@@ -487,8 +488,29 @@ class LaporanHama extends Model {
 
     /**
      * Verify report using QueryBuilder
+     * Only allows verification of Submitted reports (business rule: Draf cannot be verified)
      */
     public function verify(int $id, int $userId, string $status, string $catatan = ''): int {
+        // First check the current status of the report
+        $laporan = $this->find($id);
+        if (!$laporan) {
+            throw new InvalidArgumentException('Laporan tidak ditemukan.');
+        }
+        
+        // Business rule: Only Submitted reports can be verified
+        if ($laporan['status'] !== 'Submitted') {
+            throw new LogicException(
+                "Laporan dengan status '{$laporan['status']}' tidak dapat diverifikasi. " .
+                "Hanya laporan berstatus 'Submitted' yang dapat diverifikasi."
+            );
+        }
+        
+        // Validate status is one of the allowed verification statuses
+        $allowedStatuses = ['Diverifikasi', 'Ditolak'];
+        if (!in_array($status, $allowedStatuses, true)) {
+            throw new InvalidArgumentException("Status verifikasi tidak valid: {$status}");
+        }
+        
         $data = [
             'status' => $status,
             'verified_by' => $userId,
@@ -507,6 +529,25 @@ class LaporanHama extends Model {
             'status' => 'Diarsipkan',
             'updated_at' => date('Y-m-d H:i:s')
         ]);
+    }
+
+    /**
+     * Generate unique nomor laporan for submitted reports
+     * Format: LH-YYYYMM-NNNN (e.g., LH-202607-0001)
+     */
+    public function generateNomorLaporan(string $prefix = 'LH'): string {
+        $year = date('Y');
+        $month = date('m');
+        
+        $stmt = $this->db->prepare(
+            "SELECT COUNT(*) FROM laporan_hama 
+             WHERE YEAR(created_at) = ? AND MONTH(created_at) = ? 
+             AND status != 'Draf'"
+        );
+        $stmt->execute([$year, $month]);
+        $count = (int)$stmt->fetchColumn() + 1;
+        
+        return sprintf('%s-%s%s-%04d', $prefix, $year, $month, $count);
     }
 
     /**
@@ -585,40 +626,42 @@ class LaporanHama extends Model {
 
     /**
      * Get dashboard statistics
-     * Returns statistics with correct keys expected by dashboard view
-     */
-    /**
-     * Get dashboard statistics
      * @param int|null $userId Optional user ID to filter reports by user
+     * @param bool $includeDraft Whether to include Draft reports (default false per AGENTS.md)
      */
-    public function getDashboardStats(?int $userId = null): array {
+    public function getDashboardStats(?int $userId = null, bool $includeDraft = false): array {
         try {
+            $whereClauses = [];
+            $params = [];
+
+            if ($userId !== null) {
+                $whereClauses[] = 'user_id = :user_id';
+                $params[':user_id'] = $userId;
+            }
+
+            if (!$includeDraft) {
+                $whereClauses[] = "status != 'Draf'";
+            }
+
+            $whereSQL = !empty($whereClauses) ? 'WHERE ' . implode(' AND ', $whereClauses) : '';
+
             $sql = "
                 SELECT
                     COUNT(*) as total_laporan,
-                    0 as pending_verifikasi,
-                    SUM(CASE WHEN status IN ('Submitted', 'Diverifikasi') THEN 1 ELSE 0 END) as terverifikasi,
+                    SUM(CASE WHEN status = 'Submitted' THEN 1 ELSE 0 END) as pending_verifikasi,
+                    SUM(CASE WHEN status = 'Diverifikasi' THEN 1 ELSE 0 END) as terverifikasi,
                     SUM(CASE WHEN status = 'Draf' THEN 1 ELSE 0 END) as draf,
                     SUM(CASE WHEN status = 'Ditolak' THEN 1 ELSE 0 END) as ditolak,
                     SUM(CASE WHEN tingkat_keparahan = 'Berat' THEN 1 ELSE 0 END) as keparahan_berat,
                     SUM(CASE WHEN status IN ('Submitted', 'Diverifikasi') THEN luas_serangan ELSE 0 END) as total_luas,
                     SUM(CASE WHEN status IN ('Submitted', 'Diverifikasi') THEN populasi ELSE 0 END) as total_populasi
-                FROM laporan_hama";
-
-            if ($userId !== null) {
-                $sql .= " WHERE user_id = :user_id";
-            }
+                FROM laporan_hama {$whereSQL}";
 
             $stmt = $this->db->prepare($sql);
-            if ($userId !== null) {
-                $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
-            }
-            $stmt->execute();
+            $stmt->execute($params);
             $result = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            // Return stats with correct keys for dashboard view
             return [
-                // Primary keys expected by dashboard view
                 'total_laporan' => (int) ($result['total_laporan'] ?? 0),
                 'pending_verifikasi' => (int) ($result['pending_verifikasi'] ?? 0),
                 'terverifikasi' => (int) ($result['terverifikasi'] ?? 0),
@@ -627,8 +670,6 @@ class LaporanHama extends Model {
                 'ditolak' => (int) ($result['ditolak'] ?? 0),
                 'total_luas' => (float) ($result['total_luas'] ?? 0),
                 'total_populasi' => (int) ($result['total_populasi'] ?? 0),
-
-                // Backward compatibility with old keys
                 'total_reports' => (int) ($result['total_laporan'] ?? 0),
                 'verified_reports' => (int) ($result['terverifikasi'] ?? 0),
                 'pending_reports' => (int) ($result['pending_verifikasi'] ?? 0),
@@ -640,7 +681,6 @@ class LaporanHama extends Model {
         } catch (PDOException $e) {
             error_log("Error in getDashboardStats: " . $e->getMessage());
 
-            // Return default values on error
             return [
                 'total_laporan' => 0,
                 'pending_verifikasi' => 0,
@@ -650,7 +690,6 @@ class LaporanHama extends Model {
                 'ditolak' => 0,
                 'total_luas' => 0,
                 'total_populasi' => 0,
-                // Backward compatibility
                 'total_reports' => 0,
                 'verified_reports' => 0,
                 'pending_reports' => 0,
@@ -1103,9 +1142,22 @@ class LaporanHama extends Model {
 
             // Status filter
             if (!empty($filters['status'])) {
+                $statusVal = trim((string)$filters['status']);
+                $statusMap = [
+                    'draft' => 'Draf',
+                    'draf' => 'Draf',
+                    'submitted' => 'Submitted',
+                    'diverifikasi' => 'Diverifikasi',
+                    'verified' => 'Diverifikasi',
+                    'ditolak' => 'Ditolak',
+                    'rejected' => 'Ditolak',
+                    'diarsipkan' => 'Diarsipkan',
+                    'archived' => 'Diarsipkan',
+                ];
+                $normalizedStatus = $statusMap[strtolower($statusVal)] ?? $statusVal;
                 $where[] = 'lh.status = ?';
-                $params[] = $filters['status'];
-                error_log("[LaporanHama::fetchPaginated] Filtering by status={$filters['status']}");
+                $params[] = $normalizedStatus;
+                error_log("[LaporanHama::fetchPaginated] Filtering by status={$normalizedStatus}");
             }
 
             // Search

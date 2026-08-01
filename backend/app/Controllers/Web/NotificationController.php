@@ -67,6 +67,9 @@ class NotificationController extends Controller
         }
 
         $redirect = $_POST['redirect'] ?? ($_GET['redirect'] ?? '/notifications');
+        if (!preg_match('#^/[a-z0-9/_-]*$#', $redirect)) {
+            $redirect = '/notifications';
+        }
         $this->redirect($redirect);
     }
 

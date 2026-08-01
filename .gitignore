@@ -4,6 +4,7 @@
 
 # --- Secrets ---
 .env
+.env.local
 **/.env
 *.pem
 *.key
@@ -84,6 +85,37 @@ docker-compose.override.yml
 
 # --- Backup artifacts ---
 backups/
+
+# --- Local scratch & debug artifacts ---
+cj.txt
+pc.txt
+sc.txt
+fcm_files.txt
+audit_files.txt
+tmp_split.txt
+backend/cookies_*.txt
+backend/headers*.txt
+backend/*.html
+
+# --- Local SQL dumps ---
+database/jagapadi_local*.sql
+
+# --- Vendor & cache at repo root ---
+/vendor/
+/storage/cache/
+
+# --- Uploaded assets ---
+backend/public/assets/uploads/
+
+# --- Test output artifacts ---
+test-results/
+e2e/junit.xml
+e2e/test-output.json
+e2e/*.png
+
+# --- Separate Next.js apps (not part of main repo) ---
+/nextjs-app/
+/web-app/
 
 # --- Keep these ---
 !.gitignore

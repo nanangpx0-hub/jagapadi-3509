@@ -373,7 +373,7 @@ class HargaKomoditasController extends Controller {
             
             $priceData = $this->model->getPriceByLocation($komoditas);
             
-            // Add coordinates from kecamatan_jember if available
+            // Add coordinates (randomized sekitar pusat Jember; master_kecamatan tidak menyimpan koordinat)
             $mapData = [];
             foreach ($priceData as $row) {
                 $mapData[] = [

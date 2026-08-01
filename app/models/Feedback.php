@@ -62,32 +62,42 @@ class Feedback {
         
         $whereClause = implode(" AND ", $where);
         
-        // Get total count
-        $countSql = "SELECT COUNT(*) as total FROM feedback f WHERE {$whereClause}";
-        $countStmt = $this->db->prepare($countSql);
-        $countStmt->execute($params);
-        $total = $countStmt->fetch(PDO::FETCH_ASSOC)['total'];
-        
+        try {
+            // Get total count
+            $countSql = "SELECT COUNT(*) as total FROM feedback f WHERE {$whereClause}";
+            $countStmt = $this->db->prepare($countSql);
+            $countStmt->execute($params);
+            $total = $countStmt->fetch(PDO::FETCH_ASSOC)['total'];
+        } catch (\PDOException $e) {
+            error_log('Feedback::getAll(count) - ' . $e->getMessage());
+            return ['data' => [], 'total' => 0, 'page' => $page, 'limit' => $limit, 'totalPages' => 0];
+        }
+
         // Cast to integers for LIMIT/OFFSET (avoid SQL injection by ensuring they are integers)
         $limit = (int) $limit;
         $offset = (int) $offset;
         
-        // Get data with user info - embed LIMIT/OFFSET directly as integers
-        $sql = "SELECT f.*, 
-                       u.nama_lengkap as user_nama,
-                       u.username as user_username,
-                       u.role as user_role,
-                       p.nama_lengkap as processor_nama
-                FROM feedback f
-                LEFT JOIN users u ON f.user_id = u.id
-                LEFT JOIN users p ON f.processed_by = p.id
-                WHERE {$whereClause}
-                ORDER BY f.created_at DESC
-                LIMIT {$limit} OFFSET {$offset}";
-        
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute($params);
-        $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        try {
+            // Get data with user info - embed LIMIT/OFFSET directly as integers
+            $sql = "SELECT f.*, 
+                           u.nama_lengkap as user_nama,
+                           u.username as user_username,
+                           u.role as user_role,
+                           p.nama_lengkap as processor_nama
+                    FROM feedback f
+                    LEFT JOIN users u ON f.user_id = u.id
+                    LEFT JOIN users p ON f.processed_by = p.id
+                    WHERE {$whereClause}
+                    ORDER BY f.created_at DESC
+                    LIMIT {$limit} OFFSET {$offset}";
+            
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($params);
+            $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (\PDOException $e) {
+            error_log('Feedback::getAll(data) - ' . $e->getMessage());
+            return ['data' => [], 'total' => 0, 'page' => $page, 'limit' => $limit, 'totalPages' => 0];
+        }
         
         return [
             'data' => $data,
@@ -408,20 +418,29 @@ class Feedback {
      * @return array Dashboard stats
      */
     public function getDashboardStats(): array {
-        $sql = "SELECT 
-                    COUNT(*) as total,
-                    SUM(CASE WHEN status = 'diterima' THEN 1 ELSE 0 END) as pending,
-                    SUM(CASE WHEN status = 'dalam_proses' THEN 1 ELSE 0 END) as in_progress,
-                    SUM(CASE WHEN status = 'selesai' THEN 1 ELSE 0 END) as completed,
-                    SUM(CASE WHEN status = 'ditolak' THEN 1 ELSE 0 END) as rejected,
-                    SUM(CASE WHEN jenis_feedback = 'bug' THEN 1 ELSE 0 END) as bugs,
-                    SUM(CASE WHEN jenis_feedback = 'fitur_baru' THEN 1 ELSE 0 END) as features,
-                    SUM(CASE WHEN jenis_feedback = 'peningkatan' THEN 1 ELSE 0 END) as improvements
-                FROM feedback";
-        
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute();
-        return $stmt->fetch(PDO::FETCH_ASSOC);
+        try {
+            $sql = "SELECT 
+                        COUNT(*) as total,
+                        SUM(CASE WHEN status = 'diterima' THEN 1 ELSE 0 END) as pending,
+                        SUM(CASE WHEN status = 'dalam_proses' THEN 1 ELSE 0 END) as in_progress,
+                        SUM(CASE WHEN status = 'selesai' THEN 1 ELSE 0 END) as completed,
+                        SUM(CASE WHEN status = 'ditolak' THEN 1 ELSE 0 END) as rejected,
+                        SUM(CASE WHEN jenis_feedback = 'bug' THEN 1 ELSE 0 END) as bugs,
+                        SUM(CASE WHEN jenis_feedback = 'fitur_baru' THEN 1 ELSE 0 END) as features,
+                        SUM(CASE WHEN jenis_feedback = 'peningkatan' THEN 1 ELSE 0 END) as improvements
+                    FROM feedback";
+            
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute();
+            return $stmt->fetch(PDO::FETCH_ASSOC);
+        } catch (\PDOException $e) {
+            error_log('Feedback::getDashboardStats - ' . $e->getMessage());
+            return [
+                'total' => 0, 'pending' => 0, 'in_progress' => 0,
+                'completed' => 0, 'rejected' => 0,
+                'bugs' => 0, 'features' => 0, 'improvements' => 0,
+            ];
+        }
     }
     
     // ============================================

@@ -30,7 +30,7 @@
                 // Create modal
                 const modal = document.createElement('div');
                 modal.id = 'confirm-dialog-modal';
-                modal.className = 'modal fade';
+                modal.className = 'modal';
                 modal.setAttribute('tabindex', '-1');
                 modal.setAttribute('role', 'dialog');
                 modal.innerHTML = `

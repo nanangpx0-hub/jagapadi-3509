@@ -3,7 +3,7 @@ class User {
   final String username;
   final String namaLengkap;
   final String role;
-  final int isActive;
+  final bool isActive;
   final bool mustChangePassword;
 
   User({
@@ -21,7 +21,7 @@ class User {
       username: json['username'] as String? ?? '',
       namaLengkap: json['nama_lengkap'] as String? ?? '',
       role: json['role'] as String? ?? 'petugas',
-      isActive: json['is_active'] as int? ?? 1,
+      isActive: json['aktif'] as bool? ?? true,
       mustChangePassword: json['must_change_password'] as bool? ?? false,
     );
   }
@@ -31,7 +31,7 @@ class User {
         'username': username,
         'nama_lengkap': namaLengkap,
         'role': role,
-        'is_active': isActive,
+        'aktif': isActive,
         'must_change_password': mustChangePassword,
       };
 

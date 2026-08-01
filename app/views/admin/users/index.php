@@ -22,7 +22,7 @@
         <div class="mt-3">
             <form method="GET" action="<?= BASE_URL ?>user" class="form-row">
                 <div class="col-md-3 mb-2">
-                    <input type="text" name="search" class="form-control" placeholder="Cari nama/username/email" value="<?= htmlspecialchars($search) ?>">
+                    <input type="text" name="search" class="form-control" placeholder="Cari nama/username/email" value="<?= htmlspecialchars($search ?? '') ?>">
                 </div>
                 <div class="col-md-3 mb-2">
                     <select name="role" class="form-control" onchange="this.form.submit()">
@@ -66,9 +66,9 @@
                     <?php foreach ($users as $user): ?>
                     <tr>
                         <td><?= $user['id'] ?></td>
-                        <td><?= htmlspecialchars($user['nama_lengkap']) ?></td>
+                        <td><?= htmlspecialchars($user['nama_lengkap'] ?? '') ?></td>
                         <td>
-                            <strong><?= htmlspecialchars($user['username']) ?></strong>
+                            <strong><?= htmlspecialchars($user['username'] ?? '') ?></strong>
                             <?php if ($user['id'] == $_SESSION['user_id']): ?>
                             <span class="badge badge-primary badge-sm">You</span>
                             <?php endif; ?>

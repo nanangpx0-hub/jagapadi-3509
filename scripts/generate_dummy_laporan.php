@@ -91,7 +91,7 @@ echo "Loading reference data...\n";
 
 $users = $db->query("SELECT id, nama_lengkap, role FROM users WHERE aktif = 1 AND role IN ('petugas','admin','operator') ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
 $opt   = $db->query("SELECT id, nama_opt, jenis FROM master_opt ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
-$kec   = $db->query("SELECT id, nama_kecamatan FROM kecamatan_jember ORDER BY nama_kecamatan")->fetchAll(PDO::FETCH_ASSOC);
+$kec   = $db->query("SELECT id, nama_kecamatan FROM master_kecamatan ORDER BY nama_kecamatan")->fetchAll(PDO::FETCH_ASSOC);
 $desa  = $db->query("SELECT id, nama_desa, kecamatan_id FROM master_desa ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
 
 if (count($users) < 3) { echo "ERROR: Need at least 3 users.\n"; exit(1); }

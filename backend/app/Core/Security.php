@@ -14,7 +14,6 @@ class Security
 
         $name = Env::get('SESSION_NAME', 'jagapadi_session');
         $isSecure = Request::isSecure();
-        $isProduction = Env::get('APP_ENV', 'production') === 'production';
 
         session_name($name);
 
@@ -23,12 +22,26 @@ class Security
         ini_set('session.use_trans_sid', '0');
         ini_set('session.cookie_httponly', '1');
         ini_set('session.cookie_samesite', 'Lax');
+        ini_set('session.gc_maxlifetime', '28800');
+        ini_set('session.cookie_lifetime', '0');
 
-        if ($isSecure && $isProduction) {
+        if ($isSecure) {
             ini_set('session.cookie_secure', '1');
         }
 
         session_start();
+
+        self::checkSessionIdle();
+    }
+
+    public static function checkSessionIdle(): void
+    {
+        $maxIdle = 28800;
+        $loginAt = $_SESSION['login_at'] ?? null;
+        if ($loginAt !== null && (time() - $loginAt) > $maxIdle) {
+            $_SESSION = [];
+            session_regenerate_id(true);
+        }
     }
 
     public static function regenerateSession(): void
@@ -101,5 +114,25 @@ class Security
     public static function e(mixed $value): string
     {
         return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * Mitigasi spreadsheet/formula injection (CSV / XLSX).
+     * Sel yang diawali karakter berbahaya (= + - @ tab CR) diprefix
+     * tanda kutip satu agar tidak dieksekusi sebagai formula oleh
+     * Excel/LibreOffice saat file hasil ekspor dibuka.
+     */
+    public static function sanitizeCell(mixed $value): string
+    {
+        $str = (string) $value;
+        if ($str === '') {
+            return $str;
+        }
+        $first = $str[0];
+        if ($first === '=' || $first === '+' || $first === '-'
+            || $first === '@' || $first === "\t" || $first === "\r") {
+            return "'" . $str;
+        }
+        return $str;
     }
 }

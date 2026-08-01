@@ -37,6 +37,7 @@
       },
       options: {
         responsive: true, maintainAspectRatio: false,
+        animation: false,
         scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
         plugins: { legend: { position: 'top' } }
       }
@@ -60,28 +61,35 @@
       },
       options: {
         responsive: true, maintainAspectRatio: false,
+        animation: false,
         scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
         plugins: { legend: { position: 'top' } }
       }
     });
   }
 
-  // Map
+  // Map with animations disabled
   function initMap() {
     if (map) return;
-    map = L.map('map').setView([-8.17, 113.70], 11);
+    map = L.map('map', {
+      zoomAnimation: false,
+      fadeAnimation: false,
+      markerZoomAnimation: false
+    }).setView([-8.17, 113.70], 11);
+    window.map = map;
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
     loadGeoJSON('hama');
   }
 
-  function loadGeoJSON(type) {
+  function loadGeoJSON(type, customUrl) {
+    if (!map) return;
     if (geoLayer) { map.removeLayer(geoLayer); geoLayer = null; }
 
-    const url = type === 'hama'
-      ? '/dashboard/map/hama.json?tahun=' + currentTahun + '&limit=500'
-      : '/dashboard/map/irigasi.json?tahun=' + currentTahun + '&limit=500';
+    const url = customUrl || (type === 'hama'
+      ? '/dashboard/map/hama?tahun=' + currentTahun + '&limit=500'
+      : '/dashboard/map/irigasi?tahun=' + currentTahun + '&limit=500');
 
     fetch(url)
       .then(r => r.json())
@@ -95,22 +103,40 @@
               color: '#fff',
               weight: 2,
               opacity: 1,
-              fillOpacity: 0.7
+              fillOpacity: 0.8
             });
           },
           onEachFeature: function(feature, layer) {
             const p = feature.properties || {};
-            layer.bindPopup('<strong>' + (p.popup || '') + '</strong><br>' +
-              (p.tanggal || '') + ' &middot; ' + (p.desa || '') + ', ' + (p.kecamatan || ''));
+            if (typeof window.buildPopupContent === 'function') {
+              layer.bindPopup(window.buildPopupContent(p, type));
+            } else {
+              let popupHtml = '<div style="font-size:13px;line-height:1.5;">';
+              if (p.nomor_laporan) popupHtml += '<strong>' + p.nomor_laporan + '</strong><br>';
+              if (type === 'hama') {
+                if (p.opt) popupHtml += '<span style="color:#1a73e8;">' + p.opt + '</span> &middot; ';
+                if (p.tingkat_keparahan) popupHtml += '<b>' + p.tingkat_keparahan + '</b><br>';
+                if (p.id) popupHtml += '<a href="/laporan-hama/' + p.id + '" style="color:#1a73e8;text-decoration:none;font-weight:600;">Lihat Detail &raquo;</a><br>';
+              } else {
+                if (p.nama_saluran) popupHtml += '<span style="color:#2e7d32;">' + p.nama_saluran + '</span><br>';
+                if (p.kondisi_fisik) popupHtml += 'Kondisi: ' + p.kondisi_fisik + '<br>';
+                if (p.debit_air) popupHtml += 'Debit: ' + p.debit_air + '<br>';
+                if (p.id) popupHtml += '<a href="/laporan-irigasi/' + p.id + '" style="color:#2e7d32;text-decoration:none;font-weight:600;">Lihat Detail &raquo;</a><br>';
+              }
+              popupHtml += '<small style="color:#666;">' + (p.tanggal || '') + ' &middot; ' + (p.desa || '') + ', ' + (p.kecamatan || '') + '</small></div>';
+              layer.bindPopup(popupHtml);
+            }
           }
         }).addTo(map);
 
         if (data.features.length > 0) {
-          map.fitBounds(geoLayer.getBounds(), { padding: [30, 30] });
+          map.fitBounds(geoLayer.getBounds(), { padding: [30, 30], animate: false });
         }
       })
       .catch(() => {});
   }
+
+  window.loadGeoJSON = loadGeoJSON;
 
   window.switchMapLayer = function(type) {
     currentLayer = type;
@@ -118,6 +144,13 @@
     document.getElementById('toggleIrigasi').className = type === 'irigasi' ? 'active' : '';
     loadGeoJSON(type);
   };
+
+  // Responsiveness handling
+  window.addEventListener('resize', function() {
+    if (map) {
+      map.invalidateSize();
+    }
+  });
 
   // Init
   document.addEventListener('DOMContentLoaded', function() {

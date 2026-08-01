@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 
 require_once ROOT_PATH . '/app/controllers/Api/BaseApiController.php';
 require_once ROOT_PATH . '/app/models/Irigasi.php';
@@ -113,7 +114,7 @@ class IrigasiController extends BaseApiController {
             
             // Handle file upload if present
             if (isset($_FILES['foto']) && $_FILES['foto']['error'] === UPLOAD_ERR_OK) {
-                $data['foto'] = $this->handleFileUpload($_FILES['foto']);
+                $data['foto'] = $this->handleFileUpload($_FILES['foto'], 'irigasi');
             }
             
             $irigasiId = $this->irigasiModel->create($data);
@@ -158,7 +159,7 @@ class IrigasiController extends BaseApiController {
             
             // Handle file upload if present
             if (isset($_FILES['foto']) && $_FILES['foto']['error'] === UPLOAD_ERR_OK) {
-                $data['foto'] = $this->handleFileUpload($_FILES['foto']);
+                $data['foto'] = $this->handleFileUpload($_FILES['foto'], 'irigasi');
             }
             
             $success = $this->irigasiModel->update($id, $data);
@@ -220,41 +221,6 @@ class IrigasiController extends BaseApiController {
             
         } catch (Exception $e) {
             $this->sendError('Failed to retrieve irigasi statistics: ' . $e->getMessage(), 500);
-        }
-    }
-    
-    /**
-     * Handle file upload
-     */
-    private function handleFileUpload($file) {
-        $uploadDir = ROOT_PATH . '/public/uploads/irigasi/';
-        
-        // Create directory if it doesn't exist
-        if (!is_dir($uploadDir)) {
-            mkdir($uploadDir, 0755, true);
-        }
-        
-        // Generate unique filename
-        $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
-        $filename = uniqid() . '_' . time() . '.' . $extension;
-        $filepath = $uploadDir . $filename;
-        
-        // Validate file type
-        $allowedTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-        if (!in_array(strtolower($extension), $allowedTypes)) {
-            throw new Exception('Invalid file type. Only JPG, PNG, GIF, and WEBP are allowed.');
-        }
-        
-        // Validate file size (max 10MB)
-        if ($file['size'] > 10 * 1024 * 1024) {
-            throw new Exception('File size too large. Maximum 10MB allowed.');
-        }
-        
-        // Move uploaded file
-        if (move_uploaded_file($file['tmp_name'], $filepath)) {
-            return 'uploads/irigasi/' . $filename;
-        } else {
-            throw new Exception('Failed to upload file.');
         }
     }
     

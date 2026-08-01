@@ -142,9 +142,12 @@ class ApiClient {
     }
   }
 
-  Future<ApiResponse<Map<String, dynamic>>> delete(String path) async {
+  Future<ApiResponse<Map<String, dynamic>>> delete(
+    String path, {
+    Map<String, dynamic>? data,
+  }) async {
     try {
-      final response = await _dio.delete(path);
+      final response = await _dio.delete(path, data: data);
       return ApiResponse.fromJson(
         response.data as Map<String, dynamic>,
         response.statusCode ?? 200,

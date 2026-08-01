@@ -6,6 +6,7 @@ namespace App\Middleware;
 
 use App\Core\Jwt;
 use App\Core\Request;
+use App\Helpers\JwtBlacklist;
 use App\Models\User;
 
 class ApiAuthMiddleware
@@ -36,6 +37,17 @@ class ApiAuthMiddleware
             return false;
         }
 
+        if (isset($payload['jti']) && JwtBlacklist::isRevoked((string) $payload['jti'])) {
+            http_response_code(401);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'success' => false,
+                'error' => 'TokenRevoked',
+                'message' => 'Token sudah tidak berlaku (logout/revoked).',
+            ]);
+            return false;
+        }
+
         $user = User::find((int) $payload['sub']);
         if ($user === null || !User::isActive($user)) {
             http_response_code(401);
@@ -48,7 +60,7 @@ class ApiAuthMiddleware
             return false;
         }
 
-        $GLOBALS['auth_user'] = $user;
+        $GLOBALS['auth_user'] = User::withoutSensitiveFields($user);
         $GLOBALS['auth_payload'] = $payload;
 
         return true;

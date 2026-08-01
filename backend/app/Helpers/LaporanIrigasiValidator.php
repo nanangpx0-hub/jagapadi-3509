@@ -22,8 +22,14 @@ class LaporanIrigasiValidator
 
         if (isset($input['kabupaten_id']) && $input['kabupaten_id'] !== '') {
             $id = (int) $input['kabupaten_id'];
-            if (MasterKabupaten::find($id) === null) {
+            $kab = MasterKabupaten::find($id);
+            if ($kab === null) {
                 $errors['kabupaten_id'] = 'Kabupaten tidak valid.';
+            } else {
+                $jember = MasterKabupaten::findByKode('3509');
+                if ($jember && (int) $kab['id'] !== (int) $jember['id']) {
+                    $errors['kabupaten_id'] = 'Hanya Kabupaten Jember yang didukung.';
+                }
             }
         }
 
@@ -124,8 +130,14 @@ class LaporanIrigasiValidator
             }
 
             $kabId = (int) $input['kabupaten_id'];
-            if (MasterKabupaten::find($kabId) === null) {
+            $kab = MasterKabupaten::find($kabId);
+            if ($kab === null) {
                 $errors['kabupaten_id'] = 'Kabupaten tidak valid.';
+            } else {
+                $jember = MasterKabupaten::findByKode('3509');
+                if ($jember && (int) $kab['id'] !== (int) $jember['id']) {
+                    $errors['kabupaten_id'] = 'Hanya Kabupaten Jember yang didukung.';
+                }
             }
 
             $kecId = (int) $input['kecamatan_id'];

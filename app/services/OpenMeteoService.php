@@ -344,22 +344,21 @@ class OpenMeteoService {
     }
     
     /**
-     * Load locations from kecamatan_jember table
+     * Load locations from master_kecamatan (sumber kebenaran kecamatan)
      */
     private function loadLocations(): void {
         try {
             $db = Database::getInstance()->getConnection();
             $stmt = $db->prepare(
-                "SELECT id, nama_kecamatan, latitude, longitude, kode_bps, kode_bmkg_adm4 
-                 FROM kecamatan_jember 
-                 WHERE is_active = 1 
+                "SELECT id, nama_kecamatan, kode 
+                 FROM master_kecamatan 
                  ORDER BY nama_kecamatan"
             );
             $stmt->execute();
             $this->locations = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
-            $this->log("Loaded " . count($this->locations) . " active kecamatan");
-            
+
+            $this->log("Loaded " . count($this->locations) . " kecamatan");
+
         } catch (Exception $e) {
             $this->log("Failed to load kecamatan: " . $e->getMessage(), 'ERROR');
             // Use fallback locations if table doesn't exist

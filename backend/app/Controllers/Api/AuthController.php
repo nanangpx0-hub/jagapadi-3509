@@ -11,6 +11,7 @@ use App\Core\Request;
 use App\Models\User;
 use App\Models\ActivityLog;
 use App\Helpers\RateLimiter;
+use App\Helpers\JwtBlacklist;
 use App\Helpers\PasswordValidator;
 
 class AuthController extends BaseApiController
@@ -18,15 +19,17 @@ class AuthController extends BaseApiController
     public function login(): void
     {
         $ip = Request::ip();
-        $maxAttempts = (int) ($_ENV['LOGIN_MAX_ATTEMPTS'] ?? 5);
-        $decay = (int) ($_ENV['LOGIN_DECAY_SECONDS'] ?? 900);
+        $username = Request::input('username', '');
+        $maxAttempts = (int) Env::get('LOGIN_MAX_ATTEMPTS', '5');
+        $decay = (int) Env::get('LOGIN_DECAY_SECONDS', '900');
 
-        if (!RateLimiter::attempt('login', "api_$ip", $maxAttempts, $decay)) {
+        $rlKey = 'api_' . $ip . ($username !== '' ? '_' . mb_strtolower($username) : '');
+
+        if (!RateLimiter::attempt('login', $rlKey, $maxAttempts, $decay)) {
             $this->error('TooManyRequests', 'Terlalu banyak percobaan login. Coba lagi nanti.', [], 429);
             return;
         }
 
-        $username = Request::input('username', '');
         $password = Request::input('password', '');
 
         if ($username === '' || $password === '') {
@@ -47,7 +50,7 @@ class AuthController extends BaseApiController
 
         if (!User::isActive($user)) {
             ActivityLog::log((int) $user['id'], 'login_failed', 'users', $user['id'], 'API login: akun tidak aktif');
-            $this->error('Unauthorized', 'Akun Anda tidak aktif. Hubungi administrator.', [], 401);
+            $this->error('Unauthorized', 'Autentikasi gagal.', [], 401);
             return;
         }
 
@@ -59,7 +62,7 @@ class AuthController extends BaseApiController
             'exp' => time() + $jwtExpiry,
         ]);
 
-        RateLimiter::reset('login', "api_$ip");
+        RateLimiter::reset('login', $rlKey);
         ActivityLog::log((int) $user['id'], 'login_success', 'users', (int) $user['id'], 'API login berhasil');
 
         $this->success([
@@ -78,11 +81,29 @@ class AuthController extends BaseApiController
             return;
         }
 
+        $payload = Jwt::decode($token);
+        if ($payload === null) {
+            $this->error('TokenInvalid', 'Token tidak valid atau sudah kedaluwarsa.', [], 401);
+            return;
+        }
+
+        $user = User::find((int) $payload['sub']);
+        if ($user === null || !User::isActive($user)) {
+            $this->error('UserInactive', 'Akun tidak aktif atau tidak ditemukan.', [], 401);
+            return;
+        }
+
         $newToken = Jwt::refresh($token);
         if ($newToken === null) {
             $this->error('TokenInvalid', 'Token tidak valid atau sudah kedaluwarsa.', [], 401);
             return;
         }
+
+        // Revoke token lama agar tidak dapat dipakai lagi setelah refresh.
+        if (isset($payload['jti']) && isset($payload['exp'])) {
+            JwtBlacklist::revoke((string) $payload['jti'], (int) $payload['exp'], (int) $user['id']);
+        }
+        JwtBlacklist::purgeExpired();
 
         $this->success([
             'token' => $newToken,
@@ -94,6 +115,14 @@ class AuthController extends BaseApiController
     public function logout(): void
     {
         $userId = $GLOBALS['auth_user']['id'] ?? null;
+        $payload = $GLOBALS['auth_payload'] ?? null;
+
+        // Revoke token saat ini agar tidak dapat dipakai lagi setelah logout.
+        if (isset($payload['jti']) && isset($payload['exp'])) {
+            JwtBlacklist::revoke((string) $payload['jti'], (int) $payload['exp'], $userId !== null ? (int) $userId : null);
+        }
+        JwtBlacklist::purgeExpired();
+
         ActivityLog::log($userId, 'logout', null, null, 'API logout');
 
         $this->success([], 'Logout berhasil');
@@ -101,8 +130,8 @@ class AuthController extends BaseApiController
 
     public function changePassword(): void
     {
-        $user = $GLOBALS['auth_user'] ?? null;
-        if ($user === null) {
+        $authUser = $GLOBALS['auth_user'] ?? null;
+        if ($authUser === null) {
             $this->error('Unauthenticated', 'User tidak terautentikasi.', [], 401);
             return;
         }
@@ -124,6 +153,12 @@ class AuthController extends BaseApiController
         $validation = PasswordValidator::validate($newPassword);
         if (!$validation['valid']) {
             $this->error('ValidationError', implode('; ', $validation['errors']), [], 422);
+            return;
+        }
+
+        $user = User::find((int) $authUser['id']);
+        if ($user === null) {
+            $this->error('Unauthenticated', 'User tidak ditemukan.', [], 401);
             return;
         }
 

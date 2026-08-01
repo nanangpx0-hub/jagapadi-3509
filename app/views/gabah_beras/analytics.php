@@ -127,7 +127,7 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                         <strong>Dampak Cuaca:</strong>
                         <ul class="small mb-0">
                             <?php foreach (($weather_correlation['weather_impact'] ?? ['Tidak ada data']) as $impact): ?>
-                            <li><?= htmlspecialchars($impact) ?></li>
+                            <li><?= htmlspecialchars($impact ?? '') ?></li>
                             <?php endforeach; ?>
                         </ul>
                     </div>

@@ -134,7 +134,7 @@
             <div class="card-header">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
-                        <h4 class="mb-1"><?= htmlspecialchars($feedback['judul']) ?></h4>
+                        <h4 class="mb-1"><?= htmlspecialchars($feedback['judul'] ?? '') ?></h4>
                         <div class="mb-2">
                             <span class="badge badge-jenis-<?= $feedback['jenis_feedback'] ?>">
                                 <?php
@@ -194,7 +194,7 @@
                 <div class="mb-4">
                     <h6><i class="fas fa-align-left"></i> Deskripsi</h6>
                     <div class="p-3 bg-light rounded">
-                        <?= nl2br(htmlspecialchars($feedback['deskripsi'])) ?>
+                        <?= nl2br(htmlspecialchars($feedback['deskripsi'] ?? '')) ?>
                     </div>
                 </div>
                 
@@ -222,11 +222,11 @@
                 <div class="mb-4">
                     <h6><i class="fas fa-comment-alt"></i> Catatan Admin</h6>
                     <div class="alert alert-info">
-                        <?= nl2br(htmlspecialchars($feedback['admin_notes'])) ?>
+                        <?= nl2br(htmlspecialchars($feedback['admin_notes'] ?? '')) ?>
                         <?php if ($feedback['processor_nama']): ?>
                         <hr>
                         <small>
-                            <i class="fas fa-user-check"></i> Diproses oleh: <?= htmlspecialchars($feedback['processor_nama']) ?>
+                            <i class="fas fa-user-check"></i> Diproses oleh: <?= htmlspecialchars($feedback['processor_nama'] ?? '') ?>
                             <?php if ($feedback['processed_at']): ?>
                             pada <?= date('d M Y H:i', strtotime($feedback['processed_at'])) ?>
                             <?php endif; ?>
@@ -262,7 +262,7 @@
                                     <?= ucfirst(str_replace('_', ' ', $history['new_status'])) ?>
                                 </strong>
                                 <?php if ($history['notes']): ?>
-                                <p class="mb-0 mt-1 text-muted"><?= htmlspecialchars($history['notes']) ?></p>
+                                <p class="mb-0 mt-1 text-muted"><?= htmlspecialchars($history['notes'] ?? '') ?></p>
                                 <?php endif; ?>
                             </div>
                             <div class="text-right">
@@ -270,7 +270,7 @@
                                     <?= date('d M Y H:i', strtotime($history['created_at'])) ?>
                                 </small>
                                 <?php if ($history['changed_by_nama']): ?>
-                                <br><small class="text-muted">oleh <?= htmlspecialchars($history['changed_by_nama']) ?></small>
+                                <br><small class="text-muted">oleh <?= htmlspecialchars($history['changed_by_nama'] ?? '') ?></small>
                                 <?php endif; ?>
                             </div>
                         </div>
@@ -316,7 +316,7 @@
                     <div class="voter-item">
                         <i class="fas fa-user-circle fa-2x text-muted mr-2"></i>
                         <div>
-                            <strong><?= htmlspecialchars($voter['nama_lengkap']) ?></strong>
+                            <strong><?= htmlspecialchars($voter['nama_lengkap'] ?? '') ?></strong>
                             <br><small class="text-muted"><?= date('d M Y H:i', strtotime($voter['voted_at'])) ?></small>
                         </div>
                     </div>

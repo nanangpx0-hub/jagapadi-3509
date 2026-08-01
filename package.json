@@ -2,16 +2,38 @@
   "name": "jagapadi",
   "version": "1.0.0",
   "description": "JAGAPADI - Jember Agrikultur Gapai Prestasi Digital",
-  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e": "cd e2e && npx playwright test",
+    "test:e2e:ui": "cd e2e && npx playwright test --ui",
+    "test:e2e:debug": "cd e2e && npx playwright test --debug",
+    "test:e2e:report": "cd e2e && npx playwright show-report reports/html"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2",
     "vite": "^5.4.0"
   },
   "dependencies": {
     "chart.js": "^4.4.0"
-  }
+  },
+  "main": "vite.config.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nanangpx5-netizen/jagapadi.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/nanangpx5-netizen/jagapadi/issues"
+  },
+  "homepage": "https://github.com/nanangpx5-netizen/jagapadi#readme"
 }

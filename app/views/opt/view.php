@@ -101,7 +101,7 @@
                                 }
                             }
                         ?>
-                        <img src="<?= BASE_URL . $photoUrl ?>" class="detail-photo" alt="<?= htmlspecialchars($opt['nama_opt']) ?>"
+                        <img src="<?= BASE_URL . $photoUrl ?>" class="detail-photo" alt="<?= htmlspecialchars($opt['nama_opt'] ?? '') ?>"
                              onerror="this.src='<?= BASE_URL ?>public/img/no-image.png'">
                         <?php else: ?>
                         <div class="text-center py-4">
@@ -114,10 +114,10 @@
                         <div class="kode"><i class="fas fa-barcode"></i> <?= htmlspecialchars($opt['kode_opt'] ?? '') ?></div>
                         <div class="nama"><?= htmlspecialchars($opt['nama_opt'] ?? '') ?></div>
                         <?php if (!empty($opt['nama_ilmiah'])): ?>
-                        <div class="nama-ilmiah"><?= htmlspecialchars($opt['nama_ilmiah']) ?></div>
+                        <div class="nama-ilmiah"><?= htmlspecialchars($opt['nama_ilmiah'] ?? '') ?></div>
                         <?php endif; ?>
                         <?php if (!empty($opt['nama_lokal'])): ?>
-                        <div class="mt-1"><small>Nama lokal: <?= htmlspecialchars($opt['nama_lokal']) ?></small></div>
+                        <div class="mt-1"><small>Nama lokal: <?= htmlspecialchars($opt['nama_lokal'] ?? '') ?></small></div>
                         <?php endif; ?>
                         
                         <div class="mt-3">
@@ -134,7 +134,7 @@
                             if ($karantina != 'Tidak'):
                             ?>
                             <span class="badge badge-danger badge-lg mr-2">
-                                <i class="fas fa-shield-alt"></i> <?= htmlspecialchars($karantina) ?>
+                                <i class="fas fa-shield-alt"></i> <?= htmlspecialchars($karantina ?? '') ?>
                             </span>
                             <?php endif; ?>
                             
@@ -149,7 +149,7 @@
                             $bahayaClass = $bahayaColors[$bahaya] ?? 'secondary';
                             ?>
                             <span class="badge badge-<?= $bahayaClass ?> badge-lg">
-                                <i class="fas fa-exclamation-triangle"></i> Bahaya: <?= htmlspecialchars($bahaya) ?>
+                                <i class="fas fa-exclamation-triangle"></i> Bahaya: <?= htmlspecialchars($bahaya ?? '') ?>
                             </span>
                         </div>
                     </div>
@@ -183,7 +183,7 @@
                                 <span class="taxonomy-arrow"><i class="fas fa-chevron-right"></i></span>
                                 <?php endif; ?>
                                 <span class="taxonomy-item" title="<?= $level ?>">
-                                    <?= htmlspecialchars($value) ?>
+                                    <?= htmlspecialchars($value ?? '') ?>
                                 </span>
                                 <?php $i++; endforeach; ?>
                             </div>
@@ -193,7 +193,7 @@
                             <?php foreach ($taxonomy as $level => $value): ?>
                             <div class="info-row">
                                 <div class="info-label"><?= $level ?></div>
-                                <div class="info-value"><?= htmlspecialchars($value) ?></div>
+                                <div class="info-value"><?= htmlspecialchars($value ?? '') ?></div>
                             </div>
                             <?php endforeach; ?>
                         </div>
@@ -213,14 +213,14 @@
                                         'OPTK B' => 'Sudah tersebar luas'
                                     ];
                                     ?>
-                                    <strong><?= htmlspecialchars($karantina) ?></strong>
+                                    <strong><?= htmlspecialchars($karantina ?? '') ?></strong>
                                     <small class="text-muted d-block"><?= $karantinaExplain[$karantina] ?? '' ?></small>
                                 </div>
                             </div>
                             <div class="info-row">
                                 <div class="info-label">Tingkat Bahaya</div>
                                 <div class="info-value">
-                                    <span class="badge badge-<?= $bahayaClass ?>"><?= htmlspecialchars($bahaya) ?></span>
+                                    <span class="badge badge-<?= $bahayaClass ?>"><?= htmlspecialchars($bahaya ?? '') ?></span>
                                 </div>
                             </div>
                             <div class="info-row">
@@ -246,7 +246,7 @@
                         <?php if (!empty($opt['rekomendasi'])): ?>
                         <div class="info-section">
                             <h5 class="info-section-title"><i class="fas fa-lightbulb"></i> Rekomendasi Pengendalian</h5>
-                            <p><?= nl2br(htmlspecialchars($opt['rekomendasi'])) ?></p>
+                            <p><?= nl2br(htmlspecialchars($opt['rekomendasi'] ?? '')) ?></p>
                         </div>
                         <?php endif; ?>
                         
@@ -254,7 +254,7 @@
                         <?php if (!empty($opt['referensi'])): ?>
                         <div class="info-section">
                             <h5 class="info-section-title"><i class="fas fa-book"></i> Referensi</h5>
-                            <p class="text-muted"><?= nl2br(htmlspecialchars($opt['referensi'])) ?></p>
+                            <p class="text-muted"><?= nl2br(htmlspecialchars($opt['referensi'] ?? '')) ?></p>
                         </div>
                         <?php endif; ?>
                         

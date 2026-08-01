@@ -4,19 +4,23 @@
  */
 
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
+
+$allowedOrigins = ['https://bpsjember.my.id', 'https://jagapadi.yourdomain.com', 'http://localhost:8080'];
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (in_array($origin, $allowedOrigins, true)) {
+    header("Access-Control-Allow-Origin: {$origin}");
+}
 header('Access-Control-Allow-Methods: GET');
 header('Access-Control-Allow-Headers: Content-Type');
 
-// Security check
 session_start();
 if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'] ?? '', ['admin'])) {
     http_response_code(403);
-    echo json_encode(['error' => 'Unauthorized']);
+    echo json_encode(['success' => false, 'error' => 'Unauthorized']);
     exit;
 }
 
-require_once __DIR__ . '/../app/config/Database.php';
+require_once __DIR__ . '/../app/core/Database.php';
 
 try {
     $db = Database::getInstance()->getConnection();
@@ -50,8 +54,8 @@ try {
     // Invalid codes
     $stmt = $db->query("
         SELECT COUNT(*) as count FROM master_kecamatan 
-        WHERE kode_kecamatan NOT REGEXP '^35[0-9]{4}$'
-        OR LENGTH(kode_kecamatan) != 6
+        WHERE kode NOT REGEXP '^35[0-9]{4}$'
+        OR LENGTH(kode) != 6
     ");
     $stats['invalid_codes'] = (int)$stmt->fetch()['count'];
     
@@ -78,7 +82,8 @@ try {
     echo json_encode($stats);
     
 } catch (Exception $e) {
+    error_log('[API] kecamatan_stats error: ' . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['error' => $e->getMessage()]);
+    echo json_encode(['success' => false, 'error' => 'Terjadi kesalahan internal.']);
 }
 ?>

@@ -1,75 +1,34 @@
-# Pull Request JAGAPADI
+# Pull Request Template
 
-Terima kasih sudah kirim PR ke JAGAPADI.  
-Isi bagian di bawah sepadat mungkin, tapi jangan pelit konteks.
+## Description
+Brief description of changes and link to related issue/task.
 
-## Ringkasan Perubahan
-
-_Jelaskan dengan bahasa manusia, bukan hanya judul commit._
-
-- ...
-- ...
-
-## Scope / Area Terdampak
-
-- [ ] Controller
-- [ ] Model
-- [ ] View/UI
-- [ ] API
-- [ ] Database/Migration
-- [ ] Dokumentasi
-- [ ] Lainnya: ...
-
-## Jenis Perubahan
-
-- [ ] Fitur baru
-- [ ] Bugfix
+## Type of Change
+- [ ] Bug fix
+- [ ] New feature
 - [ ] Refactor
-- [ ] Dokumentasi
-- [ ] Maintenance database
-- [ ] Cleanup kode
+- [ ] Documentation
+- [ ] CI/CD
+- [ ] Chore
 
-## Checklist Pengujian Manual
+## Checklist
+- [ ] Scope matches the issue/task
+- [ ] No secrets (.env, tokens, keys, passwords) committed
+- [ ] Tests/lint passed locally
+- [ ] Documentation updated if needed
+- [ ] Migration provided if schema changes
+- [ ] Does not break Draft policy (`include_draft` default false, draft not verifiable)
+- [ ] No unrelated refactoring
 
-- [ ] Sudah dicek lokal
-- [ ] Tidak ada error utama
-- [ ] Area terdampak sudah diuji
-- [ ] Role terkait sudah diuji jika menyangkut akses
-- [ ] Dashboard/peta dicek jika menyangkut data laporan
-- [ ] Tidak ada file runtime/upload/backup yang ikut commit
+## Testing
+- [ ] Unit tests added/updated
+- [ ] Feature tests added/updated
+- [ ] Manual testing performed
 
-## Dampak Database
+## Screenshots (if UI changes)
+| Before | After |
+|--------|-------|
+|        |       |
 
-- [ ] Tidak ada perubahan database
-- [ ] Ada migration/script
-- [ ] Sudah dijelaskan cara rollback
-- [ ] Backup diperlukan sebelum eksekusi
-
-_Jelaskan detail jika ada perubahan database:_
-- Nama migration/script: ...
-- Dampak ke data: ...
-- Cara rollback: ...
-
-## Risiko dan Catatan
-
-_Tuliskan risiko, asumsi, atau catatan penting._
-
-- ...
-
-## Agent yang Terlibat
-
-- Eksekutor utama: ...
-- Reviewer: ...
-- Riset/referensi: ...
-- Catatan: ...
-
----
-
-## Checklist Sebelum PR
-
-- [ ] Sudah baca `AGENTS.md`
-- [ ] Branch bukan `main`
-- [ ] Scope PR fokus ke satu topik/fitur
-- [ ] Tidak ada file runtime/upload/backup yang ikut
-- [ ] `git status` bersih
-- [ ] CI hijau
+## Additional Notes
+Any breaking changes, migration notes, or deployment considerations.
