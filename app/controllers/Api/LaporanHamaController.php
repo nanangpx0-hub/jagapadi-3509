@@ -145,52 +145,6 @@ class LaporanHamaController extends BaseApiController {
     }
     
     /**
-     * Submit a draft laporan hama (change status from Draf to Submitted)
-     * POST /api/laporan-hama/{id}/submit
-     */
-    public function submit($id) {
-        try {
-            if (!$id || !is_numeric($id)) {
-                $this->sendError('Invalid laporan ID', 400);
-            }
-            
-            $existingLaporan = $this->laporanModel->getById($id);
-            if (!$existingLaporan) {
-                $this->sendError('Laporan not found', 404);
-            }
-            
-            // Only allow submit if status is Draf
-            if ($existingLaporan['status'] !== 'Draf') {
-                $this->sendError('Hanya laporan berstatus Draf yang dapat disubmit', 422);
-            }
-            
-            // Only the owner or admin can submit
-            if ($_SESSION['role'] === 'petugas' && $existingLaporan['user_id'] != $_SESSION['user_id']) {
-                $this->sendError('Forbidden', 403);
-            }
-            
-            // Generate nomor laporan
-            $nomorLaporan = $this->laporanModel->generateNomorLaporan();
-            
-            $success = $this->laporanModel->update($id, [
-                'status' => 'Submitted',
-                'nomor_laporan' => $nomorLaporan,
-                'updated_at' => date('Y-m-d H:i:s')
-            ]);
-            
-            if ($success) {
-                $laporan = $this->laporanModel->getById($id);
-                $this->sendResponse($laporan, 'Laporan berhasil disubmit');
-            } else {
-                $this->sendError('Failed to submit laporan', 500);
-            }
-            
-        } catch (Exception $e) {
-            $this->sendError('Failed to submit laporan: ' . $e->getMessage(), 500);
-        }
-    }
-    
-    /**
      * Update laporan hama
      * PUT /api/laporan-hama/{id}
      */
@@ -283,9 +237,8 @@ class LaporanHamaController extends BaseApiController {
                 $this->sendError('Laporan not found', 404);
             }
             
-            // Check permission
-            if ($_SESSION['role'] !== 'admin' && 
-                ($_SESSION['role'] === 'petugas' && $existingLaporan['user_id'] != $_SESSION['user_id'])) {
+            // Check permission - only admin can delete
+            if ($_SESSION['role'] !== 'admin') {
                 $this->sendError('Forbidden', 403);
             }
             

@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ganti Password - JAGAPADI</title>
-    <link rel="stylesheet" href="<?= BASE_URL ?>/public/css/adminlte.min.css">
-    <link rel="stylesheet" href="<?= BASE_URL ?>/public/css/auth.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/css/adminlte.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         .password-requirements {
@@ -192,7 +191,7 @@
 
                 <?php if (!$data['is_force_change']): ?>
                     <div class="text-center mt-3">
-                        <a href="<?= BASE_URL ?>/dashboard" class="text-muted">
+                        <a href="<?= BASE_URL ?>dashboard" class="text-muted">
                             <i class="fas fa-arrow-left"></i> Kembali ke Dashboard
                         </a>
                     </div>
@@ -201,9 +200,9 @@
         </div>
     </div>
 
-    <script src="<?= BASE_URL ?>/public/js/jquery.min.js"></script>
-    <script src="<?= BASE_URL ?>/public/js/bootstrap.bundle.min.js"></script>
-    <script src="<?= BASE_URL ?>/public/js/adminlte.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js"></script>
     
     <script>
         // Password visibility toggle

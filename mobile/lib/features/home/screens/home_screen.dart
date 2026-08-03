@@ -71,8 +71,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       fontWeight: FontWeight.w600,
                     )),
             const SizedBox(height: 4),
-            Text('${auth.isAdmin ? 'Admin' : 'Petugas Lapangan'}',
-                style: TextStyle(color: AppColors.textSecondary)),
+            Text(auth.isAdmin ? 'Admin' : 'Petugas Lapangan',
+                style: const TextStyle(color: AppColors.textSecondary)),
             const SizedBox(height: 24),
             if (auth.isAdmin)
               _MenuCard(
@@ -147,7 +147,7 @@ class _MenuCard extends StatelessWidget {
     return Card(
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: color.withOpacity(0.15),
+          backgroundColor: color.withValues(alpha: 0.15),
           child: Icon(icon, color: color),
         ),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),

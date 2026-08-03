@@ -195,6 +195,12 @@ class Router {
 
         // Laporan AJAX Routes
         $this->get('/laporan/fetch', 'LaporanController@fetch', ['auth']);
+
+        // Utility API Routes (migrated from api/*.php)
+        $this->get('/api/utilities/recent-activity', 'Api\UtilityController@recentActivity', ['auth', 'admin']);
+        $this->get('/api/utilities/kecamatan-stats', 'Api\UtilityController@kecamatanStats', ['auth', 'admin']);
+        $this->get('/api/utilities/desa-filter', 'Api\UtilityController@desaFilter', ['auth', 'admin']);
+        $this->get('/api/utilities/desa-autocomplete', 'Api\UtilityController@desaAutocomplete', ['auth', 'admin']);
     }
 
     /**

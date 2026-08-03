@@ -22,6 +22,17 @@ class ApiController extends Controller {
     }
 
     /**
+     * Get API configuration
+     */
+    private function getApiConfig(): array {
+        $configFile = ROOT_PATH . '/config/api_config.php';
+        if (file_exists($configFile)) {
+            return require $configFile;
+        }
+        return [];
+    }
+
+    /**
      * Parse JSON request body and return array data.
      *
      * @return array
@@ -133,12 +144,21 @@ class ApiController extends Controller {
         }
         
         // Sanitize string inputs
-        $lokasi = Security::sanitizeInput($input['lokasi']);
-        $catatan = isset($input['catatan']) ? Security::sanitizeInput($input['catatan']) : '';
+        $lokasi = trim($input['lokasi']);
+        $catatan = isset($input['catatan']) ? trim($input['catatan']) : '';
+        
+        // Get API config for default user mapping
+        $apiConfig = $this->getApiConfig();
+        $sourceConfig = $apiConfig['external_api'] ?? [];
+        $userId = $sourceConfig['default_user_id'] ?? null;
+        
+        if (!$userId) {
+            $this->json(['status' => 'error', 'message' => 'API configuration error: default_user_id not configured for external_api'], 500);
+        }
         
         // Create report
         $reportData = [
-            'user_id' => 1, // Default to admin for API submissions
+            'user_id' => (int)$userId,
             'master_opt_id' => (int)$input['master_opt_id'],
             'tanggal' => $input['tanggal'],
             'lokasi' => $lokasi,
@@ -214,7 +234,7 @@ class ApiController extends Controller {
         $mitraId = (int)$input['mitra_id'];
         $kegiatanId = (int)$input['kegiatan_id'];
         $jumlahHonor = (float)$input['jumlah_honor'];
-        $catatan = Security::sanitizeInput($input['catatan'] ?? '');
+        $catatan = trim($input['catatan'] ?? '');
 
         if ($laporanId <= 0 || $mitraId <= 0 || $kegiatanId <= 0 || $jumlahHonor < 0) {
             $this->json(['status' => 'error', 'message' => 'Numeric fields must be valid and non-negative'], 400);

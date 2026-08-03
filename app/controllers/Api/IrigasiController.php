@@ -191,9 +191,8 @@ class IrigasiController extends BaseApiController {
                 $this->sendError('Irigasi not found', 404);
             }
             
-            // Check permission
-            if ($_SESSION['role'] !== 'admin' && 
-                ($_SESSION['role'] === 'petugas' && $existingIrigasi['user_id'] != $_SESSION['user_id'])) {
+            // Check permission - only admin can delete
+            if ($_SESSION['role'] !== 'admin') {
                 $this->sendError('Forbidden', 403);
             }
             

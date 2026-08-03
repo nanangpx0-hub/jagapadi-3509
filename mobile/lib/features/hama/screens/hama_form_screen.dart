@@ -3,11 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import '../../../core/theme.dart';
 import '../../auth/providers/auth_provider.dart';
-import '../../wilayah/providers/wilayah_provider.dart';
 import '../../wilayah/widgets/wilayah_picker.dart';
-import '../models/laporan_hama.dart';
 import '../providers/laporan_hama_provider.dart';
 
 class HamaFormScreen extends StatefulWidget {
@@ -63,21 +60,26 @@ class _HamaFormScreenState extends State<HamaFormScreen> {
   }
 
   Future<void> _pickFoto() async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.camera, maxWidth: 1024);
+    final picked = await ImagePicker()
+        .pickImage(source: ImageSource.camera, maxWidth: 1024);
     if (picked != null) setState(() => _foto = File(picked.path));
   }
 
   void _applyFieldErrors(Map<String, dynamic>? errors) {
     if (errors == null) return;
     setState(() {
-      _fieldErrors = errors.map((k, v) => MapEntry(k, v is List ? v.join('\n') : v.toString()));
+      _fieldErrors = errors
+          .map((k, v) => MapEntry(k, v is List ? v.join('\n') : v.toString()));
     });
   }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() { _loading = true; _fieldErrors = {}; });
+    setState(() {
+      _loading = true;
+      _fieldErrors = {};
+    });
     final p = context.read<LaporanHamaProvider>();
     final data = <String, dynamic>{
       'action': 'draft',
@@ -88,8 +90,10 @@ class _HamaFormScreenState extends State<HamaFormScreen> {
       'desa_id': _desaId,
       'tingkat_keparahan': _keparahan,
       'lokasi': _lokasiCtrl.text,
-      if (_luasCtrl.text.isNotEmpty) 'luas_serangan': double.tryParse(_luasCtrl.text),
-      if (_populasiCtrl.text.isNotEmpty) 'populasi': double.tryParse(_populasiCtrl.text),
+      if (_luasCtrl.text.isNotEmpty)
+        'luas_serangan': double.tryParse(_luasCtrl.text),
+      if (_populasiCtrl.text.isNotEmpty)
+        'populasi': double.tryParse(_populasiCtrl.text),
       if (_latCtrl.text.isNotEmpty) 'latitude': double.tryParse(_latCtrl.text),
       if (_lngCtrl.text.isNotEmpty) 'longitude': double.tryParse(_lngCtrl.text),
       'catatan': _catatanCtrl.text,
@@ -112,10 +116,11 @@ class _HamaFormScreenState extends State<HamaFormScreen> {
       if (p.fieldErrors != null) _applyFieldErrors(p.fieldErrors);
       final msg = p.error ?? 'Terjadi kesalahan. Silakan coba lagi.';
       if (msg.contains('Terlalu banyak')) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Terlalu banyak permintaan, coba lagi nanti')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Terlalu banyak permintaan, coba lagi nanti')));
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(msg)));
       }
     }
   }
@@ -126,7 +131,9 @@ class _HamaFormScreenState extends State<HamaFormScreen> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     return Scaffold(
-      appBar: AppBar(title: Text(widget.id != null ? 'Edit Laporan Hama' : 'Laporan Hama Baru')),
+      appBar: AppBar(
+          title: Text(
+              widget.id != null ? 'Edit Laporan Hama' : 'Laporan Hama Baru')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -136,16 +143,22 @@ class _HamaFormScreenState extends State<HamaFormScreen> {
             children: [
               TextFormField(
                 controller: _tanggalCtrl,
-                decoration: InputDecoration(labelText: 'Tanggal', hintText: 'YYYY-MM-DD', errorText: _fe('tanggal')),
-                validator: (v) => v == null || v.isEmpty ? 'Tanggal wajib diisi' : null,
+                decoration: InputDecoration(
+                    labelText: 'Tanggal',
+                    hintText: 'YYYY-MM-DD',
+                    errorText: _fe('tanggal')),
+                validator: (v) =>
+                    v == null || v.isEmpty ? 'Tanggal wajib diisi' : null,
               ),
               const SizedBox(height: 16),
               Consumer<LaporanHamaProvider>(
                 builder: (_, p, __) => DropdownButtonFormField<int>(
-                  decoration: InputDecoration(labelText: 'OPT', errorText: _fe('master_opt_id')),
-                  value: _optId,
+                  decoration: InputDecoration(
+                      labelText: 'OPT', errorText: _fe('master_opt_id')),
+                  initialValue: _optId,
                   items: [
-                    const DropdownMenuItem(value: null, child: Text('Pilih OPT')),
+                    const DropdownMenuItem(
+                        value: null, child: Text('Pilih OPT')),
                     ...p.optList.map((o) =>
                         DropdownMenuItem(value: o.id, child: Text(o.nama))),
                   ],
@@ -168,12 +181,15 @@ class _HamaFormScreenState extends State<HamaFormScreen> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _lokasiCtrl,
-                decoration: InputDecoration(labelText: 'Lokasi', errorText: _fe('lokasi')),
+                decoration: InputDecoration(
+                    labelText: 'Lokasi', errorText: _fe('lokasi')),
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                decoration: InputDecoration(labelText: 'Tingkat Keparahan', errorText: _fe('tingkat_keparahan')),
-                value: _keparahan,
+                decoration: InputDecoration(
+                    labelText: 'Tingkat Keparahan',
+                    errorText: _fe('tingkat_keparahan')),
+                initialValue: _keparahan,
                 items: ['Ringan', 'Sedang', 'Berat']
                     .map((k) => DropdownMenuItem(value: k, child: Text(k)))
                     .toList(),
@@ -185,7 +201,9 @@ class _HamaFormScreenState extends State<HamaFormScreen> {
                   Expanded(
                     child: TextFormField(
                       controller: _luasCtrl,
-                      decoration: InputDecoration(labelText: 'Luas (ha)', errorText: _fe('luas_serangan')),
+                      decoration: InputDecoration(
+                          labelText: 'Luas (ha)',
+                          errorText: _fe('luas_serangan')),
                       keyboardType: TextInputType.number,
                     ),
                   ),
@@ -193,7 +211,8 @@ class _HamaFormScreenState extends State<HamaFormScreen> {
                   Expanded(
                     child: TextFormField(
                       controller: _populasiCtrl,
-                      decoration: InputDecoration(labelText: 'Populasi', errorText: _fe('populasi')),
+                      decoration: InputDecoration(
+                          labelText: 'Populasi', errorText: _fe('populasi')),
                       keyboardType: TextInputType.number,
                     ),
                   ),
@@ -205,7 +224,8 @@ class _HamaFormScreenState extends State<HamaFormScreen> {
                   Expanded(
                     child: TextFormField(
                       controller: _latCtrl,
-                      decoration: InputDecoration(labelText: 'Latitude', errorText: _fe('latitude')),
+                      decoration: InputDecoration(
+                          labelText: 'Latitude', errorText: _fe('latitude')),
                       keyboardType: TextInputType.number,
                     ),
                   ),
@@ -220,13 +240,15 @@ class _HamaFormScreenState extends State<HamaFormScreen> {
               const SizedBox(height: 12),
               TextFormField(
                 controller: _lngCtrl,
-                decoration: InputDecoration(labelText: 'Longitude', errorText: _fe('longitude')),
+                decoration: InputDecoration(
+                    labelText: 'Longitude', errorText: _fe('longitude')),
                 keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _catatanCtrl,
-                decoration: InputDecoration(labelText: 'Catatan', errorText: _fe('catatan')),
+                decoration: InputDecoration(
+                    labelText: 'Catatan', errorText: _fe('catatan')),
                 maxLines: 3,
               ),
               const SizedBox(height: 16),
@@ -236,7 +258,9 @@ class _HamaFormScreenState extends State<HamaFormScreen> {
                     onPressed: _pickFoto,
                     icon: const Icon(Icons.camera_alt, size: 18),
                     label: const Text('Ambil Foto'),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.grey.shade200, foregroundColor: Colors.black87),
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey.shade200,
+                        foregroundColor: Colors.black87),
                   ),
                   if (_foto != null) ...[
                     const SizedBox(width: 12),
@@ -248,7 +272,11 @@ class _HamaFormScreenState extends State<HamaFormScreen> {
               ElevatedButton(
                 onPressed: _loading ? null : _save,
                 child: _loading
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
                     : const Text('Simpan Draft'),
               ),
             ],

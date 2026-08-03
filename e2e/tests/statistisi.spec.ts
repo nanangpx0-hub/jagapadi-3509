@@ -1,14 +1,14 @@
 import { test, expect } from '@playwright/test';
 
-const BASE = 'http://localhost:8080';
+const BASE = 'http://localhost/jagapadi-3509';
 const STAT_USER = 'statistisi01';
-const STAT_PASS = 'ChangeMeStatistisi!123';
+const STAT_PASS = 'Jember3509';
 const ADMIN_USER = 'admin';
-const ADMIN_PASS = 'ChangeMeAdmin!123';
+const ADMIN_PASS = 'Jember3509';
 
 async function loginAs(page, username, password) {
-  await page.goto(`${BASE}/login`);
-  await page.fill('#username', username);
+  await page.goto(`${BASE}/auth/login`);
+  await page.fill('input[name="username"]', username);
   await page.fill('#password', password);
   await page.getByRole('button', { name: 'Login' }).click();
   await page.waitForURL(/\/(dashboard|password\/change)/);
@@ -26,7 +26,7 @@ test.describe('Statistisi — Authentication & Session', () => {
 
   test('statistisi can logout successfully', async ({ page }) => {
     await loginAs(page, STAT_USER, STAT_PASS);
-    await page.locator('form[action="/logout"] button[type="submit"]').click();
+    await page.locator('form[action="auth/logout"] button[type="submit"]').click();
     await expect(page).toHaveURL(/\/login/);
   });
 });
@@ -169,3 +169,5 @@ test.describe('Statistisi — Negative / Edge Cases', () => {
     }
   });
 });
+
+

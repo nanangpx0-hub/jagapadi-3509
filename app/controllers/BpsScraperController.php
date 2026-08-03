@@ -313,13 +313,37 @@ class BpsScraperController extends Controller {
         try {
             require_once ROOT_PATH . '/app/services/BpsScraper.php';
             $scraper = new BpsScraper();
-            
+            $scraper->setDebug(APP_DEBUG);
+
+            // Input validation with whitelisting
+            $tahun = (int)($_POST['tahun'] ?? date('Y'));
+            if ($tahun < 2000 || $tahun > 2100) {
+                throw new Exception('Tahun tidak valid (2000-2100)');
+            }
+
+            $source = $_POST['source'] ?? 'simulasi';
+            if (!in_array($source, ['simulasi', 'resmi_webapi', 'auto'])) {
+                $source = 'simulasi';
+            }
+
+            $skenario = $_POST['skenario'] ?? 'baseline';
+            if (!in_array($skenario, ['baseline', 'optimis', 'pesimis'])) {
+                $skenario = 'baseline';
+            }
+
+            $availableKabupaten = $scraper->getKabupatenList();
+            $kabupaten = !empty($_POST['kabupaten']) ? $_POST['kabupaten'] : null;
+            if ($kabupaten && !array_key_exists($kabupaten, $availableKabupaten)) {
+                throw new Exception('Kabupaten tidak valid');
+            }
+
             $options = [
-                'tahun' => $_POST['tahun'] ?? date('Y'),
-                'kabupaten' => !empty($_POST['kabupaten']) ? $_POST['kabupaten'] : null,
-                'source' => $_POST['source'] ?? 'simulasi',
-                'skenario' => $_POST['skenario'] ?? 'baseline',
-                'force_refresh' => isset($_POST['force_refresh']) && $_POST['force_refresh'] === 'true'
+                'tahun' => $tahun,
+                'kabupaten' => $kabupaten,
+                'source' => $source,
+                'skenario' => $skenario,
+                'force_refresh' => isset($_POST['force_refresh']) && $_POST['force_refresh'] === 'true',
+                'fallback' => $source === 'auto'
             ];
             
             $result = $scraper->run($options);
@@ -510,29 +534,47 @@ class BpsScraperController extends Controller {
             echo json_encode(['success' => false, 'error' => 'Method not allowed']);
             exit;
         }
-        
+
         if (!isset($_POST['csrf_token']) || !Security::validateCsrfToken($_POST['csrf_token'])) {
             echo json_encode(['success' => false, 'error' => 'Token keamanan tidak valid']);
             exit;
         }
-        
+
         try {
             if (!isset($_FILES['excel_file']) || $_FILES['excel_file']['error'] !== UPLOAD_ERR_OK) {
                 throw new Exception('Tidak ada file yang diupload');
             }
-            
+
             $file = $_FILES['excel_file'];
             $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-            
+
             if (!in_array($extension, ['xlsx', 'xls', 'csv'])) {
                 throw new Exception('Format file tidak didukung. Gunakan xlsx, xls, atau csv');
             }
-            
+
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            $mimeType = finfo_file($finfo, $file['tmp_name']);
+            finfo_close($finfo);
+            $allowedMimes = [
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'application/vnd.ms-excel',
+                'text/csv',
+                'application/csv'
+            ];
+            if (!in_array($mimeType, $allowedMimes)) {
+                throw new Exception('Tipe file tidak didukung');
+            }
+
+            $maxSize = 5 * 1024 * 1024;
+            if ($file['size'] > $maxSize) {
+                throw new Exception('File terlalu besar (maksimal 5MB)');
+            }
+
             $uploadDir = ROOT_PATH . '/storage/uploads/temp/';
             if (!is_dir($uploadDir)) {
                 mkdir($uploadDir, 0755, true);
             }
-            
+
             $tempFile = $uploadDir . uniqid('import_bps_') . '.' . $extension;
             
             if (!move_uploaded_file($file['tmp_name'], $tempFile)) {
@@ -566,24 +608,48 @@ class BpsScraperController extends Controller {
         $this->checkAdmin();
         
         header('Content-Type: application/json');
-        
+
+        if (!isset($_POST['csrf_token']) || !Security::validateCsrfToken($_POST['csrf_token'])) {
+            echo json_encode(['success' => false, 'error' => 'Token keamanan tidak valid']);
+            exit;
+        }
+
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             echo json_encode(['success' => false, 'error' => 'Method not allowed']);
             exit;
         }
-        
+
         try {
             if (!isset($_FILES['excel_file']) || $_FILES['excel_file']['error'] !== UPLOAD_ERR_OK) {
                 throw new Exception('Tidak ada file yang diupload');
             }
-            
+
             $file = $_FILES['excel_file'];
             $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-            
+
             if (!in_array($extension, ['xlsx', 'xls', 'csv'])) {
                 throw new Exception('Format file tidak didukung');
             }
-            
+
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            $mimeType = finfo_file($finfo, $file['tmp_name']);
+            finfo_close($finfo);
+            $allowedMimes = [
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'application/vnd.ms-excel',
+                'text/csv',
+                'application/csv'
+            ];
+            if (!in_array($mimeType, $allowedMimes)) {
+                throw new Exception('Tipe file tidak didukung');
+            }
+
+            // Size limit check (10MB)
+            $maxSize = 10 * 1024 * 1024;
+            if ($file['size'] > $maxSize) {
+                throw new Exception('File terlalu besar (maksimal 10MB)');
+            }
+
             $uploadDir = ROOT_PATH . '/storage/uploads/temp/';
             if (!is_dir($uploadDir)) {
                 mkdir($uploadDir, 0755, true);

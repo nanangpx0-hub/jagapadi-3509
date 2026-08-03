@@ -117,8 +117,8 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                 <div class="col-md-2">
                     <label class="form-label" for="filterDataSource">Sumber Data</label>
                     <select class="form-control" id="filterDataSource" name="data_source">
-                        <option value="bmkg" selected>BMKG Verified</option>
-                        <option value="all">Semua Sumber</option>
+                        <option value="all" selected>Semua Sumber</option>
+                        <option value="bmkg">BMKG Verified</option>
                         <option value="simulation">Simulasi</option>
                     </select>
                 </div>
@@ -791,14 +791,13 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
         // Create toast element
         const toast = document.createElement('div');
         toast.className = `custom-toast alert alert-${type} position-fixed`;
-        toast.style.cssText = 'top: 80px; right: 20px; z-index: 9999; min-width: 250px; animation: fadeIn 0.3s;';
+        toast.style.cssText = 'top: 80px; right: 20px; z-index: 9999; min-width: 250px;';
         toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : type === 'danger' ? 'times-circle' : type === 'warning' ? 'exclamation-circle' : 'info-circle'} mr-2"></i>${message}`;
         document.body.appendChild(toast);
         
         // Auto remove after 3 seconds
         setTimeout(() => {
-            toast.style.animation = 'fadeOut 0.3s';
-            setTimeout(() => toast.remove(), 300);
+            toast.remove();
         }, 3000);
     }
     
@@ -854,7 +853,7 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
             // Reset dropdowns to default values
             document.getElementById('filterYear').value = new Date().getFullYear();
             document.getElementById('filterMonth').value = '';
-            document.getElementById('filterDataSource').value = 'bmkg';
+            document.getElementById('filterDataSource').value = 'all';
             document.getElementById('chartType').value = 'monthly';
             
             // Check demo mode toggle if it exists and reset it too if needed
@@ -1768,7 +1767,7 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
         
         const toast = document.createElement('div');
         toast.className = `alert alert-${type} curah-hujan-toast position-fixed shadow`;
-        toast.style.cssText = 'top: 80px; right: 20px; z-index: 1060; min-width: 280px; max-width: 350px; animation: slideIn 0.3s ease;';
+        toast.style.cssText = 'top: 80px; right: 20px; z-index: 1060; min-width: 280px; max-width: 350px;';
         toast.innerHTML = `
             <button type="button" class="close" onclick="this.parentElement.remove()">
                 <span>&times;</span>
@@ -1781,8 +1780,7 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
         // Auto-remove after 4 seconds
         setTimeout(() => {
             if (toast.parentElement) {
-                toast.style.animation = 'slideOut 0.3s ease';
-                setTimeout(() => toast.remove(), 300);
+                toast.remove();
             }
         }, 4000);
     }
@@ -3019,29 +3017,6 @@ input[type="checkbox"]:active {
 /* ========================================
    TOAST NOTIFICATION ANIMATIONS
    ======================================== */
-
-/* Toast slide animations */
-@keyframes slideIn {
-    from {
-        transform: translateX(100%);
-        opacity: 0;
-    }
-    to {
-        transform: translateX(0);
-        opacity: 1;
-    }
-}
-
-@keyframes slideOut {
-    from {
-        transform: translateX(0);
-        opacity: 1;
-    }
-    to {
-        transform: translateX(100%);
-        opacity: 0;
-    }
-}
 
 /* Toast notification styling */
 .curah-hujan-toast {

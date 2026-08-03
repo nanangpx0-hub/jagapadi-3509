@@ -109,7 +109,7 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
             <form id="filterForm" class="row align-items-end">
                 <div class="col-md-3 mb-3">
                     <label class="form-label font-weight-bold">Bulan Analisis</label>
-                    <select class="form-control" name="bulan" id="bulanSelect">
+                    <select class="form-control" name="bulan" id="filter-bulan">
                         <?php
                         $months = [
                             1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
@@ -128,7 +128,7 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                 
                 <div class="col-md-3 mb-3">
                     <label class="form-label font-weight-bold">Tahun</label>
-                    <select class="form-control" name="tahun" id="tahunSelect">
+                    <select class="form-control" name="tahun" id="filter-tahun">
                         <?php
                         $currentYear = date('Y');
                         for ($y = $currentYear; $y >= $currentYear - 4; $y--):
@@ -140,7 +140,7 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                 
                 <div class="col-md-4 mb-3">
                     <label class="form-label font-weight-bold">Kecamatan</label>
-                    <select class="form-control" name="kecamatan_id" id="kecamatanSelect">
+                    <select class="form-control" name="kecamatan_id" id="filter-kecamatan">
                         <option value="">Pilih Kecamatan...</option>
                         <?php if (!empty($data['kecamatan_list'])): ?>
                             <?php foreach ($data['kecamatan_list'] as $kec): ?>
@@ -154,10 +154,10 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                 </div>
                 
                 <div class="col-md-2 mb-3">
-                    <button type="submit" class="btn btn-primary btn-block">
+                    <button type="button" id="btn-analyze" class="btn btn-primary btn-block">
                         <i class="fas fa-magic mr-2"></i> Analisa
                     </button>
-                    <button type="button" class="btn btn-outline-secondary btn-block mt-2" onclick="location.reload()">
+                    <button type="button" id="btn-reset" class="btn btn-outline-secondary btn-block mt-2">
                         <i class="fas fa-undo mr-2"></i> Reset
                     </button>
                 </div>
@@ -170,34 +170,46 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
         </div>
 
         <!-- Main Content Area (Hidden by default, shown after analysis) -->
-        <div id="analysisContent" style="display: none;">
+        <div id="analysis-result" style="display: none;">
+            
+            <div id="existing-warning" class="alert alert-warning mb-4" style="display: none;">
+                <i class="fas fa-exclamation-triangle mr-1"></i> Analisis untuk periode dan wilayah ini sudah pernah dibuat sebelumnya. Anda dapat memperbarui data atau menyimpannya sebagai analisis baru.
+            </div>
+
             <!-- KPI Cards -->
             <div class="row mb-4">
                 <div class="col-xl-3 col-md-6 mb-4">
                     <div class="kpi-card primary">
-                        <div class="kpi-value" id="kpiLuasPanen">-</div>
+                        <div class="kpi-value" id="kpi-luas-panen">-</div>
                         <div class="kpi-label">Total Luas Panen (Ha)</div>
                     </div>
                 </div>
                 <div class="col-xl-3 col-md-6 mb-4">
                     <div class="kpi-card info">
-                        <div class="kpi-value" id="kpiCurahHujan">-</div>
+                        <div class="kpi-value" id="kpi-curah-hujan">-</div>
                         <div class="kpi-label">Avg Curah Hujan (mm)</div>
                         <small class="text-muted">Lagging (H-1 Bulan)</small>
                     </div>
                 </div>
                 <div class="col-xl-3 col-md-6 mb-4">
                     <div class="kpi-card warning">
-                        <div class="kpi-value" id="kpiHama">-</div>
+                        <div class="kpi-value" id="kpi-laporan-hama">-</div>
                         <div class="kpi-label">Laporan Hama</div>
                         <small class="text-muted">Lagging (H-1 Bulan)</small>
                     </div>
                 </div>
                 <div class="col-xl-3 col-md-6 mb-4">
-                    <div class="kpi-card success">
-                        <div class="kpi-value" id="kpiRiskScore">-</div>
+                    <div class="kpi-card success" data-bs-toggle="tooltip" data-bs-placement="top" title="Skor <40: Aman (Hijau), 40-70: Waspada (Kuning), >70: Bahaya (Merah)">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="kpi-value" id="kpi-skor-risiko">-</div>
+                            <i class="fas fa-info-circle text-muted" style="cursor: pointer;"></i>
+                        </div>
                         <div class="kpi-label">Skor Risiko Produksi</div>
-                        <small class="text-muted">0 (Rendah) - 100 (Tinggi)</small>
+                        <div class="mt-2 small">
+                            <span id="score-cuaca" class="badge">Cuaca: -</span>
+                            <span id="score-hama" class="badge">Hama: -</span>
+                            <span id="score-total" class="badge">Total: -</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -244,24 +256,36 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                             <span class="badge badge-warning" id="statusBadge">DRAFT</span>
                         </div>
 
+                        <div class="form-group mb-3">
+                            <label class="font-weight-bold">Faktor Penyebab Utama</label>
+                            <select class="form-control" id="faktor-penyebab">
+                                <option value="Cuaca Ekstrem">Cuaca Ekstrem</option>
+                                <option value="Serangan OPT">Serangan OPT</option>
+                                <option value="Normal">Normal</option>
+                                <option value="Alih Fungsi Lahan">Alih Fungsi Lahan</option>
+                                <option value="Lainnya">Lainnya</option>
+                            </select>
+                        </div>
+
                         <!-- Auto Generated Story -->
                         <div class="story-section">
                             <h6><i class="fas fa-robot mr-2"></i>AI Generated Insight</h6>
-                            <p id="autoNarrative" class="text-muted small font-italic">
-                                Silakan lakukan analisis untuk mendapatkan insight otomatis...
-                            </p>
+                            <textarea id="narasi-otomatis" class="form-control" rows="4" readonly placeholder="Silakan lakukan analisis untuk mendapatkan insight otomatis..."></textarea>
                         </div>
 
                         <!-- Manual Editor -->
                         <div class="form-group mb-3">
                             <label class="font-weight-bold">Final Narrative / Official Statement</label>
-                            <textarea class="form-control" id="finalNarrative" rows="8" 
+                            <textarea class="form-control" id="narasi-final" rows="8" 
                                 placeholder="Edit narasi final di sini sebelum dipublikasikan..."></textarea>
                         </div>
 
                         <div class="d-grid gap-2">
-                            <button class="btn btn-success btn-block" id="btnSaveAnalysis">
+                            <button class="btn btn-success btn-block mb-2" id="btn-save-analysis">
                                 <i class="fas fa-save mr-2"></i> Simpan Analisis
+                            </button>
+                            <button class="btn btn-info btn-block text-white" id="btn-preview">
+                                <i class="fas fa-print mr-2"></i> Preview & Cetak
                             </button>
                         </div>
                     </div>
@@ -270,7 +294,7 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
         </div>
 
         <!-- Empty State -->
-        <div id="emptyState" class="text-center py-5">
+        <div id="default-state" class="text-center py-5">
             <div style="font-size: 4rem; color: #ddd; margin-bottom: 1rem;">
                 <i class="fas fa-chart-pie"></i>
             </div>
@@ -280,220 +304,40 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
     </div>
 </div>
 
+<!-- Loading Overlay -->
+<div id="loading-overlay" class="loading-overlay">
+    <div class="loading-spinner">
+        <i class="fas fa-spinner fa-spin fa-3x mb-3 text-primary"></i>
+        <h5>Memproses Data...</h5>
+        <p>Sedang menghubungkan variabel eksogen</p>
+        <div id="loading-timer" class="mt-3" style="font-size: 1.2rem; font-weight: 500;">
+            <i class="fas fa-clock mr-2"></i>Waktu proses: <span id="timer-display">00:00</span>
+        </div>
+        <div id="loading-warning" class="mt-3 text-warning" style="display: none;">
+            <i class="fas fa-exclamation-triangle mr-2"></i>
+            Proses sudah berlangsung lebih dari 5 menit. 
+            Silakan cek koneksi jaringan atau <a href="#" onclick="location.reload()" class="text-warning font-weight-bold">muat ulang halaman</a>.
+        </div>
+    </div>
+</div>
+
+<script src="<?= BASE_URL ?>public/js/storytelling-dashboard.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const ctx = document.getElementById('correlationChart').getContext('2d');
-    let chartInstance = null;
-
-    // Load recent analyses on start
-    loadRecentAnalyses();
-
-    document.getElementById('filterForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        const btn = this.querySelector('button[type="submit"]');
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
-        btn.disabled = true;
-
-        // Collect form data
-        const formData = new FormData(this);
-
-        // AJAX Call
-        fetch('<?= BASE_URL ?>storytelling/generateAnalysis', {
-            method: 'POST',
-            body: formData,
-            headers: {
-                'X-CSRF-TOKEN': '<?= $_SESSION['csrf_token'] ?>'
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if(data.status === 'success') {
-                updateDashboard(data.data);
-                document.getElementById('emptyState').style.display = 'none';
-                document.getElementById('analysisContent').style.display = 'block';
-            } else {
-                alert('Error: ' + data.message);
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Terjadi kesalahan saat memproses data.');
-        })
-        .finally(() => {
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-        });
+    // Initialize Dashboard
+    StorytellingDashboard.init({
+        baseUrl: '<?= BASE_URL ?>',
+        csrfToken: '<?= $_SESSION['csrf_token'] ?>'
     });
 
-    document.getElementById('btnSaveAnalysis').addEventListener('click', function() {
-        const autoNarrative = document.getElementById('autoNarrative').innerText;
-        const finalNarrative = document.getElementById('finalNarrative').value;
-        const form = document.getElementById('filterForm');
-        
-        if(!finalNarrative.trim()) {
-            alert('Harap isi narasi final sebelum menyimpan.');
-            return;
-        }
-
-        const payload = {
-            periode_bulan: form.bulan.value,
-            periode_tahun: form.tahun.value,
-            wilayah_id: form.kecamatan_id.value,
-            narasi_otomatis: autoNarrative,
-            narasi_final: finalNarrative,
-            csrf_token: '<?= $_SESSION['csrf_token'] ?>'
-        };
-
-        const btn = this;
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
-
-        fetch('<?= BASE_URL ?>storytelling/store', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': '<?= $_SESSION['csrf_token'] ?>'
-            },
-            body: JSON.stringify(payload)
-        })
-        .then(response => response.json())
-        .then(data => {
-            if(data.status === 'success') {
-                alert('Analisis berhasil disimpan!');
-                loadRecentAnalyses(); // Reload table
-            } else {
-                alert('Gagal menyimpan: ' + data.message);
-            }
-        })
-        .catch(err => {
-            console.error(err);
-            alert('Terjadi kesalahan koneksi.');
-        })
-        .finally(() => {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-save mr-2"></i> Simpan Analisis';
+    // Initialize tooltips if Bootstrap is available
+    if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
         });
-    });
-
-    function updateDashboard(data) {
-        // Update KPI Cards
-        document.getElementById('kpiLuasPanen').innerText = parseFloat(data.metrics.luas_panen).toLocaleString();
-        document.getElementById('kpiCurahHujan').innerText = data.metrics.rainfall;
-        document.getElementById('kpiHama').innerText = data.metrics.pest_reports;
-        
-        const riskScore = data.risk_score.total;
-        const riskEl = document.getElementById('kpiRiskScore');
-        riskEl.innerText = riskScore;
-        riskEl.parentElement.className = `kpi-card ${riskScore > 70 ? 'danger' : (riskScore > 40 ? 'warning' : 'success')}`;
-
-        // Update Narratives
-        document.getElementById('autoNarrative').innerText = data.narrative.generated;
-        // Don't overwrite final narrative if user has typed something, unless it's empty
-        if(!document.getElementById('finalNarrative').value) {
-            document.getElementById('finalNarrative').value = data.narrative.generated;
-        }
-
-        // Update Chart
-        updateChart(data.chart_data);
-    }
-
-    function updateChart(chartData) {
-        if(chartInstance) {
-            chartInstance.destroy();
-        }
-
-        chartInstance = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: chartData.labels,
-                datasets: [
-                    {
-                        label: 'Produksi (Ton)',
-                        data: chartData.produksi,
-                        backgroundColor: 'rgba(54, 162, 235, 0.5)',
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        borderWidth: 1,
-                        yAxisID: 'y'
-                    },
-                    {
-                        type: 'line',
-                        label: 'Curah Hujan (mm)',
-                        data: chartData.rainfall, // Lagging data usually shown aligned
-                        borderColor: 'rgba(255, 99, 132, 1)',
-                        borderWidth: 2,
-                        fill: false,
-                        yAxisID: 'y1'
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false,
-                },
-                scales: {
-                    y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        title: { display: true, text: 'Produksi (Ton)' }
-                    },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        title: { display: true, text: 'Curah Hujan (mm)' },
-                        grid: {
-                            drawOnChartArea: false,
-                        },
-                    },
-                }
-            }
-        });
-    }
-
-    function loadRecentAnalyses() {
-        const tbody = document.getElementById('recentAnalysesTable');
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center">Loading...</td></tr>';
-
-        // Fetch recent data 
-        fetch('<?= BASE_URL ?>storytelling/getRecent')
-            .then(response => response.json())
-            .then(data => {
-                renderRecentTable(data.data || []);
-            })
-            .catch(err => {
-                console.warn('Could not load recent analyses', err);
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Belum ada riwayat analisis.</td></tr>';
-            });
-    }
-
-    function renderRecentTable(data) {
-        const tbody = document.getElementById('recentAnalysesTable');
-        tbody.innerHTML = '';
-
-        if(data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Belum ada riwayat analisis.</td></tr>';
-            return;
-        }
-
-        data.forEach(row => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${row.periode_bulan}/${row.periode_tahun}</td>
-                <td>${row.nama_kecamatan || '-'}</td>
-                <td>${row.faktor_penyebab_utama}</td>
-                <td><span class="badge badge-${row.status_analisis === 'published' ? 'success' : 'secondary'}">${row.status_analisis}</span></td>
-                <td>
-                    <button class="btn btn-sm btn-info" title="Lihat"><i class="fas fa-eye"></i></button>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
+    } else if (typeof $ !== 'undefined' && $.fn.tooltip) {
+        $('[data-bs-toggle="tooltip"]').tooltip();
     }
 });
 </script>

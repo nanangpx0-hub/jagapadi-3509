@@ -156,7 +156,6 @@
     font-size: 0.8rem;
     color: #28a745;
     opacity: 0;
-    transition: opacity 0.3s ease;
 }
 
 /* Numeric input with increment/decrement buttons */
@@ -472,7 +471,7 @@
                             <strong>File > 2MB akan dikompresi otomatis</strong>
                         </small>
                         <div id="fotoPreview" class="mt-2" style="display: none;">
-                            <img id="previewImg" src="" style="max-width: 300px; max-height: 300px;" class="img-thumbnail">
+                            <img id="previewImg" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" style="max-width: 300px; max-height: 300px;" class="img-thumbnail">
                             <button type="button" class="btn btn-sm btn-danger mt-2" onclick="clearFotoPreview()">
                                 <i class="fas fa-times"></i> Hapus Foto
                             </button>

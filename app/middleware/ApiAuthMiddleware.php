@@ -210,6 +210,9 @@ return [
         'api_key_backup' => getenv('SCRAPER_API_KEY_BACKUP') ?: null,
         'api_key_backup_hash' => getenv('SCRAPER_API_KEY_BACKUP_HASH') ?: null,
         
+        // Default user ID for API submissions
+        'default_user_id' => getenv('SCRAPER_DEFAULT_USER_ID') ?: null,
+        
         // Token TTL in seconds (24 hours)
         'token_ttl' => 86400,
         
@@ -225,6 +228,7 @@ return [
         'api_key_hash' => getenv('MOBILE_API_KEY_HASH') ?: null,
         'api_key_backup' => null,
         'api_key_backup_hash' => null,
+        'default_user_id' => getenv('MOBILE_DEFAULT_USER_ID') ?: null,
         'token_ttl' => 3600,
         'allowed_ips' => [],
     ],
@@ -234,6 +238,7 @@ return [
         'api_key_hash' => getenv('EXTERNAL_API_KEY_HASH') ?: null,
         'api_key_backup' => null,
         'api_key_backup_hash' => null,
+        'default_user_id' => getenv('EXTERNAL_DEFAULT_USER_ID') ?: null,
         'token_ttl' => 3600,
         'allowed_ips' => [],
     ],

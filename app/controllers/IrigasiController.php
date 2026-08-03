@@ -51,7 +51,6 @@ class IrigasiController extends Controller {
             $this->validateCsrfToken();
 
             try {
-                // Log incoming POST data for debugging
                 error_log("Irigasi Create - POST data: " . json_encode($_POST));
                 
                 // Validasi input
@@ -62,7 +61,8 @@ class IrigasiController extends Controller {
                     $this->view('irigasi/create', [
                         'title' => 'Input Data Irigasi',
                         'kabupaten' => $this->wilayahModel->getAllOrdered(),
-                        'data' => $_POST
+                        'data' => $_POST,
+                        'errors' => $errors
                     ]);
                     return;
                 }
@@ -71,32 +71,27 @@ class IrigasiController extends Controller {
                 $noLaporan = $this->generateUniqueId();
 
                 // Sanitasi input dasar
-                $kondisiFisik = !empty($_POST['kondisi_fisik']) ? $_POST['kondisi_fisik'] : 'Baik';
+                $kondisiFisik = !empty($_POST['kondisi_fisik']) ? $_POST['kondisi_fisik'] : 'Bagus';
                 
-                // Logic: If kondisi Baik, status must be "Normal"
-                // If kondisi Rusak, status must be one of the repair options
-                $statusPerbaikan = $_POST['status_perbaikan'];
-                
-                // Auto-set status to "Normal" if kondisi is "Baik"
-                if ($kondisiFisik === 'Baik') {
-                    $statusPerbaikan = 'Normal';
-                }
+                // Map kondisi form values to DB enum values
+                // Form: Baik → DB: Bagus, Rusak Ringan → DB: Tidak Bagus, Rusak Berat → DB: Rusak
+                $kondisiFisikMap = [
+                    'Baik' => 'Bagus',
+                    'Rusak Ringan' => 'Tidak Bagus',
+                    'Rusak Berat' => 'Rusak',
+                ];
+                $kondisiFisikDb = $kondisiFisikMap[$kondisiFisik] ?? $kondisiFisik;
                 
                 $data = [
-                    'no_laporan' => $noLaporan,
+                    'nomor_laporan' => $noLaporan,
                     'user_id' => $_SESSION['user_id'],
-                    'nama_pelapor' => trim(Security::sanitizeInput($_POST['nama_pelapor'])),
                     'kabupaten_id' => !empty($_POST['kabupaten_id']) ? (int)$_POST['kabupaten_id'] : null,
                     'kecamatan_id' => !empty($_POST['kecamatan_id']) ? (int)$_POST['kecamatan_id'] : null,
                     'desa_id' => !empty($_POST['desa_id']) ? (int)$_POST['desa_id'] : null,
                     'nama_saluran' => trim(Security::sanitizeInput($_POST['nama_saluran'])),
-                    'jenis_saluran' => $_POST['jenis_saluran'],
-                    'jenis_irigasi' => !empty($_POST['jenis_irigasi']) ? $_POST['jenis_irigasi'] : 'Teknis',
-                    'kondisi_fisik' => $kondisiFisik,
+                    'daerah_irigasi' => trim(Security::sanitizeInput($_POST['nama_saluran'])),
+                    'kondisi_fisik' => $kondisiFisikDb,
                     'debit_air' => !empty($_POST['debit_air']) ? $_POST['debit_air'] : 'Cukup',
-                    'status_perbaikan' => $statusPerbaikan,
-                    'aksi_dilakukan' => Security::sanitizeInput($_POST['aksi_dilakukan'] ?? ''),
-                    'luas_layanan' => (float)$_POST['luas_layanan'],
                     'tanggal' => $_POST['tanggal'],
                     'latitude' => !empty($_POST['latitude']) ? (float)$_POST['latitude'] : null,
                     'longitude' => !empty($_POST['longitude']) ? (float)$_POST['longitude'] : null,
@@ -128,7 +123,8 @@ class IrigasiController extends Controller {
                         $this->view('irigasi/create', [
                             'title' => 'Input Data Irigasi',
                             'kabupaten' => $this->wilayahModel->getAllOrdered(),
-                            'data' => $_POST
+                            'data' => $_POST,
+                            'errors' => ['foto' => 'Tipe file tidak diizinkan. Hanya JPG, PNG, dan GIF yang diizinkan.']
                         ]);
                         return;
                     }
@@ -140,7 +136,8 @@ class IrigasiController extends Controller {
                         $this->view('irigasi/create', [
                             'title' => 'Input Data Irigasi',
                             'kabupaten' => $this->wilayahModel->getAllOrdered(),
-                            'data' => $_POST
+                            'data' => $_POST,
+                            'errors' => ['foto' => 'Ekstensi file tidak diizinkan. Hanya JPG, PNG, dan GIF yang diizinkan.']
                         ]);
                         return;
                     }
@@ -165,14 +162,16 @@ class IrigasiController extends Controller {
                             if ($result['compressed']) {
                                 $originalSize = ImageCompressor::formatFileSize($result['original_size']);
                                 $finalSize = ImageCompressor::formatFileSize($result['final_size']);
-                                $_SESSION['info'] = "✅ Foto berhasil dikompresi dari {$originalSize} menjadi {$finalSize} (pengurangan {$result['reduction_percent']}%). Ukuran file sekarang sesuai batas maksimal.";
+                                $_SESSION['info'] = "Foto berhasil dikompresi dari {$originalSize} menjadi {$finalSize} (pengurangan {$result['reduction_percent']}%). Ukuran file sekarang sesuai batas maksimal.";
                             }
                         } else {
+                            error_log("Irigasi Create - Photo compression failed: " . ($result['error'] ?? 'Unknown error'));
                             ErrorMessage::set('Gagal mengkompresi foto: ' . ($result['error'] ?? 'Unknown error'));
                             $this->view('irigasi/create', [
                                 'title' => 'Input Data Irigasi',
                                 'kabupaten' => $this->wilayahModel->getAllOrdered(),
-                                'data' => $_POST
+                                'data' => $_POST,
+                                'errors' => ['foto' => 'Gagal mengkompresi foto.']
                             ]);
                             return;
                         }
@@ -181,30 +180,37 @@ class IrigasiController extends Controller {
                         if (move_uploaded_file($tempPath, $targetPath)) {
                             $data['foto_url'] = 'public/uploads/irigasi/' . $fileName;
                         } else {
-                            ErrorMessage::set('Gagal mengupload file.');
+                            error_log("Irigasi Create - Failed to move uploaded file: " . $file['name']);
+                            ErrorMessage::set('Gagal mengupload file foto.');
                             $this->view('irigasi/create', [
                                 'title' => 'Input Data Irigasi',
                                 'kabupaten' => $this->wilayahModel->getAllOrdered(),
-                                'data' => $_POST
+                                'data' => $_POST,
+                                'errors' => ['foto' => 'Gagal mengupload file foto.']
                             ]);
                             return;
                         }
                     }
+                } else {
+                    error_log("Irigasi Create - No photo uploaded or upload error: " . ($_FILES['foto']['error'] ?? 'no file'));
                 }
 
                 // Attempt to create record
                 $this->model->create($data);
                 
-                ErrorMessage::setSuccess('Data irigasi berhasil disimpan dengan ID: ' . $noLaporan);
+                error_log("Irigasi Create - Success: laporan {$noLaporan} saved for user " . $_SESSION['user_id']);
+                ErrorMessage::setSuccess('Data irigasi berhasil disimpan dengan nomor: ' . $noLaporan);
                 $this->redirect('irigasi/index');
 
             } catch (Exception $e) {
-                error_log("Irigasi Create Exception: " . $e->getMessage());
-                ErrorMessage::set('Gagal menyimpan data: ' . $e->getMessage());
+                error_log("Irigasi Create Exception: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine());
+                error_log("Irigasi Create - POST data that caused error: " . json_encode($_POST));
+                ErrorMessage::set('Gagal menyimpan data irigasi: ' . $e->getMessage());
                 $this->view('irigasi/create', [
                     'title' => 'Input Data Irigasi',
                     'kabupaten' => $this->wilayahModel->getAllOrdered(),
-                    'data' => $_POST
+                    'data' => $_POST,
+                    'errors' => ['server' => 'Gagal menyimpan data: ' . $e->getMessage()]
                 ]);
                 return;
             }
@@ -227,30 +233,13 @@ class IrigasiController extends Controller {
     private function validateInput(array $data): array {
         $errors = [];
 
-        // Required fields - Nama Pelapor
-        if (empty($data['nama_pelapor'])) {
-            $errors[] = 'Nama pelapor wajib diisi';
-        }
-
-        // Required fields - Nama Irigasi
+        // Required fields - Nama Saluran
         if (empty($data['nama_saluran'])) {
-            $errors[] = 'Nama irigasi wajib diisi';
+            $errors[] = 'Nama saluran wajib diisi';
         } elseif (strlen(trim($data['nama_saluran'])) < 3) {
-            $errors[] = 'Nama irigasi minimal 3 karakter';
-        } elseif (strlen($data['nama_saluran']) > 100) {
-            $errors[] = 'Nama irigasi maksimal 100 karakter';
-        }
-
-        // Required fields - Jenis Saluran
-        if (empty($data['jenis_saluran'])) {
-            $errors[] = 'Jenis saluran wajib dipilih';
-        }
-
-        // Required fields - Kapasitas
-        if (empty($data['luas_layanan'])) {
-            $errors[] = 'Kapasitas layanan wajib diisi';
-        } elseif (!is_numeric($data['luas_layanan']) || (float)$data['luas_layanan'] <= 0) {
-            $errors[] = 'Kapasitas layanan harus berupa angka positif';
+            $errors[] = 'Nama saluran minimal 3 karakter';
+        } elseif (strlen($data['nama_saluran']) > 200) {
+            $errors[] = 'Nama saluran maksimal 200 karakter';
         }
 
         // Required fields - Tanggal
@@ -260,7 +249,7 @@ class IrigasiController extends Controller {
             $errors[] = 'Tanggal tidak boleh melebihi hari ini';
         }
 
-        // Required fields - Foto Irigasi (v2.2.1)
+        // Required fields - Foto Irigasi
         if (!isset($_FILES['foto']) || $_FILES['foto']['error'] !== UPLOAD_ERR_OK) {
             if (!isset($_FILES['foto'])) {
                 $errors[] = 'Foto irigasi wajib diupload';
@@ -274,28 +263,41 @@ class IrigasiController extends Controller {
         // Required fields - Kondisi (Radio)
         if (empty($data['kondisi_fisik'])) {
             $errors[] = 'Kondisi saluran wajib dipilih';
+        } elseif (!in_array($data['kondisi_fisik'], ['Baik', 'Rusak Ringan', 'Rusak Berat'], true)) {
+            $errors[] = 'Kondisi saluran tidak valid';
         }
 
-        // Required fields - Status Perbaikan (logic based on kondisi)
-        if (empty($data['status_perbaikan'])) {
-            $errors[] = 'Status perbaikan wajib dipilih';
-        } else {
-            // Validate status based on kondisi
-            $kondisi = $data['kondisi_fisik'] ?? '';
-            $status = $data['status_perbaikan'];
-            
-            if ($kondisi === 'Baik' && $status !== 'Normal') {
-                $errors[] = 'Status harus "Normal" ketika kondisi saluran baik';
-            } elseif (in_array($kondisi, ['Rusak Ringan', 'Rusak Berat'])) {
-                $validStatuses = ['Selesai Diperbaiki', 'Dalam Perbaikan', 'Belum Ditangani'];
-                if (!in_array($status, $validStatuses)) {
-                    $errors[] = 'Status perbaikan tidak valid. Pilih: Selesai Diperbaiki, Dalam Perbaikan, atau Belum Ditangani';
-                }
-            }
+        // Required fields - Debit Air
+        if (empty($data['debit_air'])) {
+            $errors[] = 'Debit air wajib dipilih';
+        } elseif (!in_array($data['debit_air'], ['Cukup', 'Kurang', 'Kering'], true)) {
+            $errors[] = 'Debit air tidak valid';
+        }
+
+        // Required fields - Kabupaten
+        if (empty($data['kabupaten_id']) || (int)$data['kabupaten_id'] <= 0) {
+            $errors[] = 'Kabupaten wajib dipilih';
+        }
+
+        // Required fields - Kecamatan
+        if (empty($data['kecamatan_id']) || (int)$data['kecamatan_id'] <= 0) {
+            $errors[] = 'Kecamatan wajib dipilih';
+        }
+
+        // Required fields - Desa
+        if (empty($data['desa_id']) || (int)$data['desa_id'] <= 0) {
+            $errors[] = 'Desa wajib dipilih';
+        }
+
+        // Required fields - Luas Layanan
+        if (empty($data['luas_layanan'])) {
+            $errors[] = 'Luas layanan wajib diisi';
+        } elseif (!is_numeric($data['luas_layanan']) || (float)$data['luas_layanan'] <= 0) {
+            $errors[] = 'Luas layanan harus berupa angka positif';
         }
 
         // Status workflow validation
-        if (isset($data['status']) && !in_array($data['status'], ['Draf', 'Submitted', 'Diverifikasi', 'Ditolak'])) {
+        if (isset($data['status']) && !in_array($data['status'], ['Draf', 'Submitted', 'Diverifikasi', 'Ditolak', 'Diarsipkan'], true)) {
             $errors[] = 'Status workflow tidak valid';
         }
 
@@ -307,7 +309,7 @@ class IrigasiController extends Controller {
      * Format: IRG-YYYYMMDD-XXXX
      */
     private function generateUniqueId() {
-        $prefix = 'IRG-' . date('Ymd') . '-';
+        $prefix = 'LI-' . date('Ymd') . '-';
         $db = Database::getInstance()->getConnection();
         
         // Count reports today
@@ -418,36 +420,36 @@ class IrigasiController extends Controller {
                 }
                 
                 if (!empty($errors)) {
+                    error_log("Irigasi Edit - Validation errors: " . implode(', ', $errors));
                     ErrorMessage::set(implode(', ', $errors));
                     $this->view('irigasi/edit', [
                         'title' => 'Edit Data Irigasi',
                         'data' => array_merge($data, $_POST),
-                        'kabupaten' => $this->wilayahModel->getAllOrdered()
+                        'kabupaten' => $this->wilayahModel->getAllOrdered(),
+                        'errors' => $errors
                     ]);
                     return;
                 }
                 
                 // Build update data
-                $kondisiFisik = !empty($_POST['kondisi_fisik']) ? $_POST['kondisi_fisik'] : 'Baik';
-                $statusPerbaikan = $_POST['status_perbaikan'];
+                $kondisiFisik = !empty($_POST['kondisi_fisik']) ? $_POST['kondisi_fisik'] : 'Bagus';
                 
-                if ($kondisiFisik === 'Baik') {
-                    $statusPerbaikan = 'Normal';
-                }
+                // Map kondisi form values to DB enum values
+                $kondisiFisikMap = [
+                    'Baik' => 'Bagus',
+                    'Rusak Ringan' => 'Tidak Bagus',
+                    'Rusak Berat' => 'Rusak',
+                ];
+                $kondisiFisikDb = $kondisiFisikMap[$kondisiFisik] ?? $kondisiFisik;
                 
                 $updateData = [
-                    'nama_pelapor' => trim(Security::sanitizeInput($_POST['nama_pelapor'])),
                     'kabupaten_id' => !empty($_POST['kabupaten_id']) ? (int)$_POST['kabupaten_id'] : null,
                     'kecamatan_id' => !empty($_POST['kecamatan_id']) ? (int)$_POST['kecamatan_id'] : null,
                     'desa_id' => !empty($_POST['desa_id']) ? (int)$_POST['desa_id'] : null,
                     'nama_saluran' => trim(Security::sanitizeInput($_POST['nama_saluran'])),
-                    'jenis_saluran' => $_POST['jenis_saluran'],
-                    'jenis_irigasi' => !empty($_POST['jenis_irigasi']) ? $_POST['jenis_irigasi'] : 'Teknis',
-                    'kondisi_fisik' => $kondisiFisik,
+                    'daerah_irigasi' => trim(Security::sanitizeInput($_POST['nama_saluran'])),
+                    'kondisi_fisik' => $kondisiFisikDb,
                     'debit_air' => !empty($_POST['debit_air']) ? $_POST['debit_air'] : 'Cukup',
-                    'status_perbaikan' => $statusPerbaikan,
-                    'aksi_dilakukan' => Security::sanitizeInput($_POST['aksi_dilakukan'] ?? ''),
-                    'luas_layanan' => (float)$_POST['luas_layanan'],
                     'tanggal' => $_POST['tanggal'],
                     'latitude' => !empty($_POST['latitude']) ? (float)$_POST['latitude'] : null,
                     'longitude' => !empty($_POST['longitude']) ? (float)$_POST['longitude'] : null,
@@ -478,20 +480,33 @@ class IrigasiController extends Controller {
                             }
                         }
                         $updateData['foto_url'] = 'public/uploads/irigasi/' . $fileName;
+                    } else {
+                        error_log("Irigasi Edit - Failed to move uploaded file: " . $file['name']);
+                        ErrorMessage::set('Gagal mengupload file foto.');
+                        $this->view('irigasi/edit', [
+                            'title' => 'Edit Data Irigasi',
+                            'data' => array_merge($data, $_POST),
+                            'kabupaten' => $this->wilayahModel->getAllOrdered(),
+                            'errors' => ['foto' => 'Gagal mengupload file foto.']
+                        ]);
+                        return;
                     }
                 }
                 
                 $this->model->update($id, $updateData);
+                error_log("Irigasi Edit - Success: laporan {$id} updated");
                 ErrorMessage::setSuccess('Data irigasi berhasil diperbarui');
                 $this->redirect('irigasi/index');
                 
             } catch (Exception $e) {
-                error_log("Irigasi Edit Exception: " . $e->getMessage());
-                ErrorMessage::set('Gagal mengupdate data: ' . $e->getMessage());
+                error_log("Irigasi Edit Exception: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine());
+                error_log("Irigasi Edit - POST data that caused error: " . json_encode($_POST));
+                ErrorMessage::set('Gagal mengupdate data irigasi: ' . $e->getMessage());
                 $this->view('irigasi/edit', [
                     'title' => 'Edit Data Irigasi',
                     'data' => array_merge($data, $_POST),
-                    'kabupaten' => $this->wilayahModel->getAllOrdered()
+                    'kabupaten' => $this->wilayahModel->getAllOrdered(),
+                    'errors' => ['server' => 'Gagal mengupdate data: ' . $e->getMessage()]
                 ]);
                 return;
             }

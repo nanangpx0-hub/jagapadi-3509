@@ -55,7 +55,7 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.agriculture, size: 64, color: AppTheme.primaryColor),
+                  const Icon(Icons.agriculture, size: 64, color: AppTheme.primaryColor),
                   const SizedBox(height: 8),
                   Text('JAGAPADI',
                       style: Theme.of(context).textTheme.headlineMedium?.copyWith(

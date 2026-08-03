@@ -9,6 +9,9 @@ $script = dirname($_SERVER['SCRIPT_NAME']);
 $baseUrl = $protocol . '://' . $host . ($script !== '/' ? $script : '') . '/';
 define('BASE_URL', $baseUrl);
 
+// Define UPLOAD_PATH
+define('UPLOAD_PATH', ROOT_PATH . '/storage/uploads/');
+
 // Load .env file (base), then .env.local (overrides)
 $envPaths = [ROOT_PATH . '/.env', ROOT_PATH . '/.env.local'];
 $loadedKeys = [];
@@ -70,16 +73,17 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 
-// CORS Policy Headers
-$allowedOrigins = [
+// CORS Policy Headers - configured via environment variables
+$corsOrigins = getenv('CORS_ALLOWED_ORIGINS');
+$allowedOrigins = $corsOrigins ? array_map('trim', explode(',', $corsOrigins)) : [
     'http://localhost',
     'http://localhost:8080',
     'https://bpsjember.my.id',
-    'https://jagapadi.yourdomain.com' // Update with your domain
+    'https://jagapadi.yourdomain.com'
 ];
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-if (in_array($origin, $allowedOrigins)) {
+if (in_array($origin, $allowedOrigins, true)) {
     header("Access-Control-Allow-Origin: {$origin}");
     header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH');
     header('Access-Control-Allow-Headers: Content-Type, Authorization, X-API-Key, X-CSRF-TOKEN, X-Requested-With');

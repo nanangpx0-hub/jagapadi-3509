@@ -235,37 +235,7 @@ class StorytellingController extends Controller {
         }
     }
     
-    /**
-     * Get list of saved analyses with pagination
-     */
-    public function getAnalyses() {
-        $this->checkAuth();
-        $this->checkStorytellingAccess();
-        
-        header('Content-Type: application/json');
-        
-        try {
-            // This seems to be using a missing method getAnalysesList
-            // We'll replace this with getRecent logic for now or implement getAnalysesList later
-            // For the specific route /getRecent used in view, we will add a new method below
-            $page = (int) ($_GET['page'] ?? 1);
-            $limit = (int) ($_GET['limit'] ?? 10);
-            
-            // Placeholder response until getAnalysesList is implemented
-             echo json_encode([
-                'success' => true,
-                'data' => [],
-                'pagination' => ['total' => 0, 'page' => $page, 'limit' => $limit]
-            ]);
-            
-        } catch (Exception $e) {
-            http_response_code(400);
-            echo json_encode([
-                'success' => false,
-                'error' => $e->getMessage()
-            ]);
-        }
-    }
+
 
     /**
      * Get list of recent analyses (Public API for AJAX)
@@ -357,6 +327,21 @@ class StorytellingController extends Controller {
     }
     
     private function getInitialStats(): array {
+        $cacheFile = ROOT_PATH . '/storage/cache/storytelling_stats.json';
+        $cacheDir = dirname($cacheFile);
+        
+        if (!is_dir($cacheDir)) {
+            mkdir($cacheDir, 0755, true);
+        }
+        
+        // Cache valid for 24 hours
+        if (file_exists($cacheFile) && (time() - filemtime($cacheFile) < 86400)) {
+            $cachedData = json_decode(file_get_contents($cacheFile), true);
+            if ($cachedData) {
+                return $cachedData;
+            }
+        }
+
         try {
             $currentYear = date('Y');
             
@@ -374,11 +359,14 @@ class StorytellingController extends Controller {
             $stmt->execute([$currentYear]);
             $result = $stmt->fetch(PDO::FETCH_ASSOC);
             
-            return [
+            $stats = [
                 'total_analyses' => (int) ($result['total_analyses'] ?? 0),
                 'published_count' => (int) ($result['published_count'] ?? 0),
                 'draft_count' => (int) ($result['draft_count'] ?? 0)
             ];
+            
+            file_put_contents($cacheFile, json_encode($stats));
+            return $stats;
         } catch (Exception $e) {
             // Table might not exist yet, return default values
             error_log("[STORYTELLING] getInitialStats error: " . $e->getMessage());
@@ -530,20 +518,16 @@ class StorytellingController extends Controller {
     }
     
     private function getWeatherDataForChart(int $bulan, int $tahun, int $wilayahId): array {
-        // Get kecamatan info for pattern matching
-        $kecamatanInfo = $this->getKecamatanInfo($wilayahId);
-        $lokasiPattern = '%' . $kecamatanInfo['nama_kecamatan'] . '%';
-        
         $sql = "
             SELECT COALESCE(AVG(curah_hujan), 0) as curah_hujan
             FROM curah_hujan
             WHERE MONTH(tanggal) = ? 
               AND YEAR(tanggal) = ?
-              AND lokasi LIKE ?
+              AND kecamatan_id = ?
         ";
         
         $stmt = Database::getInstance()->getConnection()->prepare($sql);
-        $stmt->execute([$bulan, $tahun, $lokasiPattern]);
+        $stmt->execute([$bulan, $tahun, $wilayahId]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         
         return ['curah_hujan' => (float) $result['curah_hujan']];

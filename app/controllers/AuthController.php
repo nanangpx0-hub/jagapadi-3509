@@ -21,18 +21,6 @@ class AuthController extends Controller {
                 $this->redirect('auth/login');
             }
             
-            // Check rate limiting for login attempts
-            if (Security::checkRateLimit('auth_login', 10, 60)) {
-                $_SESSION['error'] = 'Terlalu banyak permintaan login. Silakan coba lagi nanti.';
-                $this->redirect('auth/login');
-            }
-
-            // Check brute force protection
-            if (Security::checkBruteForce('login', 5, 900)) {
-                $_SESSION['error'] = 'Terlalu banyak percobaan login. Silakan coba lagi setelah 15 menit.';
-                $this->redirect('auth/login');
-            }
-            
             $username = Security::sanitizeInput($_POST['username'] ?? '');
             $password = $_POST['password'] ?? '';
             
@@ -98,12 +86,6 @@ class AuthController extends Controller {
         $isForceChange = isset($_SESSION['user_needs_password_change']);
         
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            // Rate limit password change attempts
-            if (Security::checkRateLimit('auth_change_password', 8, 60)) {
-                $_SESSION['error'] = 'Terlalu banyak permintaan ubah password. Silakan coba lagi nanti.';
-                $this->redirect('auth/change_password');
-            }
-
             // Validate CSRF token
             $token = $_POST['csrf_token'] ?? '';
             if (!Security::validateCsrfToken($token)) {

@@ -234,12 +234,13 @@ class LaporanController extends Controller {
             }
             // Validate wilayah relationship if wilayah data is provided
             if (!empty($postData['kabupaten_id']) && !empty($postData['kecamatan_id']) && !empty($postData['desa_id'])) {
-            $kabModel = $this->model('MasterKabupaten');
-            $kecModel = $this->model('MasterKecamatan');
-            $desaModel = $this->model('MasterDesa');
-            $kab = $kabModel->findById($postData['kabupaten_id']);
-            $kec = $kecModel->findById($postData['kecamatan_id']);
-            $des = $desaModel->findById($postData['desa_id']);
+                $kabModel = $this->model('MasterKabupaten');
+                $kecModel = $this->model('MasterKecamatan');
+                $desaModel = $this->model('MasterDesa');
+                // findByIdOrKode supports DB id, BPS kode (3509), short kode (09), dan format lain
+                $kab = $kabModel->findByIdOrKode($postData['kabupaten_id']);
+                $kec = $kecModel->findById($postData['kecamatan_id']);
+                $des = $desaModel->findById($postData['desa_id']);
 
                 if (!$kab || !$kec || !$des) {
                     $_SESSION['error'] = 'Data wilayah tidak ditemukan di database';
@@ -248,12 +249,11 @@ class LaporanController extends Controller {
 
                 if ($kec['kabupaten_id'] != $kab['id'] || $des['kecamatan_id'] != $kec['id']) {
                     $_SESSION['error'] = 'Relasi wilayah tidak valid. Pastikan kecamatan berada di kabupaten yang dipilih dan desa berada di kecamatan yang dipilih.';
-                $this->redirect('laporan/create');
-            }
+                    $this->redirect('laporan/create');
+                }
 
-            $postData['kabupaten'] = $kab['nama_kabupaten'];
-            $postData['kecamatan'] = $kec['nama_kecamatan'];
-            $postData['desa'] = $des['nama_desa'];
+                // Normalize ke id asli di database (form bisa mengirim format padded seperti '09')
+                $postData['kabupaten_id'] = $kab['id'];
 
                 // Update lokasi with complete address if alamat_lengkap is empty
                 if (empty($postData['alamat_lengkap']) || $postData['lokasi'] === 'Lokasi akan diisi setelah validasi wilayah') {
@@ -531,16 +531,16 @@ class LaporanController extends Controller {
             $kabModel = $this->model('MasterKabupaten');
             $kecModel = $this->model('MasterKecamatan');
             $desaModel = $this->model('MasterDesa');
-            $kab = $kabModel->findById($postData['kabupaten_id']);
+            // findByIdOrKode supports DB id, BPS kode (3509), short kode (09), dan format lain
+            $kab = $kabModel->findByIdOrKode($postData['kabupaten_id']);
             $kec = $kecModel->findById($postData['kecamatan_id']);
             $des = $desaModel->findById($postData['desa_id']);
             if (!$kab || !$kec || !$des || $kec['kabupaten_id'] != $kab['id'] || $des['kecamatan_id'] != $kec['id']) {
                 $_SESSION['error'] = 'Relasi wilayah tidak valid';
                 $this->redirect('laporan/edit/' . $id);
             }
-            $postData['kabupaten'] = $kab['nama_kabupaten'];
-            $postData['kecamatan'] = $kec['nama_kecamatan'];
-            $postData['desa'] = $des['nama_desa'];
+            // Normalize ke id asli di database (form bisa mengirim format padded seperti '09')
+            $postData['kabupaten_id'] = $kab['id'];
 
             if (!empty($postData['latitude']) && !empty($postData['longitude'])) {
                 $lat = (float)$postData['latitude'];
@@ -659,10 +659,9 @@ class LaporanController extends Controller {
                     mo.nama_opt,
                     mo.jenis,
                     mo.etl_acuan,
-                    mo.rekomendasi,
+                    mo.deskripsi AS rekomendasi,
                     u.nama_lengkap as pelapor_nama,
                     u.email as pelapor_email,
-                    u.phone as pelapor_phone,
                     v.nama_lengkap as verifikator_nama
                 FROM laporan_hama lh
                 LEFT JOIN master_opt mo ON lh.master_opt_id = mo.id
@@ -1012,7 +1011,7 @@ class LaporanController extends Controller {
     private function createNotification($userId, $title, $message, $type = 'info') {
         $db = Database::getInstance()->getConnection();
         $stmt = $db->prepare("
-            INSERT INTO notifications (user_id, title, message, type)
+            INSERT INTO notifications (user_id, title, body, type)
             VALUES (?, ?, ?, ?)
         ");
         $stmt->execute([$userId, $title, $message, $type]);

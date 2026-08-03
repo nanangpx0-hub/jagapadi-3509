@@ -633,13 +633,12 @@
         
         const toast = document.createElement('div');
         toast.className = `custom-toast alert alert-${type} position-fixed`;
-        toast.style.cssText = 'top: 80px; right: 20px; z-index: 9999; min-width: 250px; animation: fadeIn 0.3s;';
-        toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : type === 'danger' ? 'times-circle' : 'info-circle'} mr-2"></i>${message}`;
+        toast.style.cssText = 'top: 80px; right: 20px; z-index: 9999; min-width: 250px;';
+        toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : type === 'danger' ? 'times-circle' : type === 'info-circle'} mr-2"></i>${message}`;
         document.body.appendChild(toast);
         
         setTimeout(() => {
-            toast.style.animation = 'fadeOut 0.3s';
-            setTimeout(() => toast.remove(), 300);
+            toast.remove();
         }, 3000);
     }
     

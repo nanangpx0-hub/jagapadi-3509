@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import '../../../core/theme.dart';
 import '../../wilayah/widgets/wilayah_picker.dart';
 import '../providers/laporan_irigasi_provider.dart';
 
@@ -48,14 +47,16 @@ class _IrigasiFormScreenState extends State<IrigasiFormScreen> {
   }
 
   Future<void> _pickFoto() async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.camera, maxWidth: 1024);
+    final picked = await ImagePicker()
+        .pickImage(source: ImageSource.camera, maxWidth: 1024);
     if (picked != null) setState(() => _foto = File(picked.path));
   }
 
   void _applyFieldErrors(Map<String, dynamic>? errors) {
     if (errors == null) return;
     setState(() {
-      _fieldErrors = errors.map((k, v) => MapEntry(k, v is List ? v.join('\n') : v.toString()));
+      _fieldErrors = errors
+          .map((k, v) => MapEntry(k, v is List ? v.join('\n') : v.toString()));
     });
   }
 
@@ -63,7 +64,10 @@ class _IrigasiFormScreenState extends State<IrigasiFormScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() { _loading = true; _fieldErrors = {}; });
+    setState(() {
+      _loading = true;
+      _fieldErrors = {};
+    });
     final p = context.read<LaporanIrigasiProvider>();
     final data = <String, dynamic>{
       'action': 'draft',
@@ -87,17 +91,19 @@ class _IrigasiFormScreenState extends State<IrigasiFormScreen> {
         await p.api.uploadFoto('/laporan-irigasi/$newId/foto', _foto!.path);
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Draf berhasil disimpan')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Draf berhasil disimpan')));
         Navigator.pop(context);
       }
     } else if (mounted) {
       if (p.fieldErrors != null) _applyFieldErrors(p.fieldErrors);
       final msg = p.error ?? 'Terjadi kesalahan. Silakan coba lagi.';
       if (msg.contains('Terlalu banyak')) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Terlalu banyak permintaan, coba lagi nanti')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Terlalu banyak permintaan, coba lagi nanti')));
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(msg)));
       }
     }
   }
@@ -105,7 +111,9 @@ class _IrigasiFormScreenState extends State<IrigasiFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.id != null ? 'Edit Irigasi' : 'Laporan Irigasi Baru')),
+      appBar: AppBar(
+          title: Text(
+              widget.id != null ? 'Edit Irigasi' : 'Laporan Irigasi Baru')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -115,19 +123,27 @@ class _IrigasiFormScreenState extends State<IrigasiFormScreen> {
             children: [
               TextFormField(
                 controller: _tanggalCtrl,
-                decoration: InputDecoration(labelText: 'Tanggal', hintText: 'YYYY-MM-DD', errorText: _fe('tanggal')),
-                validator: (v) => v == null || v.isEmpty ? 'Tanggal wajib diisi' : null,
+                decoration: InputDecoration(
+                    labelText: 'Tanggal',
+                    hintText: 'YYYY-MM-DD',
+                    errorText: _fe('tanggal')),
+                validator: (v) =>
+                    v == null || v.isEmpty ? 'Tanggal wajib diisi' : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _saluranCtrl,
-                decoration: InputDecoration(labelText: 'Nama Saluran', errorText: _fe('nama_saluran')),
-                validator: (v) => v == null || v.isEmpty ? 'Nama saluran wajib diisi' : null,
+                decoration: InputDecoration(
+                    labelText: 'Nama Saluran', errorText: _fe('nama_saluran')),
+                validator: (v) =>
+                    v == null || v.isEmpty ? 'Nama saluran wajib diisi' : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _daerahCtrl,
-                decoration: InputDecoration(labelText: 'Daerah Irigasi', errorText: _fe('daerah_irigasi')),
+                decoration: InputDecoration(
+                    labelText: 'Daerah Irigasi',
+                    errorText: _fe('daerah_irigasi')),
               ),
               const SizedBox(height: 16),
               WilayahPicker(
@@ -143,21 +159,29 @@ class _IrigasiFormScreenState extends State<IrigasiFormScreen> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                decoration: InputDecoration(labelText: 'Kondisi Fisik', errorText: _fe('kondisi_fisik')),
-                value: _kondisiFisik,
+                decoration: InputDecoration(
+                    labelText: 'Kondisi Fisik',
+                    errorText: _fe('kondisi_fisik')),
+                initialValue: _kondisiFisik,
                 items: ['Bagus', 'Sedang', 'Tidak Bagus', 'Rusak']
-                    .map((k) => DropdownMenuItem(value: k, child: Text(k))).toList(),
+                    .map((k) => DropdownMenuItem(value: k, child: Text(k)))
+                    .toList(),
                 onChanged: (v) => setState(() => _kondisiFisik = v),
-                validator: (_) => _kondisiFisik == null ? 'Kondisi fisik wajib dipilih' : null,
+                validator: (_) => _kondisiFisik == null
+                    ? 'Kondisi fisik wajib dipilih'
+                    : null,
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                decoration: InputDecoration(labelText: 'Debit Air', errorText: _fe('debit_air')),
-                value: _debitAir,
+                decoration: InputDecoration(
+                    labelText: 'Debit Air', errorText: _fe('debit_air')),
+                initialValue: _debitAir,
                 items: ['Cukup', 'Kurang', 'Kering']
-                    .map((k) => DropdownMenuItem(value: k, child: Text(k))).toList(),
+                    .map((k) => DropdownMenuItem(value: k, child: Text(k)))
+                    .toList(),
                 onChanged: (v) => setState(() => _debitAir = v),
-                validator: (_) => _debitAir == null ? 'Debit air wajib dipilih' : null,
+                validator: (_) =>
+                    _debitAir == null ? 'Debit air wajib dipilih' : null,
               ),
               const SizedBox(height: 16),
               Row(
@@ -165,24 +189,30 @@ class _IrigasiFormScreenState extends State<IrigasiFormScreen> {
                   Expanded(
                     child: TextFormField(
                       controller: _latCtrl,
-                      decoration: InputDecoration(labelText: 'Latitude', errorText: _fe('latitude')),
+                      decoration: InputDecoration(
+                          labelText: 'Latitude', errorText: _fe('latitude')),
                       keyboardType: TextInputType.number,
                     ),
                   ),
                   const SizedBox(width: 8),
-                  IconButton(icon: const Icon(Icons.my_location), onPressed: _getLocation, tooltip: 'Ambil lokasi'),
+                  IconButton(
+                      icon: const Icon(Icons.my_location),
+                      onPressed: _getLocation,
+                      tooltip: 'Ambil lokasi'),
                 ],
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _lngCtrl,
-                decoration: InputDecoration(labelText: 'Longitude', errorText: _fe('longitude')),
+                decoration: InputDecoration(
+                    labelText: 'Longitude', errorText: _fe('longitude')),
                 keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _catatanCtrl,
-                decoration: InputDecoration(labelText: 'Catatan', errorText: _fe('catatan')),
+                decoration: InputDecoration(
+                    labelText: 'Catatan', errorText: _fe('catatan')),
                 maxLines: 3,
               ),
               const SizedBox(height: 16),
@@ -190,13 +220,19 @@ class _IrigasiFormScreenState extends State<IrigasiFormScreen> {
                 onPressed: _pickFoto,
                 icon: const Icon(Icons.camera_alt, size: 18),
                 label: const Text('Ambil Foto'),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.grey.shade200, foregroundColor: Colors.black87),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey.shade200,
+                    foregroundColor: Colors.black87),
               ),
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: _loading ? null : _save,
                 child: _loading
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
                     : const Text('Simpan Draft'),
               ),
             ],

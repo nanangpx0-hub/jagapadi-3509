@@ -54,11 +54,18 @@ const StorytellingDashboard = (function() {
         
         // Chart
         correlationChart: null,
-        
+
         // Loading
-        loadingOverlay: null
+        loadingOverlay: null,
+        timerDisplay: null,
+        warningDisplay: null
     };
-    
+
+    // Timer state
+    let processTimer = null;
+    let processStartTime = 0;
+    const WARNING_THRESHOLD = 300; // 5 minutes in seconds
+
     /**
      * Initialize the dashboard
      */
@@ -71,10 +78,39 @@ const StorytellingDashboard = (function() {
         // Bind event listeners
         bindEvents();
         
-        // Initialize chart
-        initChart();
+        // Load recent analyses on start
+        loadRecentAnalyses();
         
         console.log('[StorytellingDashboard] Initialized');
+    }
+
+    /**
+     * Helper to handle fetch requests and check for 401/403 session timeout
+     */
+    async function apiFetch(url, options = {}) {
+        try {
+            const response = await fetch(url, options);
+            
+            // Check for unauthorized access (session timeout)
+            if (response.status === 401 || response.status === 403) {
+                showAlert('Sesi Anda telah habis. Mengalihkan ke halaman login...', 'warning');
+                setTimeout(() => {
+                    window.location.href = `${config.baseUrl}/auth/login`;
+                }, 2000);
+                throw new Error('Unauthorized');
+            }
+            
+            return response;
+        } catch (error) {
+            if (error.message !== 'Unauthorized') {
+                throw error;
+            }
+            // Return a dummy response to prevent further processing if unauthorized
+            return {
+                json: async () => ({ success: false, error: 'Unauthorized' }),
+                ok: false
+            };
+        }
     }
     
     /**
@@ -108,6 +144,8 @@ const StorytellingDashboard = (function() {
         
         // Loading
         elements.loadingOverlay = document.getElementById('loading-overlay');
+        elements.timerDisplay = document.getElementById('timer-display');
+        elements.warningDisplay = document.getElementById('loading-warning');
     }
     
     /**
@@ -279,8 +317,8 @@ const StorytellingDashboard = (function() {
             elements.btnAnalyze.disabled = true;
             elements.btnAnalyze.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menganalisis...';
             
-            // Make AJAX request
-            const response = await fetch(`${config.baseUrl}/storytelling/generateAnalysis`, {
+            // Make AJAX request using wrapper to handle session timeouts
+            const response = await apiFetch(`${config.baseUrl}/storytelling/generateAnalysis`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
@@ -292,6 +330,10 @@ const StorytellingDashboard = (function() {
                     wilayah_id: wilayahId
                 })
             });
+            
+            if (!response.ok && response.status !== 400) {
+                if (response.status === 401 || response.status === 403) return; // Handled by apiFetch
+            }
             
             const result = await response.json();
             
@@ -450,7 +492,7 @@ const StorytellingDashboard = (function() {
                 faktor_penyebab_override: elements.faktorPenyebab.value
             };
             
-            const response = await fetch(`${config.baseUrl}/storytelling/store`, {
+            const response = await apiFetch(`${config.baseUrl}/storytelling/store`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -458,6 +500,10 @@ const StorytellingDashboard = (function() {
                 },
                 body: JSON.stringify(saveData)
             });
+            
+            if (!response.ok && response.status !== 400) {
+                if (response.status === 401 || response.status === 403) return; // Handled by apiFetch
+            }
             
             const result = await response.json();
             
@@ -551,7 +597,9 @@ const StorytellingDashboard = (function() {
      */
     async function updateChartData(bulan, tahun, wilayahId) {
         try {
-            const response = await fetch(`${config.baseUrl}/storytelling/getChartData?bulan=${bulan}&tahun=${tahun}&wilayah_id=${wilayahId}&months=6`);
+            const response = await apiFetch(`${config.baseUrl}/storytelling/getChartData?bulan=${bulan}&tahun=${tahun}&wilayah_id=${wilayahId}&months=6`);
+            if (!response.ok) return;
+            
             const result = await response.json();
             
             if (result.success) {
@@ -565,9 +613,70 @@ const StorytellingDashboard = (function() {
     /**
      * Utility functions
      */
-    
+
+    /**
+     * Start the process timer
+     */
+    function startTimer() {
+        if (processTimer) {
+            clearInterval(processTimer);
+            processTimer = null;
+        }
+
+        processStartTime = Date.now();
+        updateTimerDisplay(0);
+
+        if (elements.warningDisplay) {
+            elements.warningDisplay.style.display = 'none';
+        }
+
+        processTimer = setInterval(() => {
+            const elapsed = Math.floor((Date.now() - processStartTime) / 1000);
+            updateTimerDisplay(elapsed);
+
+            if (elapsed >= WARNING_THRESHOLD && elements.warningDisplay) {
+                elements.warningDisplay.style.display = 'block';
+            }
+        }, 1000);
+    }
+
+    /**
+     * Stop the process timer
+     */
+    function stopTimer() {
+        if (processTimer) {
+            clearInterval(processTimer);
+            processTimer = null;
+        }
+        processStartTime = 0;
+        if (elements.timerDisplay) {
+            elements.timerDisplay.textContent = '00:00';
+        }
+        if (elements.warningDisplay) {
+            elements.warningDisplay.style.display = 'none';
+        }
+    }
+
+    /**
+     * Update timer display in mm:ss format
+     */
+    function updateTimerDisplay(seconds) {
+        if (!elements.timerDisplay) return;
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        elements.timerDisplay.textContent =
+            String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+    }
+
     function showLoading(show) {
-        elements.loadingOverlay.style.display = show ? 'flex' : 'none';
+        if (elements.loadingOverlay) {
+            elements.loadingOverlay.style.display = show ? 'flex' : 'none';
+        }
+        if (show) {
+            startTimer();
+        } else {
+            stopTimer();
+        }
     }
     
     function showAlert(message, type = 'info') {
@@ -678,11 +787,55 @@ const StorytellingDashboard = (function() {
     }
     
     function refreshRecentAnalyses() {
-        // Reload the page to refresh recent analyses table
-        // In a more sophisticated implementation, this could be done via AJAX
-        setTimeout(() => {
-            window.location.reload();
-        }, 1000);
+        loadRecentAnalyses();
+    }
+    
+    function loadRecentAnalyses() {
+        const tbody = document.getElementById('recentAnalysesTable');
+        if (!tbody) return;
+        
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center">Loading...</td></tr>';
+    
+        apiFetch(`${config.baseUrl}/storytelling/getRecent`)
+            .then(response => {
+                if (!response.ok) throw new Error('Failed to load');
+                return response.json();
+            })
+            .then(data => {
+                renderRecentTable(data.data || []);
+            })
+            .catch(err => {
+                if (err.message === 'Unauthorized') return;
+                console.warn('Could not load recent analyses', err);
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Belum ada riwayat analisis.</td></tr>';
+            });
+    }
+    
+    function renderRecentTable(data) {
+        const tbody = document.getElementById('recentAnalysesTable');
+        if (!tbody) return;
+        
+        tbody.innerHTML = '';
+    
+        if(data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Belum ada riwayat analisis.</td></tr>';
+            return;
+        }
+    
+        data.forEach(row => {
+            const tr = document.createElement('tr');
+            const statusBadge = row.status_analisis === 'published' ? 'success' : (row.status_analisis === 'draft' ? 'warning' : 'secondary');
+            tr.innerHTML = `
+                <td>${row.periode_bulan}/${row.periode_tahun}</td>
+                <td>${row.nama_kecamatan || '-'}</td>
+                <td>${row.faktor_penyebab_utama}</td>
+                <td><span class="badge badge-${statusBadge}">${row.status_analisis}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-info" onclick="viewAnalysis(${row.id})" title="Lihat"><i class="fas fa-eye"></i></button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
     }
     
     // Public API

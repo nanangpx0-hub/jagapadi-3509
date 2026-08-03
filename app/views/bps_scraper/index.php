@@ -623,7 +623,15 @@
     
     const BASE_URL = '<?= BASE_URL ?>';
     const isAdmin = <?= $_SESSION['role'] === 'admin' ? 'true' : 'false' ?>;
-    
+
+    // Escape HTML to prevent XSS
+    function escapeHtml(text) {
+        if (text === null || text === undefined) return '';
+        const div = document.createElement('div');
+        div.textContent = String(text);
+        return div.innerHTML;
+    }
+
     // Format number
     function formatNumber(num) {
         return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
@@ -636,8 +644,8 @@
         
         const toast = document.createElement('div');
         toast.className = `custom-toast alert alert-${type} position-fixed`;
-        toast.style.cssText = 'top: 80px; right: 20px; z-index: 9999; min-width: 250px; animation: fadeIn 0.3s;';
-        toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : type === 'danger' ? 'times-circle' : 'info-circle'} mr-2"></i>${message}`;
+        toast.style.cssText = 'top: 80px; right: 20px; z-index: 9999; min-width: 250px;';
+        toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : type === 'danger' ? 'times-circle' : 'info-circle'} mr-2"></i>${escapeHtml(message)}`;
         document.body.appendChild(toast);
         
         setTimeout(() => toast.remove(), 4000);
@@ -673,7 +681,7 @@
             })
             .catch(err => {
                 console.error('Load error:', err);
-                document.getElementById('tableBody').innerHTML = `<tr><td colspan="9" class="text-center text-danger py-4"><i class="fas fa-exclamation-triangle"></i> Gagal memuat data: ${err.message}</td></tr>`;
+                document.getElementById('tableBody').innerHTML = `<tr><td colspan="9" class="text-center text-danger py-4"><i class="fas fa-exclamation-triangle"></i> Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
                 showToast('Gagal memuat data', 'danger');
             });
     }
@@ -703,38 +711,38 @@
             if (isAdmin) {
                 actionColumn = `
                 <td class="text-center">
-                    <button class="btn btn-sm btn-warning btn-edit" data-id="${row.id}" title="Edit">
+                    <button class="btn btn-sm btn-warning btn-edit" data-id="${escapeHtml(row.id)}" title="Edit">
                         <i class="fas fa-edit"></i>
                     </button>
-                    <button class="btn btn-sm btn-danger btn-delete" data-id="${row.id}" title="Hapus">
+                    <button class="btn btn-sm btn-danger btn-delete" data-id="${escapeHtml(row.id)}" title="Hapus">
                         <i class="fas fa-trash"></i>
                     </button>
                 </td>`;
             }
             
             return `
-            <tr class="${!isValid ? 'table-warning' : ''}" data-id="${row.id}">
+            <tr class="${!isValid ? 'table-warning' : ''}" data-id="${escapeHtml(row.id)}">
                 <td class="text-center">${no++}</td>
                 <td>
-                    <strong>${row.kabupaten_kota}</strong>
+                    <strong>${escapeHtml(row.kabupaten_kota)}</strong>
                     ${!isValid ? '<span class="badge badge-warning ml-1">Anomali</span>' : ''}
                 </td>
-                <td class="text-center">${row.tahun}</td>
-                <td class="text-right">${row.luas_panen_formatted}</td>
-                <td class="text-right">${row.produksi_gabah_formatted}</td>
-                <td class="text-right">${row.produksi_beras_formatted}</td>
+                <td class="text-center">${escapeHtml(row.tahun)}</td>
+                <td class="text-right">${escapeHtml(row.luas_panen_formatted)}</td>
+                <td class="text-right">${escapeHtml(row.produksi_gabah_formatted)}</td>
+                <td class="text-right">${escapeHtml(row.produksi_beras_formatted)}</td>
                 <td class="text-center">
-                    ${row.produktivitas}
+                    ${escapeHtml(row.produktivitas)}
                     <small class="d-block text-muted text-xs">${validationIcon}</small>
                 </td>
                 <td>
                     <span class="badge badge-${row.sumber_data_type === 'resmi_webapi' ? 'success' : 'info'}">
-                        ${row.sumber_data_type === 'resmi_webapi' ? 'WebAPI' : 'Simulasi'}
+                        ${escapeHtml(row.sumber_data_type === 'resmi_webapi' ? 'WebAPI' : 'Simulasi')}
                     </span>
                 </td>
                  <td>
                     <span class="badge badge-light border">
-                        ${row.tipe_skenario || '-'}
+                        ${escapeHtml(row.tipe_skenario || '-')}
                     </span>
                 </td>
                 ${actionColumn}
@@ -837,15 +845,15 @@
                 
                 tbody.innerHTML = response.data.map(item => `
                     <tr>
-                        <td>${item.kabupaten_kota}<br><small class="text-muted">Tahun ${item.tahun}</small></td>
-                        <td><span class="badge badge-secondary">${item.field_name}</span></td>
-                        <td>${item.value_actual}</td>
-                        <td class="text-danger small">${item.notes}</td>
+                        <td>${escapeHtml(item.kabupaten_kota)}<br><small class="text-muted">Tahun ${escapeHtml(item.tahun)}</small></td>
+                        <td><span class="badge badge-secondary">${escapeHtml(item.field_name)}</span></td>
+                        <td>${escapeHtml(item.value_actual)}</td>
+                        <td class="text-danger small">${escapeHtml(item.notes)}</td>
                     </tr>
                 `).join('');
             })
             .catch(err => {
-                tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">Error: ${err.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">Error: ${escapeHtml(err.message)}</td></tr>`;
             });
     };
     
@@ -1135,9 +1143,10 @@
                 const thead = document.querySelector('#previewTable thead tr');
                 const tbody = document.querySelector('#previewTable tbody');
                 
-                thead.innerHTML = data.headers.map(h => `<th>${h}</th>`).join('');
+                thead.innerHTML = data.headers.map(h => `<th>${escapeHtml(h)}</th>`).join('');
                 tbody.innerHTML = data.data.map(row => {
-                    const cells = data.headers.map(h => `<td>${row[h] || ''}</td>`).join('');
+                    // Escape all cell values to prevent XSS
+                    const cells = data.headers.map(h => `<td>${escapeHtml(row[h] || '')}</td>`).join('');
                     return `<tr>${cells}</tr>`;
                 }).join('');
                 
@@ -1200,7 +1209,7 @@
             const errorList = document.getElementById('resultErrorList');
             if (data.errors && data.errors.length > 0) {
                 errorsDiv.style.display = 'block';
-                errorList.innerHTML = data.errors.slice(0, 5).map(e => `<li>${e}</li>`).join('');
+                errorList.innerHTML = data.errors.slice(0, 5).map(e => `<li>${escapeHtml(e)}</li>`).join('');
                 if (data.errors.length > 5) {
                     errorList.innerHTML += `<li>...dan ${data.errors.length - 5} error lainnya</li>`;
                 }

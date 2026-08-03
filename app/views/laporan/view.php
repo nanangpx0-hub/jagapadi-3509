@@ -179,7 +179,7 @@
                                      style="max-width: 100%; cursor: pointer;" 
                                      class="img-thumbnail"
                                      alt="Foto Laporan"
-                                     onerror="this.onerror=null; this.src='<?= BASE_URL ?>public/images/no-image.png'; this.alt='Foto tidak ditemukan';">
+                                     onerror="this.onerror=null; this.src='data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='; this.alt='Foto tidak ditemukan';">
                             </a>
                             <div class="mt-2">
                                 <small class="text-muted">

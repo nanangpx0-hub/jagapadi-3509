@@ -324,7 +324,7 @@ $errorMsg = ErrorMessage::flash();
     font-weight: 500;
 }
 
-/* Running indicator animation */
+/* Running indicator animation - disabled for static display */
 .running-indicator {
     display: none;
     width: 16px;
@@ -332,16 +332,10 @@ $errorMsg = ErrorMessage::flash();
     border: 2px solid #28a745;
     border-top: 2px solid transparent;
     border-radius: 50%;
-    animation: spin 1s linear infinite;
 }
 
 .is-running .running-indicator {
     display: inline-block;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
 }
 
 /* Toast Notifications */
@@ -476,6 +470,22 @@ $errorMsg = ErrorMessage::flash();
         min-width: 150px;
     }
 }
+
+/* Disable all repeating/blinking/pulsing (timbul tenggelam) animations on this page */
+*, *::before, *::after {
+    animation: none !important;
+}
+</style>
+
+<!-- DataTables CSS -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap4.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap4.min.css">
+<style>
+#dataTable_wrapper .dataTables_filter,
+#dataTable_wrapper .dataTables_length { margin-bottom: 0.75rem; }
+#dataTable_wrapper .dataTables_filter input { margin-left: 0.5rem; }
+#dataTable_wrapper .dataTables_paginate .pagination { justify-content: center; margin-top: 0.5rem; }
+#dataTable_wrapper .dataTables_info { padding-top: 0.75rem; }
 </style>
 
 <div class="container-fluid">
@@ -554,6 +564,7 @@ $errorMsg = ErrorMessage::flash();
                 <table class="table table-bordered table-hover" id="dataTable">
                     <thead class="thead-light">
                         <tr>
+                            <th width="50" class="text-center">No</th>
                             <th>No Laporan</th>
                             <th>Tanggal</th>
                             <th>Pelapor</th>
@@ -565,8 +576,10 @@ $errorMsg = ErrorMessage::flash();
                         </tr>
                     </thead>
                     <tbody>
+                        <?php $no = 0; ?>
                         <?php foreach ($laporan as $item): ?>
                         <tr>
+                            <td class="text-center text-muted"><?= ++$no ?></td>
                             <td>
                                 <span class="badge badge-light border"><?= htmlspecialchars($item['no_laporan'] ?? '-') ?></span>
                             </td>
@@ -581,8 +594,8 @@ $errorMsg = ErrorMessage::flash();
                             </td>
                             <td>
                                 <strong><?= htmlspecialchars($item['nama_saluran']) ?></strong><br>
-                                <span class="badge badge-info"><?= $item['jenis_saluran'] ?? $item['jenis_irigasi'] ?></span><br>
-                                <small class="text-muted">Luas: <?= number_format($item['luas_layanan'], 2) ?> Ha</small>
+                                <span class="badge badge-info"><?= htmlspecialchars($item['jenis_saluran'] ?? $item['jenis_irigasi'] ?? '-') ?></span><br>
+                                <small class="text-muted">Luas: <?= number_format((float)($item['luas_layanan'] ?? 0.0), 2) ?> Ha</small>
                             </td>
                             <td>
                                 <?php 
@@ -1361,6 +1374,26 @@ document.addEventListener('DOMContentLoaded', function() {
             clearInterval(checkInterval);
             IrigasiActionController.init();
         }, 3000);
+    }
+});
+</script>
+
+<!-- DataTables JS (jQuery sudah dimuat di head header.php) -->
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap4.min.js"></script>
+<script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
+<script>
+$(function() {
+    if ($.fn.DataTable && $('#dataTable').length) {
+        $('#dataTable').DataTable({
+            responsive: true,
+            pageLength: 25,
+            lengthMenu: [10, 25, 50, 100],
+            order: [[0, 'asc']],
+            language: {
+                url: 'https://cdn.datatables.net/plug-ins/1.13.7/i18n/id.json'
+            }
+        });
     }
 });
 </script>

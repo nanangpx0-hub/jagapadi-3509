@@ -10,7 +10,6 @@ use App\Core\Jwt;
 use App\Core\Request;
 use App\Models\User;
 use App\Models\ActivityLog;
-use App\Helpers\RateLimiter;
 use App\Helpers\JwtBlacklist;
 use App\Helpers\PasswordValidator;
 
@@ -18,18 +17,7 @@ class AuthController extends BaseApiController
 {
     public function login(): void
     {
-        $ip = Request::ip();
         $username = Request::input('username', '');
-        $maxAttempts = (int) Env::get('LOGIN_MAX_ATTEMPTS', '5');
-        $decay = (int) Env::get('LOGIN_DECAY_SECONDS', '900');
-
-        $rlKey = 'api_' . $ip . ($username !== '' ? '_' . mb_strtolower($username) : '');
-
-        if (!RateLimiter::attempt('login', $rlKey, $maxAttempts, $decay)) {
-            $this->error('TooManyRequests', 'Terlalu banyak percobaan login. Coba lagi nanti.', [], 429);
-            return;
-        }
-
         $password = Request::input('password', '');
 
         if ($username === '' || $password === '') {
@@ -62,7 +50,6 @@ class AuthController extends BaseApiController
             'exp' => time() + $jwtExpiry,
         ]);
 
-        RateLimiter::reset('login', $rlKey);
         ActivityLog::log((int) $user['id'], 'login_success', 'users', (int) $user['id'], 'API login berhasil');
 
         $this->success([

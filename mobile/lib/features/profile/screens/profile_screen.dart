@@ -92,7 +92,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           Center(
             child: Text('@${user?.username ?? '-'}',
-                style: TextStyle(color: AppColors.textSecondary)),
+                style: const TextStyle(color: AppColors.textSecondary)),
           ),
           const SizedBox(height: 8),
           if (user?.role != null)
@@ -102,8 +102,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(
                   color: user!.role == 'admin'
-                      ? Colors.blue.withOpacity(0.15)
-                      : Colors.green.withOpacity(0.15),
+                      ? Colors.blue.withValues(alpha: 0.15)
+                      : Colors.green.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(

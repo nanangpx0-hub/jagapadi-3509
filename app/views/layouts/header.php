@@ -18,6 +18,8 @@
     <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- jQuery (dimuat di head agar tersedia untuk skrip inline pada body view) -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="<?= BASE_URL ?>public/css/loading.css">

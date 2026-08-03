@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test';
 
-const BASE = 'http://localhost:8080';
+const BASE = 'http://localhost/jagapadi-3509';
 const ADMIN_USER = 'admin';
-const ADMIN_PASS = 'ChangeMeAdmin!123';
+const ADMIN_PASS = 'Jember3509';
 
 async function loginAsAdmin(page) {
-  await page.goto(BASE + '/login');
-  await page.fill('#username', ADMIN_USER);
+  await page.goto(BASE + '/auth/login');
+  await page.fill('input[name="username"]', ADMIN_USER);
   await page.fill('#password', ADMIN_PASS);
   await page.getByRole('button', { name: 'Login' }).click();
   await page.waitForURL(/\/(dashboard|password\/change)/);
@@ -106,9 +106,9 @@ test.describe('Laporan Management', () => {
   });
 
   test('should not allow unauthenticated create laporan', async ({ page }) => {
-    await page.goto(BASE + '/logout');
+    await page.goto(BASE + '/auth/logout');
     await page.goto(BASE + '/laporan-hama/create');
-    await expect(page).toHaveURL(/\/login/);
+    await expect(page).toHaveURL(/\/auth\/login|\/login/);
   });
 
   test('should have CSRF protection on laporan forms', async ({ page }) => {
@@ -117,3 +117,5 @@ test.describe('Laporan Management', () => {
     await expect(csrfField).toHaveCount(1);
   });
 });
+
+

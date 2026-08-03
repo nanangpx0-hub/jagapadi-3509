@@ -10,6 +10,7 @@ module.exports = defineConfig({
   fullyParallel: CI,
   workers: CI ? 2 : 1,
   retries: CI ? 2 : 0,
+  globalSetup: require.resolve('./global-setup.js'),
   reporter: [
     ['html', { outputFolder: 'reports/html' }],
     ['json', { outputFile: 'reports/test-results.json' }],

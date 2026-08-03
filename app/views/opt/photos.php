@@ -174,16 +174,10 @@
     z-index: 9999;
     align-items: center;
     justify-content: center;
-    animation: fadeIn 0.3s ease;
 }
 
 .photo-preview-modal.active {
     display: flex;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
 }
 
 .photo-preview-content {
@@ -204,11 +198,10 @@
 @keyframes zoomIn {
     from {
         transform: scale(0.8);
-        opacity: 0;
     }
+
     to {
         transform: scale(1);
-        opacity: 1;
     }
 }
 
@@ -482,27 +475,22 @@
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // Remove card with fade out animation
+                // Remove card directly without animation
                 if (card) {
-                    card.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-                    card.style.opacity = '0';
-                    card.style.transform = 'scale(0.8)';
-                    setTimeout(() => {
-                        card.remove();
-                        
-                        // Update total count
-                        const badge = document.querySelector('.card-title .badge');
-                        if (badge) {
-                            const currentCount = parseInt(badge.textContent) || 0;
-                            badge.textContent = Math.max(0, currentCount - 1);
-                        }
-                        
-                        // Show message if no photos left
-                        const grid = document.getElementById('photosGrid');
-                        if (grid && grid.children.length === 0) {
-                            location.reload();
-                        }
-                    }, 300);
+                    card.remove();
+                    
+                    // Update total count
+                    const badge = document.querySelector('.card-title .badge');
+                    if (badge) {
+                        const currentCount = parseInt(badge.textContent) || 0;
+                        badge.textContent = Math.max(0, currentCount - 1);
+                    }
+                    
+                    // Show message if no photos left
+                    const grid = document.getElementById('photosGrid');
+                    if (grid && grid.children.length === 0) {
+                        location.reload();
+                    }
                 }
                 
                 // Show success toast
@@ -547,7 +535,7 @@
         
         const toast = document.createElement('div');
         toast.className = 'alert alert-' + (type === 'success' ? 'success' : 'danger') + ' alert-dismissible fade show';
-        toast.style.cssText = 'min-width: 300px; margin-bottom: 10px; animation: slideInRight 0.3s ease;';
+        toast.style.cssText = 'min-width: 300px; margin-bottom: 10px;';
         toast.innerHTML = `
             <button type="button" class="close" data-dismiss="alert">&times;</button>
             <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i> ${message}

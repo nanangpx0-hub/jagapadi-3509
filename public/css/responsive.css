@@ -795,24 +795,11 @@ img {
     margin-bottom: 0.75rem;
     display: none;
     box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
-    animation: pulseHint 2s ease-in-out infinite;
 }
 
 .mobile-scroll-indicator i {
     margin-right: 0.5rem;
     animation: swipeHint 1.5s ease-in-out infinite;
-}
-
-@keyframes pulseHint {
-
-    0%,
-    100% {
-        opacity: 1;
-    }
-
-    50% {
-        opacity: 0.8;
-    }
 }
 
 @keyframes swipeHint {
@@ -953,7 +940,6 @@ img {
 /* Performance Optimizations */
 .lazy {
     opacity: 0;
-    transition: opacity 0.3s;
 }
 
 .lazy.loaded {
@@ -1459,7 +1445,6 @@ img {
         background: rgba(0, 0, 0, 0.5) !important;
         z-index: 1039 !important;
         display: block !important;
-        animation: fadeIn 0.3s ease-in-out;
     }
 
     /* Navbar stays in place */
@@ -1633,17 +1618,6 @@ img {
     .info-box-number {
         font-size: 1.25rem !important;
         font-weight: 600 !important;
-    }
-}
-
-/* Fade in animation for overlay */
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-    }
-
-    to {
-        opacity: 1;
     }
 }
 
@@ -1851,7 +1825,6 @@ img {
         background-color: rgba(0, 0, 0, 0.5);
         z-index: 1030;
         opacity: 1;
-        transition: opacity 0.3s ease-in-out;
         pointer-events: auto;
     }
 

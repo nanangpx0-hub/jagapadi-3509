@@ -1,13 +1,13 @@
 import { test, expect } from '@playwright/test';
 
-const BASE = 'http://localhost:8080';
+const BASE = 'http://localhost/jagapadi-3509';
 const ADMIN_USER = 'admin';
-const ADMIN_PASS = 'ChangeMeAdmin!123';
+const ADMIN_PASS = 'Jember3509';
 
 async function loginAsAdmin(page) {
-  await page.goto(`${BASE}/login`);
-  await page.fill('#username', ADMIN_USER);
-  await page.fill('#password', ADMIN_PASS);
+  await page.goto(`${BASE}/auth/login`);
+  await page.fill('input[name="username"]', ADMIN_USER);
+  await page.fill('input[name="password"]', ADMIN_PASS);
   await page.getByRole('button', { name: 'Login' }).click();
   await page.waitForURL(/\/(dashboard|password\/change)/);
   if (page.url().includes('/password/change')) {
@@ -177,3 +177,5 @@ test.describe('Dashboard', () => {
     await expect(page).toHaveURL(/\/wilayah/);
   });
 });
+
+

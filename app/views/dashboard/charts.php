@@ -259,6 +259,18 @@
     .chart-container {
         height: 250px;
     }
+
+    .chart-tabs {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        flex-wrap: nowrap;
+    }
+
+    .chart-tab {
+        padding: 12px 14px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
 }
 </style>
 

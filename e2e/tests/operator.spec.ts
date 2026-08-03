@@ -1,14 +1,14 @@
 import { test, expect } from '@playwright/test';
 
-const BASE = 'http://localhost:8080';
+const BASE = 'http://localhost/jagapadi-3509';
 const OPERATOR_USER = 'operator01';
-const OPERATOR_PASS = 'ChangeMeOperator!123';
+const OPERATOR_PASS = 'Jember3509';
 const ADMIN_USER = 'admin';
-const ADMIN_PASS = 'ChangeMeAdmin!123';
+const ADMIN_PASS = 'Jember3509';
 
 async function loginAs(page, username, password) {
-  await page.goto(`${BASE}/login`);
-  await page.fill('#username', username);
+  await page.goto(`${BASE}/auth/login`);
+  await page.fill('input[name="username"]', username);
   await page.fill('#password', password);
   await page.getByRole('button', { name: 'Login' }).click();
   await page.waitForURL(/\/(dashboard|password\/change)/);
@@ -29,7 +29,7 @@ test.describe('Operator — Authentication & Session', () => {
 
   test('operator can logout successfully', async ({ page }) => {
     await loginAs(page, OPERATOR_USER, OPERATOR_PASS);
-    await page.locator('form[action="/logout"] button[type="submit"]').click();
+    await page.locator('form[action="auth/logout"] button[type="submit"]').click();
     await expect(page).toHaveURL(/\/login/);
   });
 
@@ -195,3 +195,5 @@ test.describe('Operator — Cross-Role Restrictions', () => {
     await expect(page).toHaveURL(/\/(login|dashboard)/);
   });
 });
+
+

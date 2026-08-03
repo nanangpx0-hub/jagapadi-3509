@@ -34,6 +34,11 @@
 .map-loading { position:absolute; top:0; left:0; right:0; bottom:0; background:rgba(255,255,255,0.8); display:flex; align-items:center; justify-content:center; z-index:2000; }
 .map-loading.hidden { display:none; }
 @media (max-width:768px) { .map-container { height:calc(100vh - 150px); } .map-controls { max-width:200px; right:6px; top:6px; } .filter-panel { max-width:200px; left:6px; top:6px; } .control-panel-body,.filter-panel-body { padding:10px; } .legend-panel { display:none; } }
+
+/* Nonaktifkan animasi timbul tenggelam (pulse/blink/fade/spin) agar seluruh elemen pada peta tampil statis */
+*, *::before, *::after {
+    animation: none !important;
+}
 </style>
 
 <div class="row mb-3">

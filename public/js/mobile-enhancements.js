@@ -882,7 +882,6 @@
                 z-index: 1035;
                 opacity: 0;
                 visibility: hidden;
-                transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
                 pointer-events: none;
             `;
             document.body.appendChild(this.overlay);
@@ -918,10 +917,12 @@
                 if (isOpen && window.innerWidth < 992) {
                     this.overlay.style.opacity = '1';
                     this.overlay.style.visibility = 'visible';
+                    this.overlay.style.display = 'block';
                     this.overlay.style.pointerEvents = 'auto';
                 } else {
                     this.overlay.style.opacity = '0';
                     this.overlay.style.visibility = 'hidden';
+                    this.overlay.style.display = 'none';
                     this.overlay.style.pointerEvents = 'none';
                 }
             }
@@ -962,7 +963,7 @@
                 container.addEventListener('scroll', () => {
                     const hint = container.previousElementSibling;
                     if (hint && hint.classList.contains('table-scroll-hint')) {
-                        // Fade out hint after user scrolls
+                        // Dim hint when user scrolls
                         if (container.scrollLeft > 10) {
                             hint.style.opacity = '0.5';
                         } else {

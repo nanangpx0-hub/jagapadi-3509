@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'app.dart';
 import 'core/fcm/fcm_service.dart';
 import 'core/router.dart';

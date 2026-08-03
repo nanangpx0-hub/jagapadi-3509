@@ -424,7 +424,6 @@ tbody tr:hover {
     box-shadow: 0 4px 12px rgba(0,0,0,0.25);
     opacity: 0;
     visibility: hidden;
-    transition: all 0.2s ease;
     border: 1px solid rgba(255,255,255,0.1);
 }
 
@@ -444,7 +443,6 @@ tbody tr:hover {
     border-top-color: #2c3e50;
     opacity: 0;
     visibility: hidden;
-    transition: all 0.2s ease;
 }
 
 .btn-action:hover::before {
@@ -729,6 +727,7 @@ tbody tr:hover {
                                     <input type="checkbox" id="checkAll" title="Pilih Semua">
                                 </th>
                                 <?php endif; ?>
+                                <th width="50" class="text-center">No</th>
                                 <th data-sort="id" data-dir="desc" class="sortable">
                                     ID <i class="fas fa-sort fa-sm text-muted"></i>
                                 </th>
@@ -766,7 +765,7 @@ tbody tr:hover {
     </div>
 </div>
 
-<?php if(($_SESSION['role'] ?? '') == 'admin'): ?>
+<?php if(($_SESSION['role'] ?? '') !== ''): ?>
 <script>
 /**
  * Master Checkbox & Bulk Delete - Consolidated Implementation
@@ -840,7 +839,7 @@ tbody tr:hover {
     function buildURL() {
         const params = new URLSearchParams({
             page: state.page,
-            per_page: state.perPage,
+            per_page: state.perPage < 0 ? 'all' : state.perPage,
             search: state.search,
             status: state.status,
             sort_col: state.sortCol,
@@ -904,6 +903,7 @@ tbody tr:hover {
         const isPetugas = '<?= $_SESSION['role'] ?? '' ?>' === 'petugas';
         const canEdit = isAdmin || isOperator || isPetugas;
         const canDelete = isAdmin || (isPetugas && (r.status === 'Draf' || r.status === 'Ditolak'));
+        const rowNo = state.perPage < 0 ? idx + 1 : (state.page - 1) * state.perPage + idx + 1;
         const foto = r.foto_url
             ? `<div class="photo-thumbnail-container"><img src="${BASE_URL}${r.foto_url}" alt="Foto" class="photo-thumbnail" data-full-image="${BASE_URL}${r.foto_url}" loading="lazy" onerror="this.onerror=null;this.style.display='none';this.parentElement.innerHTML='<div class=\\'photo-thumbnail no-image\\'><i class=\\'fas fa-image\\'></i></div>';"></div>`
             : `<div class="photo-thumbnail-container"><div class="photo-thumbnail no-image"><i class="fas fa-image"></i></div></div>`;
@@ -933,6 +933,7 @@ tbody tr:hover {
 
         return `<tr>
             ${checkbox}
+            <td class="text-center text-muted">${rowNo}</td>
             <td><span class="badge badge-light">#${r.id}</span></td>
             <td>${foto}</td>
             <td>${formatDate(r.tanggal)}</td>
@@ -1061,7 +1062,7 @@ tbody tr:hover {
             console.error('[LaporanTable] Error:', err);
             if (err.name === 'AbortError') return;
             const tbody = qs('#tableBody');
-            if (tbody) tbody.innerHTML = `<tr><td colspan="12" class="text-center text-danger py-4"><i class="fas fa-exclamation-triangle"></i> Gagal memuat: ${escapeHtml(err.message)}</td></tr>`;
+            if (tbody) tbody.innerHTML = `<tr><td colspan="13" class="text-center text-danger py-4"><i class="fas fa-exclamation-triangle"></i> Gagal memuat: ${escapeHtml(err.message)}</td></tr>`;
         } finally {
             state.loading = false;
         }
@@ -1282,7 +1283,7 @@ tbody tr:hover {
 <!-- Photo Preview Overlay -->
 <div id="photoPreviewOverlay" class="photo-preview-overlay">
     <span class="photo-preview-close">&times;</span>
-    <img id="photoPreviewImage" class="photo-preview-image" src="" alt="Preview Foto">
+    <img id="photoPreviewImage" class="photo-preview-image" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="Preview Foto">
 </div>
 
 <script>

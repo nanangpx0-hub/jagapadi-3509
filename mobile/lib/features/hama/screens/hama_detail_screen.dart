@@ -127,8 +127,9 @@ class _HamaDetailScreenState extends State<HamaDetailScreen> {
               if (l.status == 'Diverifikasi')
                 const PopupMenuItem(value: 'archive', child: Text('Arsipkan')),
             ], onSelected: (v) async {
-              if (v == 'verify') await _handleAdminVerify();
-              else if (v == 'reject') await _handleAdminReject();
+              if (v == 'verify') {
+                await _handleAdminVerify();
+              } else if (v == 'reject') await _handleAdminReject();
               else if (v == 'archive') await _handleArchive();
             }),
         ],
@@ -247,7 +248,7 @@ class _InfoRow extends StatelessWidget {
         children: [
           SizedBox(
             width: 140,
-            child: Text(label, style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+            child: Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
           ),
           Expanded(child: Text(value, style: TextStyle(fontWeight: FontWeight.w500, color: valueColor))),
         ],

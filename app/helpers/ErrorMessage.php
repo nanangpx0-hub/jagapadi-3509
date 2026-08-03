@@ -72,22 +72,43 @@ class ErrorMessage {
     
     /**
      * Set error message in session
-     * 
-     * @param string $key Error key
+     *
+     * @param string $key Error key or raw message string
      * @param array $params Parameters
      */
     public static function set($key, $params = []) {
-        $_SESSION['error'] = self::get($key, $params);
+        $_SESSION['error'] = self::resolve($key, $params);
     }
-    
+
     /**
      * Set success message in session
-     * 
-     * @param string $key Success key
+     *
+     * @param string $key Success key or raw message string
      * @param array $params Parameters
      */
     public static function setSuccess($key, $params = []) {
-        $_SESSION['success'] = self::get($key, $params);
+        $_SESSION['success'] = self::resolve($key, $params);
+    }
+
+    /**
+     * Resolve a message key to its text, falling back to raw string if key not found.
+     *
+     * @param string $key Error/success key or raw message
+     * @param array $params Parameters for placeholder replacement
+     * @return string Resolved message
+     */
+    private static function resolve(string $key, array $params = []): string {
+        if (isset(self::$messages[$key])) {
+            $message = self::$messages[$key];
+        } else {
+            $message = $key;
+        }
+
+        foreach ($params as $param => $value) {
+            $message = str_replace('{' . $param . '}', $value, $message);
+        }
+
+        return $message;
     }
     
     /**
