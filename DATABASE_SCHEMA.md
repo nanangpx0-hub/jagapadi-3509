@@ -53,7 +53,7 @@ Catatan:
 ### `laporan_hama`
 - Laporan serangan hama/OPT.
 - Kolom penting: `user_id`, `master_opt_id`, `tanggal`, `lokasi`, `latitude`, `longitude`, `tingkat_keparahan`, `populasi`, `luas_serangan`, `foto_url`, `status`, `kabupaten_id`, `kecamatan_id`, `desa_id`.
-- Status historis yang terlihat: `Draf`, `Submitted`, `Diverifikasi`, `Ditolak`; migration terbaru menambah status arsip jika sudah diterapkan.
+- Definsi `status`: `DEFAULT 'Submitted'`, ENUM: `'Submitted'`, `'Diverifikasi'`, `'Ditolak'` (serta `'Diarsipkan'` jika diterapkan). (Alur status `Draf` awal telah dihapus).
 
 ### `master_opt`
 - Master organisme pengganggu tanaman.

@@ -62,11 +62,11 @@
                     </tr>
                     <tr>
                         <th>Kode OPT</th>
-                        <td><strong><?= htmlspecialchars($laporan['kode_opt']) ?></strong></td>
+                        <td><strong><?= htmlspecialchars($laporan['kode_opt'] ?? '') ?></strong></td>
                     </tr>
                     <tr>
                         <th>Nama OPT</th>
-                        <td><?= htmlspecialchars($laporan['nama_opt']) ?></td>
+                        <td><?= htmlspecialchars($laporan['nama_opt'] ?? '') ?></td>
                     </tr>
                     <tr>
                         <th>Jenis</th>
@@ -81,7 +81,7 @@
                     </tr>
                     <tr>
                         <th>Lokasi</th>
-                        <td><?= htmlspecialchars($laporan['lokasi']) ?></td>
+                        <td><?= htmlspecialchars($laporan['lokasi'] ?? '') ?></td>
                     </tr>
                     <tr>
                         <th>Koordinat GPS</th>
@@ -141,7 +141,7 @@
                     <tr>
                         <th>Pelapor</th>
                         <td>
-                            <?= htmlspecialchars($laporan['pelapor_nama']) ?><br>
+                            <?= htmlspecialchars($laporan['pelapor_nama'] ?? '') ?><br>
                             <small class="text-muted">
                                 <?= $laporan['pelapor_email'] ?? '' ?><br>
                                 <?= $laporan['pelapor_phone'] ?? '' ?>
@@ -151,7 +151,7 @@
                     <?php if(!empty($laporan['catatan'])): ?>
                     <tr>
                         <th>Catatan Pelapor</th>
-                        <td><?= nl2br(htmlspecialchars($laporan['catatan'])) ?></td>
+                        <td><?= nl2br(htmlspecialchars($laporan['catatan'] ?? '')) ?></td>
                     </tr>
                     <?php endif; ?>
                     <?php if($laporan['status'] == 'Diverifikasi' || $laporan['status'] == 'Ditolak'): ?>
@@ -166,7 +166,7 @@
                     <?php if(!empty($laporan['catatan_verifikasi'])): ?>
                     <tr>
                         <th>Catatan Verifikasi</th>
-                        <td><?= nl2br(htmlspecialchars($laporan['catatan_verifikasi'])) ?></td>
+                        <td><?= nl2br(htmlspecialchars($laporan['catatan_verifikasi'] ?? '')) ?></td>
                     </tr>
                     <?php endif; ?>
                     <?php endif; ?>
@@ -194,7 +194,7 @@
                 <?php if(!empty($laporan['rekomendasi'])): ?>
                 <div class="alert alert-info">
                     <h5><i class="icon fas fa-info-circle"></i> Rekomendasi Pengendalian:</h5>
-                    <?= nl2br(htmlspecialchars($laporan['rekomendasi'])) ?>
+                    <?= nl2br(htmlspecialchars($laporan['rekomendasi'] ?? '')) ?>
                 </div>
                 <?php endif; ?>
             </div>
@@ -319,11 +319,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const popupContent = `
                 <div style="min-width: 200px;">
                     <h6 style="margin: 0 0 10px 0; color: #28a745;">
-                        <strong><?= htmlspecialchars($laporan['nama_opt']) ?></strong>
+                        <strong><?= htmlspecialchars($laporan['nama_opt'] ?? '') ?></strong>
                     </h6>
                     <table style="width: 100%; font-size: 12px;">
                         <tr><td><strong>Jenis:</strong></td><td><?= $laporan['jenis'] ?></td></tr>
-                        <tr><td><strong>Lokasi:</strong></td><td><?= htmlspecialchars($laporan['lokasi']) ?></td></tr>
+                        <tr><td><strong>Lokasi:</strong></td><td><?= htmlspecialchars($laporan['lokasi'] ?? '') ?></td></tr>
                         <tr><td><strong>Keparahan:</strong></td><td><span style="color: ${iconColor}; font-weight: bold;"><?= $laporan['tingkat_keparahan'] ?></span></td></tr>
                         <tr><td><strong>Tanggal:</strong></td><td><?= date('d/m/Y', strtotime($laporan['tanggal'])) ?></td></tr>
                     </table>

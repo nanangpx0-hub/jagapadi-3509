@@ -62,7 +62,7 @@ final class ModelTest extends TestCase {
             self::markTestSkipped('PDO SQLite or MySQL driver is required for ModelTest.');
         }
 
-        if (!function_exists('loadEnv')) {
+        if (!function_exists('loadEnv') && is_file(ROOT_PATH . '/config/env.php')) {
             require_once ROOT_PATH . '/config/env.php';
         }
 

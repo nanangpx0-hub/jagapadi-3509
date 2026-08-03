@@ -130,6 +130,7 @@ e2e/reports/
 e2e/junit.xml
 e2e/test-output.json
 e2e/*.png
+.phpunit.result.cache
 
 # --- Separate Next.js apps (not part of main repo) ---
 /nextjs-app/

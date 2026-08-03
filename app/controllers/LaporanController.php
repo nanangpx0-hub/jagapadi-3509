@@ -543,10 +543,10 @@ class LaporanController extends Controller {
             $postData['kabupaten_id'] = $kab['id'];
 
             if (!empty($postData['latitude']) && !empty($postData['longitude'])) {
-                $lat = (float)$postData['latitude'];
-                $lon = (float)$postData['longitude'];
-                if ($lat < JEMBER_LAT_MIN || $lat > JEMBER_LAT_MAX || $lon < JEMBER_LON_MIN || $lon > JEMBER_LON_MAX) {
-                    $_SESSION['error'] = 'Koordinat GPS harus berada dalam wilayah Jember';
+                require_once ROOT_PATH . '/app/helpers/GeoValidator.php';
+                $geoRes = GeoValidator::validateJemberCoordinates((float)$postData['latitude'], (float)$postData['longitude']);
+                if (!$geoRes['valid']) {
+                    $_SESSION['error'] = $geoRes['message'];
                     $this->redirect('laporan/edit/' . $id);
                 }
             }
@@ -1103,9 +1103,9 @@ class LaporanController extends Controller {
                 $errors[] = 'Alamat lengkap wajib diisi minimal 10 karakter untuk petugas';
             }
 
-            // Petugas hanya dapat membuat dengan status Draf atau Submitted
-            if (!in_array($data['status'], ['Draf', 'Submitted'])) {
-                $errors[] = 'Status tidak valid untuk petugas. Hanya Draf dan Submitted yang diizinkan.';
+            // Petugas hanya dapat membuat dengan status Submitted
+            if (!in_array($data['status'], ['Submitted'])) {
+                $errors[] = 'Status tidak valid untuk petugas. Hanya Submitted yang diizinkan.';
             }
 
             // Petugas wajib mengisi populasi jika tingkat keparahan Berat
@@ -1176,10 +1176,11 @@ class LaporanController extends Controller {
                 $errors[] = 'Longitude harus antara -180 dan 180';
             }
 
-            // Check Jember boundaries if both provided
-            if ($lat < JEMBER_LAT_MIN || $lat > JEMBER_LAT_MAX ||
-                $lon < JEMBER_LON_MIN || $lon > JEMBER_LON_MAX) {
-                $errors[] = 'Koordinat GPS harus berada dalam wilayah Jember';
+            // Check Jember boundaries and land geofencing
+            require_once ROOT_PATH . '/app/helpers/GeoValidator.php';
+            $geoValidation = GeoValidator::validateJemberCoordinates($lat, $lon);
+            if (!$geoValidation['valid']) {
+                $errors[] = $geoValidation['message'];
             }
         }
 

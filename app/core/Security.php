@@ -37,12 +37,14 @@ class Security {
 
         // Use secure comparison to prevent timing attacks
         $valid = hash_equals($sessionToken, $token);
-        
-        if ($valid) {
-            // Rotate token after successful validation to prevent replay attacks
-            self::regenerateCsrfToken();
-        }
-        
+
+        // No automatic rotation here: the web request path validates the
+        // token twice (index.php gate + controller-level check), and rotation
+        // between the two validations would reject every state-changing
+        // request. Tokens stay valid for the whole session lifetime; the
+        // 1-hour expiry above and SameSite=Lax cookie limit replay risk.
+        // regenerateCsrfToken() remains available for explicit rotation.
+
         return $valid;
     }
 

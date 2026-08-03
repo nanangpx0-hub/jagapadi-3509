@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once ROOT_PATH . '/app/controllers/Api/BaseApiController.php';
 require_once ROOT_PATH . '/app/models/LaporanHama.php';
+require_once ROOT_PATH . '/app/helpers/GeoValidator.php';
 
 class LaporanHamaController extends BaseApiController {
     
@@ -103,21 +104,26 @@ class LaporanHamaController extends BaseApiController {
             if (!empty($errors)) {
                 $this->sendError('Validation failed', 422, $errors);
             }
-            
-            // Validate status if provided
-            $requestedStatus = $data['status'] ?? 'Draf';
-            $allowedStatuses = ['Draf', 'Submitted'];
-            if (!in_array($requestedStatus, $allowedStatuses, true)) {
-                $this->sendError('Status tidak valid. Hanya Draf atau Submitted yang diperbolehkan.', 422);
+
+            // Validasi koordinat (geofencing)
+            $lat = $data['latitude'] ?? null;
+            $lng = $data['longitude'] ?? null;
+            if ($lat === null || $lng === null || !is_numeric($lat) || !is_numeric($lng)) {
+                $this->sendError('Koordinat (latitude dan longitude) wajib diisi berupa angka valid.', 422);
+            }
+
+            $geoValidation = GeoValidator::validateJemberCoordinates((float)$lat, (float)$lng);
+            if (!$geoValidation['valid']) {
+                $this->sendError($geoValidation['message'], 422);
             }
             
             // Set user_id from session
             $data['user_id'] = $_SESSION['user_id'];
             
-            // Set default values
+            // Set default values - Status langsung 'Submitted' (menghapus alur 'Draf')
             $data['populasi'] = $data['populasi'] ?? 0;
             $data['luas_serangan'] = $data['luas_serangan'] ?? 0;
-            $data['status'] = $requestedStatus;
+            $data['status'] = 'Submitted';
             $data['created_at'] = date('Y-m-d H:i:s');
             
             // Handle file upload if present
@@ -125,10 +131,8 @@ class LaporanHamaController extends BaseApiController {
                 $data['foto'] = $this->handleFileUpload($_FILES['foto'], 'laporan');
             }
             
-            // Generate nomor_laporan only when status is Submitted
-            if ($data['status'] === 'Submitted') {
-                $data['nomor_laporan'] = $this->laporanModel->generateNomorLaporan();
-            }
+            // Generate nomor_laporan untuk status Submitted
+            $data['nomor_laporan'] = $this->laporanModel->generateNomorLaporan();
             
             $laporanId = $this->laporanModel->create($data);
             
