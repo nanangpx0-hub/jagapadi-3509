@@ -1,14 +1,14 @@
 import { test, expect } from '@playwright/test';
 
-const BASE = 'http://localhost:8080';
+const BASE = 'http://localhost/jagapadi-3509';
 const PETUGAS_USER = 'petugas01';
-const PETUGAS_PASS = 'ChangeMePetugas!123';
+const PETUGAS_PASS = 'Jember3509';
 const ADMIN_USER = 'admin';
-const ADMIN_PASS = 'ChangeMeAdmin!123';
+const ADMIN_PASS = 'Jember3509';
 
 async function loginAs(page, username, password) {
-  await page.goto(BASE + '/login');
-  await page.fill('#username', username);
+  await page.goto(BASE + '/auth/login');
+  await page.fill('input[name="username"]', username);
   await page.fill('#password', password);
   await page.getByRole('button', { name: 'Login' }).click();
   await page.waitForURL(/\/(dashboard|password\/change)/);
@@ -98,3 +98,5 @@ test.describe('Admin Verifikasi Laporan', () => {
     expect(statusText).not.toBe('Diverifikasi');
   });
 });
+
+

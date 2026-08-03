@@ -69,7 +69,7 @@ class _WilayahPickerState extends State<WilayahPicker> {
             widget.onKabupatenChanged(v);
             if (v != null) w.loadKecamatan(v);
           },
-          textFn: (e) => (e as Kabupaten).nama,
+          textFn: (e) => (e).nama,
         ),
         const SizedBox(height: 12),
         _Dropdown(
@@ -86,7 +86,7 @@ class _WilayahPickerState extends State<WilayahPicker> {
             widget.onKecamatanChanged(v);
             if (v != null) w.loadDesa(v);
           },
-          textFn: (e) => (e as Kecamatan).nama,
+          textFn: (e) => (e).nama,
         ),
         const SizedBox(height: 12),
         _Dropdown(
@@ -99,7 +99,7 @@ class _WilayahPickerState extends State<WilayahPicker> {
             setState(() => _desaId = v);
             widget.onDesaChanged(v);
           },
-          textFn: (e) => (e as Desa).nama,
+          textFn: (e) => (e).nama,
         ),
       ],
     );
@@ -128,7 +128,7 @@ class _Dropdown<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<int>(
-      value: items.any((e) => (e is Kabupaten ? (e as Kabupaten).id : e is Kecamatan ? (e as Kecamatan).id : (e as Desa).id) == value)
+      initialValue: items.any((e) => (e is Kabupaten ? (e as Kabupaten).id : e is Kecamatan ? (e as Kecamatan).id : (e as Desa).id) == value)
           ? value
           : null,
       decoration: InputDecoration(labelText: label, errorText: errorText),

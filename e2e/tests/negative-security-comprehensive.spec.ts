@@ -1,14 +1,14 @@
 import { test, expect } from '@playwright/test';
 
-const BASE = 'http://localhost:8080';
+const BASE = 'http://localhost/jagapadi-3509';
 const ADMIN_USER = 'admin';
-const ADMIN_PASS = 'ChangeMeAdmin!123';
+const ADMIN_PASS = 'Jember3509';
 const PETUGAS_USER = 'petugas01';
-const PETUGAS_PASS = 'ChangeMePetugas!123';
+const PETUGAS_PASS = 'Jember3509';
 const OPERATOR_USER = 'operator01';
-const OPERATOR_PASS = 'ChangeMeOperator!123';
+const OPERATOR_PASS = 'Jember3509';
 const STATISTISI_USER = 'statistisi01';
-const STATISTISI_PASS = 'ChangeMeStatistisi!123';
+const STATISTISI_PASS = 'Jember3509';
 
 const ROLES = [
   { name: 'admin', user: ADMIN_USER, pass: ADMIN_PASS },
@@ -19,8 +19,8 @@ const ROLES = [
 
 async function loginAs(page, username: string, password: string) {
   try {
-    await page.goto(`${BASE}/login`, { timeout: 10000 });
-    await page.fill('#username', username);
+    await page.goto(`${BASE}/auth/login`, { timeout: 10000 });
+    await page.fill('input[name="username"]', username);
     await page.fill('#password', password);
     await page.getByRole('button', { name: 'Login' }).click();
     await page.waitForURL(/\/(dashboard|password\/change)/, { timeout: 8000 });
@@ -99,7 +99,7 @@ test.describe('SQL Injection Resistance', () => {
 
   for (const payload of sqliPatterns) {
     test(`login form rejects SQLi: "${payload.slice(0, 20)}"`, async ({ page }) => {
-      const url = `${BASE}/login`;
+      const url = `${BASE}/auth/login`;
       // Get CSRF token from login page
       await page.goto(url);
       const csrfToken = await page.locator('input[name="_csrf_token"]').getAttribute('value').catch(() => '');
@@ -128,9 +128,9 @@ test.describe('XSS Prevention', () => {
 
   for (const payload of xssPatterns) {
     test(`dashboard search rejects XSS: "${payload.slice(0, 20)}"`, async ({ page }) => {
-      await page.goto(`${BASE}/login`);
-      await page.fill('#username', 'admin');
-      await page.fill('#password', 'ChangeMeAdmin!123');
+      await page.goto(`${BASE}/auth/login`);
+      await page.fill('input[name="username"]', 'admin');
+      await page.fill('#password', 'Jember3509');
       await page.getByRole('button', { name: 'Login' }).click();
       await page.waitForTimeout(2000);
       await page.goto(`${BASE}/dashboard?search=${encodeURIComponent(payload)}`);
@@ -152,8 +152,8 @@ test.describe('Forced Browsing Protection', () => {
   for (const role of testRoles) {
     for (const path of sensitivePaths) {
       test(`${role.name} — cannot access ${path}`, async ({ page }) => {
-        await page.goto(`${BASE}/login`);
-        await page.fill('#username', role.user);
+        await page.goto(`${BASE}/auth/login`);
+        await page.fill('input[name="username"]', role.user);
         await page.fill('#password', role.pass);
         await page.getByRole('button', { name: 'Login' }).click();
         await page.waitForTimeout(2000);
@@ -171,7 +171,7 @@ test.describe('Session Security', () => {
     const sessionCookie = cookies1.find(c => c.name.includes('PHPSESSID') || c.name.includes('session'));
     expect(sessionCookie).toBeDefined();
 
-    await page.locator('form[action="/logout"] button[type="submit"]').click();
+    await page.locator('form[action="auth/logout"] button[type="submit"]').click();
     await page.waitForTimeout(2000);
     const urlAfterLogout = page.url();
     expect(urlAfterLogout).toMatch(/\/login/);
@@ -188,7 +188,7 @@ test.describe('Session Security', () => {
     const cookies1 = await context.cookies();
     const session1 = cookies1.find(c => c.name.includes('PHPSESSID') || c.name.includes('session'));
 
-    await page.locator('form[action="/logout"] button[type="submit"]').click();
+    await page.locator('form[action="auth/logout"] button[type="submit"]').click();
     await loginAs(page, ADMIN_USER, ADMIN_PASS);
     const cookies2 = await context.cookies();
     const session2 = cookies2.find(c => c.name.includes('PHPSESSID') || c.name.includes('session'));
@@ -201,13 +201,13 @@ test.describe('Rate Limiting / Brute Force Protection', () => {
   test('rapid failed login attempts are handled gracefully', async ({ page }) => {
     // Use 3 attempts (under LOGIN_MAX_ATTEMPTS=5) to avoid IP lockout
     for (let i = 0; i < 3; i++) {
-      await page.goto(`${BASE}/login`);
-      await page.fill('#username', 'admin');
+      await page.goto(`${BASE}/auth/login`);
+      await page.fill('input[name="username"]', 'admin');
       await page.fill('#password', `wrong_${i}`);
       await page.getByRole('button', { name: 'Login' }).click();
     }
-    await page.goto(`${BASE}/login`);
-    await page.fill('#username', ADMIN_USER);
+    await page.goto(`${BASE}/auth/login`);
+    await page.fill('input[name="username"]', ADMIN_USER);
     await page.fill('#password', ADMIN_PASS);
     await page.getByRole('button', { name: 'Login' }).click();
     const currentUrl = page.url();
@@ -228,9 +228,9 @@ test.describe('Rate Limiting / Brute Force Protection', () => {
 
 test.describe('Include Draft Parameter Handling', () => {
   test('include_draft=invalid is accepted (falls back to default false)', async ({ page }) => {
-    await page.goto(`${BASE}/login`);
-    await page.fill('#username', 'admin');
-    await page.fill('#password', 'ChangeMeAdmin!123');
+    await page.goto(`${BASE}/auth/login`);
+    await page.fill('input[name="username"]', 'admin');
+    await page.fill('#password', 'Jember3509');
     await page.getByRole('button', { name: 'Login' }).click();
     await page.waitForTimeout(2000);
     const endpoints = [
@@ -246,8 +246,8 @@ test.describe('Include Draft Parameter Handling', () => {
 
 test.describe('HTTP Verb Tampering', () => {
   test('DELETE on read-only endpoints is rejected', async ({ page }) => {
-    await page.goto(`${BASE}/login`);
-    await page.fill('#username', ADMIN_USER);
+    await page.goto(`${BASE}/auth/login`);
+    await page.fill('input[name="username"]', ADMIN_USER);
     await page.fill('#password', ADMIN_PASS);
     await page.getByRole('button', { name: 'Login' }).click();
     await page.waitForTimeout(2000);
@@ -268,3 +268,5 @@ test.describe('HTTP Verb Tampering', () => {
     expect([405, 404, 403, 401, 422]).toContain(resp.status());
   });
 });
+
+

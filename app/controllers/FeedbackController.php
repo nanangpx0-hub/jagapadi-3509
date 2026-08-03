@@ -449,7 +449,7 @@ class FeedbackController extends Controller {
      */
     private function createNotification($userId, $title, $message, $type = 'info') {
         $db = Database::getInstance()->getConnection();
-        $sql = "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)";
+        $sql = "INSERT INTO notifications (user_id, title, body, type) VALUES (?, ?, ?, ?)";
         $stmt = $db->prepare($sql);
         $stmt->execute([$userId, $title, $message, $type]);
     }

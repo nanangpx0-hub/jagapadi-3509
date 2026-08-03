@@ -31,7 +31,11 @@ class LaporanIrigasiProvider extends ChangeNotifier {
     if (res.success && res.data != null) {
       final raw = res.data!['data'] as List<dynamic>? ?? [];
       final items = raw.map((e) => LaporanIrigasi.fromJson({'data': e})).toList();
-      if (refresh) _list = items; else _list.addAll(items);
+      if (refresh) {
+        _list = items;
+      } else {
+        _list.addAll(items);
+      }
       final meta = res.data!['meta'] as Map<String, dynamic>?;
       _total = meta?['total'] as int? ?? items.length;
       _page++;
@@ -42,8 +46,11 @@ class LaporanIrigasiProvider extends ChangeNotifier {
   Future<void> loadDetail(int id) async {
     _loading = true; _error = null; notifyListeners();
     final res = await api.get('/laporan-irigasi/$id');
-    if (res.success && res.data != null) _detail = LaporanIrigasi.fromJson(res.data!);
-    else _error = res.message;
+    if (res.success && res.data != null) {
+      _detail = LaporanIrigasi.fromJson(res.data!);
+    } else {
+      _error = res.message;
+    }
     _loading = false; notifyListeners();
   }
 
@@ -69,8 +76,11 @@ class LaporanIrigasiProvider extends ChangeNotifier {
     _loading = true; notifyListeners();
     final res = await api.delete('/laporan-irigasi/$id');
     _loading = false; notifyListeners();
-    if (res.success) _list.removeWhere((e) => e.id == id);
-    else _error = res.message;
+    if (res.success) {
+      _list.removeWhere((e) => e.id == id);
+    } else {
+      _error = res.message;
+    }
     return res.success;
   }
 

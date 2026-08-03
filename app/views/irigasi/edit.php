@@ -27,12 +27,51 @@
     <?php if (isset($_SESSION['error'])): ?>
         <div class="alert alert-danger alert-dismissible fade show" role="alert">
             <i class="fas fa-exclamation-circle mr-2"></i>
-            <strong>Error!</strong> <?= $_SESSION['error'] ?>
+            <strong>Error!</strong> <?= htmlspecialchars($_SESSION['error']) ?>
             <button type="button" class="close" data-dismiss="alert" aria-label="Close">
                 <span aria-hidden="true">&times;</span>
             </button>
         </div>
         <?php unset($_SESSION['error']); ?>
+    <?php endif; ?>
+
+    <?php if (isset($_SESSION['success'])): ?>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle mr-2"></i>
+            <strong>Berhasil!</strong> <?= htmlspecialchars($_SESSION['success']) ?>
+            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+            </button>
+        </div>
+        <?php unset($_SESSION['success']); ?>
+    <?php endif; ?>
+
+    <?php if (isset($_SESSION['info'])): ?>
+        <div class="alert alert-info alert-dismissible fade show" role="alert">
+            <i class="fas fa-info-circle mr-2"></i>
+            <strong>Informasi:</strong> <?= htmlspecialchars($_SESSION['info']) ?>
+            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+            </button>
+        </div>
+        <?php unset($_SESSION['info']); ?>
+    <?php endif; ?>
+
+    <?php if (!empty($errors ?? [])): ?>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-triangle mr-2"></i>
+            <strong>Validasi Gagal!</strong>
+            <ul class="mb-0 mt-2">
+                <?php foreach ($errors as $field => $msg): ?>
+                    <?php if (is_string($msg) && $msg !== ''): ?>
+                        <li><?= htmlspecialchars($msg) ?></li>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            </ul>
+            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+            </button>
+        </div>
     <?php endif; ?>
 
     <form action="<?= BASE_URL ?>irigasi/edit/<?= $data['id'] ?>" method="POST" enctype="multipart/form-data" id="formIrigasi" class="needs-validation" novalidate>
@@ -132,6 +171,21 @@
                                         <option value="Tersier" <?= (isset($data['jenis_saluran']) && $data['jenis_saluran'] == 'Tersier') ? 'selected' : '' ?>>Tersier</option>
                                     </select>
                                     <div class="invalid-feedback">Pilih jenis saluran.</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="debit_air">Debit Air <span class="text-danger">*</span></label>
+                                    <select class="form-control custom-select" id="debit_air" name="debit_air" required>
+                                        <option value="" disabled selected>-- Pilih Debit Air --</option>
+                                        <option value="Cukup" <?= (isset($data['debit_air']) && $data['debit_air'] == 'Cukup') ? 'selected' : '' ?>>Cukup</option>
+                                        <option value="Kurang" <?= (isset($data['debit_air']) && $data['debit_air'] == 'Kurang') ? 'selected' : '' ?>>Kurang</option>
+                                        <option value="Kering" <?= (isset($data['debit_air']) && $data['debit_air'] == 'Kering') ? 'selected' : '' ?>>Kering</option>
+                                    </select>
+                                    <div class="invalid-feedback">Pilih debit air.</div>
                                 </div>
                             </div>
                         </div>
@@ -769,10 +823,9 @@ document.addEventListener('DOMContentLoaded', function() {
         margin-top: 0.5rem;
     }
     
-    /* Smooth transition for container visibility */
+    /* Smooth visibility for containers */
     #status_normal_container,
     #status_dropdown_container {
-        transition: opacity 0.3s ease-in-out;
     }
     
     /* Auto-filled field styling */
@@ -796,12 +849,6 @@ document.addEventListener('DOMContentLoaded', function() {
     #autoFillBadge {
         font-size: 0.7rem;
         vertical-align: middle;
-        animation: fadeIn 0.5s ease-in-out;
-    }
-    
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(-5px); }
-        to { opacity: 1; transform: translateY(0); }
     }
     
     #btnEditNama {

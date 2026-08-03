@@ -220,7 +220,7 @@ class DashboardDataAggregator {
      */
     public function getLatestPrices() {
         $sql = "SELECT 
-                    komoditas,
+                    jenis_komoditas as komoditas,
                     harga,
                     tanggal,
                     sumber_data
@@ -228,9 +228,9 @@ class DashboardDataAggregator {
                 WHERE tanggal = (
                     SELECT MAX(tanggal) 
                     FROM harga_komoditas h2 
-                    WHERE h2.komoditas = h1.komoditas
+                    WHERE h2.jenis_komoditas = h1.jenis_komoditas
                 )
-                ORDER BY komoditas";
+                ORDER BY jenis_komoditas";
         
         $stmt = $this->db->prepare($sql);
         $stmt->execute();
@@ -242,15 +242,15 @@ class DashboardDataAggregator {
      */
     public function getPriceTrend($months = 6) {
         $sql = "SELECT 
-                    komoditas,
+                    jenis_komoditas as komoditas,
                     DATE_FORMAT(tanggal, '%Y-%m') as period,
                     AVG(harga) as avg_price,
                     MIN(harga) as min_price,
                     MAX(harga) as max_price
                 FROM harga_komoditas 
                 WHERE tanggal >= DATE_SUB(CURDATE(), INTERVAL :months MONTH)
-                GROUP BY komoditas, DATE_FORMAT(tanggal, '%Y-%m')
-                ORDER BY komoditas, period";
+                GROUP BY jenis_komoditas, DATE_FORMAT(tanggal, '%Y-%m')
+                ORDER BY jenis_komoditas, period";
         
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':months' => $months]);
@@ -262,14 +262,14 @@ class DashboardDataAggregator {
      */
     public function getPriceComparison() {
         $sql = "SELECT 
-                    komoditas,
+                    jenis_komoditas as komoditas,
                     AVG(harga) as avg_price,
                     MIN(harga) as min_price,
                     MAX(harga) as max_price,
                     STDDEV(harga) as price_volatility
                 FROM harga_komoditas 
                 WHERE tanggal >= DATE_SUB(CURDATE(), INTERVAL 3 MONTH)
-                GROUP BY komoditas";
+                GROUP BY jenis_komoditas";
         
         $stmt = $this->db->prepare($sql);
         $stmt->execute();
@@ -281,13 +281,13 @@ class DashboardDataAggregator {
      */
     public function getPriceAlerts() {
         $sql = "SELECT 
-                    komoditas,
+                    jenis_komoditas as komoditas,
                     tanggal,
-                    persentase_perubahan,
-                    deskripsi,
-                    dibaca
-                FROM harga_komoditas_alerts 
-                WHERE dibaca = 0
+                    persentase as persentase_perubahan,
+                    tipe_alert as deskripsi,
+                    is_read as dibaca
+                FROM harga_alerts 
+                WHERE is_read = 0
                 ORDER BY tanggal DESC
                 LIMIT 10";
         
@@ -336,7 +336,7 @@ class DashboardDataAggregator {
                     SUM(produksi_gabah) as total_produksi_gabah,
                     SUM(produksi_beras) as total_produksi_beras,
                     AVG(produktivitas) as avg_produktivitas,
-                    COUNT(DISTINCT kabupaten) as total_kabupaten
+                    COUNT(DISTINCT kabupaten_kota) as total_kabupaten
                 FROM data_pertanian_bps 
                 WHERE tahun = :year";
         
@@ -370,7 +370,7 @@ class DashboardDataAggregator {
      */
     public function getTopProducers($year, $limit = 10) {
         $sql = "SELECT 
-                    kabupaten,
+                    kabupaten_kota as kabupaten,
                     luas_panen,
                     produksi_gabah,
                     produksi_beras,

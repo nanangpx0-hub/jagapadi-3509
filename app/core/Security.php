@@ -36,7 +36,14 @@ class Security {
         }
 
         // Use secure comparison to prevent timing attacks
-        return hash_equals($sessionToken, $token);
+        $valid = hash_equals($sessionToken, $token);
+        
+        if ($valid) {
+            // Rotate token after successful validation to prevent replay attacks
+            self::regenerateCsrfToken();
+        }
+        
+        return $valid;
     }
 
     /**
@@ -128,10 +135,11 @@ class Security {
     }
 
     /**
-     * Validate user input for XSS prevention
+     * Validate user input - only trim whitespace
+     * HTML escaping should be done at output, not input
      */
     public static function sanitizeInput(string $input): string {
-        return htmlspecialchars(trim($input), ENT_QUOTES, 'UTF-8');
+        return trim($input);
     }
 
     /**

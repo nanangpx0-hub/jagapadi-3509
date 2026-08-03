@@ -14,7 +14,6 @@ class DashboardChartsApiController extends BaseApiController {
     private $aggregator;
     
     public function __construct() {
-        parent::__construct();
         $this->aggregator = new DashboardDataAggregator();
     }
     

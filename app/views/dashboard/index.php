@@ -93,6 +93,10 @@
                             height: 280px;
                         }
                     }
+                    /* Nonaktifkan animasi timbul tenggelam (pulse/blink/fade/spin) agar seluruh elemen pada peta tampil statis */
+                    #dashboardMapHome *, #dashboardMapHome *::before, #dashboardMapHome *::after {
+                        animation: none !important;
+                    }
                 </style>
                 <div id="dashboardMapHome"></div>
             </div>

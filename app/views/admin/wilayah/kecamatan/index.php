@@ -877,18 +877,6 @@ $(document).ready(function() {
     margin-bottom: 1rem;
     border: 1px solid transparent;
     border-radius: 0.25rem;
-    animation: slideInDown 0.3s ease-out;
-}
-
-@keyframes slideInDown {
-    from {
-        transform: translateY(-100%);
-        opacity: 0;
-    }
-    to {
-        transform: translateY(0);
-        opacity: 1;
-    }
 }
 
 /* Enhanced button styling */

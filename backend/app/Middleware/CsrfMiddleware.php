@@ -9,6 +9,10 @@ use App\Core\Request;
 
 class CsrfMiddleware
 {
+    private const EXEMPT_PATHS = [
+        '/logout',
+    ];
+
     public function handle(array $route, array $params): bool
     {
         $method = Request::method();
@@ -19,6 +23,12 @@ class CsrfMiddleware
         $uri = Request::uri();
         if (str_starts_with($uri, '/api/')) {
             return true;
+        }
+
+        foreach (self::EXEMPT_PATHS as $exemptPath) {
+            if ($uri === $exemptPath || str_starts_with($uri, $exemptPath . '/')) {
+                return true;
+            }
         }
 
         $token = Request::input('_csrf_token');

@@ -170,7 +170,7 @@
                 indicator = document.createElement('span');
                 indicator.id = 'autoSaveIndicator';
                 indicator.className = 'text-success ml-2';
-                indicator.style.cssText = 'font-size: 0.8rem; opacity: 0; transition: opacity 0.3s;';
+                indicator.style.cssText = 'font-size: 0.8rem; opacity: 0;';
 
                 // Insert after submit button
                 const submitBtn = document.getElementById('btnSubmitForm');

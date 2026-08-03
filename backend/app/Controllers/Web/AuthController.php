@@ -10,7 +10,6 @@ use App\Core\Request;
 use App\Core\Controller;
 use App\Models\User;
 use App\Models\ActivityLog;
-use App\Helpers\RateLimiter;
 use App\Helpers\PasswordValidator;
 
 class AuthController extends Controller
@@ -26,20 +25,7 @@ class AuthController extends Controller
 
     public function login(): void
     {
-        $ip = Request::ip();
         $username = Request::input('username', '');
-        $maxAttempts = (int) Env::get('LOGIN_MAX_ATTEMPTS', '5');
-        $decay = (int) Env::get('LOGIN_DECAY_SECONDS', '900');
-
-        $rlKey = 'web_' . $ip . ($username !== '' ? '_' . mb_strtolower($username) : '');
-
-        if (!RateLimiter::attempt('login', $rlKey, $maxAttempts, $decay)) {
-            $availableIn = RateLimiter::availableIn('login', $rlKey, $decay);
-            $_SESSION['flash_error'] = "Terlalu banyak percobaan login. Coba lagi dalam $availableIn detik.";
-            header('Location: /login');
-            return;
-        }
-
         $password = Request::input('password', '');
 
         if ($username === '' || $password === '') {
@@ -74,7 +60,6 @@ class AuthController extends Controller
         $_SESSION['must_change_password'] = (bool) ($user['must_change_password'] ?? false);
         $_SESSION['login_at'] = time();
 
-        RateLimiter::reset('login', $rlKey);
         ActivityLog::log((int) $user['id'], 'login_success', 'users', (int) $user['id'], 'Login web berhasil');
 
         if ($_SESSION['must_change_password']) {

@@ -356,7 +356,7 @@
         },
 
         getCsrfHeaders: function() {
-            const token = document.querySelector('input[name="csrf_token"]')?.value 
+            const token = document.querySelector('input[name="_csrf_token"]')?.value 
                       || document.querySelector('meta[name="csrf-token"]')?.content;
             return token ? { 'X-CSRF-TOKEN': token } : {};
         }

@@ -2,12 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:jagapadi_mobile/core/theme.dart';
-import 'package:jagapadi_mobile/core/api_client.dart';
-import 'package:jagapadi_mobile/core/config.dart';
 import 'package:jagapadi_mobile/core/router.dart';
-import 'package:jagapadi_mobile/core/secure_storage.dart';
 import 'package:jagapadi_mobile/features/auth/providers/auth_provider.dart';
-import 'package:jagapadi_mobile/features/auth/screens/login_screen.dart';
 
 Widget createTestApp() {
   final appRouter = AppRouter();

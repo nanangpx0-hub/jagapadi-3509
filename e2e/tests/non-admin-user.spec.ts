@@ -1,15 +1,15 @@
 import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 
-const BASE = 'http://localhost:8080';
+const BASE = 'http://localhost/jagapadi-3509';
 
 const PETUGAS_USER = 'petugas01';
-const PETUGAS_PASS = 'ChangeMePetugas!123';
+const PETUGAS_PASS = 'Jember3509';
 const ADMIN_USER = 'admin';
-const ADMIN_PASS = 'ChangeMeAdmin!123';
+const ADMIN_PASS = 'Jember3509';
 
 async function loginAs(page: Page, username: string, password: string) {
-  await page.goto(`${BASE}/login`);
-  await page.fill('#username', username);
+  await page.goto(`${BASE}/auth/login`);
+  await page.fill('input[name="username"]', username);
   await page.fill('#password', password);
   await page.getByRole('button', { name: 'Login' }).click();
   await page.waitForURL(/\/(dashboard|password\/change)/);
@@ -55,13 +55,13 @@ test.describe('Petugas — Authentication', () => {
 
   test('petugas can logout successfully', async ({ page }) => {
     await loginAs(page, PETUGAS_USER, PETUGAS_PASS);
-    await page.locator('form[action="/logout"] button[type="submit"]').click();
+    await page.locator('form[action="auth/logout"] button[type="submit"]').click();
     await expect(page).toHaveURL(/\/login/);
   });
 
   test('invalid credentials show error for petugas', async ({ page }) => {
-    await page.goto(`${BASE}/login`);
-    await page.fill('#username', PETUGAS_USER);
+    await page.goto(`${BASE}/auth/login`);
+    await page.fill('input[name="username"]', PETUGAS_USER);
     await page.fill('#password', 'wrong_password');
     await page.getByRole('button', { name: 'Login' }).click();
     await expect(page).toHaveURL(/\/login/);
@@ -77,24 +77,24 @@ test.describe('Petugas — Authentication', () => {
   });
 
   test('petugas login rejects SQL injection', async ({ page }) => {
-    await page.goto(`${BASE}/login`);
-    await page.fill('#username', "' OR '1'='1");
+    await page.goto(`${BASE}/auth/login`);
+    await page.fill('input[name="username"]', "' OR '1'='1");
     await page.fill('#password', "' OR '1'='1");
     await page.getByRole('button', { name: 'Login' }).click();
     await expect(page).toHaveURL(/\/login/);
   });
 
   test('petugas login rejects XSS injection', async ({ page }) => {
-    await page.goto(`${BASE}/login`);
-    await page.fill('#username', '<script>alert("xss")</script>');
+    await page.goto(`${BASE}/auth/login`);
+    await page.fill('input[name="username"]', '<script>alert("xss")</script>');
     await page.fill('#password', 'password');
     await page.getByRole('button', { name: 'Login' }).click();
     await expect(page).toHaveURL(/\/login/);
   });
 
   test('petugas login handles long input gracefully', async ({ page }) => {
-    await page.goto(`${BASE}/login`);
-    await page.fill('#username', 'a'.repeat(1000));
+    await page.goto(`${BASE}/auth/login`);
+    await page.fill('input[name="username"]', 'a'.repeat(1000));
     await page.fill('#password', 'test');
     await page.getByRole('button', { name: 'Login' }).click();
     await expect(page).toHaveURL(/\/login/);
@@ -117,7 +117,7 @@ test.describe('Petugas — Session Persistence', () => {
 
   test('petugas session is invalidated after logout', async ({ page }) => {
     await loginAs(page, PETUGAS_USER, PETUGAS_PASS);
-    await page.locator('form[action="/logout"] button[type="submit"]').click();
+    await page.locator('form[action="auth/logout"] button[type="submit"]').click();
     await page.goto(`${BASE}/dashboard`);
     await expect(page).toHaveURL(/\/login/);
   });
@@ -1084,3 +1084,5 @@ test.describe('Petugas — API JWT Lifecycle', () => {
     expect(resp.status()).toBe(401);
   });
 });
+
+

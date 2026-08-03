@@ -99,6 +99,23 @@ backend/*.html
 # --- Local SQL dumps ---
 database/jagapadi_local*.sql
 
+# --- Local config not tracked by design ---
+config/config.php
+
+# --- Playwright session state & debug artifacts ---
+auth/
+*.json.session
+debug_*.js
+debug_global_setup.js
+debug_setup.js
+debug_setup2.js
+tmp_check*.php
+.rnd
+76
+playwright-report/
+reports/
+storage/uploads/
+
 # --- Vendor & cache at repo root ---
 /vendor/
 /storage/cache/
@@ -131,3 +148,6 @@ e2e/*.png
 !dok/**
 !scripts/
 !scripts/**
+
+# --- But keep out analysis output ---
+scripts/hasil_analisis_wind.txt

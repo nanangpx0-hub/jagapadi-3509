@@ -64,10 +64,14 @@ class KecepatanAnginScraper {
                 }
             }
             
-            // Save data
+            // Save data using UPSERT to prevent duplicates
             foreach ($data as $record) {
                 try {
-                    $this->model->insert($record);
+                    if (method_exists($this->model, 'insertUpsert')) {
+                        $this->model->insertUpsert($record);
+                    } else {
+                        $this->model->insert($record);
+                    }
                     $result['records_success']++;
                 } catch (Exception $e) {
                     $this->log("Failed to insert: " . $e->getMessage(), 'ERROR');
@@ -241,14 +245,20 @@ class KecepatanAnginScraper {
         try {
             $db = Database::getInstance()->getConnection();
             $stmt = $db->prepare(
-                "SELECT id, nama_kecamatan, kode 
+                "SELECT id, 
+                        nama_kecamatan, 
+                        kode AS kode_bmkg_adm4, 
+                        latitude, 
+                        longitude 
                  FROM master_kecamatan 
+                 WHERE latitude IS NOT NULL 
+                   AND longitude IS NOT NULL
                  ORDER BY nama_kecamatan"
             );
             $stmt->execute();
             $this->locations = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
-            $this->log("Loaded " . count($this->locations) . " active kecamatan");
+            $this->log("Loaded " . count($this->locations) . " active kecamatan with coordinates");
             
         } catch (Exception $e) {
             $this->log("Failed to load kecamatan: " . $e->getMessage(), 'ERROR');

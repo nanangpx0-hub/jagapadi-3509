@@ -17,13 +17,10 @@ protected $fillable = [
         'catatan_verifikasi',
         'verified_by',
         'verified_at',
-        'kabupaten',
-        'kecamatan',
-        'desa',
-        'alamat_lengkap',
         'kabupaten_id',
         'kecamatan_id',
         'desa_id',
+        'alamat_lengkap',
         'nomor_laporan',
     ];
     protected array $relations = [
@@ -538,16 +535,30 @@ protected $fillable = [
     public function generateNomorLaporan(string $prefix = 'LH'): string {
         $year = date('Y');
         $month = date('m');
+        $lockName = "nomor_laporan_{$prefix}_{$year}{$month}";
         
-        $stmt = $this->db->prepare(
-            "SELECT COUNT(*) FROM laporan_hama 
-             WHERE YEAR(created_at) = ? AND MONTH(created_at) = ? 
-             AND status != 'Draf'"
-        );
-        $stmt->execute([$year, $month]);
-        $count = (int)$stmt->fetchColumn() + 1;
+        $stmt = $this->db->prepare("SELECT GET_LOCK(?, 10)");
+        $stmt->execute([$lockName]);
+        $lockAcquired = (int)$stmt->fetchColumn();
         
-        return sprintf('%s-%s%s-%04d', $prefix, $year, $month, $count);
+        if (!$lockAcquired) {
+            throw new Exception('Failed to acquire lock for nomor laporan generation');
+        }
+        
+        try {
+            $stmt = $this->db->prepare(
+                "SELECT COUNT(*) FROM laporan_hama 
+                 WHERE YEAR(created_at) = ? AND MONTH(created_at) = ? 
+                 AND status != 'Draf'"
+            );
+            $stmt->execute([$year, $month]);
+            $count = (int)$stmt->fetchColumn() + 1;
+            
+            return sprintf('%s-%s%s-%04d', $prefix, $year, $month, $count);
+        } finally {
+            $stmt = $this->db->prepare("SELECT RELEASE_LOCK(?)");
+            $stmt->execute([$lockName]);
+        }
     }
 
     /**
@@ -968,6 +979,14 @@ protected $fillable = [
             $qb->where('lh.user_id', $filters['user_id']);
         }
 
+        if (!empty($filters['date_from'])) {
+            $qb->where('lh.tanggal', $filters['date_from'], '>=');
+        }
+
+        if (!empty($filters['date_to'])) {
+            $qb->where('lh.tanggal', $filters['date_to'], '<=');
+        }
+
         $qb->orderBy('lh.created_at', 'DESC')
             ->limit($limit)
             ->offset($offset);
@@ -1009,6 +1028,14 @@ protected $fillable = [
 
         if (!empty($filters['user_id'])) {
             $qb->where('lh.user_id', $filters['user_id']);
+        }
+
+        if (!empty($filters['date_from'])) {
+            $qb->where('lh.tanggal', $filters['date_from'], '>=');
+        }
+
+        if (!empty($filters['date_to'])) {
+            $qb->where('lh.tanggal', $filters['date_to'], '<=');
         }
 
         return $qb->count();

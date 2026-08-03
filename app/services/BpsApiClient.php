@@ -23,12 +23,18 @@ class BpsApiClient {
     private const VAR_LUAS_PANEN = '87'; // Luas Panen Padi
     private const VAR_PRODUKSI_PADI = '88'; // Produksi Padi
     private const VAR_PRODUKTIVITAS = '89'; // Produktivitas Padi
-    
+
+    // Rate limiting: delay between API requests (seconds)
+    private const RATE_LIMIT_DELAY = 1.5;
+    // Max retry attempts with exponential backoff
+    private const MAX_RETRIES = 3;
+
     private $apiKey;
     private $timeout = 30;
     private $debug = false;
     private $lastError = null;
     private $lastResponse = null;
+    private $lastRequestTime = 0;
     
     /**
      * Constructor
@@ -172,55 +178,78 @@ class BpsApiClient {
     }
     
     /**
-     * Make HTTP request to BPS API
-     * 
+     * Make HTTP request to BPS API with rate limiting and retry
+     *
      * @param string $url
      * @return array
      * @throws Exception
      */
     private function makeRequest($url) {
-        $ch = curl_init();
-        
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => $this->timeout,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_SSL_VERIFYPEER => true,
-            CURLOPT_HTTPHEADER => [
-                'Accept: application/json',
-                'User-Agent: JAGAPADI/1.0'
-            ]
-        ]);
-        
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        
-        curl_close($ch);
-        
-        if ($error) {
-            throw new Exception("cURL Error: {$error}");
+        // Rate limiting: enforce minimum delay between requests
+        $now = microtime(true);
+        $elapsed = $now - $this->lastRequestTime;
+        if ($this->lastRequestTime > 0 && $elapsed < self::RATE_LIMIT_DELAY) {
+            $sleepTime = self::RATE_LIMIT_DELAY - $elapsed;
+            usleep((int)($sleepTime * 1000000));
         }
-        
-        if ($httpCode !== 200) {
-            throw new Exception("BPS API returned HTTP {$httpCode}");
+        $this->lastRequestTime = microtime(true);
+
+        $retryCount = 0;
+        $lastError = null;
+
+        while ($retryCount < self::MAX_RETRIES) {
+            $ch = curl_init();
+
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $url,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => $this->timeout,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_SSL_VERIFYPEER => true,
+                CURLOPT_HTTPHEADER => [
+                    'Accept: application/json',
+                    'User-Agent: JAGAPADI/1.0 (+https://jagapadi.jember.gov.id)'
+                ]
+            ]);
+
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $error = curl_error($ch);
+
+            curl_close($ch);
+
+            if ($error) {
+                $lastError = "cURL Error: {$error}";
+                $this->log($lastError, 'WARNING');
+            } elseif ($httpCode === 429 || $httpCode >= 500) {
+                $lastError = "BPS API returned HTTP {$httpCode}";
+                $this->log($lastError, 'WARNING');
+            } else {
+                $data = json_decode($response, true);
+                $this->lastResponse = $data;
+
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    $lastError = "Invalid JSON response from BPS API";
+                    $this->log($lastError, 'WARNING');
+                } elseif (isset($data['status']) && $data['status'] !== 'OK') {
+                    $message = $data['message'] ?? 'Unknown API error';
+                    $lastError = "BPS API Error: {$message}";
+                    $this->log($lastError, 'WARNING');
+                } else {
+                    $this->log("Successful request to BPS API");
+                    return $data;
+                }
+            }
+
+            $retryCount++;
+            if ($retryCount < self::MAX_RETRIES) {
+                $delay = pow(2, $retryCount); // 2s, 4s
+                $this->log("Retry {$retryCount}/" . self::MAX_RETRIES . " in {$delay}s...");
+                sleep($delay);
+            }
         }
-        
-        $data = json_decode($response, true);
-        $this->lastResponse = $data;
-        
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new Exception("Invalid JSON response from BPS API");
-        }
-        
-        // Check for API error response
-        if (isset($data['status']) && $data['status'] !== 'OK') {
-            $message = $data['message'] ?? 'Unknown API error';
-            throw new Exception("BPS API Error: {$message}");
-        }
-        
-        return $data;
+
+        throw new Exception($lastError ?? "Unknown error after " . self::MAX_RETRIES . " retries");
     }
     
     /**

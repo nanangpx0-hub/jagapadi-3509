@@ -280,18 +280,20 @@ class CurahHujan {
      */
     public function insert($data) {
         $sql = "INSERT INTO {$this->table} 
-                (tanggal, lokasi, kode_wilayah, curah_hujan, satuan, sumber_data, keterangan)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (tanggal, lokasi, kecamatan_id, kode_wilayah, curah_hujan, satuan, sumber_data, keterangan)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                 curah_hujan = VALUES(curah_hujan),
                 sumber_data = VALUES(sumber_data),
                 keterangan = VALUES(keterangan),
+                kecamatan_id = VALUES(kecamatan_id),
                 updated_at = CURRENT_TIMESTAMP";
         
         $stmt = $this->db->prepare($sql);
         $result = $stmt->execute([
             $data['tanggal'],
             $data['lokasi'] ?? 'Jember',
+            $data['kecamatan_id'] ?? null,
             $data['kode_wilayah'] ?? '35.09',
             $data['curah_hujan'],
             $data['satuan'] ?? 'mm',
@@ -356,6 +358,7 @@ class CurahHujan {
         $sql = "UPDATE {$this->table} SET 
                 tanggal = ?,
                 lokasi = ?,
+                kecamatan_id = ?,
                 kode_wilayah = ?,
                 curah_hujan = ?,
                 sumber_data = ?,
@@ -367,6 +370,7 @@ class CurahHujan {
         return $stmt->execute([
             $data['tanggal'],
             $data['lokasi'] ?? 'Jember',
+            $data['kecamatan_id'] ?? null,
             $data['kode_wilayah'] ?? '35.09',
             $data['curah_hujan'],
             $data['sumber_data'] ?? 'Manual',
@@ -475,6 +479,7 @@ class CurahHujan {
                 `id` INT(11) NOT NULL AUTO_INCREMENT,
                 `tanggal` DATE NOT NULL,
                 `lokasi` VARCHAR(100) DEFAULT 'Jember',
+                `kecamatan_id` INT(11) DEFAULT NULL,
                 `kode_wilayah` VARCHAR(20) DEFAULT NULL,
                 `curah_hujan` DECIMAL(10,2) NOT NULL,
                 `satuan` VARCHAR(10) DEFAULT 'mm',
@@ -484,7 +489,8 @@ class CurahHujan {
                 `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 PRIMARY KEY (`id`),
                 UNIQUE KEY `unique_tanggal_lokasi` (`tanggal`, `lokasi`),
-                INDEX `idx_tanggal` (`tanggal`)
+                INDEX `idx_tanggal` (`tanggal`),
+                INDEX `idx_curah_hujan_kecamatan` (`kecamatan_id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
             
             // Create log table

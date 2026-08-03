@@ -64,7 +64,7 @@ class _IrigasiListScreenState extends State<IrigasiListScreen> {
             child: p.loading && p.list.isEmpty
                 ? const Center(child: CircularProgressIndicator())
                 : p.list.isEmpty
-                    ? Center(child: Text('Belum ada laporan', style: TextStyle(color: AppColors.textSecondary)))
+                    ? const Center(child: Text('Belum ada laporan', style: TextStyle(color: AppColors.textSecondary)))
                     : RefreshIndicator(
                         onRefresh: _refresh,
                         child: ListView.builder(
@@ -83,7 +83,7 @@ class _IrigasiListScreenState extends State<IrigasiListScreen> {
                                 trailing: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
-                                    color: (item.status == 'Draf' ? Colors.grey : item.status == 'Submitted' ? Colors.orange : item.status == 'Diverifikasi' ? Colors.green : item.status == 'Ditolak' ? Colors.red : Colors.blueGrey).withOpacity(0.15),
+                                    color: (item.status == 'Draf' ? Colors.grey : item.status == 'Submitted' ? Colors.orange : item.status == 'Diverifikasi' ? Colors.green : item.status == 'Ditolak' ? Colors.red : Colors.blueGrey).withValues(alpha: 0.15),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Text(item.statusLabel, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: item.status == 'Draf' ? Colors.grey : item.status == 'Submitted' ? Colors.orange : item.status == 'Diverifikasi' ? Colors.green : item.status == 'Ditolak' ? Colors.red : Colors.blueGrey)),

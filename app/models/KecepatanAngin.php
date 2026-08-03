@@ -100,6 +100,43 @@ class KecepatanAngin {
     }
     
     /**
+     * Insert new record with UPSERT (ON DUPLICATE KEY UPDATE)
+     * Requires UNIQUE constraint (tanggal, lokasi) on table
+     */
+    public function insertUpsert($data): bool {
+        $sql = "INSERT INTO {$this->table} 
+                (tanggal, lokasi, kode_wilayah, kecepatan_angin, kecepatan_max, 
+                 arah_angin, arah_angin_desc, satuan, sumber_data, keterangan, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                ON DUPLICATE KEY UPDATE
+                    kode_wilayah = VALUES(kode_wilayah),
+                    kecepatan_angin = VALUES(kecepatan_angin),
+                    kecepatan_max = IF(VALUES(kecepatan_max) IS NOT NULL, VALUES(kecepatan_max), kecepatan_max),
+                    arah_angin = IF(VALUES(arah_angin) IS NOT NULL, VALUES(arah_angin), arah_angin),
+                    arah_angin_desc = IF(VALUES(arah_angin_desc) IS NOT NULL, VALUES(arah_angin_desc), arah_angin_desc),
+                    satuan = VALUES(satuan),
+                    sumber_data = VALUES(sumber_data),
+                    keterangan = CONCAT(keterangan, 
+                        IF(keterangan IS NULL OR keterangan = '', '', ' | '),
+                        VALUES(keterangan)),
+                    updated_at = NOW()";
+
+        $stmt = $this->db->prepare($sql);
+        return $stmt->execute([
+            $data['tanggal'],
+            $data['lokasi'] ?? 'Jember',
+            $data['kode_wilayah'] ?? '35.09',
+            $data['kecepatan_angin'],
+            $data['kecepatan_max'] ?? null,
+            $data['arah_angin'] ?? null,
+            $data['arah_angin_desc'] ?? null,
+            $data['satuan'] ?? 'km/h',
+            $data['sumber_data'] ?? 'Manual',
+            $data['keterangan'] ?? null
+        ]);
+    }
+
+    /**
      * Insert new record
      */
     public function insert($data) {

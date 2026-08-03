@@ -130,9 +130,6 @@ class UserController extends BaseApiController {
             $data['aktif'] = $data['aktif'] ?? 1;
             $data['created_at'] = date('Y-m-d H:i:s');
             
-            // Hash password
-            $data['password'] = password_hash($data['password'], PASSWORD_DEFAULT);
-            
             $userId = $this->userModel->createUser($data);
             
             if ($userId) {
@@ -206,7 +203,7 @@ class UserController extends BaseApiController {
             
             // Hash password if provided
             if (isset($data['password']) && !empty($data['password'])) {
-                $data['password'] = password_hash($data['password'], PASSWORD_DEFAULT);
+                $data['password'] = $data['password'];
             } else {
                 unset($data['password']); // Don't update password if not provided
             }

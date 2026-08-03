@@ -129,7 +129,7 @@ class KecepatanAnginController extends Controller {
                 'offset' => $_GET['offset'] ?? 0
             ];
             
-            $dataSource = $_GET['data_source'] ?? 'openmeteo';
+            $dataSource = $_GET['data_source'] ?? '';
             if ($dataSource === 'openmeteo') {
                 $filters['sumber_data_like'] = '%Open-Meteo%';
             } elseif ($dataSource === 'simulation') {
@@ -919,15 +919,41 @@ class KecepatanAnginController extends Controller {
             
             $windData = $this->model->getWindByLocation($year, $month);
             
+            // Load kecamatan coordinates lookup (nama_kecamatan without ", Jember" => [lat, lon, kode])
+            $db = Database::getInstance()->getConnection();
+            $kecStmt = $db->prepare("SELECT nama_kecamatan, latitude, longitude, kode FROM master_kecamatan WHERE latitude IS NOT NULL AND longitude IS NOT NULL");
+            $kecStmt->execute();
+            $kecLookup = [];
+            foreach ($kecStmt->fetchAll(PDO::FETCH_ASSOC) as $k) {
+                $kecLookup[trim($k['nama_kecamatan'])] = [
+                    'latitude'  => (float) $k['latitude'],
+                    'longitude' => (float) $k['longitude'],
+                    'kode'      => $k['kode']
+                ];
+            }
+            // Fallback: key with full lokasi format "NamaKec, Jember"
+            foreach ($kecLookup as $nama => $coord) {
+                $kecLookup[$nama . ', Jember'] = $coord;
+            }
+            $defaultLatLng = ['latitude' => -8.1706, 'longitude' => 113.7003];
+            
             $mapData = [];
             foreach ($windData as $row) {
+                $namaLokasi = trim($row['lokasi']);
+                $coord = $kecLookup[$namaLokasi] ?? $defaultLatLng;
+                $kecNameOnly = explode(',', $namaLokasi)[0];
+                if (!isset($kecLookup[$namaLokasi]) && isset($kecLookup[$kecNameOnly])) {
+                    $coord = $kecLookup[$kecNameOnly];
+                }
+                
                 $mapData[] = [
                     'lokasi' => $row['lokasi'],
                     'rata_rata' => (float) $row['rata_rata'],
                     'maksimum' => (float) ($row['maksimum'] ?? 0),
                     'jumlah_data' => (int) $row['jumlah_data'],
-                    'latitude' => -8.1706,
-                    'longitude' => 113.7003
+                    'latitude' => $coord['latitude'],
+                    'longitude' => $coord['longitude'],
+                    'kode_wilayah' => $coord['kode'] ?? null
                 ];
             }
             
@@ -935,6 +961,7 @@ class KecepatanAnginController extends Controller {
                 'success' => true,
                 'year' => $year,
                 'month' => $month,
+                'matched_coordinates' => count(array_filter($mapData, fn($m) => !($m['latitude'] == -8.1706 && $m['longitude'] == 113.7003))),
                 'data' => $mapData
             ]);
         } catch (Exception $e) {

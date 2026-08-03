@@ -151,7 +151,7 @@
                         
                         <div id="fotoPreview" class="mt-2" style="display: none;">
                             <strong>Preview Foto Baru:</strong><br>
-                            <img id="previewImg" src="" style="max-width: 300px; max-height: 300px;" class="img-thumbnail mt-2">
+                            <img id="previewImg" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" style="max-width: 300px; max-height: 300px;" class="img-thumbnail mt-2">
                             <button type="button" class="btn btn-sm btn-danger mt-2" onclick="clearFotoPreview()">
                                 <i class="fas fa-times"></i> Batalkan
                             </button>
