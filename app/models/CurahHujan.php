@@ -424,14 +424,20 @@ class CurahHujan {
      * @return bool
      */
     public function logActivity($action, $status, $message, $stats = []) {
+        // Sanitize and truncate status to max 50 characters to prevent truncation warnings
+        $statusStr = substr(trim((string)$status), 0, 50);
+        if (empty($statusStr)) {
+            $statusStr = 'success';
+        }
+
         $sql = "INSERT INTO {$this->logTable} 
                 (action, status, message, records_processed, records_success, records_failed, execution_time)
                 VALUES (?, ?, ?, ?, ?, ?, ?)";
         
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([
-            $action,
-            $status,
+            substr(trim((string)$action), 0, 50),
+            $statusStr,
             $message,
             $stats['processed'] ?? 0,
             $stats['success'] ?? 0,
@@ -497,7 +503,7 @@ class CurahHujan {
             $this->db->exec("CREATE TABLE IF NOT EXISTS `{$this->logTable}` (
                 `id` INT(11) NOT NULL AUTO_INCREMENT,
                 `action` VARCHAR(50) NOT NULL,
-                `status` ENUM('success', 'failed', 'partial') NOT NULL,
+                `status` VARCHAR(50) NOT NULL DEFAULT 'success',
                 `message` TEXT,
                 `records_processed` INT DEFAULT 0,
                 `records_success` INT DEFAULT 0,

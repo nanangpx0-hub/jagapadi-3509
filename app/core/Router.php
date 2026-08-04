@@ -196,6 +196,26 @@ class Router {
         // Laporan AJAX Routes
         $this->get('/laporan/fetch', 'LaporanController@fetch', ['auth']);
 
+        // Laporan Lainnya Web Routes
+        $this->get('/laporan-lainnya', 'LaporanLainnyaController@index', ['auth']);
+        $this->get('/laporan-lainnya/create', 'LaporanLainnyaController@create', ['auth']);
+        $this->post('/laporan-lainnya', 'LaporanLainnyaController@store', ['auth']);
+        $this->get('/laporan-lainnya/edit/{id}', 'LaporanLainnyaController@edit', ['auth']);
+        $this->put('/laporan-lainnya/{id}', 'LaporanLainnyaController@update', ['auth']);
+        $this->get('/laporan-lainnya/{id}', 'LaporanLainnyaController@show', ['auth']);
+        $this->post('/laporan-lainnya/{id}/submit', 'LaporanLainnyaController@submit', ['auth']);
+        $this->delete('/laporan-lainnya/{id}', 'LaporanLainnyaController@destroy', ['auth', 'admin']);
+
+        // Laporan Lainnya API Routes
+        $this->get('/api/v1/jenis-laporan', 'Api\LaporanLainnyaController@jenisIndex', ['auth']);
+        $this->get('/api/v1/laporan-lainnya', 'Api\LaporanLainnyaController@index', ['auth']);
+        $this->post('/api/v1/laporan-lainnya', 'Api\LaporanLainnyaController@store', ['auth']);
+        $this->get('/api/v1/laporan-lainnya/{id}', 'Api\LaporanLainnyaController@show', ['auth']);
+        $this->put('/api/v1/laporan-lainnya/{id}', 'Api\LaporanLainnyaController@update', ['auth']);
+        $this->post('/api/v1/laporan-lainnya/{id}/submit', 'Api\LaporanLainnyaController@submit', ['auth']);
+        $this->delete('/api/v1/laporan-lainnya/{id}', 'Api\LaporanLainnyaController@destroy', ['auth', 'admin']);
+        $this->post('/api/v1/laporan-lainnya/{id}/foto', 'Api\LaporanLainnyaController@uploadFoto', ['auth']);
+
         // Utility API Routes (migrated from api/*.php)
         $this->get('/api/utilities/recent-activity', 'Api\UtilityController@recentActivity', ['auth', 'admin']);
         $this->get('/api/utilities/kecamatan-stats', 'Api\UtilityController@kecamatanStats', ['auth', 'admin']);

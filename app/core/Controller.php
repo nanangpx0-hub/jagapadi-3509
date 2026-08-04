@@ -126,4 +126,12 @@ class Controller {
         }
         return null;
     }
+
+    protected function sanitizeRequestData(): array {
+        $clean = [];
+        foreach ($_POST as $key => $value) {
+            $clean[$key] = is_string($value) ? trim($value) : $value;
+        }
+        return $clean;
+    }
 }

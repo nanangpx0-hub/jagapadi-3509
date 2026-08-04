@@ -292,6 +292,12 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="<?= BASE_URL ?>laporan-lainnya" class="nav-link">
+                            <i class="nav-icon fas fa-clipboard-list"></i>
+                            <p>Laporan Lainnya</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="<?= BASE_URL ?>irigasi" class="nav-link <?= (strpos($_SERVER['REQUEST_URI'], '/irigasi') !== false && strpos($_SERVER['REQUEST_URI'], '/irigasiScraper') === false) ? 'active' : '' ?>">
                             <i class="nav-icon fas fa-water"></i>
                             <p>Sebaran Irigasi</p>

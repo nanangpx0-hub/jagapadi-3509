@@ -9,6 +9,8 @@
         <testsuite name="Unit">
             <file>tests/Unit/ModelTest.php</file>
             <file>tests/Unit/LoggerTest.php</file>
+            <file>tests/Unit/LaporanHamaStatusTest.php</file>
+            <file>tests/Unit/LaporanLainnyaTest.php</file>
         </testsuite>
     </testsuites>
     <php>

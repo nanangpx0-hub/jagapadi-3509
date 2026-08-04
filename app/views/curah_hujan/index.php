@@ -118,6 +118,7 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                     <label class="form-label" for="filterDataSource">Sumber Data</label>
                     <select class="form-control" id="filterDataSource" name="data_source">
                         <option value="all" selected>Semua Sumber</option>
+                        <option value="nasa">NASA POWER API</option>
                         <option value="bmkg">BMKG Verified</option>
                         <option value="simulation">Simulasi</option>
                     </select>
@@ -2040,7 +2041,9 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
             
             // Determine source badge
             let sourceBadge = '';
-            if (row.sumber_data.includes('BMKG')) {
+            if (row.sumber_data.includes('NASA')) {
+                sourceBadge = `<span class="badge badge-primary"><i class="fas fa-satellite"></i> ${row.sumber_data}</span>`;
+            } else if (row.sumber_data.includes('BMKG')) {
                 sourceBadge = `<span class="badge badge-success"><i class="fas fa-check-circle"></i> ${row.sumber_data}</span>`;
             } else if (row.sumber_data.includes('Simulasi')) {
                 sourceBadge = `<span class="badge badge-warning"><i class="fas fa-exclamation-triangle"></i> ${row.sumber_data}</span>`;
@@ -2536,9 +2539,9 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                     formData.append('year', year);
                     formData.append('month', month);
                     
-                    // Add timeout with AbortController (15 seconds)
+                    // Add timeout with AbortController (60 seconds for complex API requests)
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 15000);
+                    const timeoutId = setTimeout(() => controller.abort(), 60000);
                     
                     const response = await fetch('<?= BASE_URL ?>/curahHujan/runScraper', {
                         method: 'POST',
@@ -2548,7 +2551,7 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                     
                     clearTimeout(timeoutId);
                     
-                    if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+                    if (!response.ok) throw new Error(`HTTP Error ${response.status} (${response.statusText || 'Server Response Error'})`);
                     
                     const data = await response.json();
                     
@@ -2563,14 +2566,14 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                     } else {
                         updateMonthStatus(month, 'failed');
                         results.failed++;
-                        results.errors.push(`${bulanNames[month - 1]}: ${data.error || data.message || 'Unknown error'}`);
+                        results.errors.push(`${bulanNames[month - 1]}: ${data.error || data.message || 'Gagal memproses data API/Database'}`);
                     }
                     
                 } catch (err) {
                     if (err.name === 'AbortError') {
                         updateMonthStatus(month, 'failed');
                         results.failed++;
-                        results.errors.push(`${bulanNames[month - 1]}: Request timeout (15s)`);
+                        results.errors.push(`${bulanNames[month - 1]}: Request timeout (60s) - Batas waktu permintaan terlampaui`);
                     } else {
                         updateMonthStatus(month, 'failed');
                         results.failed++;

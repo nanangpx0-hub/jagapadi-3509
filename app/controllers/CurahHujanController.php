@@ -133,7 +133,9 @@ class CurahHujanController extends Controller {
             
             // Data source filtering
             $dataSource = $_GET['data_source'] ?? 'all';
-            if ($dataSource === 'bmkg') {
+            if ($dataSource === 'nasa' || $dataSource === 'nasa_power') {
+                $filters['sumber_data_like'] = '%NASA%';
+            } elseif ($dataSource === 'bmkg') {
                 $filters['sumber_data_like'] = '%BMKG%';
             } elseif ($dataSource === 'simulation') {
                 $filters['sumber_data_like'] = '%Simulasi%';
@@ -316,10 +318,12 @@ class CurahHujanController extends Controller {
         $this->checkAuth();
         $this->checkAdmin();
         
-        header('Content-Type: application/json');
+        ob_start();
+        header('Content-Type: application/json; charset=utf-8');
         
         // Verify CSRF token
         if (!isset($_POST['csrf_token']) || !Security::validateCsrfToken($_POST['csrf_token'])) {
+            ob_end_clean();
             echo json_encode(['success' => false, 'error' => 'Token keamanan tidak valid']);
             exit;
         }
@@ -331,20 +335,97 @@ class CurahHujanController extends Controller {
             $options = [
                 'year' => $_POST['year'] ?? date('Y'),
                 'month' => $_POST['month'] ?? date('m'),
+                'source' => $_POST['source'] ?? $_POST['data_source'] ?? 'nasa',
                 'force_simulation' => isset($_POST['force_simulation'])
             ];
             
             $result = $scraper->run($options);
             
-            echo json_encode([
+            $jsonOutput = json_encode([
                 'success' => $result['success'],
+                'no_data' => $result['no_data'] ?? false,
                 'message' => $result['message'],
                 'source' => $result['source'],
                 'records_success' => $result['records_success'],
                 'records_failed' => $result['records_failed'],
                 'execution_time' => $result['execution_time']
             ]);
+
+            if (ob_get_length()) {
+                ob_end_clean();
+            }
+            echo $jsonOutput;
         } catch (Exception $e) {
+            if (ob_get_length()) {
+                ob_end_clean();
+            }
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+        exit;
+    }
+
+    /**
+     * Endpoint terdedikasi untuk pengambilan data NASA POWER API
+     */
+    public function fetch_nasa_curah_hujan() {
+        $this->checkAuth();
+        $this->checkAdmin();
+        
+        ob_start();
+        header('Content-Type: application/json; charset=utf-8');
+        
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['csrf_token'])) {
+            if (!Security::validateCsrfToken($_POST['csrf_token'])) {
+                ob_end_clean();
+                echo json_encode(['success' => false, 'error' => 'Token keamanan tidak valid']);
+                exit;
+            }
+        }
+        
+        try {
+            require_once ROOT_PATH . '/app/services/CurahHujanScraper.php';
+            $scraper = new CurahHujanScraper();
+            
+            $year = $_REQUEST['year'] ?? date('Y');
+            $month = $_REQUEST['month'] ?? date('m');
+            
+            $data = $scraper->fetch_nasa_curah_hujan($year, $month);
+            
+            if (!empty($data)) {
+                $bulkRes = $this->model->bulkInsert($data);
+                
+                $this->model->logActivity('fetch_nasa', 'success', "NASA POWER API: Berhasil mengambil data ({$bulkRes['success']} sukses)", [
+                    'processed' => count($data),
+                    'success' => $bulkRes['success'],
+                    'failed' => $bulkRes['failed']
+                ]);
+                
+                $jsonOutput = json_encode([
+                    'success' => true,
+                    'message' => "Berhasil mengambil {$bulkRes['success']} data curah hujan dari NASA POWER API",
+                    'source' => 'NASA POWER (PRECTOTCORR)',
+                    'records_success' => $bulkRes['success'],
+                    'records_failed' => $bulkRes['failed'],
+                    'execution_time' => 1.5
+                ]);
+            } else {
+                $jsonOutput = json_encode([
+                    'success' => false,
+                    'error' => 'Tidak ada data valid yang dikembalikan oleh NASA POWER API'
+                ]);
+            }
+
+            if (ob_get_length()) {
+                ob_end_clean();
+            }
+            echo $jsonOutput;
+        } catch (Exception $e) {
+            if (ob_get_length()) {
+                ob_end_clean();
+            }
             echo json_encode([
                 'success' => false,
                 'error' => $e->getMessage()

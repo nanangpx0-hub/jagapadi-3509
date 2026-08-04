@@ -15,7 +15,8 @@ class DashboardDataAggregator {
         'prices' => 3600,       // 1 hour
         'production' => 86400,  // 24 hours
         'irrigation' => 1800,   // 30 minutes
-        'hama' => 1800          // 30 minutes
+        'hama' => 1800,         // 30 minutes
+        'lainnya' => 1800       // 30 minutes
     ];
     
     public function __construct() {
@@ -790,5 +791,96 @@ class DashboardDataAggregator {
         rsort($allYears);
         
         return $allYears;
+    }
+
+    // =========================================
+    // LAPORAN LAINNYA DATA
+    // =========================================
+
+    /**
+     * Get laporan lainnya summary for dashboard
+     */
+    public function getLainnyaSummary($filters = []) {
+        $cacheKey = 'lainnya_summary_' . md5(json_encode($filters));
+        $cached = $this->getCache($cacheKey, 'lainnya');
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $year = $filters['year'] ?? date('Y');
+
+        $result = [
+            'statistics' => $this->getLainnyaStats($year),
+            'byJenis' => $this->getLainnyaByJenis($year),
+            'trend' => $this->getLainnyaTrend($year),
+            'last_updated' => date('Y-m-d H:i:s')
+        ];
+
+        $this->setCache($cacheKey, $result, 'lainnya');
+        return $result;
+    }
+
+    /**
+     * Get laporan lainnya statistics
+     */
+    public function getLainnyaStats($year) {
+        $sql = "SELECT
+                    COUNT(*) as total_laporan,
+                    SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END) as draf,
+                    SUM(CASE WHEN status = 'verified' THEN 1 ELSE 0 END) as diverifikasi
+                FROM laporan_lainnya
+                WHERE YEAR(tanggal_kejadian) = :year";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':year' => $year]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Get laporan lainnya breakdown by jenis
+     */
+    public function getLainnyaByJenis($year, $limit = 10) {
+        $sql = "SELECT
+                    mjl.nama as jenis_nama,
+                    mjl.kode as jenis_kode,
+                    COUNT(ll.id) as total_laporan,
+                    SUM(CASE WHEN ll.status = 'verified' THEN 1 ELSE 0 END) as diverifikasi
+                FROM laporan_lainnya ll
+                LEFT JOIN master_jenis_laporan mjl ON ll.jenis_id = mjl.id
+                WHERE YEAR(ll.tanggal_kejadian) = :year
+                GROUP BY mjl.id, mjl.nama, mjl.kode
+                ORDER BY total_laporan DESC
+                LIMIT :limit";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->bindValue(':year', $year, PDO::PARAM_INT);
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Get laporan lainnya monthly trend
+     */
+    public function getLainnyaTrend($year) {
+        $sql = "SELECT
+                    MONTH(tanggal_kejadian) as bulan,
+                    COUNT(*) as total,
+                    SUM(CASE WHEN status = 'verified' THEN 1 ELSE 0 END) as diverifikasi
+                FROM laporan_lainnya
+                WHERE YEAR(tanggal_kejadian) = :year
+                GROUP BY MONTH(tanggal_kejadian)
+                ORDER BY bulan";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':year' => $year]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Clear lainnya cache
+     */
+    public function clearLainnyaCache() {
+        $this->clearCache('lainnya');
     }
 }

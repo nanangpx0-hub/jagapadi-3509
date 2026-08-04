@@ -16,22 +16,22 @@ class CurahHujanScraper {
     
     // Konfigurasi sumber data (ordered by priority)
     private $sources = [
+        'nasa_power' => [
+            'name' => 'NASA POWER API',
+            'url' => 'https://power.larc.nasa.gov/api/temporal/daily/point',
+            'enabled' => true,
+            'priority' => 1  // Primary source for daily precipitation PRECTOTCORR
+        ],
         'openmeteo' => [
             'name' => 'Open-Meteo',
             'url' => 'https://api.open-meteo.com/v1/forecast',
             'enabled' => true,
-            'priority' => 1  // Primary source: actual precipitation data
+            'priority' => 2
         ],
         'bmkg_api' => [
             'name' => 'BMKG API',
             'url' => 'https://api.bmkg.go.id/publik/prakiraan-cuaca',
             'enabled' => true,
-            'priority' => 2  // Secondary: weather categories
-        ],
-        'dataonline_bmkg' => [
-            'name' => 'BMKG Data Online',
-            'url' => 'https://dataonline.bmkg.go.id',
-            'enabled' => false, // Requires authentication
             'priority' => 3
         ],
         'simulation' => [
@@ -170,27 +170,35 @@ class CurahHujanScraper {
             $targetDate = DateTime::createFromFormat('Y-m-d', "{$targetYear}-{$targetMonth}-01");
             $isHistoricalRequest = $targetDate < $currentDate && $targetDate->format('Y-m') !== $currentDate->format('Y-m');
             
+            $requestedSource = $options['source'] ?? null;
+
             if ($forceSimulation) {
                 $this->log("Force simulation mode enabled");
                 $data = $this->generateSimulationData($targetYear, $targetMonth);
                 $result['source'] = 'Simulasi';
-            } elseif ($isHistoricalRequest) {
-                // APIs cannot provide historical data, use simulation
-                $this->log("Historical data requested ({$targetYear}-{$targetMonth}), APIs only provide forecast");
-                $this->log("Using simulation data for historical period");
-                $data = $this->generateSimulationData($targetYear, $targetMonth);
-                $result['source'] = 'Simulasi (Data Historis)';
             } else {
-                // Try data sources in priority order:
-                // 1. Open-Meteo (actual precipitation mm)
-                // 2. BMKG API (weather forecast categories)
-                // 3. Simulation (fallback)
-                
                 $data = null;
                 
-                // === Priority 1: Open-Meteo (actual mm precipitation) ===
-                if ($this->sources['openmeteo']['enabled']) {
-                    $this->log("[Priority 1] Attempting Open-Meteo API (actual precipitation data)");
+                // === Priority 1: NASA POWER API (daily precipitation PRECTOTCORR) ===
+                if ($requestedSource === 'nasa' || $requestedSource === 'nasa_power' || $this->sources['nasa_power']['enabled']) {
+                    $this->log("[Priority 1] Attempting NASA POWER API (PRECTOTCORR daily)");
+                    try {
+                        $nasaResult = $this->fetch_nasa_curah_hujan($targetYear, $targetMonth);
+                        if (!empty($nasaResult)) {
+                            $data = $nasaResult;
+                            $result['source'] = 'NASA POWER (PRECTOTCORR)';
+                            $this->log("✓ NASA POWER: fetched " . count($data) . " records");
+                        } else {
+                            $this->log("NASA POWER API returned empty data, trying next source");
+                        }
+                    } catch (Exception $e) {
+                        $this->log("NASA POWER ERROR: " . $e->getMessage());
+                    }
+                }
+
+                // === Priority 2: Open-Meteo (actual mm precipitation) ===
+                if (empty($data) && $this->sources['openmeteo']['enabled']) {
+                    $this->log("[Priority 2] Attempting Open-Meteo API (actual precipitation data)");
                     try {
                         if ($this->openMeteoService->isAvailable()) {
                             $targetDateStr = date('Y-m-d', strtotime("{$targetYear}-{$targetMonth}-01"));
@@ -211,9 +219,9 @@ class CurahHujanScraper {
                     }
                 }
                 
-                // === Priority 2: BMKG API (weather categories) ===
+                // === Priority 3: BMKG API (weather categories) ===
                 if (empty($data) && $this->sources['bmkg_api']['enabled']) {
-                    $this->log("[Priority 2] Attempting BMKG API (weather categories)");
+                    $this->log("[Priority 3] Attempting BMKG API (weather categories)");
                     try {
                         if ($this->bmkgService->isAvailable()) {
                             $bmkgResult = $this->bmkgService->fetchAndSave(date('Y-m-d', strtotime("{$targetYear}-{$targetMonth}-01")));
@@ -717,5 +725,221 @@ class CurahHujanScraper {
         ];
         
         return $monthNames[(int)$month] ?? 'Bulan ' . $month;
+    }
+
+    /**
+     * Fetch daily rainfall data from NASA POWER API (PRECTOTCORR)
+     * Menggunakan cURL Multi (Parallel Requests) & Local Caching untuk kecepatan tinggi
+     * 
+     * @param int|null $year Target year
+     * @param int|null $month Target month (1-12) or null for full year
+     * @return array List of formatted record arrays
+     */
+    public function fetch_nasa_curah_hujan($year = null, $month = null) {
+        $year = $year ? (int)$year : (int)date('Y');
+        
+        if ($month) {
+            $monthPad = str_pad($month, 2, '0', STR_PAD_LEFT);
+            $lastDay = date('t', strtotime("{$year}-{$monthPad}-01"));
+            $startDate = "{$year}{$monthPad}01";
+            $endDate = "{$year}{$monthPad}{$lastDay}";
+        } else {
+            $startDate = "{$year}0101";
+            $endDate = "{$year}1231";
+        }
+
+        $this->log("Fetching from NASA POWER API for {$startDate} - {$endDate}...");
+
+        $cacheDir = ROOT_PATH . '/storage/cache/nasa';
+        if (!is_dir($cacheDir)) {
+            @mkdir($cacheDir, 0755, true);
+        }
+
+        $kecamatanCoords = [
+            'Ajung'       => ['lat' => -8.2435, 'lon' => 113.6644],
+            'Ambulu'      => ['lat' => -8.3444, 'lon' => 113.6056],
+            'Arjasa'      => ['lat' => -8.1064, 'lon' => 113.7381],
+            'Balung'      => ['lat' => -8.2678, 'lon' => 113.5419],
+            'Bangsalsari'  => ['lat' => -8.1481, 'lon' => 113.5289],
+            'Gumukmas'    => ['lat' => -8.3308, 'lon' => 113.4150],
+            'Jelbuk'      => ['lat' => -8.0531, 'lon' => 113.7431],
+            'Jenggawah'   => ['lat' => -8.2717, 'lon' => 113.6706],
+            'Jombang'     => ['lat' => -8.2567, 'lon' => 113.3481],
+            'Kalisat'     => ['lat' => -8.1256, 'lon' => 113.8117],
+            'Kaliwates'   => ['lat' => -8.1825, 'lon' => 113.6797],
+            'Kencong'     => ['lat' => -8.2831, 'lon' => 113.3667],
+            'Ledokombo'   => ['lat' => -8.1186, 'lon' => 113.8822],
+            'Mayang'      => ['lat' => -8.1969, 'lon' => 113.7878],
+            'Mumbulsari'  => ['lat' => -8.2750, 'lon' => 113.7222],
+            'Pakusari'    => ['lat' => -8.1678, 'lon' => 113.7667],
+            'Panti'       => ['lat' => -8.1086, 'lon' => 113.6067],
+            'Patrang'     => ['lat' => -8.1506, 'lon' => 113.7125],
+            'Puger'       => ['lat' => -8.3611, 'lon' => 113.4778],
+            'Rambipuji'   => ['lat' => -8.2042, 'lon' => 113.6139],
+            'Semboro'     => ['lat' => -8.2178, 'lon' => 113.4567],
+            'Silo'        => ['lat' => -8.2464, 'lon' => 113.9186],
+            'Sukorambi'   => ['lat' => -8.1469, 'lon' => 113.6492],
+            'Sukowono'    => ['lat' => -8.0575, 'lon' => 113.8322],
+            'Sumberbaru'  => ['lat' => -8.1278, 'lon' => 113.3986],
+            'Sumberjambe' => ['lat' => -8.0317, 'lon' => 113.8967],
+            'Sumbersari'  => ['lat' => -8.1758, 'lon' => 113.7208],
+            'Tanggul'     => ['lat' => -8.1603, 'lon' => 113.4519],
+            'Tempurejo'   => ['lat' => -8.3075, 'lon' => 113.7719],
+            'Umbulsari'   => ['lat' => -8.2561, 'lon' => 113.4406],
+            'Wuluhan'     => ['lat' => -8.3475, 'lon' => 113.5469],
+        ];
+
+        // Fetch master_kecamatan IDs for proper mapping
+        $kecamatanMapDB = [];
+        try {
+            $db = Database::getInstance()->getConnection();
+            $stmtKec = $db->query("SELECT id, nama_kecamatan FROM master_kecamatan");
+            while ($row = $stmtKec->fetch(PDO::FETCH_ASSOC)) {
+                $kecamatanMapDB[strtolower(trim($row['nama_kecamatan']))] = (int)$row['id'];
+            }
+        } catch (Exception $e) {
+            $this->log("DB Lookup Warning: " . $e->getMessage());
+        }
+
+        $allData = [];
+        $uncached = [];
+
+        // Check local file cache first
+        foreach ($kecamatanCoords as $namaKecamatan => $coord) {
+            $cacheKey = "nasa_" . preg_replace('/[^a-z0-9_]/i', '', strtolower($namaKecamatan)) . "_{$startDate}_{$endDate}.json";
+            $cachePath = $cacheDir . '/' . $cacheKey;
+
+            if (file_exists($cachePath) && (time() - filemtime($cachePath) < 86400 * 7)) { // 7 days TTL
+                $cachedContent = @file_get_contents($cachePath);
+                $cachedJson = json_decode($cachedContent, true);
+                if (is_array($cachedJson) && !empty($cachedJson)) {
+                    foreach ($cachedJson as $rec) {
+                        $allData[] = $rec;
+                    }
+                    continue;
+                }
+            }
+            $uncached[$namaKecamatan] = $coord;
+        }
+
+        if (empty($uncached)) {
+            $this->log("Loaded all " . count($allData) . " records for {$startDate}-{$endDate} directly from local cache.");
+            return $allData;
+        }
+
+        // Execute parallel HTTP requests using cURL multi for uncached kecamatan
+        $mh = curl_multi_init();
+        $curlHandles = [];
+
+        foreach ($uncached as $namaKecamatan => $coord) {
+            $lat = $coord['lat'];
+            $lon = $coord['lon'];
+
+            $apiUrl = "https://power.larc.nasa.gov/api/temporal/daily/point?" . http_build_query([
+                'parameters' => 'PRECTOTCORR',
+                'community'  => 'AG',
+                'longitude'  => $lon,
+                'latitude'   => $lat,
+                'start'      => $startDate,
+                'end'        => $endDate,
+                'format'     => 'JSON'
+            ]);
+
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL            => $apiUrl,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_TIMEOUT        => 45,
+                CURLOPT_CONNECTTIMEOUT => 10,
+                CURLOPT_USERAGENT      => 'JAGAPADI-System/1.0 (PHP-cURL-Multi)',
+                CURLOPT_SSL_VERIFYPEER => false,
+            ]);
+
+            curl_multi_add_handle($mh, $ch);
+            $curlHandles[$namaKecamatan] = [
+                'ch' => $ch,
+                'coord' => $coord
+            ];
+        }
+
+        // Execute cURL multi handles in parallel
+        $running = null;
+        do {
+            $status = curl_multi_exec($mh, $running);
+            if ($running) {
+                curl_multi_select($mh, 0.05);
+            }
+        } while ($running > 0 && $status === CURLM_OK);
+
+        // Collect and parse responses
+        foreach ($curlHandles as $namaKecamatan => $handleInfo) {
+            $ch = $handleInfo['ch'];
+            $coord = $handleInfo['coord'];
+            $lat = $coord['lat'];
+            $lon = $coord['lon'];
+            $kecId = $kecamatanMapDB[strtolower(trim($namaKecamatan))] ?? null;
+
+            $response = curl_multi_getcontent($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlErrno = curl_errno($ch);
+            $curlError = curl_error($ch);
+
+            curl_multi_remove_handle($mh, $ch);
+            curl_close($ch);
+
+            if ($curlErrno !== 0 || $httpCode !== 200 || empty($response)) {
+                $this->log("NASA POWER API Error for {$namaKecamatan}: HTTP status {$httpCode}, cURL error ({$curlErrno}): {$curlError}");
+                continue;
+            }
+
+            $jsonData = json_decode($response, true);
+            if (json_last_error() !== JSON_ERROR_NONE || !isset($jsonData['properties']['parameter']['PRECTOTCORR'])) {
+                $this->log("NASA POWER API Invalid JSON format or missing PRECTOTCORR for {$namaKecamatan}");
+                continue;
+            }
+
+            $rainData = $jsonData['properties']['parameter']['PRECTOTCORR'];
+            $kecRecords = [];
+
+            foreach ($rainData as $rawDate => $val) {
+                if ($val === null || $val == -999 || $val === '') {
+                    continue;
+                }
+
+                $rawDateStr = (string)$rawDate;
+                if (strlen($rawDateStr) === 8) {
+                    $formattedDate = substr($rawDateStr, 0, 4) . '-' . substr($rawDateStr, 4, 2) . '-' . substr($rawDateStr, 6, 2);
+                } else {
+                    $dt = DateTime::createFromFormat('Ymd', $rawDateStr);
+                    $formattedDate = $dt ? $dt->format('Y-m-d') : $rawDateStr;
+                }
+
+                $rec = [
+                    'tanggal' => $formattedDate,
+                    'lokasi' => $namaKecamatan,
+                    'kecamatan' => $namaKecamatan,
+                    'kecamatan_id' => $kecId,
+                    'latitude' => $lat,
+                    'longitude' => $lon,
+                    'curah_hujan' => floatval($val),
+                    'satuan' => 'mm',
+                    'sumber_data' => 'NASA POWER (PRECTOTCORR)',
+                    'keterangan' => 'Terkoreksi NASA POWER Daily Point API (PRECTOTCORR)'
+                ];
+                $allData[] = $rec;
+                $kecRecords[] = $rec;
+            }
+
+            // Save to file cache for instant retrieval on next run
+            if (!empty($kecRecords)) {
+                $cacheKey = "nasa_" . preg_replace('/[^a-z0-9_]/i', '', strtolower($namaKecamatan)) . "_{$startDate}_{$endDate}.json";
+                $cachePath = $cacheDir . '/' . $cacheKey;
+                @file_put_contents($cachePath, json_encode($kecRecords), LOCK_EX);
+            }
+        }
+
+        curl_multi_close($mh);
+        return $allData;
     }
 }

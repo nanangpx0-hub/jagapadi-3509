@@ -158,10 +158,10 @@ class OpenMeteoService {
         
         foreach ($this->locations as $location) {
             try {
-                $data = $this->fetchPrecipitation(
-                    (float) $location['latitude'],
-                    (float) $location['longitude']
-                );
+                $lat = (float) ($location['latitude'] ?? $location['lat'] ?? -8.1706);
+                $lon = (float) ($location['longitude'] ?? $location['lng'] ?? $location['lon'] ?? 113.7003);
+
+                $data = $this->fetchPrecipitation($lat, $lon);
                 
                 if ($data) {
                     // Extract data for target date
@@ -170,15 +170,15 @@ class OpenMeteoService {
                     if ($dailyData) {
                         $record = [
                             'tanggal' => $targetDate,
-                            'lokasi' => $location['nama_kecamatan'] . ', Jember',
+                            'lokasi' => ($location['nama_kecamatan'] ?? 'Jember') . ', Jember',
                             'kode_wilayah' => $location['kode_bmkg_adm4'] ?? '35.09',
                             'curah_hujan' => $dailyData['precipitation_sum'],
                             'satuan' => 'mm',
                             'sumber_data' => 'Open-Meteo',
                             'keterangan' => sprintf(
                                 'Data curah hujan dari Open-Meteo API. Koordinat: %s, %s. Kondisi cuaca: %s',
-                                $location['latitude'],
-                                $location['longitude'],
+                                $lat,
+                                $lon,
                                 $dailyData['weather_desc'] ?? 'N/A'
                             ),
                             'kecamatan_id' => $location['id']
