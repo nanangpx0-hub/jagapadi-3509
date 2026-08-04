@@ -456,7 +456,7 @@
                         </div>
                     </div>
                     
-                    <input type="hidden" name="status" id="statusSelect" value="submitted">
+                    <input type="hidden" name="status" id="statusSelect" value="draft">
 
                 </div>
                 <div class="card-footer">

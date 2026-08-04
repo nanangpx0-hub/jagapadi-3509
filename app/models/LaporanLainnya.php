@@ -88,7 +88,9 @@ class LaporanLainnya extends Model {
 
     public function getCountWithFilters(array $filters = []): int {
         $qb = new QueryBuilder();
-        $qb->table('laporan_lainnya ll');
+        $qb->table('laporan_lainnya ll')
+            ->leftJoin('users u', 'll.user_id = u.id')
+            ->leftJoin('master_jenis_laporan mjl', 'll.jenis_id = mjl.id');
 
         if (!empty($filters['jenis_id'])) {
             $qb->where('ll.jenis_id', $filters['jenis_id']);
@@ -135,12 +137,14 @@ public function getById(int $id): ?array {
                           'md.nama_desa',
                           'mk.nama_kecamatan',
                           'kab.nama_kabupaten',
+                          'v.nama_lengkap as verifikator_nama',
                       ])
                       ->leftJoin('users u', 'll.user_id = u.id')
                       ->leftJoin('master_jenis_laporan mjl', 'll.jenis_id = mjl.id')
                       ->leftJoin('master_desa md', 'll.desa_id = md.id')
                       ->leftJoin('master_kecamatan mk', 'md.kecamatan_id = mk.id')
                       ->leftJoin('master_kabupaten kab', 'mk.kabupaten_id = kab.id')
+                      ->leftJoin('users v', 'll.verified_by = v.id')
                       ->where('ll.id', $id)
                       ->limit(1)
                       ->get();
@@ -166,9 +170,9 @@ public function getById(int $id): ?array {
 
     public function submitReport(int $id): bool {
         return $this->update($id, [
-            'status' => 'verified',
+            'status' => 'submitted',
             'verified_by' => null,
-            'verified_at' => date('Y-m-d H:i:s'),
+            'verified_at' => null,
             'catatan_verifikasi' => null,
         ]);
     }
@@ -230,7 +234,7 @@ public function getById(int $id): ?array {
                     SUM(CASE WHEN ll.status = 'draft' THEN 1 ELSE 0 END) as draf
                 FROM laporan_lainnya ll
                 LEFT JOIN master_jenis_laporan mjl ON ll.jenis_id = mjl.id
-                WHERE YEAR(ll.tanggal_kejadian) = :tahun OR ll.tanggal_kejadian IS NULL
+                WHERE YEAR(ll.tanggal_kejadian) = :tahun
                 GROUP BY mjl.id, mjl.kode, mjl.nama
                 ORDER BY mjl.nama ASC";
 

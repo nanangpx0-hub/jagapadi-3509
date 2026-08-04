@@ -278,7 +278,7 @@ class LaporanLainnyaController extends Controller {
 
             $uploadDir = ROOT_PATH . '/public/uploads/laporan-lainnya/';
             if (!is_dir($uploadDir)) {
-                mkdir($uploadDir, 0777, true);
+                mkdir($uploadDir, 0755, true);
             }
 
             $file = $_FILES['foto'];
@@ -303,7 +303,7 @@ class LaporanLainnyaController extends Controller {
                 return;
             }
 
-            $fileName = hash('sha256', time() . $file['name'] . uniqid()) . '.' . $extension;
+            $fileName = bin2hex(random_bytes(16)) . '.' . $extension;
             $targetPath = $uploadDir . $fileName;
 
             if ($file['size'] > $maxSize) {
@@ -352,7 +352,7 @@ class LaporanLainnyaController extends Controller {
                 'deskripsi' => $data['deskripsi'] ?? null,
                 'latitude' => $latitude !== null ? (float)$latitude : null,
                 'longitude' => $longitude !== null ? (float)$longitude : null,
-                'status' => 'submitted',
+                'status' => 'draft',
             ];
 
             $reportId = $this->laporanModel->createReport($reportData);
@@ -491,6 +491,77 @@ class LaporanLainnyaController extends Controller {
             return;
         }
 
+        // ============ Upload Foto (dengan kompresi otomatis) ============
+        $fotoUrl = $laporan['foto_url'] ?? null;
+        if (isset($_FILES['foto']) && $_FILES['foto']['error'] == 0) {
+            require_once ROOT_PATH . '/app/helpers/ImageCompressor.php';
+
+            $uploadDir = ROOT_PATH . '/public/uploads/laporan-lainnya/';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
+            }
+
+            $file = $_FILES['foto'];
+            $maxSize = 2 * 1024 * 1024; // 2MB
+            $allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+            $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
+
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            $mimeType = finfo_file($finfo, $file['tmp_name']);
+            finfo_close($finfo);
+
+            if (!in_array($mimeType, $allowedTypes)) {
+                $_SESSION['error'] = 'Tipe file tidak diizinkan. Hanya JPG, PNG, dan WEBP yang diizinkan.';
+                $this->redirect("laporan-lainnya/edit/{$id}");
+                return;
+            }
+
+            $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+            if (!in_array($extension, $allowedExtensions)) {
+                $_SESSION['error'] = 'Ekstensi file tidak diizinkan. Hanya JPG, PNG, dan WEBP yang diizinkan.';
+                $this->redirect("laporan-lainnya/edit/{$id}");
+                return;
+            }
+
+            // Hapus foto lama jika ada
+            if (!empty($fotoUrl)) {
+                $oldFilePath = ROOT_PATH . '/public/' . $fotoUrl;
+                if (file_exists($oldFilePath)) {
+                    unlink($oldFilePath);
+                }
+            }
+
+            $fileName = bin2hex(random_bytes(16)) . '.' . $extension;
+            $targetPath = $uploadDir . $fileName;
+
+            if ($file['size'] > $maxSize) {
+                $compressor = new ImageCompressor();
+                $result = $compressor->compress($file['tmp_name'], $targetPath, $maxSize);
+
+                if ($result['success']) {
+                    $fotoUrl = 'uploads/laporan-lainnya/' . $fileName;
+
+                    if ($result['compressed']) {
+                        $originalSize = ImageCompressor::formatFileSize($result['original_size']);
+                        $finalSize = ImageCompressor::formatFileSize($result['final_size']);
+                        $_SESSION['info'] = "Foto berhasil dikompresi dari {$originalSize} menjadi {$finalSize} (pengurangan {$result['reduction_percent']}%)";
+                    }
+                } else {
+                    $_SESSION['error'] = 'Gagal mengkompresi foto: ' . ($result['error'] ?? 'Unknown error');
+                    $this->redirect("laporan-lainnya/edit/{$id}");
+                    return;
+                }
+            } else {
+                if (move_uploaded_file($file['tmp_name'], $targetPath)) {
+                    $fotoUrl = 'uploads/laporan-lainnya/' . $fileName;
+                } else {
+                    $_SESSION['error'] = 'Gagal mengupload file.';
+                    $this->redirect("laporan-lainnya/edit/{$id}");
+                    return;
+                }
+            }
+        }
+
         $kabupatenResolvedId = null;
         $kecamatanResolvedId = null;
         $desaResolvedId = null;
@@ -532,6 +603,7 @@ class LaporanLainnyaController extends Controller {
             'deskripsi' => $data['deskripsi'] ?? null,
             'latitude' => !empty($data['latitude']) ? (float)$data['latitude'] : null,
             'longitude' => !empty($data['longitude']) ? (float)$data['longitude'] : null,
+            'foto_url' => $fotoUrl,
         ];
 
         $success = $this->laporanModel->updateReport($id, $updateData);
@@ -593,7 +665,7 @@ class LaporanLainnyaController extends Controller {
 
         if ($success) {
             $this->logActivity('Submit', 'laporan_lainnya', $id, 'Laporan lainnya disubmit dan otomatis diverifikasi');
-            $_SESSION['success'] = 'Laporan berhasil disubmit dan diverifikasi';
+            $_SESSION['success'] = 'Laporan berhasil disubmit dan masuk antrian verifikasi';
         } else {
             $_SESSION['error'] = 'Gagal submit laporan';
         }

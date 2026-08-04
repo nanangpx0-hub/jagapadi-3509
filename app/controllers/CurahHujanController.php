@@ -1082,9 +1082,8 @@ class CurahHujanController extends Controller {
                     'total' => (float) $row['total'],
                     'maksimum' => (float) $row['maksimum'],
                     'jumlah_data' => (int) $row['jumlah_data'],
-                    // Default coordinates for Jember center
-                    'latitude' => -8.1706,
-                    'longitude' => 113.7003
+                    'latitude' => null,
+                    'longitude' => null
                 ];
             }
             
