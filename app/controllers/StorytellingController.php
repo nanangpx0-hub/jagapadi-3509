@@ -81,61 +81,63 @@ class StorytellingController extends Controller {
      * Method: POST
      * Expected params: bulan, tahun, wilayah_id
      */
-    public function generateAnalysis() {
-        $this->checkAuth();
-        $this->checkStorytellingAccess();
-        
-        header('Content-Type: application/json');
-        
-        try {
-            // Validate input
-            $bulan = (int) ($_POST['bulan'] ?? 0);
-            $tahun = (int) ($_POST['tahun'] ?? 0);
-            $wilayahId = (int) ($_POST['wilayah_id'] ?? 0);
-            
-            if ($bulan < 1 || $bulan > 12) {
-                throw new Exception('Bulan tidak valid (1-12)');
-            }
-            
-            if ($tahun < 2020 || $tahun > (date('Y') + 1)) {
-                throw new Exception('Tahun tidak valid');
-            }
-            
-            if ($wilayahId <= 0) {
-                throw new Exception('Wilayah harus dipilih');
-            }
-            
-            // Check if analysis for this period already exists
-            $existingAnalysis = $this->checkExistingAnalysis($bulan, $tahun, $wilayahId);
-            
-            // Generate analysis using DataStoryService
-            $analysisResult = $this->dataStoryService->analyzeCauses($bulan, $tahun, $wilayahId);
-            
-            if (!$analysisResult['success']) {
-                throw new Exception($analysisResult['error'] ?? 'Gagal melakukan analisis');
-            }
-            
-            // Add existing analysis info if any
-            if ($existingAnalysis) {
-                $analysisResult['existing_analysis'] = $existingAnalysis;
-                $analysisResult['has_existing'] = true;
-            } else {
-                $analysisResult['has_existing'] = false;
-            }
-            
-            // Add chart data for visualization
-            $analysisResult['chart_data'] = $this->getChartData($bulan, $tahun, $wilayahId);
-            
-            echo json_encode($analysisResult);
-            
-        } catch (Exception $e) {
-            http_response_code(400);
-            echo json_encode([
-                'success' => false,
-                'error' => $e->getMessage()
-            ]);
-        }
-    }
+public function generateAnalysis() {
+         $this->checkAuth();
+         $this->checkStorytellingAccess();
+         
+         header('Content-Type: application/json');
+         
+         set_time_limit(45);
+         
+         try {
+             $bulan = (int) ($_POST['bulan'] ?? 0);
+             $tahun = (int) ($_POST['tahun'] ?? 0);
+             $wilayahId = (int) ($_POST['wilayah_id'] ?? 0);
+             
+             if ($bulan < 1 || $bulan > 12) {
+                 throw new Exception('Bulan tidak valid (1-12)');
+             }
+             
+             if ($tahun < 2020 || $tahun > (date('Y') + 1)) {
+                 throw new Exception('Tahun tidak valid');
+             }
+             
+             if ($wilayahId <= 0) {
+                 throw new Exception('Wilayah harus dipilih');
+             }
+             
+             $this->logActivity('storytelling_analyze_start', "Analisis {$tahun}-{$bulan} wilayah #{$wilayahId} dimulai");
+             
+             $existingAnalysis = $this->checkExistingAnalysis($bulan, $tahun, $wilayahId);
+             
+             $analysisResult = $this->dataStoryService->analyzeCauses($bulan, $tahun, $wilayahId);
+             
+             if (!$analysisResult['success']) {
+                 throw new Exception($analysisResult['error'] ?? 'Gagal melakukan analisis');
+             }
+             
+             if ($existingAnalysis) {
+                 $analysisResult['existing_analysis'] = $existingAnalysis;
+                 $analysisResult['has_existing'] = true;
+             } else {
+                 $analysisResult['has_existing'] = false;
+             }
+             
+             $analysisResult['chart_data'] = $this->getChartData($bulan, $tahun, $wilayahId);
+             
+             $this->logActivity('storytelling_analyze_complete', "Analisis {$tahun}-{$bulan} wilayah #{$wilayahId} selesai");
+             
+             echo json_encode($analysisResult);
+             
+         } catch (Exception $e) {
+             error_log("[STORYTELLING] generateAnalysis error: " . $e->getMessage());
+             http_response_code(400);
+             echo json_encode([
+                 'success' => false,
+                 'error' => $e->getMessage()
+             ]);
+         }
+     }
     
     /**
      * Menyimpan hasil analisis final ke database

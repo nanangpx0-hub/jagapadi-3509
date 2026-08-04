@@ -87,11 +87,20 @@ const StorytellingDashboard = (function() {
     /**
      * Helper to handle fetch requests and check for 401/403 session timeout
      */
+    const FETCH_TIMEOUT_MS = 30000;
+
     async function apiFetch(url, options = {}) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
         try {
-            const response = await fetch(url, options);
-            
-            // Check for unauthorized access (session timeout)
+            const response = await fetch(url, {
+                ...options,
+                signal: controller.signal
+            });
+
+            clearTimeout(timeoutId);
+
             if (response.status === 401 || response.status === 403) {
                 showAlert('Sesi Anda telah habis. Mengalihkan ke halaman login...', 'warning');
                 setTimeout(() => {
@@ -99,17 +108,23 @@ const StorytellingDashboard = (function() {
                 }, 2000);
                 throw new Error('Unauthorized');
             }
-            
+
             return response;
         } catch (error) {
-            if (error.message !== 'Unauthorized') {
-                throw error;
+            clearTimeout(timeoutId);
+
+            if (error.name === 'AbortError') {
+                throw new Error('Permintaan timeout. Server tidak merespons dalam 30 detik. Silakan coba lagi.');
             }
-            // Return a dummy response to prevent further processing if unauthorized
-            return {
-                json: async () => ({ success: false, error: 'Unauthorized' }),
-                ok: false
-            };
+
+            if (error.message === 'Unauthorized') {
+                return {
+                    json: async () => ({ success: false, error: 'Unauthorized' }),
+                    ok: false
+                };
+            }
+
+            throw error;
         }
     }
     
@@ -296,28 +311,28 @@ const StorytellingDashboard = (function() {
     /**
      * Handle analyze button click
      */
-    async function handleAnalyze() {
+async function handleAnalyze() {
         if (state.isAnalyzing) return;
-        
-        // Validate inputs
+
         const bulan = elements.filterBulan.value;
         const tahun = elements.filterTahun.value;
         const wilayahId = elements.filterKecamatan.value;
-        
+
         if (!wilayahId) {
             showAlert('Pilih kecamatan terlebih dahulu', 'warning');
             return;
         }
-        
+
         try {
             state.isAnalyzing = true;
             showLoading(true);
-            
-            // Disable analyze button
+            updateLoadingMessage('Memproses Data... Mengambil data produksi');
+
             elements.btnAnalyze.disabled = true;
             elements.btnAnalyze.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menganalisis...';
-            
-            // Make AJAX request using wrapper to handle session timeouts
+
+            updateLoadingMessage('Memproses Data... Menghubungkan variabel eksogen');
+
             const response = await apiFetch(`${config.baseUrl}/storytelling/generateAnalysis`, {
                 method: 'POST',
                 headers: {
@@ -330,13 +345,15 @@ const StorytellingDashboard = (function() {
                     wilayah_id: wilayahId
                 })
             });
-            
+
             if (!response.ok && response.status !== 400) {
-                if (response.status === 401 || response.status === 403) return; // Handled by apiFetch
+                if (response.status === 401 || response.status === 403) return;
             }
-            
+
+            updateLoadingMessage('Memproses Data... Mengurai hasil analisis');
+
             const result = await response.json();
-            
+
             if (result.success) {
                 state.currentAnalysis = result;
                 displayAnalysisResult(result);
@@ -345,15 +362,15 @@ const StorytellingDashboard = (function() {
             } else {
                 throw new Error(result.error || 'Gagal melakukan analisis');
             }
-            
+
         } catch (error) {
             console.error('Analysis error:', error);
-            showAlert(error.message, 'danger');
+            updateLoadingMessage('Proses gagal');
+            showAlert(error.message || 'Terjadi kesalahan saat menganalisis data. Silakan coba lagi.', 'danger');
         } finally {
             state.isAnalyzing = false;
             showLoading(false);
-            
-            // Re-enable analyze button
+
             elements.btnAnalyze.disabled = false;
             elements.btnAnalyze.innerHTML = '<i class="fas fa-magic"></i> Analisa Sekarang';
         }
@@ -617,45 +634,55 @@ const StorytellingDashboard = (function() {
     /**
      * Start the process timer
      */
-    function startTimer() {
-        if (processTimer) {
-            clearInterval(processTimer);
-            processTimer = null;
-        }
+function startTimer() {
+         if (processTimer) {
+             clearInterval(processTimer);
+             processTimer = null;
+         }
 
-        processStartTime = Date.now();
-        updateTimerDisplay(0);
+         processStartTime = Date.now();
+         updateTimerDisplay(0);
+         updateLoadingProgress(0);
 
-        if (elements.warningDisplay) {
-            elements.warningDisplay.style.display = 'none';
-        }
+         if (elements.warningDisplay) {
+             elements.warningDisplay.style.display = 'none';
+         }
 
-        processTimer = setInterval(() => {
-            const elapsed = Math.floor((Date.now() - processStartTime) / 1000);
-            updateTimerDisplay(elapsed);
+         processTimer = setInterval(() => {
+             const elapsed = Math.floor((Date.now() - processStartTime) / 1000);
+             updateTimerDisplay(elapsed);
+             updateLoadingProgress(Math.min(elapsed / WARNING_THRESHOLD * 100, 95));
 
-            if (elapsed >= WARNING_THRESHOLD && elements.warningDisplay) {
-                elements.warningDisplay.style.display = 'block';
-            }
-        }, 1000);
-    }
+             if (elapsed >= WARNING_THRESHOLD && elements.warningDisplay) {
+                 elements.warningDisplay.style.display = 'block';
+             }
+         }, 1000);
+     }
+
+     function updateLoadingProgress(percent) {
+         const progressBar = document.getElementById('loading-progress');
+         if (progressBar) {
+             progressBar.style.width = percent + '%';
+         }
+     }
 
     /**
      * Stop the process timer
      */
-    function stopTimer() {
-        if (processTimer) {
-            clearInterval(processTimer);
-            processTimer = null;
-        }
-        processStartTime = 0;
-        if (elements.timerDisplay) {
-            elements.timerDisplay.textContent = '00:00';
-        }
-        if (elements.warningDisplay) {
-            elements.warningDisplay.style.display = 'none';
-        }
-    }
+function stopTimer() {
+         if (processTimer) {
+             clearInterval(processTimer);
+             processTimer = null;
+         }
+         processStartTime = 0;
+         if (elements.timerDisplay) {
+             elements.timerDisplay.textContent = '00:00';
+         }
+         if (elements.warningDisplay) {
+             elements.warningDisplay.style.display = 'none';
+         }
+         updateLoadingProgress(0);
+     }
 
     /**
      * Update timer display in mm:ss format
@@ -668,16 +695,23 @@ const StorytellingDashboard = (function() {
             String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
     }
 
-    function showLoading(show) {
-        if (elements.loadingOverlay) {
-            elements.loadingOverlay.style.display = show ? 'flex' : 'none';
-        }
-        if (show) {
-            startTimer();
-        } else {
-            stopTimer();
-        }
-    }
+function showLoading(show) {
+         if (elements.loadingOverlay) {
+             elements.loadingOverlay.style.display = show ? 'flex' : 'none';
+         }
+         if (show) {
+             startTimer();
+         } else {
+             stopTimer();
+         }
+     }
+
+     function updateLoadingMessage(message) {
+         const msgEl = document.getElementById('loading-message');
+         if (msgEl) {
+             msgEl.textContent = message;
+         }
+     }
     
     function showAlert(message, type = 'info') {
         // Create alert element

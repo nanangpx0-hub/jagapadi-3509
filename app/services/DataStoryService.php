@@ -26,9 +26,13 @@ class DataStoryService {
     private const WEIGHT_CUACA = 0.6;
     private const WEIGHT_HAMA = 0.4;
     
+    private const MAX_EXECUTION_TIME = 30;
+    
     public function __construct() {
         $this->db = Database::getInstance()->getConnection();
         $this->logFile = ROOT_PATH . '/logs/data_story_service.log';
+        $this->db->setAttribute(PDO::MYSQL_ATTR_READ_TIMEOUT, 10);
+        $this->db->setAttribute(PDO::MYSQL_ATTR_WRITE_TIMEOUT, 10);
     }
     
     /**
@@ -39,55 +43,77 @@ class DataStoryService {
      * @param int $wilayahId ID wilayah (kecamatan)
      * @return array Hasil analisis lengkap
      */
-    public function analyzeCauses(int $bulan, int $tahun, int $wilayahId): array {
-        $startTime = microtime(true);
-        $this->log("Starting analysis for {$tahun}-{$bulan}, wilayah #{$wilayahId}");
-        
-        try {
-            // 1. Ambil Data Produksi Bulan Terpilih
-            $produksiData = $this->getProductionData($bulan, $tahun, $wilayahId);
-            
-            // 2. Ambil Data Penyebab dengan Time Lag -1 Bulan
-            $lagData = $this->getLaggingIndicators($bulan, $tahun, $wilayahId);
-            
-            // 3. Rule Engine - Tentukan Faktor Penyebab Utama
-            $faktorPenyebab = $this->determinePrimaryFactor($lagData);
-            
-            // 4. Kalkulasi Skor Risiko
-            $skorRisiko = $this->calculateRiskScores($lagData);
-            
-            // 5. Generate Narasi Otomatis
-            $narasi = $this->generateNarrative($bulan, $tahun, $wilayahId, $produksiData, $lagData, $faktorPenyebab, $skorRisiko);
-            
-            // 6. Compile hasil analisis
-            $result = [
-                'success' => true,
-                'periode' => [
-                    'bulan' => $bulan,
-                    'tahun' => $tahun,
-                    'nama_bulan' => $this->getMonthName($bulan),
-                    'wilayah_id' => $wilayahId
-                ],
-                'produksi_data' => $produksiData,
-                'lagging_indicators' => $lagData,
-                'faktor_penyebab_utama' => $faktorPenyebab,
-                'skor_risiko' => $skorRisiko,
-                'narasi_otomatis' => $narasi,
-                'execution_time' => round(microtime(true) - $startTime, 4)
-            ];
-            
-            $this->log("Analysis completed successfully in {$result['execution_time']}s");
-            return $result;
-            
-        } catch (Exception $e) {
-            $this->log("Analysis failed: " . $e->getMessage(), 'ERROR');
-            return [
-                'success' => false,
-                'error' => $e->getMessage(),
-                'execution_time' => round(microtime(true) - $startTime, 4)
-            ];
-        }
-    }
+public function analyzeCauses(int $bulan, int $tahun, int $wilayahId): array {
+         $startTime = microtime(true);
+         $this->log("Step 1/5: Starting analysis for {$tahun}-{$bulan}, wilayah #{$wilayahId}");
+         
+         try {
+             if ((microtime(true) - $startTime) > self::MAX_EXECUTION_TIME) {
+                 throw new Exception('Analisis melebihi batas waktu maksimum ' . self::MAX_EXECUTION_TIME . ' detik');
+             }
+             
+             // 1. Ambil Data Produksi Bulan Terpilih
+             $this->log("Step 2/5: Fetching production data for {$tahun}-{$bulan}");
+             $produksiData = $this->getProductionData($bulan, $tahun, $wilayahId);
+             $this->log("Step 2/5: Production data fetched in " . round(microtime(true) - $startTime, 4) . "s");
+             
+             if ((microtime(true) - $startTime) > self::MAX_EXECUTION_TIME) {
+                 throw new Exception('Analisis melebihi batas waktu maksimum ' . self::MAX_EXECUTION_TIME . ' detik saat mengambil data produksi');
+             }
+             
+             // 2. Ambil Data Penyebab dengan Time Lag -1 Bulan
+             $this->log("Step 3/5: Fetching lagging indicators (exogen variables)");
+             $lagData = $this->getLaggingIndicators($bulan, $tahun, $wilayahId);
+             $this->log("Step 3/5: Lagging indicators fetched in " . round(microtime(true) - $startTime, 4) . "s");
+             
+             if ((microtime(true) - $startTime) > self::MAX_EXECUTION_TIME) {
+                 throw new Exception('Analisis melebihi batas waktu maksimum ' . self::MAX_EXECUTION_TIME . ' detik saat mengambil data lagging indicators');
+             }
+             
+             // 3. Rule Engine - Tentukan Faktor Penyebab Utama
+             $this->log("Step 4/5: Running rule engine for primary factor determination");
+             $faktorPenyebab = $this->determinePrimaryFactor($lagData);
+             $this->log("Step 4/5: Primary factor determined: {$faktorPenyebab}");
+             
+             // 4. Kalkulasi Skor Risiko
+             $this->log("Step 5/5: Calculating risk scores");
+             $skorRisiko = $this->calculateRiskScores($lagData);
+             $this->log("Step 5/5: Risk scores calculated");
+             
+             // 5. Generate Narasi Otomatis
+             $this->log("Step 6/5: Generating narrative");
+             $narasi = $this->generateNarrative($bulan, $tahun, $wilayahId, $produksiData, $lagData, $faktorPenyebab, $skorRisiko);
+             $this->log("Step 6/5: Narrative generated");
+             
+             // 6. Compile hasil analisis
+             $result = [
+                 'success' => true,
+                 'periode' => [
+                     'bulan' => $bulan,
+                     'tahun' => $tahun,
+                     'nama_bulan' => $this->getMonthName($bulan),
+                     'wilayah_id' => $wilayahId
+                 ],
+                 'produksi_data' => $produksiData,
+                 'lagging_indicators' => $lagData,
+                 'faktor_penyebab_utama' => $faktorPenyebab,
+                 'skor_risiko' => $skorRisiko,
+                 'narasi_otomatis' => $narasi,
+                 'execution_time' => round(microtime(true) - $startTime, 4)
+             ];
+             
+             $this->log("Analysis completed successfully in {$result['execution_time']}s");
+             return $result;
+             
+         } catch (Exception $e) {
+             $this->log("Analysis failed at step: " . $e->getMessage(), 'ERROR');
+             return [
+                 'success' => false,
+                 'error' => 'Gagal menyelesaikan analisis: ' . $e->getMessage(),
+                 'execution_time' => round(microtime(true) - $startTime, 4)
+             ];
+         }
+     }
     
     /**
      * Ambil data produksi untuk bulan dan wilayah tertentu
@@ -170,65 +196,63 @@ class DataStoryService {
     /**
      * Ambil data curah hujan bulan sebelumnya
      */
-    private function getCurahHujanLag(int $lagBulan, int $lagTahun, int $wilayahId): array {
-        // Query rata-rata curah hujan dari bulan sebelumnya
-        // Asumsi: tabel curah_hujan memiliki relasi dengan wilayah
-        $sql = "
-            SELECT 
-                AVG(curah_hujan) as avg_curah_hujan,
-                MIN(curah_hujan) as min_curah_hujan,
-                MAX(curah_hujan) as max_curah_hujan,
-                COUNT(*) as jumlah_data,
-                SUM(CASE WHEN curah_hujan > ? THEN 1 ELSE 0 END) as hari_hujan_ekstrem
-            FROM curah_hujan ch
-            WHERE MONTH(ch.tanggal) = ? 
-              AND YEAR(ch.tanggal) = ?
-              AND (ch.lokasi LIKE ? OR ch.kode_wilayah LIKE ?)
-        ";
-        
-        // Get nama kecamatan untuk pattern matching
-        $kecamatanInfo = $this->getKecamatanInfo($wilayahId);
-        $lokasiPattern = '%' . $kecamatanInfo['nama_kecamatan'] . '%';
-        $kodePattern = $kecamatanInfo['kode_wilayah'] . '%';
-        
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([
-            self::CURAH_HUJAN_EKSTREM, 
-            $lagBulan, 
-            $lagTahun, 
-            $lokasiPattern,
-            $kodePattern
-        ]);
-        
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        if (!$result || $result['avg_curah_hujan'] === null) {
-            return [
-                'avg_curah_hujan' => 0,
-                'min_curah_hujan' => 0,
-                'max_curah_hujan' => 0,
-                'jumlah_data' => 0,
-                'hari_hujan_ekstrem' => 0,
-                'kategori' => 'Tidak Ada Data',
-                'has_data' => false
-            ];
-        }
-        
-        $avgCurahHujan = (float) $result['avg_curah_hujan'];
-        
-        // Kategorisasi curah hujan
-        $kategori = $this->categorizeCurahHujan($avgCurahHujan);
-        
-        return [
-            'avg_curah_hujan' => $avgCurahHujan,
-            'min_curah_hujan' => (float) $result['min_curah_hujan'],
-            'max_curah_hujan' => (float) $result['max_curah_hujan'],
-            'jumlah_data' => (int) $result['jumlah_data'],
-            'hari_hujan_ekstrem' => (int) $result['hari_hujan_ekstrem'],
-            'kategori' => $kategori,
-            'has_data' => true
-        ];
-    }
+private function getCurahHujanLag(int $lagBulan, int $lagTahun, int $wilayahId): array {
+         $kecamatanInfo = $this->getKecamatanInfo($wilayahId);
+         $namaKecamatan = $kecamatanInfo['nama_kecamatan'];
+         $kodeWilayah = $kecamatanInfo['kode_wilayah'];
+
+         $sql = "
+             SELECT 
+                 AVG(curah_hujan) as avg_curah_hujan,
+                 MIN(curah_hujan) as min_curah_hujan,
+                 MAX(curah_hujan) as max_curah_hujan,
+                 COUNT(*) as jumlah_data,
+                 SUM(CASE WHEN curah_hujan > ? THEN 1 ELSE 0 END) as hari_hujan_ekstrem
+             FROM curah_hujan ch
+             WHERE MONTH(ch.tanggal) = ? 
+               AND YEAR(ch.tanggal) = ?
+               AND (ch.lokasi LIKE ? OR ch.kode_wilayah LIKE ?)
+         ";
+
+         $lokasiPattern = '%' . $namaKecamatan . '%';
+         $kodePattern = $kodeWilayah . '%';
+
+         $stmt = $this->db->prepare($sql);
+         $stmt->execute([
+             self::CURAH_HUJAN_EKSTREM,
+             $lagBulan,
+             $lagTahun,
+             $lokasiPattern,
+             $kodePattern
+         ]);
+
+         $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
+         if (!$result || $result['avg_curah_hujan'] === null) {
+             return [
+                 'avg_curah_hujan' => 0,
+                 'min_curah_hujan' => 0,
+                 'max_curah_hujan' => 0,
+                 'jumlah_data' => 0,
+                 'hari_hujan_ekstrem' => 0,
+                 'kategori' => 'Tidak Ada Data',
+                 'has_data' => false
+             ];
+         }
+
+         $avgCurahHujan = (float) $result['avg_curah_hujan'];
+         $kategori = $this->categorizeCurahHujan($avgCurahHujan);
+
+         return [
+             'avg_curah_hujan' => $avgCurahHujan,
+             'min_curah_hujan' => (float) $result['min_curah_hujan'],
+             'max_curah_hujan' => (float) $result['max_curah_hujan'],
+             'jumlah_data' => (int) $result['jumlah_data'],
+             'hari_hujan_ekstrem' => (int) $result['hari_hujan_ekstrem'],
+             'kategori' => $kategori,
+             'has_data' => true
+         ];
+     }
     
     /**
      * Ambil data serangan hama bulan sebelumnya

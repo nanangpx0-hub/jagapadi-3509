@@ -309,13 +309,18 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
     <div class="loading-spinner">
         <i class="fas fa-spinner fa-spin fa-3x mb-3 text-primary"></i>
         <h5>Memproses Data...</h5>
-        <p>Sedang menghubungkan variabel eksogen</p>
-        <div id="loading-timer" class="mt-3" style="font-size: 1.2rem; font-weight: 500;">
+        <p id="loading-message">Sedang menghubungkan variabel eksogen</p>
+        <div class="mt-3 mb-2">
+            <div class="progress" style="height: 6px;">
+                <div id="loading-progress" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%;"></div>
+            </div>
+        </div>
+        <div id="loading-timer" class="mt-2" style="font-size: 1.2rem; font-weight: 500;">
             <i class="fas fa-clock mr-2"></i>Waktu proses: <span id="timer-display">00:00</span>
         </div>
         <div id="loading-warning" class="mt-3 text-warning" style="display: none;">
             <i class="fas fa-exclamation-triangle mr-2"></i>
-            Proses sudah berlangsung lebih dari 5 menit. 
+            Proses sudah berlangsung lebih dari 5 menit.
             Silakan cek koneksi jaringan atau <a href="#" onclick="location.reload()" class="text-warning font-weight-bold">muat ulang halaman</a>.
         </div>
     </div>
