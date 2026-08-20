@@ -1,15 +1,17 @@
 <?php
+declare(strict_types=1);
+
 /**
  * Feedback Model
  * 
  * Model untuk mengelola data masukan dan saran dari user.
  * Mendukung CRUD, voting, statistik, dan tracking status.
  * 
- * @version V.1.3.5
+ * @version V.1.4.0
  * @author JAGAPADI Development Team
  */
 class Feedback {
-    private $db;
+    private PDO $db;
     
     public function __construct() {
         $this->db = Database::getInstance()->getConnection();
@@ -22,7 +24,7 @@ class Feedback {
     /**
      * Get all feedback with pagination and filters
      * 
-     * @param array $filters Filter options (jenis, status, prioritas, search)
+     * @param array $filters Filter options (jenis, status, prioritas, search, user_id, year, month)
      * @param int $page Current page
      * @param int $limit Items per page
      * @return array Feedback data with pagination info
@@ -57,7 +59,17 @@ class Feedback {
         
         if (!empty($filters['user_id'])) {
             $where[] = "f.user_id = ?";
-            $params[] = $filters['user_id'];
+            $params[] = (int) $filters['user_id'];
+        }
+
+        if (!empty($filters['year'])) {
+            $where[] = "YEAR(f.created_at) = ?";
+            $params[] = (int) $filters['year'];
+        }
+
+        if (!empty($filters['month'])) {
+            $where[] = "MONTH(f.created_at) = ?";
+            $params[] = (int) $filters['month'];
         }
         
         $whereClause = implode(" AND ", $where);
@@ -67,15 +79,15 @@ class Feedback {
             $countSql = "SELECT COUNT(*) as total FROM feedback f WHERE {$whereClause}";
             $countStmt = $this->db->prepare($countSql);
             $countStmt->execute($params);
-            $total = $countStmt->fetch(PDO::FETCH_ASSOC)['total'];
+            $total = (int) ($countStmt->fetch(PDO::FETCH_ASSOC)['total'] ?? 0);
         } catch (\PDOException $e) {
             error_log('Feedback::getAll(count) - ' . $e->getMessage());
             return ['data' => [], 'total' => 0, 'page' => $page, 'limit' => $limit, 'totalPages' => 0];
         }
 
         // Cast to integers for LIMIT/OFFSET (avoid SQL injection by ensuring they are integers)
-        $limit = (int) $limit;
-        $offset = (int) $offset;
+        $limit = max(1, (int) $limit);
+        $offset = max(0, (int) $offset);
         
         try {
             // Get data with user info - embed LIMIT/OFFSET directly as integers
@@ -104,7 +116,7 @@ class Feedback {
             'total' => $total,
             'page' => $page,
             'limit' => $limit,
-            'totalPages' => ceil($total / $limit)
+            'totalPages' => (int) ceil($total / $limit)
         ];
     }
     
@@ -139,30 +151,61 @@ class Feedback {
      * @param array $data Feedback data
      * @return int|false New feedback ID or false on failure
      */
-    public function create(array $data) {
-        $sql = "INSERT INTO feedback (user_id, jenis_feedback, judul, deskripsi, prioritas, attachment_url)
-                VALUES (?, ?, ?, ?, ?, ?)";
-        
-        $stmt = $this->db->prepare($sql);
-        $success = $stmt->execute([
-            $data['user_id'],
-            $data['jenis_feedback'],
-            $data['judul'],
-            $data['deskripsi'],
-            $data['prioritas'] ?? 'medium',
-            $data['attachment_url'] ?? null
-        ]);
-        
-        if ($success) {
-            $feedbackId = $this->db->lastInsertId();
-            
-            // Log initial status
-            $this->logStatusChange($feedbackId, null, 'diterima', $data['user_id'], 'Feedback baru dibuat');
-            
-            return $feedbackId;
+    public function create(array $data): int|false {
+        $ownsTransaction = !$this->db->inTransaction();
+        if ($ownsTransaction) {
+            $this->db->beginTransaction();
         }
-        
-        return false;
+
+        try {
+            $sql = "INSERT INTO feedback (user_id, jenis_feedback, judul, deskripsi, prioritas, attachment_url)
+                    VALUES (?, ?, ?, ?, ?, ?)";
+
+            $stmt = $this->db->prepare($sql);
+            $success = $stmt->execute([
+                $data['user_id'],
+                $data['jenis_feedback'],
+                $data['judul'],
+                $data['deskripsi'],
+                $data['prioritas'] ?? 'medium',
+                $data['attachment_url'] ?? null
+            ]);
+
+            if (!$success) {
+                if ($ownsTransaction && $this->db->inTransaction()) {
+                    $this->db->rollBack();
+                }
+                return false;
+            }
+
+            $feedbackId = (int) $this->db->lastInsertId();
+
+            // Log status awal — dalam transaksi yang sama agar tidak ada data parsial
+            $historySuccess = $this->logStatusChange(
+                $feedbackId,
+                null,
+                'diterima',
+                (int) $data['user_id'],
+                'Feedback baru dibuat'
+            );
+            if (!$historySuccess) {
+                if ($ownsTransaction && $this->db->inTransaction()) {
+                    $this->db->rollBack();
+                }
+                return false;
+            }
+
+            if ($ownsTransaction) {
+                $this->db->commit();
+            }
+            return $feedbackId;
+        } catch (\PDOException $e) {
+            if ($ownsTransaction && $this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            error_log('Feedback::create - ' . $e->getMessage());
+            return false;
+        }
     }
     
     /**
@@ -178,22 +221,48 @@ class Feedback {
         // Get current status for logging
         $current = $this->getById($id);
         if (!$current) return false;
-        
+
         $oldStatus = $current['status'];
-        
-        $sql = "UPDATE feedback 
-                SET status = ?, admin_notes = ?, processed_by = ?, processed_at = NOW(), updated_at = NOW()
-                WHERE id = ?";
-        
-        $stmt = $this->db->prepare($sql);
-        $success = $stmt->execute([$status, $notes, $adminId, $id]);
-        
-        if ($success) {
-            // Log status change
-            $this->logStatusChange($id, $oldStatus, $status, $adminId, $notes);
+        $ownsTransaction = !$this->db->inTransaction();
+        if ($ownsTransaction) {
+            $this->db->beginTransaction();
         }
-        
-        return $success;
+
+        try {
+            $sql = "UPDATE feedback 
+                    SET status = ?, admin_notes = ?, processed_by = ?, processed_at = NOW(), updated_at = NOW()
+                    WHERE id = ?";
+
+            $stmt = $this->db->prepare($sql);
+            $success = $stmt->execute([$status, $notes, $adminId, $id]);
+
+            if (!$success) {
+                if ($ownsTransaction && $this->db->inTransaction()) {
+                    $this->db->rollBack();
+                }
+                return false;
+            }
+
+            // Log status change — transaksi yang sama agar riwayat tidak terputus
+            $historySuccess = $this->logStatusChange($id, $oldStatus, $status, $adminId, $notes);
+            if (!$historySuccess) {
+                if ($ownsTransaction && $this->db->inTransaction()) {
+                    $this->db->rollBack();
+                }
+                return false;
+            }
+
+            if ($ownsTransaction) {
+                $this->db->commit();
+            }
+            return true;
+        } catch (\PDOException $e) {
+            if ($ownsTransaction && $this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            error_log('Feedback::updateStatus - ' . $e->getMessage());
+            return false;
+        }
     }
     
     /**
@@ -261,7 +330,7 @@ class Feedback {
             }
             
             return $success;
-        } catch (PDOException $e) {
+        } catch (\PDOException $e) {
             // Duplicate vote - user already voted
             return false;
         }
@@ -297,7 +366,7 @@ class Feedback {
         $sql = "SELECT COUNT(*) as voted FROM feedback_votes WHERE feedback_id = ? AND user_id = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$feedbackId, $userId]);
-        return $stmt->fetch(PDO::FETCH_ASSOC)['voted'] > 0;
+        return (int) ($stmt->fetch(PDO::FETCH_ASSOC)['voted'] ?? 0) > 0;
     }
     
     /**
@@ -321,7 +390,7 @@ class Feedback {
         
         return [
             'action' => $action,
-            'vote_count' => $feedback['vote_count'] ?? 0
+            'vote_count' => (int) ($feedback['vote_count'] ?? 0)
         ];
     }
     
@@ -432,7 +501,11 @@ class Feedback {
             
             $stmt = $this->db->prepare($sql);
             $stmt->execute();
-            return $stmt->fetch(PDO::FETCH_ASSOC);
+            return $stmt->fetch(PDO::FETCH_ASSOC) ?: [
+                'total' => 0, 'pending' => 0, 'in_progress' => 0,
+                'completed' => 0, 'rejected' => 0,
+                'bugs' => 0, 'features' => 0, 'improvements' => 0,
+            ];
         } catch (\PDOException $e) {
             error_log('Feedback::getDashboardStats - ' . $e->getMessage());
             return [
@@ -441,6 +514,73 @@ class Feedback {
                 'bugs' => 0, 'features' => 0, 'improvements' => 0,
             ];
         }
+    }
+
+    public function getDashboardStatsByUser(int $userId): array {
+        return $this->getSummaryStats(['user_id' => $userId]);
+    }
+
+    public function getAdminSummaryStats(array $filters = []): array {
+        return $this->getSummaryStats($filters);
+    }
+
+    public function getRekapPerPetugas(array $filters = []): array {
+        [$whereClause, $params] = $this->buildSummaryWhere($filters);
+        $sql = "SELECT u.id AS user_id, u.nama_lengkap, u.username,
+                       COUNT(f.id) AS total,
+                       SUM(f.status = 'diterima') AS pending,
+                       SUM(f.status = 'dalam_proses') AS in_progress,
+                       SUM(f.status = 'selesai') AS completed,
+                       SUM(f.status = 'ditolak') AS rejected
+                FROM feedback f
+                INNER JOIN users u ON u.id = f.user_id
+                WHERE u.role = 'petugas' AND {$whereClause}
+                GROUP BY u.id, u.nama_lengkap, u.username
+                ORDER BY total DESC, u.nama_lengkap ASC";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    private function getSummaryStats(array $filters): array {
+        [$whereClause, $params] = $this->buildSummaryWhere($filters);
+        $sql = "SELECT COUNT(*) AS total,
+                       SUM(status = 'diterima') AS pending,
+                       SUM(status = 'dalam_proses') AS in_progress,
+                       SUM(status = 'selesai') AS completed,
+                       SUM(status = 'ditolak') AS rejected,
+                       SUM(jenis_feedback = 'bug') AS bugs,
+                       SUM(jenis_feedback = 'fitur_baru') AS features,
+                       SUM(jenis_feedback = 'peningkatan') AS improvements
+                FROM feedback f WHERE {$whereClause}";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        foreach (['total', 'pending', 'in_progress', 'completed', 'rejected', 'bugs', 'features', 'improvements'] as $key) {
+            $row[$key] = (int) ($row[$key] ?? 0);
+        }
+        return $row;
+    }
+
+    private function buildSummaryWhere(array $filters): array {
+        $where = ['1=1'];
+        $params = [];
+        $map = ['user_id' => 'f.user_id', 'jenis' => 'f.jenis_feedback', 'status' => 'f.status'];
+        foreach ($map as $key => $column) {
+            if (isset($filters[$key]) && $filters[$key] !== '') {
+                $where[] = "{$column} = ?";
+                $params[] = $filters[$key];
+            }
+        }
+        if (!empty($filters['year'])) {
+            $where[] = 'YEAR(f.created_at) = ?';
+            $params[] = (int) $filters['year'];
+        }
+        if (!empty($filters['month'])) {
+            $where[] = 'MONTH(f.created_at) = ?';
+            $params[] = (int) $filters['month'];
+        }
+        return [implode(' AND ', $where), $params];
     }
     
     // ============================================

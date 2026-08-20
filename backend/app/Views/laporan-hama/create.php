@@ -5,6 +5,7 @@
     .form-group input, .form-group select, .form-group textarea { width:100%; padding:10px 14px; border:1px solid #d0d0d0; border-radius:6px; font-size:15px; }
     .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline:none; border-color:#1a73e8; box-shadow:0 0 0 3px rgba(26,115,232,0.1); }
     .form-group .error { color:#c62828; font-size:13px; margin-top:4px; }
+    .form-group input.is-invalid { border-color:#c62828; background:#fff5f5; }
     .btn { padding:10px 24px; border:none; border-radius:6px; font-size:15px; font-weight:600; cursor:pointer; }
     .btn-primary { background:#1a73e8; color:#fff; }
     .btn-primary:hover { background:#1557b0; }
@@ -19,7 +20,7 @@
 <div class="form-card">
     <h2 style="margin-bottom:20px;">Buat Laporan Hama</h2>
 
-    <form method="POST" action="/laporan-hama">
+    <form method="POST" action="/laporan-hama" enctype="multipart/form-data" id="laporanHamaCreateForm">
         <?= \App\Core\Security::csrfField() ?>
 
         <div class="inline-group">
@@ -121,15 +122,70 @@
             <?php if (!empty($errors['catatan'])): ?><div class="error"><?= \App\Core\Security::e($errors['catatan']) ?></div><?php endif; ?>
         </div>
 
+        <div class="form-group">
+            <label for="foto">Foto <span style="color:#c62828;">*</span></label>
+            <input type="file" id="foto" name="foto" accept="image/jpeg,image/png,image/webp" aria-describedby="fotoError">
+            <div style="font-size:12px;color:#777;margin-top:4px;">Wajib untuk Kirim Laporan. Draf tetap dapat disimpan tanpa foto.</div>
+            <div class="error" id="fotoError" role="alert"><?= \App\Core\Security::e($errors['foto'] ?? '') ?></div>
+        </div>
+
         <div class="action-group">
-            <button type="submit" name="action" value="draft" class="btn btn-primary">Simpan Draf</button>
-            <button type="submit" name="action" value="submit" class="btn btn-success">Kirim Laporan</button>
+            <button type="submit" name="action" value="draft" class="btn btn-primary" id="btnSaveDraft">Simpan Draf</button>
+            <button type="submit" name="action" value="submit" class="btn btn-success" id="btnSubmitReport">Kirim Laporan</button>
             <a href="/laporan-hama" class="btn-secondary">Batal</a>
         </div>
     </form>
 </div>
 
 <script>
+const photoRequiredMessage = 'Foto laporan wajib disertakan sebelum laporan dapat dikirim.';
+const createForm = document.getElementById('laporanHamaCreateForm');
+const photoInput = document.getElementById('foto');
+const photoError = document.getElementById('fotoError');
+const submitReportButton = document.getElementById('btnSubmitReport');
+const saveDraftButton = document.getElementById('btnSaveDraft');
+
+function clearPhotoError() {
+    photoInput.setCustomValidity('');
+    photoInput.classList.remove('is-invalid');
+    photoError.textContent = '';
+}
+
+function showPhotoRequiredAlert() {
+    photoInput.setCustomValidity(photoRequiredMessage);
+    photoInput.classList.add('is-invalid');
+    photoError.textContent = photoRequiredMessage;
+    alert(photoRequiredMessage);
+    photoInput.focus();
+}
+
+photoInput.addEventListener('change', function() {
+    if (this.files && this.files.length > 0) {
+        clearPhotoError();
+    }
+});
+
+submitReportButton.addEventListener('click', function(event) {
+    photoInput.required = true;
+    if (!photoInput.files || photoInput.files.length === 0) {
+        event.preventDefault();
+        showPhotoRequiredAlert();
+    }
+});
+
+saveDraftButton.addEventListener('click', function() {
+    photoInput.required = false;
+    clearPhotoError();
+});
+
+createForm.addEventListener('submit', function(event) {
+    const action = event.submitter ? event.submitter.value : 'draft';
+    if (action === 'submit' && (!photoInput.files || photoInput.files.length === 0)) {
+        event.preventDefault();
+        showPhotoRequiredAlert();
+    }
+});
+
 function loadKecamatan(kabupatenId) {
     const kecSelect = document.getElementById('kecamatan_id');
     const desaSelect = document.getElementById('desa_id');

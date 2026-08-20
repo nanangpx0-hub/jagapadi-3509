@@ -96,8 +96,8 @@ class ExcelImportService {
             $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
             
             // Validate file type
-            if (!in_array($extension, ['xlsx', 'xls', 'csv'])) {
-                throw new Exception('Format file tidak didukung. Gunakan xlsx, xls, atau csv');
+            if (!in_array($extension, ['xlsx', 'csv'], true)) {
+                throw new Exception('Format file tidak didukung. Gunakan xlsx atau csv');
             }
             
             // Parse the file
@@ -149,7 +149,7 @@ class ExcelImportService {
             
             $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
             
-            if (!in_array($extension, ['xlsx', 'xls', 'csv'])) {
+            if (!in_array($extension, ['xlsx', 'csv'], true)) {
                 throw new Exception('Format file tidak didukung');
             }
             
@@ -190,8 +190,7 @@ class ExcelImportService {
         if ($extension === 'csv') {
             $data = $this->parseCsv($filePath);
         } else {
-            // For xlsx/xls, use simple XML parsing for xlsx
-            // or fall back to CSV conversion
+            // XLSX adalah arsip ZIP/XML; format XLS biner sengaja tidak diterima.
             $data = $this->parseXlsx($filePath);
         }
         
@@ -411,6 +410,7 @@ class ExcelImportService {
         $model = new HargaKomoditas();
         
         $processedRows = [];
+        $affectedCommodities = [];
         
         foreach ($data as $rowIndex => $row) {
             $rowNum = $rowIndex + 2; // +2 because 0-indexed and header is row 1
@@ -442,15 +442,17 @@ class ExcelImportService {
                     'lokasi' => $validatedData['lokasi'] ?? 'Jember',
                     'kode_wilayah' => '35.09',
                     'sumber_data' => 'Import Excel',
+                    'metode_data' => 'manual',
                     'keterangan' => $validatedData['keterangan'] ?? null
                 ];
                 
-                // Insert to database
-                $result = $model->insert($insertData);
+                // Upsert mencegah import file yang sama menggandakan observasi.
+                $result = $model->upsert($insertData, false);
                 
                 if ($result) {
                     $this->successCount++;
                     $processedRows[] = $insertData;
+                    $affectedCommodities[$insertData['jenis_komoditas']] = true;
                 } else {
                     throw new Exception('Gagal menyimpan ke database');
                 }
@@ -459,6 +461,10 @@ class ExcelImportService {
                 $this->failedCount++;
                 $this->errors[] = "Baris {$rowNum}: " . $e->getMessage();
             }
+        }
+
+        foreach (array_keys($affectedCommodities) as $commodity) {
+            $model->rebuildAlerts($commodity);
         }
         
         // Log the import activity
@@ -517,12 +523,12 @@ class ExcelImportService {
         $validated['jenis_komoditas'] = $komoditas;
         
         // Validate harga (positive number)
-        $harga = floatval(str_replace(['.', ','], ['', '.'], $data['harga']));
-        if ($harga <= 0) {
+        $harga = $this->normalizeNumber((string) $data['harga']);
+        if ($harga === null || $harga <= 0) {
             throw new Exception("Harga harus lebih dari 0");
         }
         if ($harga > 100000) {
-            $this->warnings[] = "Baris {$rowNum}: Harga sangat tinggi (Rp " . number_format($harga) . ")";
+            throw new Exception("Harga melebihi batas Rp100.000 per kg");
         }
         $validated['harga'] = $harga;
         
@@ -539,7 +545,9 @@ class ExcelImportService {
      */
     private function processBpsData($data) {
         require_once ROOT_PATH . '/app/models/DataPertanianBps.php';
+        require_once ROOT_PATH . '/app/services/BpsDataService.php';
         $model = new DataPertanianBps();
+        $dataService = new BpsDataService();
         
         $processedRows = [];
         
@@ -566,6 +574,10 @@ class ExcelImportService {
                 
                 // Validate and format data
                 $validatedData = $this->validateBpsRow($mappedData, $rowNum);
+                $validation = $dataService->validateRecord($validatedData);
+                if (!$validation['valid']) {
+                    throw new Exception(implode('; ', $validation['issues']));
+                }
                 
                 // Prepare data for insert
                 $insertData = [
@@ -625,57 +637,195 @@ class ExcelImportService {
     private function validateBpsRow($data, $rowNum) {
         $validated = [];
         
-        // Validate tahun (4-digit year, 2019-2030)
-        $tahun = intval($data['tahun']);
-        if ($tahun < 2019 || $tahun > 2030) {
-            throw new Exception("Tahun harus antara 2019-2030");
+        // Validate tahun (4-digit year, rentang dinamis 2000 s/d tahun depan)
+        $tahunRaw = trim((string)($data['tahun'] ?? ''));
+        $tahunMin = 2000;
+        $tahunMax = (int)date('Y') + 1;
+        $tahun = intval($tahunRaw);
+        if ($tahun < $tahunMin || $tahun > $tahunMax) {
+            throw new Exception("Tahun harus antara {$tahunMin}-{$tahunMax}");
         }
         $validated['tahun'] = $tahun;
         
-        // Validate kabupaten_kota
-        $kabupaten = trim($data['kabupaten_kota']);
+        // Validate kabupaten_kota (normalisasi ke nama standar 38 kab/kota Jatim)
+        $kabupaten = $this->normalizeKabupatenName((string)($data['kabupaten_kota'] ?? ''));
         if (strlen($kabupaten) < 3) {
             throw new Exception("Nama kabupaten/kota terlalu pendek");
         }
         $validated['kabupaten_kota'] = $kabupaten;
-        $validated['kode_wilayah'] = $data['kode_wilayah'] ?? null;
+        
+        // Normalisasi kode wilayah BPS: "35.09" / "3509" -> "3509"
+        $kodeWilayah = $this->normalizeNumber((string)($data['kode_wilayah'] ?? ''));
+        $validated['kode_wilayah'] = $kodeWilayah !== null ? (string)(int)$kodeWilayah : null;
         
         // Validate luas_panen (positive number)
-        $luasPanen = floatval(str_replace(['.', ','], ['', '.'], $data['luas_panen']));
+        $luasPanen = $this->normalizeNumber((string)($data['luas_panen'] ?? ''));
+        if ($luasPanen === null) {
+            throw new Exception("Luas panen tidak valid");
+        }
         if ($luasPanen < 0) {
             throw new Exception("Luas panen tidak boleh negatif");
+        }
+        if ($luasPanen > 500000) {
+            $this->warnings[] = "Baris {$rowNum}: Luas panen terlalu besar ({$luasPanen} ha) - cek nilai";
         }
         $validated['luas_panen'] = $luasPanen;
         
         // Validate produksi_gabah (positive number)
-        $produksiGabah = floatval(str_replace(['.', ','], ['', '.'], $data['produksi_gabah']));
+        $produksiGabah = $this->normalizeNumber((string)($data['produksi_gabah'] ?? ''));
+        if ($produksiGabah === null) {
+            throw new Exception("Produksi gabah tidak valid");
+        }
         if ($produksiGabah < 0) {
             throw new Exception("Produksi gabah tidak boleh negatif");
+        }
+        if ($produksiGabah > 5000000) {
+            $this->warnings[] = "Baris {$rowNum}: Produksi gabah terlalu besar ({$produksiGabah} ton) - cek nilai";
         }
         $validated['produksi_gabah'] = $produksiGabah;
         
         // Calculate produksi_beras if not provided (57.7% of gabah)
-        if (!empty($data['produksi_beras'])) {
-            $validated['produksi_beras'] = floatval(str_replace(['.', ','], ['', '.'], $data['produksi_beras']));
+        $produksiBeras = $this->normalizeNumber((string)($data['produksi_beras'] ?? ''));
+        if ($produksiBeras !== null) {
+            if ($produksiBeras < 0) {
+                throw new Exception("Produksi beras tidak boleh negatif");
+            }
+            if ($produksiGabah > 0 && $produksiBeras > $produksiGabah) {
+                throw new Exception(
+                    "Produksi beras ({$produksiBeras} ton) tidak boleh melebihi produksi gabah ({$produksiGabah} ton)"
+                );
+            }
+            $validated['produksi_beras'] = $produksiBeras;
         } else {
             $validated['produksi_beras'] = round($produksiGabah * 0.577, 2);
         }
         
         // Calculate produktivitas if not provided (gabah / luas_panen * 10)
-        if (!empty($data['produktivitas'])) {
-            $validated['produktivitas'] = floatval(str_replace(['.', ','], ['', '.'], $data['produktivitas']));
+        $produktivitas = $this->normalizeNumber((string)($data['produktivitas'] ?? ''));
+        if ($produktivitas !== null) {
+            if ($produktivitas < 0) {
+                throw new Exception("Produktivitas tidak boleh negatif");
+            }
+            $validated['produktivitas'] = $produktivitas;
         } else {
             $validated['produktivitas'] = $luasPanen > 0 ? round(($produksiGabah / $luasPanen) * 10, 2) : 0;
-        }
-        
-        // Warning for unusual values
-        if ($validated['produktivitas'] > 100) {
-            $this->warnings[] = "Baris {$rowNum}: Produktivitas sangat tinggi ({$validated['produktivitas']} ku/ha)";
         }
         
         $validated['keterangan'] = $data['keterangan'] ?? null;
         
         return $validated;
+    }
+    
+    /**
+     * Normalisasi angka Indonesia:
+     * - "1.234,56" -> 1234.56 (ribuan + desimal koma)
+     * - "1,234.56" -> 1234.56 (western)
+     * - "1.234"    -> 1234 (titik ribuan)
+     * - "12,5"     -> 12.5 (desimal koma)
+     * Mengembalikan float atau null bila tidak valid/kosong.
+     */
+    private function normalizeNumber($value) {
+        $value = trim((string)$value);
+        if ($value === '') {
+            return null;
+        }
+        
+        $value = preg_replace('/^rp\.?\s*/i', '', $value);
+        $value = preg_replace('/\s*\/\s*kg\s*$/i', '', $value);
+        // Hapus satuan yang menempel (mis. "1.234 ha", "12,5 ku/ha")
+        $value = preg_replace('/\s*(ha|ton|ku|ku\/ha|gkg|gkp)\s*$/i', '', $value);
+        $value = str_replace(' ', '', $value);
+        
+        if (strpos($value, ',') !== false && strpos($value, '.') !== false) {
+            // Kedua separator: koma terakhir = desimal (format Indonesia)
+            if (strrpos($value, ',') > strrpos($value, '.')) {
+                $value = str_replace('.', '', $value);
+                $value = str_replace(',', '.', $value);
+            } else {
+                $value = str_replace(',', '', $value);
+            }
+        } elseif (strpos($value, ',') !== false) {
+            // Hanya koma -> desimal
+            $value = str_replace(',', '.', $value);
+        } elseif (strpos($value, '.') !== false) {
+            // Hanya titik: ribuan bila diikuti tepat 3 digit
+            if (preg_match('/^\d{1,3}(\.\d{3})+$/', $value)) {
+                $value = str_replace('.', '', $value);
+            }
+        }
+        
+        if (!is_numeric($value)) {
+            return null;
+        }
+        
+        return (float)$value;
+    }
+    
+    /**
+     * Normalisasi nama kabupaten/kota ke daftar standar 38 kab/kota Jawa Timur.
+     * - Hapus prefix "Kab.", "Kabupaten", "Prop." (prefix "Kota" dipertahankan)
+     * - Title case
+     * - "Surabaya"/"Batu" tanpa prefix -> "Kota Surabaya"/"Kota Batu"
+     * Nama yang tidak dikenal dikembalikan apa adanya (title case) agar
+     * tidak merusak data wilayah lain.
+     */
+    private function normalizeKabupatenName($value) {
+        $clean = trim((string)$value);
+        if ($clean === '') {
+            return '';
+        }
+        
+        $clean = preg_replace('/\s+/u', ' ', $clean);
+        $clean = preg_replace('/^(kab\.?|kabupaten|prop\.?|provinsi|pemkab|pemkot)\s+/i', '', $clean);
+        $clean = preg_replace('/\(.*?\)/', '', $clean);
+        $clean = trim($clean);
+        
+        // Normalisasi: "35.09 JEMBER" -> "Jember", "JEMBER-3509" -> "Jember"
+        $clean = preg_replace('/^\d{2}\.?\d{2}\s*/', '', $clean);
+        $clean = preg_replace('/\s*-?\s*\d{4}$/', '', $clean);
+        $clean = preg_replace('/[\.\s]+/u', ' ', trim($clean));
+        
+        $candidate = $this->titleCase($clean);
+        if ($candidate === '') {
+            return '';
+        }
+        
+        $standar = [
+            'Pacitan', 'Ponorogo', 'Trenggalek', 'Tulungagung', 'Blitar', 'Kediri',
+            'Malang', 'Lumajang', 'Jember', 'Banyuwangi', 'Bondowoso', 'Situbondo',
+            'Probolinggo', 'Pasuruan', 'Sidoarjo', 'Mojokerto', 'Jombang', 'Nganjuk',
+            'Madiun', 'Magetan', 'Ngawi', 'Bojonegoro', 'Tuban', 'Lamongan', 'Gresik',
+            'Bangkalan', 'Sampang', 'Pamekasan', 'Sumenep', 'Kota Kediri',
+            'Kota Blitar', 'Kota Malang', 'Kota Probolinggo', 'Kota Pasuruan',
+            'Kota Mojokerto', 'Kota Madiun', 'Kota Surabaya', 'Kota Batu',
+        ];
+        
+        if (in_array($candidate, $standar, true)) {
+            return $candidate;
+        }
+        
+        // Nama kota tanpa prefix yang tidak ambigu (tidak ada kabupaten bernama sama)
+        if (in_array($candidate, ['Surabaya', 'Batu'], true)) {
+            $asKota = 'Kota ' . $candidate;
+            if (in_array($asKota, $standar, true)) {
+                return $asKota;
+            }
+        }
+        
+        return $candidate;
+    }
+    
+    /**
+     * Title case: huruf pertama tiap kata kapital.
+     */
+    private function titleCase($value) {
+        $words = preg_split('/\s+/', trim($value));
+        $result = [];
+        foreach ($words as $word) {
+            $lower = strtolower($word);
+            $result[] = strtoupper(substr($lower, 0, 1)) . substr($lower, 1);
+        }
+        return implode(' ', $result);
     }
     
     /**

@@ -62,7 +62,7 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                     <div>
                         <h6 class="alert-heading font-weight-bold mb-1">Status Data Angin</h6>
                         <ul class="mb-0 pl-3 small">
-                            <li><strong>Sumber Data:</strong> Open-Meteo API / Simulasi</li>
+                            <li><strong>Sumber tampilan:</strong> <?= htmlspecialchars(strtoupper($data['currentSource'] ?? 'nasa')) ?></li>
                             <li><strong>Terakhir Diperbarui:</strong> <?= date('d F Y, H:i', strtotime($data['lastScrape']['created_at'])) ?> WIB</li>
                         </ul>
                     </div>
@@ -99,6 +99,15 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                     <select class="form-control" id="chartType" name="chartType">
                         <option value="monthly">Bulanan</option>
                         <option value="yearly">Tahunan</option>
+                    </select>
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label" for="filterDataSource">Sumber Data</label>
+                    <select class="form-control" id="filterDataSource" name="data_source">
+                        <option value="nasa" <?= ($data['currentSource'] ?? 'nasa') === 'nasa' ? 'selected' : '' ?>>NASA POWER</option>
+                        <option value="openmeteo" <?= ($data['currentSource'] ?? '') === 'openmeteo' ? 'selected' : '' ?>>Open-Meteo</option>
+                        <option value="simulation" <?= ($data['currentSource'] ?? '') === 'simulation' ? 'selected' : '' ?>>Simulasi</option>
+                        <option value="all" <?= ($data['currentSource'] ?? '') === 'all' ? 'selected' : '' ?>>Semua Sumber</option>
                     </select>
                 </div>
                 <div class="col-6 col-md-2">
@@ -597,31 +606,107 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
 </div>
 
 <!-- Scraper Modal (Simplified) -->
+<!-- Scraper Modal -->
 <div class="modal fade" id="scraperModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-info text-white">
-                <h5 class="modal-title"><i class="fas fa-sync"></i> Update Data Angin</h5>
-                <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+                <h5 class="modal-title"><i class="fas fa-sync"></i> Pembaruan Data Kecepatan Angin</h5>
+                <button type="button" class="close text-white" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
             </div>
-            <div class="modal-body">
-                <p>Fitur scraping data angin akan mengambil data terbaru dari Open-Meteo API.</p>
-                <div class="alert alert-warning small">
-                    <i class="fas fa-exclamation-triangle"></i> Pastikan koneksi internet stabil.
+            <form id="scraperForm">
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="<?= Security::generateCsrfToken() ?>">
+                    
+                    <!-- Source Selection -->
+                    <div class="form-group">
+                        <label for="scraperSource">Sumber Data</label>
+                        <select class="form-control" id="scraperSource" name="source">
+                            <option value="nasa" selected>NASA POWER API (WS10M / WS2M - Terkoreksi)</option>
+                            <option value="openmeteo">Open-Meteo API</option>
+                            <option value="simulation">Simulasi (Data Sintetis)</option>
+                        </select>
+                    </div>
+
+                    <!-- Year Selection -->
+                    <div class="form-group">
+                        <label for="scraperYear">Tahun</label>
+                        <select class="form-control" name="year" id="scraperYear">
+                            <?php for ($y = 2020; $y <= 2026; $y++): ?>
+                            <option value="<?= $y ?>" <?= $y == date('Y') ? 'selected' : '' ?>><?= $y ?></option>
+                            <?php endfor; ?>
+                        </select>
+                        <small class="form-text text-muted">Pilih tahun untuk data yang akan diambil (2020-2026)</small>
+                    </div>
+                    
+                    <!-- Scraping Mode Selection -->
+                    <div class="form-group">
+                        <span class="d-block mb-2 font-weight-normal">Mode Pengambilan Data</span>
+                        <div class="btn-group btn-group-toggle d-flex" data-toggle="buttons">
+                            <label class="btn btn-outline-info active flex-fill" id="labelModeMonthly">
+                                <input type="radio" name="scrapeMode" id="modeMonthly" value="monthly" checked>
+                                <i class="fas fa-calendar-day mr-1"></i> Bulanan
+                            </label>
+                            <label class="btn btn-outline-success flex-fill" id="labelModeYearly">
+                                <input type="radio" name="scrapeMode" id="modeYearly" value="yearly">
+                                <i class="fas fa-calendar-alt mr-1"></i> Tahunan (Jan-Des)
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Month Selection (only for monthly mode) -->
+                    <div class="form-group" id="monthSelectGroup">
+                        <label for="scraperMonth">Bulan</label>
+                        <select class="form-control" name="month" id="scraperMonth">
+                            <?php 
+                            $bulanNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+                            for ($m = 1; $m <= 12; $m++): ?>
+                            <option value="<?= $m ?>" <?= $m == date('n') ? 'selected' : '' ?>><?= $bulanNames[$m-1] ?></option>
+                            <?php endfor; ?>
+                        </select>
+                    </div>
+                    
+                    <!-- Yearly Progress (only for yearly mode) -->
+                    <div id="yearlyProgressGroup" style="display: none;">
+                        <span class="d-block mb-2 font-weight-normal">Progress Pengambilan Data Tahunan</span>
+                        <div class="progress mb-2" style="height: 25px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" id="yearlyProgressBar" 
+                                 role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                0%
+                            </div>
+                        </div>
+                        <div class="d-flex flex-wrap mb-2" id="monthStatusGrid">
+                            <?php foreach ($bulanNames as $idx => $nama): ?>
+                            <div class="month-status-item mr-2 mb-2" id="monthStatus<?= $idx + 1 ?>">
+                                <span class="badge badge-secondary"><?= substr($nama, 0, 3) ?></span>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <div id="yearlyStatusText" class="text-muted small mb-2">
+                            Siap mengambil data untuk 12 bulan...
+                        </div>
+                    </div>
+                    
+                    <!-- Result Display -->
+                    <div id="scraperResult" class="mt-3" style="display: none;"></div>
                 </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Tutup</button>
-                <button type="button" class="btn btn-info">Jalankan Update</button>
-            </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Tutup</button>
+                    <button type="button" class="btn btn-danger" id="btnCancelScraper" style="display: none;">
+                        <i class="fas fa-stop"></i> Batalkan
+                    </button>
+                    <button type="submit" class="btn btn-info" id="btnRunScraper">
+                        <i class="fas fa-play" id="scraperBtnIcon"></i> <span id="scraperBtnText">Jalankan Scraper</span>
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
 
 <?php require_once ROOT_PATH . '/app/views/layouts/footer.php'; ?>
-
-<!-- Chart.js -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 
 <script>
 document.addEventListener("DOMContentLoaded", function() {
@@ -815,6 +900,349 @@ document.addEventListener("DOMContentLoaded", function() {
             this.disabled = false;
         });
     });
+
+    // --- Scraper Mode & Form Handler (Bulanan & Tahunan) ---
+    const csrfToken = '<?= Security::generateCsrfToken() ?>';
+    const bulanNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    let scraperCancelled = false;
+
+    const modeMonthly = document.getElementById('modeMonthly');
+    const modeYearly = document.getElementById('modeYearly');
+    const monthSelectGroup = document.getElementById('monthSelectGroup');
+    const yearlyProgressGroup = document.getElementById('yearlyProgressGroup');
+    const scraperBtnText = document.getElementById('scraperBtnText');
+    const btnCancelScraper = document.getElementById('btnCancelScraper');
+
+    if (modeMonthly && modeYearly) {
+        modeMonthly.addEventListener('change', function() {
+            if (this.checked) {
+                monthSelectGroup.style.display = 'block';
+                yearlyProgressGroup.style.display = 'none';
+                if (scraperBtnText) scraperBtnText.textContent = 'Jalankan Scraper';
+            }
+        });
+
+        modeYearly.addEventListener('change', function() {
+            if (this.checked) {
+                monthSelectGroup.style.display = 'none';
+                yearlyProgressGroup.style.display = 'block';
+                if (scraperBtnText) scraperBtnText.textContent = 'Ambil Data Tahunan';
+            }
+        });
+    }
+
+    if (btnCancelScraper) {
+        btnCancelScraper.addEventListener('click', function() {
+            scraperCancelled = true;
+            this.disabled = true;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Membatalkan...';
+        });
+    }
+
+    function resetYearlyProgress() {
+        const progressBar = document.getElementById('yearlyProgressBar');
+        if (progressBar) {
+            progressBar.style.width = '0%';
+            progressBar.textContent = '0%';
+            progressBar.className = 'progress-bar progress-bar-striped progress-bar-animated';
+        }
+        
+        for (let i = 1; i <= 12; i++) {
+            const badge = document.querySelector(`#monthStatus${i} span`);
+            if (badge) {
+                badge.className = 'badge badge-secondary';
+            }
+        }
+        
+        const statusText = document.getElementById('yearlyStatusText');
+        if (statusText) statusText.textContent = 'Siap mengambil data untuk 12 bulan...';
+    }
+
+    function updateMonthStatus(month, status) {
+        const badge = document.querySelector(`#monthStatus${month} span`);
+        if (badge) {
+            if (status === 'loading') {
+                badge.className = 'badge badge-warning';
+            } else if (status === 'success') {
+                badge.className = 'badge badge-success';
+            } else if (status === 'failed') {
+                badge.className = 'badge badge-danger';
+            } else if (status === 'skipped') {
+                badge.className = 'badge badge-secondary';
+            } else if (status === 'nodata') {
+                badge.className = 'badge badge-info';
+            }
+        }
+    }
+
+    function updateYearlyProgress(completed, total, currentMonth) {
+        const progressBar = document.getElementById('yearlyProgressBar');
+        const percentage = Math.round((completed / total) * 100);
+        if (progressBar) {
+            progressBar.style.width = percentage + '%';
+            progressBar.textContent = percentage + '%';
+        }
+        
+        const statusText = document.getElementById('yearlyStatusText');
+        if (statusText && currentMonth) {
+            statusText.textContent = `Mengambil data ${bulanNames[currentMonth - 1]}... (${completed}/${total})`;
+        }
+    }
+
+    const scraperForm = document.getElementById('scraperForm');
+    if (scraperForm) {
+        scraperForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const isYearlyMode = document.getElementById('modeYearly')?.checked;
+            if (isYearlyMode) {
+                runYearlyScraper();
+            } else {
+                runMonthlyScraper();
+            }
+        });
+    }
+
+    function runMonthlyScraper() {
+        const btn = document.getElementById('btnRunScraper');
+        const resultDiv = document.getElementById('scraperResult');
+        const btnIcon = document.getElementById('scraperBtnIcon');
+        const btnText = document.getElementById('scraperBtnText');
+        
+        if (btn) btn.disabled = true;
+        if (btnIcon) btnIcon.className = 'fas fa-spinner fa-spin';
+        if (btnText) btnText.textContent = 'Memproses...';
+        if (resultDiv) resultDiv.style.display = 'none';
+
+        const formData = new FormData(document.getElementById('scraperForm'));
+
+        fetch('<?= BASE_URL ?>/kecepatanAngin/runScraper', {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(res => {
+            if (!res.ok) throw new Error('Network error');
+            return res.json();
+        })
+        .then(data => {
+            if (resultDiv) {
+                resultDiv.style.display = 'block';
+                if (data.success) {
+                    resultDiv.className = 'alert alert-success';
+                    resultDiv.innerHTML = `<strong><i class="fas fa-check-circle"></i> Berhasil!</strong><br>
+                        Sumber: ${data.source}<br>
+                        Record berhasil: ${data.records_success}<br>
+                        Waktu: ${data.execution_time}s`;
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    resultDiv.className = 'alert alert-danger';
+                    resultDiv.innerHTML = `<strong><i class="fas fa-times-circle"></i> Gagal!</strong><br>${data.error || data.message}`;
+                }
+            }
+        })
+        .catch(err => {
+            if (resultDiv) {
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'alert alert-danger';
+                resultDiv.innerHTML = `<strong><i class="fas fa-exclamation-triangle"></i> Error:</strong> ${err.message}`;
+            }
+        })
+        .finally(() => {
+            if (btn) btn.disabled = false;
+            if (btnIcon) btnIcon.className = 'fas fa-play';
+            if (btnText) btnText.textContent = 'Jalankan Scraper';
+        });
+    }
+
+    async function runYearlyScraper() {
+        const btn = document.getElementById('btnRunScraper');
+        const resultDiv = document.getElementById('scraperResult');
+        const btnIcon = document.getElementById('scraperBtnIcon');
+        const btnText = document.getElementById('scraperBtnText');
+        const cancelBtn = document.getElementById('btnCancelScraper');
+        const year = document.getElementById('scraperYear').value;
+        const source = document.getElementById('scraperSource').value;
+        
+        function resetButtonState() {
+            const b = document.getElementById('btnRunScraper');
+            const c = document.getElementById('btnCancelScraper');
+            if (b) {
+                b.disabled = false;
+                b.innerHTML = '<i class="fas fa-play" id="scraperBtnIcon"></i> <span id="scraperBtnText">Ambil Data Tahunan</span>';
+            }
+            if (c) c.style.display = 'none';
+        }
+        
+        try {
+            scraperCancelled = false;
+            
+            if (btn) btn.disabled = true;
+            if (btnIcon) btnIcon.className = 'fas fa-spinner fa-spin';
+            if (btnText) btnText.textContent = 'Mengambil Data...';
+            if (cancelBtn) {
+                cancelBtn.style.display = 'inline-block';
+                cancelBtn.disabled = false;
+                cancelBtn.innerHTML = '<i class="fas fa-stop"></i> Batalkan';
+            }
+            if (resultDiv) resultDiv.style.display = 'none';
+            resetYearlyProgress();
+            
+            const results = {
+                success: 0,
+                failed: 0,
+                noData: [],
+                totalRecords: 0,
+                errors: []
+            };
+            
+            const statusText = document.getElementById('yearlyStatusText');
+            if (statusText) statusText.textContent = 'Memulai pengambilan data tahunan...';
+            
+            for (let month = 1; month <= 12; month++) {
+                if (scraperCancelled) {
+                    if (statusText) statusText.textContent = `Proses dibatalkan pada bulan ${bulanNames[month - 1]}`;
+                    for (let i = month; i <= 12; i++) {
+                        updateMonthStatus(i, 'skipped');
+                    }
+                    break;
+                }
+                
+                updateMonthStatus(month, 'loading');
+                updateYearlyProgress(month - 1, 12, month);
+                
+                try {
+                    const formData = new FormData();
+                    formData.append('csrf_token', csrfToken);
+                    formData.append('year', year);
+                    formData.append('month', month);
+                    formData.append('source', source);
+                    
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 60000);
+                    
+                    const response = await fetch('<?= BASE_URL ?>/kecepatanAngin/runScraper', {
+                        method: 'POST',
+                        body: formData,
+                        signal: controller.signal,
+                        credentials: 'same-origin',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    if (!response.ok) {
+                        let detail = '';
+                        const textResponse = response.clone();
+                        try {
+                            const errorPayload = await response.json();
+                            detail = errorPayload.message || errorPayload.error || '';
+                        } catch (_) {
+                            detail = await textResponse.text();
+                        }
+                        const suffix = detail ? `: ${detail}` : '';
+                        throw new Error(`HTTP Error ${response.status} (${response.statusText || 'Server Response Error'})${suffix}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        updateMonthStatus(month, 'success');
+                        results.success++;
+                        results.totalRecords += data.records_success || 0;
+                    } else if (data.no_data) {
+                        updateMonthStatus(month, 'nodata');
+                        results.noData.push(bulanNames[month - 1]);
+                    } else {
+                        updateMonthStatus(month, 'failed');
+                        results.failed++;
+                        results.errors.push(`${bulanNames[month - 1]}: ${data.error || data.message || 'Gagal memproses data API/Database'}`);
+                    }
+                    
+                } catch (err) {
+                    if (err.name === 'AbortError') {
+                        updateMonthStatus(month, 'failed');
+                        results.failed++;
+                        results.errors.push(`${bulanNames[month - 1]}: Request timeout (60s) - Batas waktu permintaan terlampaui`);
+                    } else {
+                        updateMonthStatus(month, 'failed');
+                        results.failed++;
+                        results.errors.push(`${bulanNames[month - 1]}: ${err.message}`);
+                    }
+                }
+                
+                updateYearlyProgress(month, 12, month);
+                
+                if (month < 12 && !scraperCancelled) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+            }
+            
+            if (resultDiv) {
+                resultDiv.style.display = 'block';
+                const progressBar = document.getElementById('yearlyProgressBar');
+                
+                const noDataMsg = results.noData.length > 0 
+                    ? `<br><span class="text-info"><i class="fas fa-info-circle"></i> Data belum tersedia untuk: ${results.noData.join(', ')}</span>` 
+                    : '';
+                
+                if (scraperCancelled) {
+                    resultDiv.className = 'alert alert-warning';
+                    resultDiv.innerHTML = `<strong><i class="fas fa-exclamation-triangle"></i> Dibatalkan</strong><br>
+                        Bulan berhasil: ${results.success}<br>
+                        Bulan gagal: ${results.failed}<br>
+                        Total record: ${results.totalRecords}${noDataMsg}`;
+                    if (progressBar) progressBar.className = 'progress-bar bg-warning';
+                } else if (results.failed === 0 && results.noData.length === 0) {
+                    resultDiv.className = 'alert alert-success';
+                    resultDiv.innerHTML = `<strong><i class="fas fa-check-circle"></i> Berhasil!</strong><br>
+                        Semua 12 bulan berhasil diproses<br>
+                        Total record: ${results.totalRecords}`;
+                    if (progressBar) progressBar.className = 'progress-bar bg-success';
+                    setTimeout(() => location.reload(), 2000);
+                } else if (results.failed === 0 && results.noData.length > 0) {
+                    resultDiv.className = 'alert alert-info';
+                    resultDiv.innerHTML = `<strong><i class="fas fa-check-circle"></i> Proses Selesai</strong><br>
+                        Bulan dengan data: ${results.success}<br>
+                        Total record: ${results.totalRecords}${noDataMsg}`;
+                    if (progressBar) progressBar.className = 'progress-bar bg-info';
+                    setTimeout(() => location.reload(), 2500);
+                } else if (results.success > 0) {
+                    resultDiv.className = 'alert alert-warning';
+                    resultDiv.innerHTML = `<strong><i class="fas fa-exclamation-triangle"></i> Sebagian Berhasil</strong><br>
+                        Bulan berhasil: ${results.success}<br>
+                        Bulan gagal: ${results.failed}<br>
+                        Total record: ${results.totalRecords}${noDataMsg}<br>
+                        <small class="text-muted">${results.errors.slice(0, 3).join(', ')}</small>`;
+                    if (progressBar) progressBar.className = 'progress-bar bg-warning';
+                } else {
+                    resultDiv.className = 'alert alert-danger';
+                    resultDiv.innerHTML = `<strong><i class="fas fa-times-circle"></i> Gagal!</strong><br>
+                        Tidak ada data yang berhasil diambil<br>
+                        <small class="text-muted">${results.errors.slice(0, 3).join(', ')}</small>${noDataMsg}`;
+                    if (progressBar) progressBar.className = 'progress-bar bg-danger';
+                }
+            }
+            
+            if (statusText) statusText.textContent = scraperCancelled ? 'Proses dibatalkan' : 'Selesai!';
+            
+        } catch (err) {
+            console.error('Yearly scraper error:', err);
+            if (resultDiv) {
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'alert alert-danger';
+                resultDiv.innerHTML = `<strong><i class="fas fa-times-circle"></i> Error!</strong><br>${err.message}`;
+            }
+        } finally {
+            resetButtonState();
+        }
+    }
 
     // --- Edit Form Handler ---
     document.getElementById('editDataForm').addEventListener('submit', function(e) {

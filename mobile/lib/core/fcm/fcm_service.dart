@@ -64,15 +64,29 @@ class FcmService {
     }
   }
 
-  static void _handleData(Map<String, String> data) {
-    final entity = data['entity'];
-    final laporanId = data['laporan_id'];
-    if (entity != null && laporanId != null && _onNavigate != null) {
-      final id = int.tryParse(laporanId);
-      if (id != null) {
-        _onNavigate!(entity, id);
-      }
+  /// Proses data payload FCM dan navigasi ke detail laporan.
+  ///
+  /// Security fix: validasi whitelist `entity` agar payload yang dimanipulasi
+  /// tidak bisa mengarahkan ke route tidak terduga.
+  static void _handleData(Map<String, dynamic> data) {
+    final entity       = data['entity']?.toString();
+    final laporanIdStr = data['laporan_id']?.toString();
+
+    // Whitelist entity yang diizinkan — tolak nilai lain
+    const _allowedEntities = {'hama', 'irigasi', 'pupuk', 'panen', 'cuaca', 'alat_sarana'};
+    if (entity == null || !_allowedEntities.contains(entity)) {
+      debugPrint('[FcmService] Entity tidak valid atau tidak dikenal: "$entity" — navigasi dibatalkan');
+      return;
     }
+
+    if (laporanIdStr == null || _onNavigate == null) return;
+    final id = int.tryParse(laporanIdStr);
+    if (id == null || id <= 0) {
+      debugPrint('[FcmService] laporan_id tidak valid: "$laporanIdStr"');
+      return;
+    }
+
+    _onNavigate!(entity, id);
   }
 
   static Future<String?> getToken() async {

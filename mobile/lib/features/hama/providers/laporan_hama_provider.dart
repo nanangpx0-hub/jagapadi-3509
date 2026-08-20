@@ -23,9 +23,10 @@ class LaporanHamaProvider extends ChangeNotifier {
   String? get error => _error;
   Map<String, dynamic>? get fieldErrors => _fieldErrors;
   int get total => _total;
+  String? get statusFilter => _statusFilter;
   bool get hasMore => _list.length < _total;
 
-  Future<void> loadList({bool refresh = false, String? status}) async {
+  Future<void> loadList({bool refresh = false, String? status, String? search}) async {
     if (refresh) {
       _page = 1;
       _list = [];
@@ -37,55 +38,81 @@ class LaporanHamaProvider extends ChangeNotifier {
 
     final q = <String, dynamic>{'page': _page, 'limit': 20, 'include_draft': 'true'};
     if (status != null && status != 'all') q['status'] = status;
+    if (search != null && search.trim().isNotEmpty) q['q'] = search.trim();
 
-    final res = await api.get('/laporan-hama', queryParams: q);
-    if (res.success && res.data != null) {
-      final rawList = res.data!['data'] as List<dynamic>? ?? [];
-      final items = rawList.map((e) => LaporanHama.fromJson({'data': e})).toList();
-      if (refresh) {
-        _list = items;
+    try {
+      final res = await api.get('/laporan-hama', queryParams: q);
+      if (res.success && res.data != null) {
+        final rawList = res.data!['data'] as List<dynamic>? ?? [];
+        final items = rawList.map((e) {
+          if (e is Map<String, dynamic>) {
+            return LaporanHama.fromJson(e);
+          }
+          return LaporanHama.fromJson(Map<String, dynamic>.from(e as Map));
+        }).toList();
+        if (refresh) {
+          _list = items;
+        } else {
+          _list.addAll(items);
+        }
+        final meta = res.data!['meta'] as Map<String, dynamic>?;
+        _total = meta?['total'] as int? ?? items.length;
+        _page++;
       } else {
-        _list.addAll(items);
+        _error = res.message ?? 'Gagal memuat data laporan hama';
       }
-      final meta = res.data!['meta'] as Map<String, dynamic>?;
-      _total = meta?['total'] as int? ?? items.length;
-      _page++;
-    } else {
-      _error = res.message ?? 'Gagal memuat data';
+    } catch (e) {
+      _error = 'Terjadi kesalahan saat memuat data: $e';
+    } finally {
+      _loading = false;
+      notifyListeners();
     }
-    _loading = false;
-    notifyListeners();
   }
 
   Future<void> loadDetail(int id) async {
     _loading = true;
     _error = null;
     notifyListeners();
-    final res = await api.get('/laporan-hama/$id');
-    if (res.success && res.data != null) {
-      _detail = LaporanHama.fromJson(res.data!);
-    } else {
-      _error = res.message ?? 'Gagal memuat detail';
+    try {
+      final res = await api.get('/laporan-hama/$id');
+      if (res.success && res.data != null) {
+        _detail = LaporanHama.fromJson(res.data!);
+      } else {
+        _error = res.message ?? 'Gagal memuat detail laporan hama';
+      }
+    } catch (e) {
+      _error = 'Terjadi kesalahan saat memuat detail: $e';
+    } finally {
+      _loading = false;
+      notifyListeners();
     }
-    _loading = false;
-    notifyListeners();
   }
 
   Future<void> loadOptList() async {
     if (_optList.isNotEmpty) return;
-    final res = await api.get('/opt', queryParams: {'aktif': '1'});
-    if (res.success && res.data != null) {
-      final raw = res.data!['data'] as List<dynamic>? ?? [];
-      _optList = raw.map((e) => OptOption.fromJson(e as Map<String, dynamic>)).toList();
-    }
+    try {
+      final res = await api.get('/opt', queryParams: {'aktif': '1'});
+      if (res.success && res.data != null) {
+        final raw = res.data!['data'] as List<dynamic>? ?? [];
+        _optList = raw
+            .map((e) => OptOption.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList();
+      }
+    } catch (_) {}
     notifyListeners();
   }
 
-  Future<Map<String, dynamic>?> save(Map<String, dynamic> data, {int? id}) async {
+  Future<Map<String, dynamic>?> save(
+    Map<String, dynamic> data, {
+    int? id,
+    Map<String, String>? headers,
+  }) async {
     _loading = true;
     _fieldErrors = null;
     notifyListeners();
-    final res = id != null ? await api.put('/laporan-hama/$id', data: data) : await api.post('/laporan-hama', data: data);
+    final res = id != null
+        ? await api.put('/laporan-hama/$id', data: data, headers: headers)
+        : await api.post('/laporan-hama', data: data, headers: headers);
     _loading = false;
     notifyListeners();
     if (res.success) return res.data;
@@ -168,6 +195,13 @@ class LaporanHamaProvider extends ChangeNotifier {
   void clearError() {
     _error = null;
     _fieldErrors = null;
+    notifyListeners();
+  }
+
+  /// Bersihkan cache list OPT.
+  /// Dipanggil saat logout agar pengguna berbeda tidak melihat data sesi lain.
+  void clearOptCache() {
+    _optList = [];
     notifyListeners();
   }
 }

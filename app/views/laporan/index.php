@@ -1,5 +1,11 @@
 <?php include ROOT_PATH . '/app/views/layouts/header.php'; ?>
 
+<?php if (($petugasReportType ?? null) === 'hama'): ?>
+    <?php require ROOT_PATH . '/app/views/reports/petugas_list.php'; ?>
+    <?php require_once ROOT_PATH . '/app/views/layouts/footer.php'; ?>
+    <?php return; ?>
+<?php endif; ?>
+
 <style>
 /* ===== MASTER CHECKBOX STYLING ===== */
 #checkAll {
@@ -625,62 +631,34 @@ tbody tr:hover {
                 </div>
             </div>
             <div class="card-body">
-                <!-- User Info Badge (for petugas) -->
-                <?php if(($_SESSION['role'] ?? '') === 'petugas'): ?>
-                <div class="alert alert-info mb-3">
-                    <i class="fas fa-info-circle"></i> 
-                    <strong>Mode Petugas:</strong> Anda hanya dapat melihat laporan yang Anda buat sendiri.
-                    <span class="badge badge-primary ml-2">
-                        <i class="fas fa-user"></i> <?= htmlspecialchars($currentUser['nama_lengkap'] ?? '') ?>
-                    </span>
-                </div>
-                
-                <?php endif; ?>
-
                 <!-- Filter Status dengan Efek Timbul-Tenggelam -->
                 <div class="filter-status-container mb-3">
                     <div class="btn-group-status" role="group" aria-label="Filter Status">
-                        <?php
-                        // Hitung jumlah per status
-                        $countAll = count($laporan);
-                        $countDraft = 0;
-                        $countActive = 0;
-                        
-                        foreach ($laporan as $item) {
-                            switch ($item['status']) {
-                                case 'Draf':
-                                    $countDraft++;
-                                    break;
-                                case 'Submitted':
-                                case 'Diverifikasi':
-                                    $countActive++;
-                                    break;
-                            }
-                        }
-                        ?>
-                        
                         <a href="<?= BASE_URL ?>laporan" 
                            class="btn-filter <?= empty($status) ? 'active' : '' ?>" 
                            data-filter="semua"
+                           data-status=""
                            aria-pressed="<?= empty($status) ? 'true' : 'false' ?>">
                             <i class="fas fa-list"></i> Semua
-                            <span class="badge badge-secondary"><?= $countAll ?></span>
+                            <span class="badge badge-secondary"><?= (int) ($countAll ?? 0) ?></span>
                         </a>
 
                         <a href="<?= BASE_URL ?>laporan?status=Draf" 
-                           class="btn-filter <?= ($status === 'Draf') ? 'active' : '' ?>" 
+                           class="btn-filter <?= strcasecmp((string) $status, 'Draf') === 0 ? 'active' : '' ?>"
                            data-filter="draft"
-                           aria-pressed="<?= ($status === 'Draf') ? 'true' : 'false' ?>">
+                           data-status="Draf"
+                           aria-pressed="<?= strcasecmp((string) $status, 'Draf') === 0 ? 'true' : 'false' ?>">
                             <i class="fas fa-file"></i> Draf
-                            <span class="badge badge-warning"><?= $countDraft ?></span>
+                            <span class="badge badge-warning"><?= (int) ($countDraft ?? 0) ?></span>
                         </a>
 
-                        <a href="<?= BASE_URL ?>laporan" 
-                           class="btn-filter" 
+                        <a href="<?= BASE_URL ?>laporan?status=Aktif"
+                           class="btn-filter <?= strcasecmp((string) $status, 'Aktif') === 0 ? 'active' : '' ?>"
                            data-filter="aktif"
-                           aria-pressed="false">
+                           data-status="Aktif"
+                           aria-pressed="<?= strcasecmp((string) $status, 'Aktif') === 0 ? 'true' : 'false' ?>">
                             <i class="fas fa-check-circle"></i> Aktif
-                            <span class="badge badge-success"><?= $countActive ?></span>
+                            <span class="badge badge-success"><?= (int) ($countActive ?? 0) ?></span>
                         </a>
                     </div>
                 </div>
@@ -824,7 +802,7 @@ tbody tr:hover {
         page: 1,
         perPage: 10,
         search: '',
-        status: '<?= $status ?>',
+        status: <?= json_encode((string) ($status ?? ''), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
         sortCol: 'tanggal',
         sortDir: 'desc',
         total: 0,
@@ -910,7 +888,7 @@ tbody tr:hover {
         const etlWarn = (r.etl_acuan > 0 && r.populasi > r.etl_acuan) ? '<i class="fas fa-exclamation-triangle text-danger ms-1" title="Melampaui ETL"></i>' : '';
 
         const editBtn = canEdit ? `<a href="${BASE_URL}laporan/edit/${r.id}" class="btn-action btn-action-warning" title="Edit"><i class="fas fa-edit"></i></a>` : '';
-        const archiveBtn = (isAdmin || isOperator) && r.status !== 'Diarsipkan' ? `
+        const archiveBtn = (isAdmin || isOperator) && ['Submitted', 'Diverifikasi'].includes(r.status) ? `
             <form action="${BASE_URL}laporan/archive/${r.id}" method="POST" class="d-inline">
                 <?= Security::getCsrfField() ?>
                 <button type="submit" class="btn-action btn-action-secondary" onclick="return confirm('Arsipkan laporan ini? Laporan tidak lagi dihitung sebagai laporan aktif.')" title="Arsipkan">
@@ -985,11 +963,26 @@ tbody tr:hover {
 
     function updateStatusFilterCounts(statusCounts) {
         if (!statusCounts) return;
-        const labels = ['Semua','Draf','Submitted','Diverifikasi','Ditolak'];
-        const vals   = [null,'Draf','Submitted','Diverifikasi','Ditolak'];
-        vals.forEach((v, i) => {
-            const badge = document.querySelector(`.btn-filter[data-filter="${labels[i].toLowerCase()}"] .badge`);
-            if (badge) badge.textContent = statusCounts[v] ?? 0;
+        const total = Object.values(statusCounts).reduce((sum, count) => sum + Number(count || 0), 0);
+        const active = Number(statusCounts.Submitted || 0) + Number(statusCounts.Diverifikasi || 0);
+        const counts = {
+            semua: total,
+            draft: Number(statusCounts.Draf || 0),
+            aktif: active,
+        };
+
+        Object.entries(counts).forEach(([filter, count]) => {
+            const badge = qs(`.btn-filter[data-filter="${filter}"] .badge`);
+            if (badge) badge.textContent = String(count);
+        });
+    }
+
+    function updateStatusButtons() {
+        const normalizedStatus = String(state.status || '').toLowerCase();
+        qsa('.btn-filter[data-status]').forEach(button => {
+            const isActive = String(button.dataset.status || '').toLowerCase() === normalizedStatus;
+            button.classList.toggle('active', isActive);
+            button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
         });
     }
 
@@ -1018,16 +1011,25 @@ tbody tr:hover {
         if (state.loading && state.abortController) {
             state.abortController.abort();
         }
-        state.abortController = new AbortController();
+        const requestController = new AbortController();
+        state.abortController = requestController;
         state.loading = true;
         showLoader();
 
         try {
             console.log('[LaporanTable] Fetching URL:', buildURL());
-            const resp = await fetch(buildURL(), { signal: state.abortController.signal });
+            const resp = await fetch(buildURL(), {
+                signal: requestController.signal,
+                headers: { Accept: 'application/json' },
+            });
             console.log('[LaporanTable] Response status:', resp.status);
-            if (!resp.ok) throw new Error('HTTP ' + resp.status);
-            const json = await resp.json();
+            let json = null;
+            try {
+                json = await resp.json();
+            } catch (parseError) {
+                throw new Error('Respons server tidak valid.');
+            }
+            if (!resp.ok) throw new Error(json.message || `Permintaan gagal (HTTP ${resp.status}).`);
             console.log('[LaporanTable] Response data:', json);
             if (!json.success) throw new Error(json.message || 'Gagal mengambil data');
 
@@ -1062,9 +1064,18 @@ tbody tr:hover {
             console.error('[LaporanTable] Error:', err);
             if (err.name === 'AbortError') return;
             const tbody = qs('#tableBody');
-            if (tbody) tbody.innerHTML = `<tr><td colspan="13" class="text-center text-danger py-4"><i class="fas fa-exclamation-triangle"></i> Gagal memuat: ${escapeHtml(err.message)}</td></tr>`;
+            const headerRow = qs('#laporanTable thead tr');
+            const colCount = headerRow ? headerRow.children.length : 12;
+            if (tbody) {
+                tbody.innerHTML = `<tr><td colspan="${colCount}" class="text-center text-danger py-4">
+                    <i class="fas fa-exclamation-triangle"></i> ${escapeHtml(err.message)}
+                    <button type="button" class="btn btn-sm btn-outline-danger ms-2" data-retry-table>Coba lagi</button>
+                </td></tr>`;
+            }
         } finally {
-            state.loading = false;
+            if (state.abortController === requestController) {
+                state.loading = false;
+            }
         }
     }
 
@@ -1088,6 +1099,15 @@ tbody tr:hover {
     function setStatus(s) {
         state.status = s;
         state.page = 1;
+        updateStatusButtons();
+
+        const currentUrl = new URL(window.location.href);
+        if (s) {
+            currentUrl.searchParams.set('status', s);
+        } else {
+            currentUrl.searchParams.delete('status');
+        }
+        window.history.replaceState({}, '', currentUrl);
         loadTable();
     }
 
@@ -1103,6 +1123,18 @@ tbody tr:hover {
     }
 
     // ========== EVENT LISTENERS FOR TABLE CONTROLS ==========
+
+    // Status filter buttons (shared by admin and petugas)
+    const statusFilterContainer = qs('.btn-group-status');
+    if (statusFilterContainer) {
+        statusFilterContainer.addEventListener('click', function(e) {
+            const button = e.target.closest('.btn-filter[data-status]');
+            if (!button) return;
+
+            e.preventDefault();
+            setStatus(button.dataset.status || '');
+        });
+    }
 
     // Per-page dropdown change
     const perPageSelect = qs('#perPageSelect');
@@ -1176,6 +1208,13 @@ tbody tr:hover {
     const tableHeaders = qs('#laporanTable');
     if (tableHeaders) {
         tableHeaders.addEventListener('click', function(e) {
+            const retryButton = e.target.closest('[data-retry-table]');
+            if (retryButton) {
+                e.preventDefault();
+                loadTable();
+                return;
+            }
+
             const th = e.target.closest('th.sortable');
             if (th) {
                 e.preventDefault();
@@ -1234,6 +1273,7 @@ tbody tr:hover {
     // ─────────────────────────────────────────────────────────────────────
 
     // Start initialization after DOM is ready
+    updateStatusButtons();
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', loadTable);
     } else {
@@ -1343,9 +1383,6 @@ tbody tr:hover {
     });
 })();
 </script>
-
-<!-- Filter Status Enhancement Script -->
-<script src="<?= BASE_URL ?>public/js/filter-status.js"></script>
 
 <!-- CSS untuk Menonaktifkan Efek Hover -->
 <link rel="stylesheet" href="<?= BASE_URL ?>public/css/hover-disabled.css">

@@ -123,7 +123,7 @@ $errorMsg = ErrorMessage::flash();
                         <i class="fas fa-arrow-left"></i> Kembali
                     </a>
                     <?php if(in_array($userRole, ['admin', 'operator', 'petugas']) && in_array($data['status'], ['Draf', 'Ditolak'])): ?>
-                    <a href="<?= BASE_URL ?>irigasi/edit/<?= $data['id'] ?>" class="btn btn-warning">
+                    <a href="<?= BASE_URL ?>irigasi/edit/<?= (int) $data['id'] ?>" class="btn btn-warning">
                         <i class="fas fa-edit"></i> Edit
                     </a>
                     <?php endif; ?>
@@ -139,7 +139,7 @@ $errorMsg = ErrorMessage::flash();
                         <h5 class="info-section-title"><i class="fas fa-info-circle"></i> Informasi Umum</h5>
                         <div class="info-row">
                             <div class="info-label">No Laporan</div>
-                            <div class="info-value"><code><?= htmlspecialchars($data['no_laporan'] ?? '-') ?></code></div>
+                            <div class="info-value"><code><?= htmlspecialchars($data['nomor_laporan'] ?? '-') ?></code></div>
                         </div>
                         <div class="info-row">
                             <div class="info-label">Tanggal Laporan</div>
@@ -173,8 +173,8 @@ $errorMsg = ErrorMessage::flash();
                         <div class="info-row">
                             <div class="info-label">Koordinat</div>
                             <div class="info-value">
-                                <a href="https://www.google.com/maps?q=<?= $data['latitude'] ?>,<?= $data['longitude'] ?>" target="_blank">
-                                    <?= $data['latitude'] ?>, <?= $data['longitude'] ?>
+                                <a href="https://www.google.com/maps?q=<?= rawurlencode((string) $data['latitude']) ?>,<?= rawurlencode((string) $data['longitude']) ?>" target="_blank" rel="noopener noreferrer">
+                                    <?= htmlspecialchars((string) $data['latitude']) ?>, <?= htmlspecialchars((string) $data['longitude']) ?>
                                     <i class="fas fa-external-link-alt"></i>
                                 </a>
                             </div>
@@ -212,8 +212,8 @@ $errorMsg = ErrorMessage::flash();
                             <div class="info-label">Kondisi Fisik</div>
                             <div class="info-value">
                                 <?php 
-                                $kondisiClass = $data['kondisi_fisik'] == 'Baik' ? 'success' : 
-                                    ($data['kondisi_fisik'] == 'Rusak Ringan' ? 'warning' : 'danger');
+                                $kondisiClass = ($data['kondisi_fisik'] ?? '') === 'Bagus' ? 'success' :
+                                    (($data['kondisi_fisik'] ?? '') === 'Tidak Bagus' ? 'warning' : 'danger');
                                 ?>
                                 <span class="badge badge-<?= $kondisiClass ?>"><?= htmlspecialchars($data['kondisi_fisik'] ?? '-') ?></span>
                             </div>
@@ -250,7 +250,7 @@ $errorMsg = ErrorMessage::flash();
                         <h5 class="info-section-title"><i class="fas fa-clipboard-check"></i> Verifikasi</h5>
                         <div class="info-row">
                             <div class="info-label">Status</div>
-                            <div class="info-value"><span class="badge badge-<?= $cls ?>"><?= $data['status'] ?></span></div>
+                            <div class="info-value"><span class="badge badge-<?= $cls ?>"><?= htmlspecialchars((string) $data['status']) ?></span></div>
                         </div>
                         <div class="info-row">
                             <div class="info-label">Verifikator</div>
@@ -274,7 +274,7 @@ $errorMsg = ErrorMessage::flash();
                     <div class="info-section">
                         <h5 class="info-section-title"><i class="fas fa-image"></i> Foto Dokumentasi</h5>
                         <div class="photo-container text-center">
-                            <img src="<?= BASE_URL . $data['foto_url'] ?>" alt="Foto Irigasi" class="img-fluid rounded"
+                            <img src="<?= htmlspecialchars(BASE_URL . (string) $data['foto_url']) ?>" alt="Foto Irigasi" class="img-fluid rounded"
                                  onerror="this.style.display='none'; this.parentNode.innerHTML='<p class=\'text-muted\'>Foto tidak tersedia</p>';">
                         </div>
                     </div>

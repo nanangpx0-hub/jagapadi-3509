@@ -1,0 +1,65 @@
+/* Shared states for direct links and parent tree menus. */
+.sidebar-dark-success .nav-sidebar > .nav-item > .nav-link.active {
+    background-color: #28a745 !important;
+    color: #fff !important;
+    box-shadow: inset 4px 0 0 #8ee4a5;
+}
+
+.sidebar-dark-success .nav-sidebar > .nav-item > .nav-link:not(.active):hover {
+    background-color: rgba(255, 255, 255, 0.13) !important;
+    color: #fff !important;
+}
+
+/* Hover remains visible without removing the persistent active indicator. */
+.sidebar-dark-success .nav-sidebar > .nav-item > .nav-link.active:hover,
+.sidebar-dark-success .nav-sidebar > .nav-item > .nav-link.active:focus-visible {
+    background-color: #1e7e34 !important;
+    color: #fff !important;
+    box-shadow: inset 4px 0 0 #b6f2c5, 0 0 0 2px rgba(142, 228, 165, 0.35);
+}
+
+.sidebar-dark-success .nav-sidebar .nav-link:focus-visible {
+    outline: 2px solid #8ee4a5 !important;
+    outline-offset: -2px;
+}
+
+/* Parent tree menu remains identifiable while expanded. */
+.sidebar-dark-success .nav-sidebar > .nav-item.menu-open > .nav-link,
+.sidebar-dark-success .nav-sidebar > .nav-item.menu-is-opening > .nav-link,
+.sidebar-dark-success .nav-sidebar > .nav-item > .nav-link.sidebar-parent-active {
+    background-color: #218838 !important;
+    color: #fff !important;
+    box-shadow: inset 4px 0 0 #8ee4a5;
+}
+
+.sidebar-dark-success .nav-sidebar > .nav-item > .nav-link.sidebar-parent-active .nav-icon,
+.sidebar-dark-success .nav-sidebar > .nav-item > .nav-link.sidebar-parent-active p,
+.sidebar-dark-success .nav-sidebar > .nav-item.menu-open > .nav-link .nav-icon,
+.sidebar-dark-success .nav-sidebar > .nav-item.menu-open > .nav-link p {
+    color: #fff !important;
+}
+
+.sidebar-dark-success .nav-treeview > .nav-item > .nav-link.active {
+    background-color: rgba(40, 167, 69, 0.28) !important;
+    color: #fff !important;
+    box-shadow: inset 3px 0 0 #8ee4a5;
+}
+
+.sidebar-dark-success .nav-treeview > .nav-item > .nav-link.active .nav-icon {
+    color: #8ee4a5 !important;
+}
+
+@media (max-width: 991.98px) {
+    .main-sidebar .nav-sidebar > .nav-item > .nav-link,
+    .main-sidebar .nav-treeview > .nav-item > .nav-link {
+        min-height: 44px;
+        align-items: center;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .main-sidebar .nav-treeview,
+    .main-sidebar .nav-link {
+        transition: none !important;
+    }
+}

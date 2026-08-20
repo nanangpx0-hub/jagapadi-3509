@@ -7,7 +7,7 @@ $errorMsg = ErrorMessage::flash();
 ?>
 
 <link rel="stylesheet" href="<?= BASE_URL ?>public/css/irigasi-monitoring.css">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="<?= BASE_URL ?>public/vendor/css/leaflet.css" />
 
 <div class="container-fluid">
     <!-- Page Header -->
@@ -287,10 +287,7 @@ $errorMsg = ErrorMessage::flash();
 </div>
 
 <!-- Leaflet JS -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-<!-- Chart.js -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script src="<?= BASE_URL ?>public/vendor/js/leaflet.js"></script>
 
 <!-- Monitoring Script -->
 <script src="<?= BASE_URL ?>public/js/irigasi-monitoring.js"></script>

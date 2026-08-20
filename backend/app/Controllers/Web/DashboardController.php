@@ -11,6 +11,11 @@ use App\Services\DashboardService;
 
 class DashboardController extends Controller
 {
+    private function isDevEnvironment(): bool {
+        $env = strtolower((string)(getenv('APP_ENV') ?: 'production'));
+        return in_array($env, ['local', 'development', 'dev'], true);
+    }
+
     public function index(): void
     {
         $role = $_SESSION['role'] ?? '';
@@ -53,7 +58,7 @@ class DashboardController extends Controller
             $data = $service->getStats();
             $this->jsonResponse($data);
         } catch (\DomainException $e) {
-            $this->jsonResponse(['error' => $e->getMessage()], 422);
+            $this->jsonResponse($e->getMessage(), 422);
         }
     }
 
@@ -66,9 +71,10 @@ class DashboardController extends Controller
         try {
             $tahun = DashboardService::validateTahun($tahun);
             $service = new DashboardService($role, $userId, $tahun);
-            $this->jsonResponse($service->getChartsHama());
+            $data = $service->getChartsHama();
+            $this->jsonResponse($data);
         } catch (\DomainException $e) {
-            $this->jsonResponse(['error' => $e->getMessage()], 422);
+            $this->jsonResponse($e->getMessage(), 422);
         }
     }
 
@@ -81,9 +87,10 @@ class DashboardController extends Controller
         try {
             $tahun = DashboardService::validateTahun($tahun);
             $service = new DashboardService($role, $userId, $tahun);
-            $this->jsonResponse($service->getChartsIrigasi());
+            $data = $service->getChartsIrigasi();
+            $this->jsonResponse($data);
         } catch (\DomainException $e) {
-            $this->jsonResponse(['error' => $e->getMessage()], 422);
+            $this->jsonResponse($e->getMessage(), 422);
         }
     }
 
@@ -115,7 +122,7 @@ class DashboardController extends Controller
 
             $this->jsonResponse($data);
         } catch (\DomainException $e) {
-            $this->jsonResponse(['error' => $e->getMessage()], 422);
+            $this->jsonResponse($e->getMessage(), 422);
         }
     }
 
@@ -127,7 +134,7 @@ class DashboardController extends Controller
         $status = $_GET['status'] ?? 'aktif';
         $limit = min(1000, max(1, (int) ($_GET['limit'] ?? 500)));
 
-        $kecamatanId = isset($_GET['kecamatan_id']) && $_GET['kecamatan_id'] !== '' ? (int) $_GET['kecamatan_id'] : null;
+$kecamatanId = isset($_GET['kecamatan_id']) && $_GET['kecamatan_id'] !== '' ? (int) $_GET['kecamatan_id'] : null;
         $desaId = isset($_GET['desa_id']) && $_GET['desa_id'] !== '' ? (int) $_GET['desa_id'] : null;
         $kondisiFisik = isset($_GET['kondisi_fisik']) && $_GET['kondisi_fisik'] !== '' ? (string) $_GET['kondisi_fisik'] : null;
 
@@ -147,8 +154,10 @@ class DashboardController extends Controller
 
             $this->jsonResponse($data);
         } catch (\DomainException $e) {
-            $this->jsonResponse(['error' => $e->getMessage()], 422);
+            $this->jsonResponse($e->getMessage(), 422);
         }
+    }
+}
     }
 
     private function logDashboardAccess(int $userId, string $role, string $action, string $scope, array $details = []): void
@@ -170,6 +179,17 @@ class DashboardController extends Controller
     {
         http_response_code($statusCode);
         header('Content-Type: application/json; charset=utf-8');
-        echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $exposeDetail = $this->isDevEnvironment();
+        $response = [
+            'success' => false,
+            'message' => 'Terjadi kesalahan pada server.',
+        ];
+        if ($exposeDetail) {
+            $response['error'] = get_class($data);
+            $response['detail'] = $data;
+        } else {
+            $response['detail'] = 'Lihat log server untuk detail.';
+        }
+        echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 }

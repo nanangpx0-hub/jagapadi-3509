@@ -12,6 +12,14 @@ class DataPertanianBps {
     private $db;
     private $table = 'data_pertanian_bps';
     private $logTable = 'bps_scraping_logs';
+    private static $tablesChecked = false;
+
+    private const SOURCE_PRIORITY_SQL = "CASE sumber_data_type
+        WHEN 'ksa' THEN 1
+        WHEN 'resmi_webapi' THEN 2
+        WHEN 'manual' THEN 3
+        WHEN 'simulasi' THEN 4
+        ELSE 5 END";
     
     // East Java regencies/cities
     const KABUPATEN_JATIM = [
@@ -27,51 +35,99 @@ class DataPertanianBps {
     
     public function __construct() {
         $this->db = Database::getInstance()->getConnection();
-        $this->createTablesIfNotExist();
+        if (!self::$tablesChecked) {
+            $this->createTablesIfNotExist();
+            self::$tablesChecked = true;
+        }
+    }
+    
+    /**
+     * Build filter WHERE clause and params (shared by getAll and countAll)
+     *
+     * @param array $filters
+     * @return array ['sql' => string, 'params' => array]
+     */
+    private function buildFilterClause($filters, $alias = '') {
+        $sql = '';
+        $params = [];
+        $prefix = $alias !== '' ? $alias . '.' : '';
+        
+        if (!empty($filters['tahun'])) {
+            $sql .= " AND {$prefix}tahun = ?";
+            $params[] = $filters['tahun'];
+        }
+        
+        if (!empty($filters['kabupaten_kota'])) {
+            $sql .= " AND {$prefix}kabupaten_kota LIKE ?";
+            $params[] = '%' . $filters['kabupaten_kota'] . '%';
+        }
+        
+        if (!empty($filters['sumber_data_like'])) {
+            $sql .= " AND {$prefix}sumber_data LIKE ?";
+            $params[] = '%' . $filters['sumber_data_like'] . '%';
+        }
+        
+        if (!empty($filters['sumber_data_type'])) {
+            $sql .= " AND {$prefix}sumber_data_type = ?";
+            $params[] = $filters['sumber_data_type'];
+        }
+        
+        if (!empty($filters['tipe_skenario'])) {
+            $sql .= " AND {$prefix}tipe_skenario = ?";
+            $params[] = $filters['tipe_skenario'];
+        }
+        
+        if (isset($filters['is_validated']) && $filters['is_validated'] !== '') {
+            $sql .= " AND {$prefix}is_validated = ?";
+            $params[] = (int) $filters['is_validated'];
+        }
+
+        if (!empty($filters['kode_provinsi'])) {
+            $sql .= " AND {$prefix}kode_provinsi = ?";
+            $params[] = $filters['kode_provinsi'];
+        }
+        
+        return [$sql, $params];
+    }
+
+    /**
+     * Pilih satu sumber terbaik untuk setiap kabupaten/tahun/skenario.
+     */
+    private function preferredSourceClause($alias = 'd') {
+        $currentPriority = str_replace('sumber_data_type', "{$alias}.sumber_data_type", self::SOURCE_PRIORITY_SQL);
+        $higherPriority = str_replace('sumber_data_type', 'higher.sumber_data_type', self::SOURCE_PRIORITY_SQL);
+
+        return " AND NOT EXISTS (
+            SELECT 1 FROM {$this->table} higher
+            WHERE higher.tahun = {$alias}.tahun
+              AND higher.kode_provinsi = {$alias}.kode_provinsi
+              AND higher.kabupaten_kota = {$alias}.kabupaten_kota
+              AND higher.tipe_skenario = {$alias}.tipe_skenario
+              AND higher.is_validated = 1
+              AND ({$higherPriority}) < ({$currentPriority})
+        )";
     }
     
     /**
      * Get all data with filters
      */
     public function getAll($filters = []) {
-        $sql = "SELECT * FROM {$this->table} WHERE 1=1";
+        $sql = "SELECT d.* FROM {$this->table} d WHERE 1=1";
         $params = [];
         
-        if (!empty($filters['tahun'])) {
-            $sql .= " AND tahun = ?";
-            $params[] = $filters['tahun'];
+        [$filterSql, $filterParams] = $this->buildFilterClause($filters, 'd');
+        $sql .= $filterSql;
+        $params = array_merge($params, $filterParams);
+
+        if (!empty($filters['preferred_only']) && empty($filters['sumber_data_type'])) {
+            $sql .= $this->preferredSourceClause('d');
         }
         
-        if (!empty($filters['kabupaten_kota'])) {
-            $sql .= " AND kabupaten_kota LIKE ?";
-            $params[] = '%' . $filters['kabupaten_kota'] . '%';
-        }
-        
-        if (!empty($filters['sumber_data_like'])) {
-            $sql .= " AND sumber_data LIKE ?";
-            $params[] = $filters['sumber_data_like'];
-        }
-        
-        if (!empty($filters['sumber_data_type'])) {
-            $sql .= " AND sumber_data_type = ?";
-            $params[] = $filters['sumber_data_type'];
-        }
-        
-        if (!empty($filters['tipe_skenario'])) {
-            $sql .= " AND tipe_skenario = ?";
-            $params[] = $filters['tipe_skenario'];
-        }
-        
-        if (isset($filters['is_validated']) && $filters['is_validated'] !== '') {
-            $sql .= " AND is_validated = ?";
-            $params[] = (int) $filters['is_validated'];
-        }
-        
-        $sql .= " ORDER BY tahun DESC, kabupaten_kota ASC";
+        $sql .= " ORDER BY d.tahun DESC, d.kabupaten_kota ASC";
         
         if (isset($filters['limit'])) {
-            $limit = (int) $filters['limit'];
-            $offset = isset($filters['offset']) ? (int) $filters['offset'] : 0;
+            $limit = max(1, min(500, (int) $filters['limit']));
+            $offset = max(0, (int) ($filters['offset'] ?? 0));
             $sql .= " LIMIT {$limit} OFFSET {$offset}";
         }
         
@@ -84,22 +140,34 @@ class DataPertanianBps {
      * Count all data with filters
      */
     public function countAll($filters = []) {
-        $sql = "SELECT COUNT(*) FROM {$this->table} WHERE 1=1";
+        $sql = "SELECT COUNT(*) FROM {$this->table} d WHERE 1=1";
         $params = [];
         
-        if (!empty($filters['tahun'])) {
-            $sql .= " AND tahun = ?";
-            $params[] = $filters['tahun'];
-        }
-        
-        if (!empty($filters['kabupaten_kota'])) {
-            $sql .= " AND kabupaten_kota LIKE ?";
-            $params[] = '%' . $filters['kabupaten_kota'] . '%';
+        [$filterSql, $filterParams] = $this->buildFilterClause($filters, 'd');
+        $sql .= $filterSql;
+        $params = array_merge($params, $filterParams);
+
+        if (!empty($filters['preferred_only']) && empty($filters['sumber_data_type'])) {
+            $sql .= $this->preferredSourceClause('d');
         }
         
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
-        return $stmt->fetchColumn();
+        return (int) $stmt->fetchColumn();
+    }
+
+    public function countDistinctKabupaten($filters = []) {
+        $sql = "SELECT COUNT(DISTINCT d.kabupaten_kota) FROM {$this->table} d WHERE 1=1";
+        [$filterSql, $params] = $this->buildFilterClause($filters, 'd');
+        $sql .= $filterSql;
+
+        if (!empty($filters['preferred_only']) && empty($filters['sumber_data_type'])) {
+            $sql .= $this->preferredSourceClause('d');
+        }
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return (int) $stmt->fetchColumn();
     }
     
     /**
@@ -114,11 +182,26 @@ class DataPertanianBps {
     /**
      * Get by year and kabupaten
      */
-    public function getByYearAndKabupaten($tahun, $kabupaten) {
-        $stmt = $this->db->prepare(
-            "SELECT * FROM {$this->table} WHERE tahun = ? AND kabupaten_kota = ?"
-        );
-        $stmt->execute([$tahun, $kabupaten]);
+    public function getByYearAndKabupaten(
+        $tahun,
+        $kabupaten,
+        $sourceType = null,
+        $scenario = 'baseline',
+        $kodeProvinsi = '35'
+    ) {
+        $sql = "SELECT * FROM {$this->table}
+                WHERE tahun = ? AND kode_provinsi = ? AND kabupaten_kota = ?
+                  AND tipe_skenario = ?";
+        $params = [$tahun, $kodeProvinsi, $kabupaten, $scenario];
+
+        if ($sourceType !== null && $sourceType !== '') {
+            $sql .= ' AND sumber_data_type = ?';
+            $params[] = $sourceType;
+        }
+
+        $sql .= ' ORDER BY ' . self::SOURCE_PRIORITY_SQL . ' ASC LIMIT 1';
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
     
@@ -127,14 +210,15 @@ class DataPertanianBps {
      */
     public function insert($data) {
         $sql = "INSERT INTO {$this->table} 
-                (tahun, kabupaten_kota, kode_wilayah, luas_panen, produksi_gabah, 
+                (tahun, kode_provinsi, kabupaten_kota, kode_wilayah, luas_panen, produksi_gabah, 
                  produksi_beras, produktivitas, sumber_data, sumber_data_type, 
                  tipe_skenario, is_validated, validation_notes, keterangan)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([
             $data['tahun'],
+            $data['kode_provinsi'] ?? '35',
             $data['kabupaten_kota'],
             $data['kode_wilayah'] ?? null,
             $data['luas_panen'],
@@ -155,7 +239,7 @@ class DataPertanianBps {
      */
     public function update($id, $data) {
         $sql = "UPDATE {$this->table} SET 
-                tahun = ?, kabupaten_kota = ?, kode_wilayah = ?,
+                tahun = ?, kode_provinsi = ?, kabupaten_kota = ?, kode_wilayah = ?,
                 luas_panen = ?, produksi_gabah = ?, produksi_beras = ?,
                 produktivitas = ?, sumber_data = ?, sumber_data_type = ?,
                 tipe_skenario = ?, is_validated = ?, validation_notes = ?, 
@@ -165,6 +249,7 @@ class DataPertanianBps {
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([
             $data['tahun'],
+            $data['kode_provinsi'] ?? '35',
             $data['kabupaten_kota'],
             $data['kode_wilayah'] ?? null,
             $data['luas_panen'],
@@ -185,7 +270,13 @@ class DataPertanianBps {
      * Upsert - Insert or update if exists
      */
     public function upsert($data) {
-        $existing = $this->getByYearAndKabupaten($data['tahun'], $data['kabupaten_kota']);
+        $existing = $this->getByYearAndKabupaten(
+            $data['tahun'],
+            $data['kabupaten_kota'],
+            $data['sumber_data_type'] ?? 'manual',
+            $data['tipe_skenario'] ?? 'baseline',
+            $data['kode_provinsi'] ?? '35'
+        );
         
         if ($existing) {
             return $this->update($existing['id'], $data);
@@ -205,60 +296,87 @@ class DataPertanianBps {
     /**
      * Get statistics for a year
      */
-    public function getStatistics($tahun = null) {
+    public function getStatistics($tahun = null, $filters = []) {
         $tahun = $tahun ?: date('Y');
-        
-        $sql = "SELECT 
-                    COUNT(DISTINCT kabupaten_kota) as jumlah_kabupaten,
-                    SUM(luas_panen) as total_luas_panen,
-                    SUM(produksi_gabah) as total_produksi_gabah,
-                    SUM(produksi_beras) as total_produksi_beras,
-                    ROUND(AVG(produktivitas), 2) as rata_produktivitas
-                FROM {$this->table} WHERE tahun = ?";
-        
+        $filters['tahun'] = $tahun;
+        unset($filters['limit'], $filters['offset']);
+
+        $sql = "SELECT
+                    COUNT(DISTINCT d.kabupaten_kota) AS jumlah_kabupaten,
+                    SUM(d.luas_panen) AS total_luas_panen,
+                    SUM(d.produksi_gabah) AS total_produksi_gabah,
+                    SUM(d.produksi_beras) AS total_produksi_beras,
+                    ROUND(SUM(d.produksi_gabah) / NULLIF(SUM(d.luas_panen), 0) * 10, 2)
+                        AS rata_produktivitas
+                FROM {$this->table} d WHERE 1=1";
+        [$filterSql, $params] = $this->buildFilterClause($filters, 'd');
+        $sql .= $filterSql;
+        if (!empty($filters['preferred_only']) && empty($filters['sumber_data_type'])) {
+            $sql .= $this->preferredSourceClause('d');
+        }
+
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$tahun]);
+        $stmt->execute($params);
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
     
     /**
      * Get yearly trend
      */
-    public function getYearlyTrend($startYear = null, $endYear = null) {
+    public function getYearlyTrend($startYear = null, $endYear = null, $filters = []) {
         $endYear = $endYear ?: date('Y');
         $startYear = $startYear ?: ($endYear - 4);
         
-        $sql = "SELECT 
-                    tahun,
-                    SUM(luas_panen) as total_luas_panen,
-                    SUM(produksi_gabah) as total_produksi_gabah,
-                    SUM(produksi_beras) as total_produksi_beras,
-                    ROUND(AVG(produktivitas), 2) as rata_produktivitas,
-                    COUNT(DISTINCT kabupaten_kota) as jumlah_kabupaten
-                FROM {$this->table}
-                WHERE tahun BETWEEN ? AND ?
-                GROUP BY tahun
-                ORDER BY tahun";
+        $sql = "SELECT
+                    d.tahun,
+                    SUM(d.luas_panen) AS total_luas_panen,
+                    SUM(d.produksi_gabah) AS total_produksi_gabah,
+                    SUM(d.produksi_beras) AS total_produksi_beras,
+                    ROUND(SUM(d.produksi_gabah) / NULLIF(SUM(d.luas_panen), 0) * 10, 2)
+                        AS rata_produktivitas,
+                    COUNT(DISTINCT d.kabupaten_kota) AS jumlah_kabupaten
+                FROM {$this->table} d
+                WHERE d.tahun BETWEEN ? AND ?";
+        $params = [$startYear, $endYear];
+        $filters['tipe_skenario'] = $filters['tipe_skenario'] ?? 'baseline';
+        $filters['is_validated'] = 1;
+        unset($filters['tahun'], $filters['limit'], $filters['offset']);
+        [$filterSql, $filterParams] = $this->buildFilterClause($filters, 'd');
+        $sql .= $filterSql;
+        $params = array_merge($params, $filterParams);
+        if (empty($filters['sumber_data_type'])) {
+            $sql .= $this->preferredSourceClause('d');
+        }
+        $sql .= ' GROUP BY d.tahun ORDER BY d.tahun';
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$startYear, $endYear]);
+        $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     
     /**
      * Get top producers
      */
-    public function getTopProducers($tahun = null, $limit = 10) {
+    public function getTopProducers($tahun = null, $limit = 10, $filters = []) {
         $tahun = $tahun ?: date('Y');
-        $limit = (int) $limit;
+        $limit = max(1, min(100, (int) $limit));
         
-        $sql = "SELECT * FROM {$this->table} 
-                WHERE tahun = ?
-                ORDER BY produksi_gabah DESC
+        $sql = "SELECT d.* FROM {$this->table} d WHERE d.tahun = ?";
+        $params = [$tahun];
+        $filters['tipe_skenario'] = $filters['tipe_skenario'] ?? 'baseline';
+        $filters['is_validated'] = 1;
+        unset($filters['tahun'], $filters['limit'], $filters['offset']);
+        [$filterSql, $filterParams] = $this->buildFilterClause($filters, 'd');
+        $sql .= $filterSql;
+        $params = array_merge($params, $filterParams);
+        if (empty($filters['sumber_data_type'])) {
+            $sql .= $this->preferredSourceClause('d');
+        }
+        $sql .= " ORDER BY d.produksi_gabah DESC
                 LIMIT {$limit}";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$tahun]);
+        $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     
@@ -338,6 +456,7 @@ class DataPertanianBps {
             $sql = "CREATE TABLE IF NOT EXISTS {$this->table} (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 tahun INT NOT NULL,
+                kode_provinsi VARCHAR(10) NOT NULL DEFAULT '35',
                 kabupaten_kota VARCHAR(100) NOT NULL,
                 kode_wilayah VARCHAR(20),
                 luas_panen DECIMAL(15,2) COMMENT 'dalam hektar',
@@ -345,7 +464,7 @@ class DataPertanianBps {
                 produksi_beras DECIMAL(15,2) COMMENT 'dalam ton',
                 produktivitas DECIMAL(10,2) COMMENT 'kuintal/ha',
                 sumber_data VARCHAR(100),
-                sumber_data_type ENUM('simulasi', 'resmi_webapi', 'manual') DEFAULT 'simulasi',
+                sumber_data_type ENUM('ksa', 'resmi_webapi', 'manual', 'simulasi') DEFAULT 'simulasi',
                 tipe_skenario ENUM('baseline', 'optimis', 'pesimis') DEFAULT 'baseline',
                 is_validated TINYINT(1) DEFAULT 0,
                 validation_notes TEXT,
@@ -354,7 +473,8 @@ class DataPertanianBps {
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 INDEX idx_tahun (tahun),
                 INDEX idx_kabupaten (kabupaten_kota),
-                UNIQUE KEY unique_data (tahun, kabupaten_kota)
+                UNIQUE KEY uk_bps_source_scenario
+                    (tahun, kode_provinsi, kabupaten_kota, sumber_data_type, tipe_skenario)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
             
             $this->db->exec($sql);

@@ -67,7 +67,7 @@
         <a href="/dashboard" class="navbar-brand">JAGAPADI</a>
         <div class="navbar-menu">
             <span class="navbar-user">
-                <?= \App\Core\Security::e($_SESSION['nama_lengkap'] ?? '') ?>
+                <a href="/profile" style="color:#fff;text-decoration:none;"><?= \App\Core\Security::e($_SESSION['nama_lengkap'] ?? '') ?></a>
                 <span class="role">(<?= \App\Core\Security::e($_SESSION['role'] ?? '') ?>)</span>
             </span>
             <div style="position:relative">

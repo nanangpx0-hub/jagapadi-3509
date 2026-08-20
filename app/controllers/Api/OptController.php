@@ -80,9 +80,10 @@ class OptController extends BaseApiController {
             
             $data = $this->getRequestData();
             $data = $this->sanitizeData($data);
+            $data = $this->normalizePayload($data);
             
             // Validate required fields
-            $requiredFields = ['nama_opt', 'nama_latin', 'jenis', 'kategori'];
+            $requiredFields = ['nama_opt', 'jenis'];
             $errors = $this->validateRequired($data, $requiredFields);
             
             if (!empty($errors)) {
@@ -97,7 +98,7 @@ class OptController extends BaseApiController {
             
             // Validate kategori
             $validKategori = ['utama', 'sekunder', 'minor'];
-            if (!in_array($data['kategori'], $validKategori)) {
+            if (isset($data['kategori']) && !in_array($data['kategori'], $validKategori, true)) {
                 $this->sendError('Invalid kategori. Must be one of: ' . implode(', ', $validKategori), 400);
             }
             
@@ -109,11 +110,10 @@ class OptController extends BaseApiController {
             // Set default values
             $data['aktif'] = $data['aktif'] ?? 1;
             $data['created_at'] = date('Y-m-d H:i:s');
-            $data['created_by'] = $_SESSION['user_id'];
             
             // Handle image upload if present
             if (isset($_FILES['gambar']) && $_FILES['gambar']['error'] === UPLOAD_ERR_OK) {
-                $data['gambar'] = $this->handleImageUpload($_FILES['gambar']);
+                $data['foto_url'] = $this->handleImageUpload($_FILES['gambar']);
             }
             
             $optId = $this->optModel->create($data);
@@ -150,6 +150,7 @@ class OptController extends BaseApiController {
             
             $data = $this->getRequestData();
             $data = $this->sanitizeData($data);
+            $data = $this->normalizePayload($data);
             
             // Validate jenis if provided
             if (isset($data['jenis'])) {
@@ -177,11 +178,10 @@ class OptController extends BaseApiController {
             
             // Set updated timestamp
             $data['updated_at'] = date('Y-m-d H:i:s');
-            $data['updated_by'] = $_SESSION['user_id'];
             
             // Handle image upload if present
             if (isset($_FILES['gambar']) && $_FILES['gambar']['error'] === UPLOAD_ERR_OK) {
-                $data['gambar'] = $this->handleImageUpload($_FILES['gambar']);
+                $data['foto_url'] = $this->handleImageUpload($_FILES['gambar']);
             }
             
             $success = $this->optModel->update($id, $data);
@@ -347,34 +347,29 @@ class OptController extends BaseApiController {
      * Handle image upload
      */
     private function handleImageUpload($file) {
-        $uploadDir = ROOT_PATH . '/public/uploads/opt/';
-        
-        // Create directory if it doesn't exist
-        if (!is_dir($uploadDir)) {
-            mkdir($uploadDir, 0755, true);
+        require_once ROOT_PATH . '/app/helpers/OptPhotoUploader.php';
+        $result = (new OptPhotoUploader())->upload($file);
+        if (!$result['success']) {
+            throw new Exception($result['error'] ?? 'Failed to upload image.');
         }
-        
-        // Generate unique filename
-        $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
-        $filename = uniqid() . '_' . time() . '.' . $extension;
-        $filepath = $uploadDir . $filename;
-        
-        // Validate file type
-        $allowedTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-        if (!in_array(strtolower($extension), $allowedTypes)) {
-            throw new Exception('Invalid file type. Only JPG, PNG, GIF, and WEBP are allowed.');
+
+        return $result['path'];
+    }
+
+    private function normalizePayload(array $data): array {
+        if (isset($data['nama_latin']) && !isset($data['nama_ilmiah'])) {
+            $data['nama_ilmiah'] = $data['nama_latin'];
         }
-        
-        // Validate file size (max 5MB)
-        if ($file['size'] > 5 * 1024 * 1024) {
-            throw new Exception('File size too large. Maximum 5MB allowed.');
-        }
-        
-        // Move uploaded file
-        if (move_uploaded_file($file['tmp_name'], $filepath)) {
-            return 'uploads/opt/' . $filename;
-        } else {
-            throw new Exception('Failed to upload image.');
-        }
+        unset($data['nama_latin'], $data['gambar'], $data['created_by'], $data['updated_by']);
+
+        $allowed = [
+            'kode_opt', 'nama_opt', 'nama_ilmiah', 'nama_lokal', 'jenis',
+            'status_karantina', 'tingkat_bahaya', 'kategori', 'kingdom',
+            'filum', 'kelas', 'ordo', 'famili', 'genus', 'etl_acuan',
+            'satuan_etl', 'foto_url', 'deskripsi', 'rekomendasi', 'referensi',
+            'aktif', 'created_at', 'updated_at',
+        ];
+
+        return array_intersect_key($data, array_flip($allowed));
     }
 }

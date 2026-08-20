@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/config.dart';
+import '../../../core/permissions.dart';
 import '../../../core/theme.dart';
+import '../../../core/widgets/mini_map_preview.dart';
+import '../../../core/widgets/status_timeline.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/laporan_irigasi_provider.dart';
 
@@ -23,24 +27,35 @@ class _IrigasiDetailScreenState extends State<IrigasiDetailScreen> {
         (_) => context.read<LaporanIrigasiProvider>().loadDetail(widget.id));
   }
 
+  /// Bangun URL foto yang benar menggunakan Uri.parse (bug fix K2).
+  /// Sebelumnya menggunakan string replace yang rapuh.
   String? _fullFotoUrl(String? url) {
     if (url == null || url.isEmpty) return null;
     if (url.startsWith('http')) return url;
-    final base = AppConfig.baseUrl.replaceAll('/api/v1', '');
-    return '$base/$url';
+    final uri = Uri.tryParse(AppConfig.baseUrl);
+    final origin = uri != null
+        ? '${uri.scheme}://${uri.host}' +
+            (uri.hasPort && uri.port != 80 && uri.port != 443
+                ? ':${uri.port}'
+                : '')
+        : '';
+    return '$origin/$url';
   }
 
   Future<void> _handleAdminVerify() async {
     final p = context.read<LaporanIrigasiProvider>();
     final res = await p.verify(widget.id);
     if (res != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Laporan berhasil diverifikasi')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Laporan berhasil diverifikasi')));
     } else if (p.error != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(p.error!)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(p.error!)));
     }
   }
 
   Future<void> _handleAdminReject() async {
+    final p = context.read<LaporanIrigasiProvider>();
     final alasanCtrl = TextEditingController();
     final alasan = await showDialog<String>(
       context: context,
@@ -55,24 +70,30 @@ class _IrigasiDetailScreenState extends State<IrigasiDetailScreen> {
           maxLines: 3,
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
-          ElevatedButton(onPressed: () {
-            if (alasanCtrl.text.trim().length < 10) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Alasan minimal 10 karakter')));
-              return;
-            }
-            Navigator.pop(context, alasanCtrl.text.trim());
-          }, child: const Text('Tolak')),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Batal')),
+          ElevatedButton(
+              onPressed: () {
+                if (alasanCtrl.text.trim().length < 10) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Alasan minimal 10 karakter')));
+                  return;
+                }
+                Navigator.pop(context, alasanCtrl.text.trim());
+              },
+              child: const Text('Tolak')),
         ],
       ),
     );
     if (alasan == null) return;
-    final p = context.read<LaporanIrigasiProvider>();
     final res = await p.reject(widget.id, alasan);
     if (res != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Laporan berhasil ditolak')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Laporan berhasil ditolak')));
     } else if (p.error != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(p.error!)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(p.error!)));
     }
   }
 
@@ -80,9 +101,11 @@ class _IrigasiDetailScreenState extends State<IrigasiDetailScreen> {
     final p = context.read<LaporanIrigasiProvider>();
     final res = await p.archive(widget.id);
     if (res != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Laporan berhasil diarsipkan')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Laporan berhasil diarsipkan')));
     } else if (p.error != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(p.error!)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(p.error!)));
     }
   }
 
@@ -92,10 +115,27 @@ class _IrigasiDetailScreenState extends State<IrigasiDetailScreen> {
     final res = await p.resubmit(widget.id);
     setState(() => _submitting = false);
     if (res != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Laporan berhasil dikirim ulang')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Laporan berhasil dikirim ulang')));
       p.loadDetail(widget.id);
     } else if (p.error != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(p.error!)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(p.error!)));
+    }
+  }
+
+  Future<void> _handleSubmitDraft() async {
+    final p = context.read<LaporanIrigasiProvider>();
+    setState(() => _submitting = true);
+    final res = await p.submit(widget.id);
+    setState(() => _submitting = false);
+    if (res != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Laporan berhasil dikirim ke Admin')));
+      p.loadDetail(widget.id);
+    } else if (p.error != null && mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(p.error!)));
     }
   }
 
@@ -109,46 +149,32 @@ class _IrigasiDetailScreenState extends State<IrigasiDetailScreen> {
       appBar: AppBar(
         title: Text(l?.nomorLaporan ?? 'Detail Irigasi'),
         actions: [
-          if (l != null && !auth.isAdmin && l.isEditable)
-            PopupMenuButton(itemBuilder: (_) => [
-              if (l.isSubmittable) const PopupMenuItem(value: 'submit', child: Text('Kirim Laporan')),
-              if (l.status == 'Draf' || l.status == 'Ditolak') const PopupMenuItem(value: 'edit', child: Text('Edit')),
-              if (l.status == 'Draf') const PopupMenuItem(value: 'delete', child: Text('Hapus', style: TextStyle(color: Colors.red))),
-            ], onSelected: (v) async {
-              if (v == 'submit') {
-                final res = await p.submit(widget.id);
-                if (res != null && mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Laporan berhasil dikirim')));
-                  p.loadDetail(widget.id);
+          if (l != null &&
+              (auth.user?.can(ReportCapability.canVerifyReport) ?? false))
+            PopupMenuButton(
+              itemBuilder: (_) => [
+                if (l.status == 'Submitted')
+                  const PopupMenuItem(
+                      value: 'verify', child: Text('Verifikasi')),
+                if (l.status == 'Submitted')
+                  const PopupMenuItem(
+                      value: 'reject',
+                      child:
+                          Text('Tolak', style: TextStyle(color: Colors.red))),
+                if (l.status == 'Diverifikasi')
+                  const PopupMenuItem(
+                      value: 'archive', child: Text('Arsipkan')),
+              ],
+              onSelected: (v) async {
+                if (v == 'verify') {
+                  await _handleAdminVerify();
+                } else if (v == 'reject') {
+                  await _handleAdminReject();
+                } else if (v == 'archive') {
+                  await _handleArchive();
                 }
-              } else if (v == 'edit') {
-                Navigator.pushNamed(context, '/irigasi/${widget.id}/edit');
-              } else if (v == 'delete') {
-                final ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(
-                  title: const Text('Hapus laporan?'),
-                  content: const Text('Tindakan ini tidak dapat dibatalkan.'),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
-                    TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Hapus', style: TextStyle(color: Colors.red))),
-                  ],
-                ));
-                if (ok == true && mounted) {
-                  await p.delete(widget.id);
-                  if (mounted) Navigator.pop(context);
-                }
-              }
-            }),
-          if (l != null && auth.isAdmin)
-            PopupMenuButton(itemBuilder: (_) => [
-              if (l.status == 'Submitted') const PopupMenuItem(value: 'verify', child: Text('Verifikasi')),
-              if (l.status == 'Submitted') const PopupMenuItem(value: 'reject', child: Text('Tolak', style: TextStyle(color: Colors.red))),
-              if (l.status == 'Diverifikasi') const PopupMenuItem(value: 'archive', child: Text('Arsipkan')),
-            ], onSelected: (v) async {
-              if (v == 'verify') {
-                await _handleAdminVerify();
-              } else if (v == 'reject') await _handleAdminReject();
-              else if (v == 'archive') await _handleArchive();
-            }),
+              },
+            ),
         ],
       ),
       body: p.loading
@@ -160,53 +186,169 @@ class _IrigasiDetailScreenState extends State<IrigasiDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _InfoRow('Status', l.statusLabel),
-                      _InfoRow('Nomor', l.nomorLaporan ?? '-'),
-                      if (l.tanggal != null) _InfoRow('Tanggal', l.tanggal!),
-                      if (l.namaSaluran != null) _InfoRow('Saluran', l.namaSaluran!),
-                      if (l.daerahIrigasi != null) _InfoRow('Daerah Irigasi', l.daerahIrigasi!),
-                      if (l.kondisiFisik != null) _InfoRow('Kondisi Fisik', l.kondisiFisik!),
-                      if (l.debitAir != null) _InfoRow('Debit Air', l.debitAir!),
-                      if (l.namaKabupaten != null) _InfoRow('Kabupaten', l.namaKabupaten!),
-                      if (l.namaKecamatan != null) _InfoRow('Kecamatan', l.namaKecamatan!),
-                      if (l.namaDesa != null) _InfoRow('Desa', l.namaDesa!),
-                      if (l.latitude != null) _InfoRow('Latitude', '${l.latitude}'),
-                      if (l.longitude != null) _InfoRow('Longitude', '${l.longitude}'),
-                      if (l.catatan != null) _InfoRow('Catatan', l.catatan!),
-                      if (l.catatanVerifikasi != null) ...[
-                        const Divider(height: 24),
-                        _InfoRow('Catatan Verifikasi', l.catatanVerifikasi!,
-                            valueColor: l.status == 'Ditolak' ? Colors.red : Colors.green),
-                      ],
-                      if (_fullFotoUrl(l.fotoUrl) != null) ...[
-                        const SizedBox(height: 12),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.network(_fullFotoUrl(l.fotoUrl)!,
-                              height: 200, width: double.infinity, fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const Text('Foto tidak tersedia')),
+                      // Timeline Status — bug fix #9: sertakan createdAt
+                      StatusTimeline(
+                        status: l.status,
+                        createdAt: l.createdAt,
+                        verifiedAt: l.verifiedAt,
+                        catatanVerifikasi: l.catatanVerifikasi,
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Information Card
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Informasi Irigasi',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 16),
+                              ),
+                              const SizedBox(height: 12),
+                              _InfoRow('Nomor Laporan',
+                                  l.nomorLaporan ?? 'Draf #${l.id}'),
+                              _InfoRow('Status', l.statusLabel),
+                              if (l.tanggal != null)
+                                _InfoRow('Tanggal Kejadian', l.tanggal!),
+                              if (l.namaSaluran != null)
+                                _InfoRow('Nama Saluran', l.namaSaluran!),
+                              if (l.daerahIrigasi != null)
+                                _InfoRow('Daerah Irigasi', l.daerahIrigasi!),
+                              if (l.kondisiFisik != null)
+                                _InfoRow('Kondisi Fisik', l.kondisiFisik!),
+                              if (l.debitAir != null)
+                                _InfoRow('Debit Air', l.debitAir!),
+                              const Divider(height: 20),
+                              if (l.namaKabupaten != null)
+                                _InfoRow('Kabupaten', l.namaKabupaten!),
+                              if (l.namaKecamatan != null)
+                                _InfoRow('Kecamatan', l.namaKecamatan!),
+                              if (l.namaDesa != null)
+                                _InfoRow('Desa', l.namaDesa!),
+                              if (l.catatan != null)
+                                _InfoRow('Catatan Petugas', l.catatan!),
+                              if (l.catatanVerifikasi != null)
+                                _InfoRow(
+                                  'Catatan Verifikasi',
+                                  l.catatanVerifikasi!,
+                                  valueColor: l.status == 'Ditolak'
+                                      ? Colors.red
+                                      : Colors.green,
+                                ),
+                            ],
+                          ),
                         ),
-                      ],
-                      if (l.isDitolak && !auth.isAdmin) ...[
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Mini Map Preview (If GPS coordinate is present)
+                      if (l.latitude != null && l.longitude != null) ...[
+                        MiniMapPreview(
+                          latitude: l.latitude!,
+                          longitude: l.longitude!,
+                        ),
                         const SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: () => Navigator.pushNamed(context, '/irigasi/${widget.id}/edit'),
-                            icon: const Icon(Icons.edit, size: 18),
-                            label: const Text('Edit & Perbaiki'),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: _submitting ? null : _handleResubmit,
-                            icon: const Icon(Icons.send, size: 18),
-                            label: Text(_submitting ? 'Mengirim...' : 'Kirim Ulang'),
-                          ),
-                        ),
                       ],
+
+                      // Foto Irigasi
+                      if (_fullFotoUrl(l.fotoUrl) != null) ...[
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Foto Saluran Irigasi',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16),
+                                ),
+                                const SizedBox(height: 12),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(
+                                    _fullFotoUrl(l.fotoUrl)!,
+                                    height: 220,
+                                    width: double.infinity,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) =>
+                                        const Text('Foto tidak dapat dimuat'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+
+                      // Explicit Action Buttons for Field Officer (Petugas)
+                      if ((auth.user?.can(ReportCapability.canSubmitReport) ??
+                          false)) ...[
+                        if (l.status == 'Draf') ...[
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () => context
+                                      .push('/irigasi/${widget.id}/edit')
+                                      .then((_) => p.loadDetail(widget.id)),
+                                  icon: const Icon(Icons.edit, size: 18),
+                                  label: const Text('Edit Draf'),
+                                  style: OutlinedButton.styleFrom(
+                                      minimumSize:
+                                          const Size(double.infinity, 48)),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed:
+                                      _submitting ? null : _handleSubmitDraft,
+                                  icon: const Icon(Icons.send, size: 18),
+                                  label: Text(_submitting
+                                      ? 'Mengirim...'
+                                      : 'Kirim Sekarang'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        if (l.isDitolak) ...[
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () => context
+                                      .push('/irigasi/${widget.id}/edit')
+                                      .then((_) => p.loadDetail(widget.id)),
+                                  icon: const Icon(Icons.edit, size: 18),
+                                  label: const Text('Edit & Perbaiki'),
+                                  style: OutlinedButton.styleFrom(
+                                      minimumSize:
+                                          const Size(double.infinity, 48)),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed:
+                                      _submitting ? null : _handleResubmit,
+                                  icon: const Icon(Icons.refresh, size: 18),
+                                  label: Text(_submitting
+                                      ? 'Mengirim...'
+                                      : 'Kirim Ulang'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                      const SizedBox(height: 24),
                     ],
                   ),
                 ),
@@ -226,8 +368,20 @@ class _InfoRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 140, child: Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13))),
-          Expanded(child: Text(value, style: TextStyle(fontWeight: FontWeight.w500, color: valueColor))),
+          SizedBox(
+            width: 140,
+            child: Text(
+              label,
+              style:
+                  const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(fontWeight: FontWeight.w500, color: valueColor),
+            ),
+          ),
         ],
       ),
     );

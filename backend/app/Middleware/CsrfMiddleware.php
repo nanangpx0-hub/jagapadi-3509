@@ -25,10 +25,9 @@ class CsrfMiddleware
             return true;
         }
 
-        foreach (self::EXEMPT_PATHS as $exemptPath) {
-            if ($uri === $exemptPath || str_starts_with($uri, $exemptPath . '/')) {
-                return true;
-            }
+        $isExempt = $this->isExemptPath($uri);
+        if ($isExempt !== null) {
+            return $isExempt;
         }
 
         $token = Request::input('_csrf_token');
@@ -52,5 +51,19 @@ class CsrfMiddleware
         }
 
         return true;
+    }
+
+    private function isExemptPath(string $uri): ?bool
+    {
+        foreach (self::EXEMPT_PATHS as $exemptPath) {
+            $normalizedExempt = preg_quote($exemptPath, '#');
+            if (preg_match('#^' . $normalizedExempt . '(/|$)#i', $uri)
+                || preg_match('#^' . $normalizedExempt . '/.*#i', $uri)
+            ) {
+                return true;
+            }
+        }
+
+        return null;
     }
 }

@@ -138,38 +138,53 @@ class CurahHujan {
      * @return array
      */
     public function getStatistics($filters = []) {
-        $sql = "SELECT 
-                    COUNT(*) as total_records,
-                    ROUND(AVG(curah_hujan), 2) as rata_rata,
-                    MAX(curah_hujan) as maksimum,
-                    MIN(curah_hujan) as minimum,
-                    SUM(curah_hujan) as total_curah_hujan,
-                    COUNT(CASE WHEN curah_hujan > 0 THEN 1 END) as hari_hujan,
-                    COUNT(CASE WHEN curah_hujan = 0 THEN 1 END) as hari_tidak_hujan
-                FROM {$this->table} WHERE 1=1";
+        $where = " WHERE 1=1";
         $params = [];
         
         if (!empty($filters['start_date'])) {
-            $sql .= " AND tanggal >= ?";
+            $where .= " AND tanggal >= ?";
             $params[] = $filters['start_date'];
         }
         if (!empty($filters['end_date'])) {
-            $sql .= " AND tanggal <= ?";
+            $where .= " AND tanggal <= ?";
             $params[] = $filters['end_date'];
         }
+        if (!empty($filters['lokasi'])) {
+            $where .= " AND lokasi = ?";
+            $params[] = $filters['lokasi'];
+        }
         if (!empty($filters['year'])) {
-            $sql .= " AND YEAR(tanggal) = ?";
+            $where .= " AND YEAR(tanggal) = ?";
             $params[] = $filters['year'];
         }
         if (!empty($filters['month'])) {
-            $sql .= " AND MONTH(tanggal) = ?";
+            $where .= " AND MONTH(tanggal) = ?";
             $params[] = $filters['month'];
         }
-        // Filter by data source
         if (!empty($filters['sumber_data_like'])) {
-            $sql .= " AND sumber_data LIKE ?";
+            $where .= " AND sumber_data LIKE ?";
             $params[] = $filters['sumber_data_like'];
         }
+
+        // Regional rainfall is the daily mean across available locations. Summing
+        // every station would inflate monthly totals by the number of locations.
+        $sql = "SELECT
+                    COALESCE(SUM(jumlah_record), 0) as total_records,
+                    COUNT(*) as jumlah_hari,
+                    ROUND(AVG(curah_hujan_harian), 2) as rata_rata,
+                    MAX(maksimum_harian) as maksimum,
+                    MIN(curah_hujan_harian) as minimum,
+                    ROUND(SUM(curah_hujan_harian), 2) as total_curah_hujan,
+                    SUM(curah_hujan_harian > 0) as hari_hujan,
+                    SUM(curah_hujan_harian = 0) as hari_tidak_hujan
+                FROM (
+                    SELECT tanggal,
+                           AVG(curah_hujan) as curah_hujan_harian,
+                           MAX(curah_hujan) as maksimum_harian,
+                           COUNT(*) as jumlah_record
+                    FROM {$this->table}{$where}
+                    GROUP BY tanggal
+                ) daily";
         
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
@@ -182,24 +197,38 @@ class CurahHujan {
      * @param int $year
      * @return array
      */
-    public function getMonthlyAverage($year = null) {
+    public function getMonthlyAverage($year = null, $filters = []) {
         $year = $year ?: date('Y');
-        
-        $sql = "SELECT 
+        $where = " WHERE YEAR(tanggal) = ?";
+        $params = [$year];
+        if (!empty($filters['sumber_data_like'])) {
+            $where .= " AND sumber_data LIKE ?";
+            $params[] = $filters['sumber_data_like'];
+        }
+        if (!empty($filters['lokasi'])) {
+            $where .= " AND lokasi = ?";
+            $params[] = $filters['lokasi'];
+        }
+
+        $sql = "SELECT
                     MONTH(tanggal) as bulan,
-                    MONTHNAME(tanggal) as nama_bulan,
-                    ROUND(AVG(curah_hujan), 2) as rata_rata,
-                    SUM(curah_hujan) as total,
+                    ROUND(AVG(curah_hujan_harian), 2) as rata_rata,
+                    ROUND(SUM(curah_hujan_harian), 2) as total,
                     COUNT(*) as jumlah_data,
-                    MAX(curah_hujan) as maksimum,
-                    MIN(curah_hujan) as minimum
-                FROM {$this->table}
-                WHERE YEAR(tanggal) = ?
-                GROUP BY MONTH(tanggal), MONTHNAME(tanggal)
+                    MAX(maksimum_harian) as maksimum,
+                    MIN(curah_hujan_harian) as minimum
+                FROM (
+                    SELECT tanggal,
+                           AVG(curah_hujan) as curah_hujan_harian,
+                           MAX(curah_hujan) as maksimum_harian
+                    FROM {$this->table}{$where}
+                    GROUP BY tanggal
+                ) daily
+                GROUP BY MONTH(tanggal)
                 ORDER BY bulan";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$year]);
+        $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     
@@ -209,20 +238,33 @@ class CurahHujan {
      * @param int $limit
      * @return array
      */
-    public function getYearlySummary($limit = 5) {
-        $sql = "SELECT 
+    public function getYearlySummary($limit = 5, $filters = []) {
+        $where = " WHERE 1=1";
+        $params = [];
+        if (!empty($filters['sumber_data_like'])) {
+            $where .= " AND sumber_data LIKE ?";
+            $params[] = $filters['sumber_data_like'];
+        }
+
+        $sql = "SELECT
                     YEAR(tanggal) as tahun,
-                    ROUND(AVG(curah_hujan), 2) as rata_rata,
-                    SUM(curah_hujan) as total,
+                    ROUND(AVG(curah_hujan_harian), 2) as rata_rata,
+                    ROUND(SUM(curah_hujan_harian), 2) as total,
                     COUNT(*) as jumlah_data,
-                    MAX(curah_hujan) as maksimum
-                FROM {$this->table}
+                    MAX(maksimum_harian) as maksimum
+                FROM (
+                    SELECT tanggal,
+                           AVG(curah_hujan) as curah_hujan_harian,
+                           MAX(curah_hujan) as maksimum_harian
+                    FROM {$this->table}{$where}
+                    GROUP BY tanggal
+                ) daily
                 GROUP BY YEAR(tanggal)
                 ORDER BY tahun DESC
                 LIMIT " . (int)$limit;
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute();
+        $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     
@@ -242,6 +284,19 @@ class CurahHujan {
                 WHERE 1=1";
         $params = [];
         
+        if (!empty($filters['start_date'])) {
+            $sql .= " AND tanggal >= ?";
+            $params[] = $filters['start_date'];
+        }
+        if (!empty($filters['end_date'])) {
+            $sql .= " AND tanggal <= ?";
+            $params[] = $filters['end_date'];
+        }
+        if (!empty($filters['lokasi'])) {
+            $sql .= " AND lokasi = ?";
+            $params[] = $filters['lokasi'];
+        }
+
         // Apply year/month filters (exclude sumber_data_like)
         if (!empty($filters['year'])) {
             $sql .= " AND YEAR(tanggal) = ?";
@@ -276,17 +331,21 @@ class CurahHujan {
      * Insert single record
      * 
      * @param array $data
-     * @return int|false
+     * @return bool
      */
     public function insert($data) {
         $sql = "INSERT INTO {$this->table} 
-                (tanggal, lokasi, kecamatan_id, kode_wilayah, curah_hujan, satuan, sumber_data, keterangan)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (tanggal, lokasi, kecamatan_id, kecamatan, latitude, longitude, kode_wilayah,
+                 curah_hujan, satuan, sumber_data, keterangan)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                 curah_hujan = VALUES(curah_hujan),
-                sumber_data = VALUES(sumber_data),
                 keterangan = VALUES(keterangan),
                 kecamatan_id = VALUES(kecamatan_id),
+                kecamatan = VALUES(kecamatan),
+                latitude = VALUES(latitude),
+                longitude = VALUES(longitude),
+                kode_wilayah = VALUES(kode_wilayah),
                 updated_at = CURRENT_TIMESTAMP";
         
         $stmt = $this->db->prepare($sql);
@@ -294,6 +353,9 @@ class CurahHujan {
             $data['tanggal'],
             $data['lokasi'] ?? 'Jember',
             $data['kecamatan_id'] ?? null,
+            $data['kecamatan'] ?? null,
+            $data['latitude'] ?? null,
+            $data['longitude'] ?? null,
             $data['kode_wilayah'] ?? '35.09',
             $data['curah_hujan'],
             $data['satuan'] ?? 'mm',
@@ -301,7 +363,7 @@ class CurahHujan {
             $data['keterangan'] ?? null
         ]);
         
-        return $result ? $this->db->lastInsertId() : false;
+        return $result;
     }
     
     /**
@@ -313,8 +375,11 @@ class CurahHujan {
     public function bulkInsert($records) {
         $success = 0;
         $failed = 0;
-        
-        $this->db->beginTransaction();
+        $ownsTransaction = !$this->db->inTransaction();
+
+        if ($ownsTransaction) {
+            $this->db->beginTransaction();
+        }
         
         try {
             foreach ($records as $record) {
@@ -324,9 +389,15 @@ class CurahHujan {
                     $failed++;
                 }
             }
-            $this->db->commit();
-        } catch (Exception $e) {
-            $this->db->rollBack();
+
+            if ($ownsTransaction) {
+                $this->db->commit();
+            }
+        } catch (Throwable $e) {
+            if ($ownsTransaction && $this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+
             $failed = count($records);
             $success = 0;
             error_log("Bulk insert curah hujan failed: " . $e->getMessage());
@@ -486,6 +557,9 @@ class CurahHujan {
                 `tanggal` DATE NOT NULL,
                 `lokasi` VARCHAR(100) DEFAULT 'Jember',
                 `kecamatan_id` INT(11) DEFAULT NULL,
+                `kecamatan` VARCHAR(100) DEFAULT NULL,
+                `latitude` DECIMAL(10,7) DEFAULT NULL,
+                `longitude` DECIMAL(10,7) DEFAULT NULL,
                 `kode_wilayah` VARCHAR(20) DEFAULT NULL,
                 `curah_hujan` DECIMAL(10,2) NOT NULL,
                 `satuan` VARCHAR(10) DEFAULT 'mm',
@@ -494,7 +568,7 @@ class CurahHujan {
                 `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 PRIMARY KEY (`id`),
-                UNIQUE KEY `unique_tanggal_lokasi` (`tanggal`, `lokasi`),
+                UNIQUE KEY `unique_tanggal_lokasi_sumber` (`tanggal`, `lokasi`, `sumber_data`),
                 INDEX `idx_tanggal` (`tanggal`),
                 INDEX `idx_curah_hujan_kecamatan` (`kecamatan_id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
@@ -529,23 +603,35 @@ class CurahHujan {
      * @param int $endYear
      * @return array
      */
-    public function getTrendAnalysis($startYear = null, $endYear = null) {
+    public function getTrendAnalysis($startYear = null, $endYear = null, $filters = []) {
         $endYear = $endYear ?: date('Y');
         $startYear = $startYear ?: ($endYear - 4);
-        
-        $sql = "SELECT 
+
+        $where = "YEAR(tanggal) BETWEEN ? AND ?";
+        $params = [$startYear, $endYear];
+        if (!empty($filters['sumber_data_like'])) {
+            $where .= " AND sumber_data LIKE ?";
+            $params[] = $filters['sumber_data_like'];
+        }
+
+        // One regional value per day prevents totals being multiplied by 31 stations.
+        $sql = "SELECT
                     YEAR(tanggal) as tahun,
                     MONTH(tanggal) as bulan,
-                    ROUND(AVG(curah_hujan), 2) as rata_rata,
-                    SUM(curah_hujan) as total,
+                    ROUND(AVG(rata_rata_harian), 2) as rata_rata,
+                    ROUND(SUM(rata_rata_harian), 2) as total,
                     COUNT(*) as jumlah_data
-                FROM {$this->table}
-                WHERE YEAR(tanggal) BETWEEN ? AND ?
+                FROM (
+                    SELECT tanggal, AVG(curah_hujan) as rata_rata_harian
+                    FROM {$this->table}
+                    WHERE {$where}
+                    GROUP BY tanggal
+                ) regional_harian
                 GROUP BY YEAR(tanggal), MONTH(tanggal)
                 ORDER BY tahun, bulan";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$startYear, $endYear]);
+        $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     
@@ -555,28 +641,38 @@ class CurahHujan {
      * @param int $year
      * @return array
      */
-    public function getSeasonalPattern($year = null) {
+    public function getSeasonalPattern($year = null, $filters = []) {
         $year = $year ?: date('Y');
-        
-        // Get monthly data with classification
-        $sql = "SELECT 
+
+        $where = "YEAR(tanggal) = ?";
+        $params = [$year];
+        if (!empty($filters['sumber_data_like'])) {
+            $where .= " AND sumber_data LIKE ?";
+            $params[] = $filters['sumber_data_like'];
+        }
+
+        $sql = "SELECT
                     MONTH(tanggal) as bulan,
-                    ROUND(AVG(curah_hujan), 2) as rata_rata,
-                    SUM(curah_hujan) as total,
-                    COUNT(CASE WHEN curah_hujan > 0 THEN 1 END) as hari_hujan,
+                    ROUND(AVG(rata_rata_harian), 2) as rata_rata,
+                    ROUND(SUM(rata_rata_harian), 2) as total,
+                    SUM(rata_rata_harian > 0) as hari_hujan,
                     COUNT(*) as total_hari,
-                    CASE 
-                        WHEN AVG(curah_hujan) > 10 THEN 'Musim Hujan'
-                        WHEN AVG(curah_hujan) > 5 THEN 'Peralihan'
+                    CASE
+                        WHEN AVG(rata_rata_harian) > 10 THEN 'Musim Hujan'
+                        WHEN AVG(rata_rata_harian) > 5 THEN 'Peralihan'
                         ELSE 'Musim Kemarau'
                     END as klasifikasi
-                FROM {$this->table}
-                WHERE YEAR(tanggal) = ?
+                FROM (
+                    SELECT tanggal, AVG(curah_hujan) as rata_rata_harian
+                    FROM {$this->table}
+                    WHERE {$where}
+                    GROUP BY tanggal
+                ) regional_harian
                 GROUP BY MONTH(tanggal)
                 ORDER BY bulan";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$year]);
+        $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     
@@ -587,14 +683,22 @@ class CurahHujan {
      * @param float $threshold Standard deviation multiplier (default 2)
      * @return array
      */
-    public function getAnomalies($year = null, $threshold = 2.0) {
+    public function getAnomalies($year = null, $threshold = 2.0, $filters = []) {
         $year = $year ?: date('Y');
+        $threshold = max(0.1, min(10.0, (float) $threshold));
+
+        $sourceSql = '';
+        $sourceParams = [];
+        if (!empty($filters['sumber_data_like'])) {
+            $sourceSql = " AND sumber_data LIKE ?";
+            $sourceParams[] = $filters['sumber_data_like'];
+        }
         
         // First get statistics for the year
         $statsSQL = "SELECT AVG(curah_hujan) as mean, STDDEV(curah_hujan) as stddev 
-                     FROM {$this->table} WHERE YEAR(tanggal) = ?";
+                     FROM {$this->table} WHERE YEAR(tanggal) = ?{$sourceSql}";
         $stmt = $this->db->prepare($statsSQL);
-        $stmt->execute([$year]);
+        $stmt->execute(array_merge([$year], $sourceParams));
         $stats = $stmt->fetch(PDO::FETCH_ASSOC);
         
         $mean = floatval($stats['mean'] ?? 0);
@@ -612,11 +716,16 @@ class CurahHujan {
                     END as tipe_anomali
                 FROM {$this->table}
                 WHERE YEAR(tanggal) = ?
+                  {$sourceSql}
                   AND (curah_hujan > ? OR (curah_hujan < ? AND curah_hujan < ?))
                 ORDER BY curah_hujan DESC";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$upperLimit, $lowerLimit, $mean, $year, $upperLimit, $lowerLimit, $mean]);
+        $stmt->execute(array_merge(
+            [$upperLimit, $lowerLimit, $mean, $year],
+            $sourceParams,
+            [$upperLimit, $lowerLimit, $mean]
+        ));
         
         return [
             'statistics' => [
@@ -635,19 +744,30 @@ class CurahHujan {
      * @param int $months Number of months to predict
      * @return array
      */
-    public function getSimplePrediction($months = 3) {
-        // Get last 12 months of data for moving average calculation
-        $sql = "SELECT 
+    public function getSimplePrediction($months = 3, $filters = []) {
+        $months = max(1, min(12, (int) $months));
+        $sourceSql = '';
+        $params = [];
+        if (!empty($filters['sumber_data_like'])) {
+            $sourceSql = " AND sumber_data LIKE ?";
+            $params[] = $filters['sumber_data_like'];
+        }
+
+        $sql = "SELECT
                     DATE_FORMAT(tanggal, '%Y-%m') as periode,
-                    ROUND(AVG(curah_hujan), 2) as rata_rata
-                FROM {$this->table}
-                WHERE tanggal >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+                    ROUND(AVG(rata_rata_harian), 2) as rata_rata
+                FROM (
+                    SELECT tanggal, AVG(curah_hujan) as rata_rata_harian
+                    FROM {$this->table}
+                    WHERE tanggal >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH){$sourceSql}
+                    GROUP BY tanggal
+                ) regional_harian
                 GROUP BY DATE_FORMAT(tanggal, '%Y-%m')
                 ORDER BY periode DESC
                 LIMIT 12";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute();
+        $stmt->execute($params);
         $historicalData = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         if (count($historicalData) < 3) {
@@ -684,7 +804,7 @@ class CurahHujan {
      * @param int $month
      * @return array
      */
-    public function getRainfallByLocation($year = null, $month = null) {
+    public function getRainfallByLocation($year = null, $month = null, $filters = []) {
         $year = $year ?: date('Y');
         
         $sql = "SELECT 
@@ -701,6 +821,11 @@ class CurahHujan {
             $sql .= " AND MONTH(tanggal) = ?";
             $params[] = $month;
         }
+
+        if (!empty($filters['sumber_data_like'])) {
+            $sql .= " AND sumber_data LIKE ?";
+            $params[] = $filters['sumber_data_like'];
+        }
         
         $sql .= " GROUP BY lokasi ORDER BY total DESC";
         
@@ -716,7 +841,8 @@ class CurahHujan {
      * @param int $days Number of recent days to check
      * @return array
      */
-    public function getAlerts($threshold = 50.0, $days = 7) {
+    public function getAlerts($threshold = 50.0, $days = 7, $filters = []) {
+        $days = max(1, min(365, (int) $days));
         $sql = "SELECT 
                     id, tanggal, lokasi, curah_hujan, sumber_data,
                     CASE 
@@ -726,11 +852,18 @@ class CurahHujan {
                     END as level
                 FROM {$this->table}
                 WHERE tanggal >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-                  AND curah_hujan > ?
-                ORDER BY curah_hujan DESC";
+                  AND curah_hujan > ?";
+        $params = [$threshold, $threshold, $days, $threshold];
+
+        if (!empty($filters['sumber_data_like'])) {
+            $sql .= " AND sumber_data LIKE ?";
+            $params[] = $filters['sumber_data_like'];
+        }
+
+        $sql .= " ORDER BY curah_hujan DESC";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$threshold, $threshold, $days, $threshold]);
+        $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     
@@ -741,22 +874,35 @@ class CurahHujan {
      * @param int $month
      * @return array
      */
-    public function getDailyData($year = null, $month = null) {
+    public function getDailyData($year = null, $month = null, $filters = []) {
         $year = $year ?: date('Y');
         $month = $month ?: date('n');
         
         $sql = "SELECT 
                     DAY(tanggal) as hari,
                     tanggal,
-                    curah_hujan,
-                    lokasi,
-                    sumber_data
+                    ROUND(AVG(curah_hujan), 2) as curah_hujan,
+                    MAX(curah_hujan) as maksimum,
+                    COUNT(*) as jumlah_lokasi
                 FROM {$this->table}
-                WHERE YEAR(tanggal) = ? AND MONTH(tanggal) = ?
+                WHERE YEAR(tanggal) = ? AND MONTH(tanggal) = ?";
+        $params = [$year, $month];
+
+        if (!empty($filters['sumber_data_like'])) {
+            $sql .= " AND sumber_data LIKE ?";
+            $params[] = $filters['sumber_data_like'];
+        }
+        if (!empty($filters['lokasi'])) {
+            $sql .= " AND lokasi = ?";
+            $params[] = $filters['lokasi'];
+        }
+
+        $sql .= "
+                GROUP BY tanggal
                 ORDER BY tanggal";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$year, $month]);
+        $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }

@@ -3,6 +3,13 @@ require_once ROOT_PATH . '/app/core/Cache.php';
 
 class MasterOpt extends Model {
     protected $table = 'master_opt';
+    protected $fillable = [
+        'kode_opt', 'nama_opt', 'nama_ilmiah', 'nama_lokal', 'jenis',
+        'status_karantina', 'tingkat_bahaya', 'kategori', 'kingdom',
+        'filum', 'kelas', 'ordo', 'famili', 'genus', 'etl_acuan',
+        'satuan_etl', 'foto_url', 'deskripsi', 'rekomendasi', 'referensi',
+        'aktif', 'created_at', 'updated_at',
+    ];
     
     /**
      * Get OPT by type (jenis)
@@ -77,6 +84,8 @@ class MasterOpt extends Model {
      * Paginated results with filters
      */
     public function paginate($page = 1, $perPage = 10, $filters = [], $keyword = null) {
+        $page = max(1, (int) $page);
+        $perPage = max(1, min(100, (int) $perPage));
         $offset = ($page - 1) * $perPage;
         
         $sql = "SELECT * FROM master_opt WHERE 1=1";
@@ -211,7 +220,7 @@ class MasterOpt extends Model {
             $options = [];
             
             // Jenis
-            $options['jenis'] = ['Hama', 'Penyakit', 'Gulma'];
+            $options['jenis'] = ['hama', 'penyakit', 'gulma'];
             
             // Status Karantina
             $options['status_karantina'] = ['Tidak', 'OPTK A1', 'OPTK A2', 'OPTK B'];
@@ -220,7 +229,11 @@ class MasterOpt extends Model {
             $options['tingkat_bahaya'] = ['Rendah', 'Sedang', 'Tinggi', 'Sangat Tinggi'];
             
             // Kingdom (static options — column not present in table)
-            $options['kingdom'] = [];
+            $stmt = $this->db->query(
+                "SELECT DISTINCT kingdom FROM master_opt
+                 WHERE kingdom IS NOT NULL AND kingdom <> '' ORDER BY kingdom"
+            );
+            $options['kingdom'] = $stmt->fetchAll(PDO::FETCH_COLUMN);
             
             return $options;
         }, 3600);
@@ -230,11 +243,10 @@ class MasterOpt extends Model {
      * Clear cache when OPT is created/updated/deleted
      */
     public function clearCache() {
-        $files = glob(ROOT_PATH . '/storage/cache/*.cache');
-        foreach ($files as $file) {
-            if (strpos($file, 'master_opt') !== false) {
-                @unlink($file);
-            }
+        Cache::delete('master_opt_stats');
+        Cache::delete('master_opt_filter_options');
+        foreach (['hama', 'penyakit', 'gulma'] as $jenis) {
+            Cache::delete('master_opt_jenis_' . $jenis);
         }
     }
     
@@ -242,24 +254,27 @@ class MasterOpt extends Model {
      * Override create to clear cache
      */
     public function create($data) {
+        $result = parent::create($data);
         $this->clearCache();
-        return parent::create($data);
+        return $result;
     }
     
     /**
      * Override update to clear cache
      */
     public function update($id, $data) {
+        $result = parent::update($id, $data);
         $this->clearCache();
-        return parent::update($id, $data);
+        return $result;
     }
     
     /**
      * Override delete to clear cache
      */
     public function delete($id) {
+        $result = parent::delete($id);
         $this->clearCache();
-        return parent::delete($id);
+        return $result;
     }
 
     public function getById($id) {
@@ -289,7 +304,7 @@ class MasterOpt extends Model {
             $params[] = (int)$filters['aktif'];
         }
         if (!empty($filters['search'])) {
-            $sql .= " AND (nama_opt LIKE ? OR nama_latin LIKE ? OR nama_ilmiah LIKE ?)";
+            $sql .= " AND (nama_opt LIKE ? OR nama_ilmiah LIKE ? OR nama_lokal LIKE ?)";
             $search = '%' . $filters['search'] . '%';
             $params[] = $search;
             $params[] = $search;
@@ -325,7 +340,7 @@ class MasterOpt extends Model {
             $params[] = (int)$filters['aktif'];
         }
         if (!empty($filters['search'])) {
-            $sql .= " AND (nama_opt LIKE ? OR nama_latin LIKE ? OR nama_ilmiah LIKE ?)";
+            $sql .= " AND (nama_opt LIKE ? OR nama_ilmiah LIKE ? OR nama_lokal LIKE ?)";
             $search = '%' . $filters['search'] . '%';
             $params[] = $search;
             $params[] = $search;
@@ -346,7 +361,11 @@ class MasterOpt extends Model {
     public function toggleStatus($id) {
         $sql = "UPDATE master_opt SET aktif = CASE WHEN aktif = 1 THEN 0 ELSE 1 END WHERE id = ?";
         $stmt = $this->db->prepare($sql);
-        return $stmt->execute([$id]);
+        $result = $stmt->execute([$id]);
+        if ($result) {
+            $this->clearCache();
+        }
+        return $result;
     }
 
     public function getStatistics() {

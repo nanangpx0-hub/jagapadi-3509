@@ -92,10 +92,12 @@ class WindAnalyticsService {
      * @return array Beaufort scale info with scale number, description, and impact
      */
     public function convertToBeaufortScale($speedKmh) {
-        $speed = floatval($speedKmh);
+        $speed = max(0.0, floatval($speedKmh));
         
         foreach ($this->beaufortScale as $scale => $data) {
-            if ($speed >= $data['min'] && $speed <= $data['max']) {
+            // Upper-bound lookup avoids decimal gaps between the integer labels
+            // in the configured Beaufort ranges (for example 5.5 km/h).
+            if ($speed <= $data['max']) {
                 return [
                     'scale' => $scale,
                     'description' => $data['desc'],
@@ -297,7 +299,10 @@ class WindAnalyticsService {
                     ROUND(AVG(kecepatan_angin), 2) as avg_speed,
                     MAX(kecepatan_max) as max_speed,
                     MIN(kecepatan_angin) as min_speed,
-                    AVG(arah_angin) as avg_direction,
+                    MOD(DEGREES(ATAN2(
+                        AVG(SIN(RADIANS(arah_angin))),
+                        AVG(COS(RADIANS(arah_angin)))
+                    )) + 360, 360) as avg_direction,
                     COUNT(*) as data_points
                 FROM kecepatan_angin
                 WHERE tanggal = ?";

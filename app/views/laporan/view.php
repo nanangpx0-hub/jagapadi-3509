@@ -10,7 +10,10 @@
                     <a href="<?= BASE_URL ?>laporan/edit/<?= $laporan['id'] ?>" class="btn btn-warning btn-sm">
                         <i class="fas fa-edit"></i> Edit
                     </a>
-                    <?php if(($laporan['status'] ?? '') !== 'Diarsipkan'): ?>
+                    <?php if(
+                        in_array($_SESSION['role'] ?? '', ['admin', 'operator'], true)
+                        && in_array($laporan['status'] ?? '', ['Submitted', 'Diverifikasi'], true)
+                    ): ?>
                     <form action="<?= BASE_URL ?>laporan/archive/<?= $laporan['id'] ?>" method="POST" class="d-inline">
                         <?= Security::getCsrfField() ?>
                         <button type="submit" class="btn btn-secondary btn-sm" onclick="return confirm('Arsipkan laporan ini? Laporan tidak lagi dihitung sebagai laporan aktif.')">

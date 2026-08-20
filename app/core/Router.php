@@ -74,7 +74,7 @@ class Router {
         $this->get('/api/laporan-hama/{id}', 'Api\LaporanHamaController@show', ['auth']);
         $this->post('/api/laporan-hama', 'Api\LaporanHamaController@store', ['auth']);
         $this->post('/api/laporan-hama/{id}/submit', 'Api\LaporanHamaController@submit', ['auth']);
-        $this->post('/api/laporan-hama/{id}/archive', 'Api\LaporanHamaController@archive', ['auth']);
+        $this->post('/api/laporan-hama/{id}/archive', 'Api\LaporanHamaController@archive', ['auth', 'operator']);
         $this->put('/api/laporan-hama/{id}', 'Api\LaporanHamaController@update', ['auth']);
         $this->delete('/api/laporan-hama/{id}', 'Api\LaporanHamaController@destroy', ['auth', 'admin']);
 
@@ -138,6 +138,7 @@ class Router {
         $this->get('/api/dashboard/map/hama', 'Api\DashboardMapApiController@hama', ['auth']);
         $this->get('/api/dashboard/map/irigasi', 'Api\DashboardMapApiController@irigasi', ['auth']);
         $this->get('/api/dashboard/map/weather', 'Api\DashboardMapApiController@weather', ['auth']);
+        $this->get('/api/dashboard/map/wind', 'Api\DashboardMapApiController@wind', ['auth']);
         $this->get('/api/dashboard/map/all', 'Api\DashboardMapApiController@all', ['auth']);
         $this->get('/api/dashboard/map/hamaSummary', 'Api\DashboardMapApiController@hamaSummary', ['auth']);
 
@@ -166,6 +167,10 @@ class Router {
         $this->delete('/api/users/{id}', 'Api\UserController@destroy', ['auth', 'admin']);
         $this->post('/api/users/{id}/toggle-status', 'Api\UserController@toggleStatus', ['auth', 'admin']);
         $this->post('/api/users/{id}/force-password-change', 'Api\UserController@setForcePasswordChange', ['auth', 'admin']);
+
+        // Feedback rekap dan daftar global eksklusif untuk Admin.
+        $this->get('/api/feedback/summary', 'Api\FeedbackController@summary', ['auth', 'admin']);
+        $this->get('/api/feedback', 'Api\FeedbackController@index', ['auth', 'admin']);
 
         // OPT API Routes
         $this->get('/api/opt', 'Api\OptController@index', ['auth']);
@@ -204,7 +209,12 @@ class Router {
         $this->put('/laporan-lainnya/{id}', 'LaporanLainnyaController@update', ['auth']);
         $this->get('/laporan-lainnya/{id}', 'LaporanLainnyaController@show', ['auth']);
         $this->post('/laporan-lainnya/{id}/submit', 'LaporanLainnyaController@submit', ['auth']);
+        $this->post('/laporan-lainnya/verify/{id}', 'LaporanLainnyaController@verify', ['auth', 'admin']);
+        $this->post('/laporan-lainnya/reject/{id}', 'LaporanLainnyaController@reject', ['auth', 'admin']);
+        $this->post('/laporan-lainnya/archive/{id}', 'LaporanLainnyaController@archive', ['auth', 'admin']);
         $this->delete('/laporan-lainnya/{id}', 'LaporanLainnyaController@destroy', ['auth', 'admin']);
+        $this->get('/laporan-lainnya/summary', 'LaporanLainnyaController@summary', ['auth', 'petugas']);
+        $this->post('/laporan-lainnya/export', 'LaporanLainnyaController@export', ['auth', 'petugas']);
 
         // Laporan Lainnya API Routes
         $this->get('/api/v1/jenis-laporan', 'Api\LaporanLainnyaController@jenisIndex', ['auth']);
@@ -215,12 +225,27 @@ class Router {
         $this->post('/api/v1/laporan-lainnya/{id}/submit', 'Api\LaporanLainnyaController@submit', ['auth']);
         $this->delete('/api/v1/laporan-lainnya/{id}', 'Api\LaporanLainnyaController@destroy', ['auth', 'admin']);
         $this->post('/api/v1/laporan-lainnya/{id}/foto', 'Api\LaporanLainnyaController@uploadFoto', ['auth']);
+        $this->get('/api/v1/laporan-lainnya/summary', 'Api\LaporanLainnyaController@summary', ['auth', 'petugas']);
+        $this->get('/api/v1/laporan-lainnya/export', 'Api\LaporanLainnyaController@export', ['auth', 'petugas']);
 
         // Utility API Routes (migrated from api/*.php)
         $this->get('/api/utilities/recent-activity', 'Api\UtilityController@recentActivity', ['auth', 'admin']);
         $this->get('/api/utilities/kecamatan-stats', 'Api\UtilityController@kecamatanStats', ['auth', 'admin']);
         $this->get('/api/utilities/desa-filter', 'Api\UtilityController@desaFilter', ['auth', 'admin']);
         $this->get('/api/utilities/desa-autocomplete', 'Api\UtilityController@desaAutocomplete', ['auth', 'admin']);
+
+        // BPS Data Public API Routes (external_auth via X-API-Key, rate_limit: 100/min)
+        $this->get('/api/v1/bps/data', 'ApiBpsController@data', ['external_auth', 'rate_limit']);
+        $this->get('/api/v1/bps/statistics', 'ApiBpsController@statistics', ['external_auth', 'rate_limit']);
+        $this->get('/api/v1/bps/trend', 'ApiBpsController@trend', ['external_auth', 'rate_limit']);
+        $this->get('/api/v1/bps/provinsi', 'ApiBpsController@provinsi', ['external_auth', 'rate_limit']);
+        $this->get('/api/v1/bps/kabupaten-list', 'ApiBpsController@kabupaten', ['external_auth', 'rate_limit']);
+        $this->post('/api/v1/bps/scrape', 'ApiBpsController@scrape', ['external_auth', 'rate_limit']);
+        $this->get('/api/v1/bps/status/{jobId}', 'ApiBpsController@status', ['external_auth', 'rate_limit']);
+
+        // Scraper Queue Routes (background scraping job queue)
+        $this->post('/api/scraper-queue/run', 'ScraperQueueController@runScraperAsync', ['auth', 'admin']);
+        $this->get('/api/scraper-queue/status/{jobId}', 'ScraperQueueController@getJobStatus', ['auth', 'admin']);
     }
 
     /**
@@ -379,6 +404,13 @@ class Router {
                     if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin', 'statistisi'])) {
                         $this->sendJsonResponse(['error' => 'Forbidden'], 403);
                         exit; // Stop execution after sending response
+                    }
+                    break;
+
+                case 'petugas':
+                    if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'petugas') {
+                        $this->sendJsonResponse(['error' => 'Forbidden: Akses khusus untuk Petugas Lapangan'], 403);
+                        exit;
                     }
                     break;
 

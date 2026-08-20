@@ -1,5 +1,21 @@
 <?php
 class LaporanHama extends Model {
+    private const ACTIVE_STATUSES = ['Submitted', 'Diverifikasi'];
+
+    private const STATUS_FILTER_ALIASES = [
+        'draft' => 'Draf',
+        'draf' => 'Draf',
+        'submitted' => 'Submitted',
+        'diverifikasi' => 'Diverifikasi',
+        'verified' => 'Diverifikasi',
+        'ditolak' => 'Ditolak',
+        'rejected' => 'Ditolak',
+        'diarsipkan' => 'Diarsipkan',
+        'archived' => 'Diarsipkan',
+        'aktif' => 'Aktif',
+        'active' => 'Aktif',
+    ];
+
     protected $table = 'laporan_hama';
 protected $fillable = [
         'user_id',
@@ -118,45 +134,73 @@ protected $fillable = [
      * Get reports by status using QueryBuilder
      */
     public function getByStatus(string $status): array {
+        $status = self::normalizeStatusFilter($status);
         $qb = new QueryBuilder();
-        return $qb->table('laporan_hama lh')
-                  ->select([
-                      'lh.*',
-                      'u.nama_lengkap as pelapor_nama',
-                      'u.username as pelapor_username',
-                      'u.role as pelapor_role',
-                      'mo.nama_opt',
-                      'mo.jenis',
-                      'mo.etl_acuan'
-                  ])
-                  ->leftJoin('users u', 'lh.user_id = u.id')
-                  ->leftJoin('master_opt mo', 'lh.master_opt_id = mo.id')
-                  ->where('lh.status', $status)
-                  ->orderBy('lh.created_at', 'DESC')
-                  ->get();
+        $qb->table('laporan_hama lh')
+           ->select([
+               'lh.*',
+               'u.nama_lengkap as pelapor_nama',
+               'u.username as pelapor_username',
+               'u.role as pelapor_role',
+               'mo.nama_opt',
+               'mo.jenis',
+               'mo.etl_acuan'
+           ])
+           ->leftJoin('users u', 'lh.user_id = u.id')
+           ->leftJoin('master_opt mo', 'lh.master_opt_id = mo.id');
+
+        $this->applyStatusFilter($qb, $status);
+
+        return $qb->orderBy('lh.created_at', 'DESC')->get();
     }
 
     /**
      * Get reports by status and user using QueryBuilder
      */
     public function getByStatusAndUser(string $status, int $userId): array {
+        $status = self::normalizeStatusFilter($status);
         $qb = new QueryBuilder();
-        return $qb->table('laporan_hama lh')
-                  ->select([
-                      'lh.*',
-                      'u.nama_lengkap as pelapor_nama',
-                      'u.username as pelapor_username',
-                      'u.role as pelapor_role',
-                      'mo.nama_opt',
-                      'mo.jenis',
-                      'mo.etl_acuan'
-                  ])
-                  ->leftJoin('users u', 'lh.user_id = u.id')
-                  ->leftJoin('master_opt mo', 'lh.master_opt_id = mo.id')
-                  ->where('lh.status', $status)
-                  ->where('lh.user_id', $userId)
+        $qb->table('laporan_hama lh')
+           ->select([
+               'lh.*',
+               'u.nama_lengkap as pelapor_nama',
+               'u.username as pelapor_username',
+               'u.role as pelapor_role',
+               'mo.nama_opt',
+               'mo.jenis',
+               'mo.etl_acuan'
+           ])
+           ->leftJoin('users u', 'lh.user_id = u.id')
+           ->leftJoin('master_opt mo', 'lh.master_opt_id = mo.id');
+
+        $this->applyStatusFilter($qb, $status);
+
+        return $qb->where('lh.user_id', $userId)
                   ->orderBy('lh.created_at', 'DESC')
                   ->get();
+    }
+
+    public static function normalizeStatusFilter(string $status): string {
+        $status = trim($status);
+        if ($status === '') {
+            return '';
+        }
+
+        $normalized = self::STATUS_FILTER_ALIASES[strtolower($status)] ?? null;
+        if ($normalized === null) {
+            throw new InvalidArgumentException('Filter status laporan tidak valid.');
+        }
+
+        return $normalized;
+    }
+
+    private function applyStatusFilter(QueryBuilder $qb, string $status): void {
+        if ($status === 'Aktif') {
+            $qb->whereIn('lh.status', self::ACTIVE_STATUSES);
+            return;
+        }
+
+        $qb->where('lh.status', $status);
     }
 
     /**
@@ -204,6 +248,8 @@ protected $fillable = [
         if ($userId !== null) {
             $qb->where('lh.user_id', $userId);
         }
+
+        $qb->where('lh.status', 'Draf', '!=');
 
         $reports = $qb->orderBy('lh.created_at', 'DESC')
             ->limit($limit)
@@ -285,6 +331,32 @@ protected $fillable = [
     public function count(): int {
         $qb = new QueryBuilder();
         return $qb->table('laporan_hama')->count();
+    }
+
+    /**
+     * Return report totals grouped by status, optionally scoped to one user.
+     *
+     * @return array<string, int>
+     */
+    public function getStatusCounts(?int $userId = null): array {
+        $sql = 'SELECT status, COUNT(*) AS total FROM laporan_hama';
+        $params = [];
+
+        if ($userId !== null) {
+            $sql .= ' WHERE user_id = :user_id';
+            $params[':user_id'] = $userId;
+        }
+
+        $sql .= ' GROUP BY status';
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+
+        $counts = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $counts[(string) $row['status']] = (int) $row['total'];
+        }
+
+        return $counts;
     }
 
     /**
@@ -521,11 +593,97 @@ protected $fillable = [
                   ->update($data);
     }
 
-    public function archive(int $id): bool {
-        return (bool) $this->update($id, [
-            'status' => 'Diarsipkan',
-            'updated_at' => date('Y-m-d H:i:s')
-        ]);
+    public function archive(
+        int $id,
+        int $changedBy,
+        string $comment = 'Laporan diarsipkan',
+        string $ipAddress = '',
+        string $userAgent = ''
+    ): bool {
+        if ($id <= 0 || $changedBy <= 0) {
+            throw new InvalidArgumentException('ID laporan dan pengguna harus valid');
+        }
+
+        $ownsTransaction = !$this->db->inTransaction();
+        if ($ownsTransaction) {
+            $this->db->beginTransaction();
+        }
+
+        try {
+            $select = $this->db->prepare(
+                'SELECT status FROM laporan_hama WHERE id = ? FOR UPDATE'
+            );
+            $select->execute([$id]);
+            $status = $select->fetchColumn();
+
+            if ($status === false) {
+                throw new RuntimeException('Laporan tidak ditemukan');
+            }
+
+            if ($status === 'Diarsipkan') {
+                if ($ownsTransaction) {
+                    $this->db->commit();
+                }
+                return false;
+            }
+
+            // Alur web legacy membuat laporan langsung aktif sebagai Submitted.
+            // Data lama Diverifikasi tetap dapat diarsipkan untuk kompatibilitas.
+            if (!in_array($status, ['Submitted', 'Diverifikasi'], true)) {
+                throw new LogicException(
+                    "Laporan berstatus {$status} tidak dapat diarsipkan"
+                );
+            }
+
+            $update = $this->db->prepare(
+                "UPDATE laporan_hama
+                 SET status = 'Diarsipkan'
+                 WHERE id = ? AND status = ?"
+            );
+            $update->execute([$id, $status]);
+            if ($update->rowCount() !== 1) {
+                throw new RuntimeException('Status laporan berubah selama proses pengarsipan');
+            }
+
+            $history = $this->db->prepare(
+                'INSERT INTO laporan_status_history
+                    (laporan_id, old_status, new_status, changed_by, komentar)
+                 VALUES (?, ?, ?, ?, ?)'
+            );
+            $history->execute([
+                $id,
+                $status,
+                'Diarsipkan',
+                $changedBy,
+                mb_substr(trim($comment), 0, 2000),
+            ]);
+
+            $activity = $this->db->prepare(
+                'INSERT INTO activity_log
+                    (user_id, action, table_name, record_id, description, ip_address, user_agent)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)'
+            );
+            $activity->execute([
+                $changedBy,
+                'laporan_hama_archived',
+                'laporan_hama',
+                $id,
+                'Laporan hama diarsipkan dari status ' . $status,
+                mb_substr($ipAddress, 0, 45),
+                mb_substr($userAgent, 0, 500),
+            ]);
+
+            if ($ownsTransaction) {
+                $this->db->commit();
+            }
+
+            return true;
+        } catch (Throwable $e) {
+            if ($ownsTransaction && $this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            throw $e;
+        }
     }
 
     /**
@@ -533,6 +691,41 @@ protected $fillable = [
      * Format: LH-YYYYMM-NNNN (e.g., LH-202607-0001)
      */
     public function generateNomorLaporan(string $prefix = 'LH'): string {
+        return $this->withNomorLaporanLock(
+            $prefix,
+            fn(): string => $this->nextNomorLaporan($prefix)
+        );
+    }
+
+    public function createSubmitted(array $data): int {
+        return $this->withNomorLaporanLock('LH', function () use ($data): int {
+            $data['status'] = 'Submitted';
+            $data['nomor_laporan'] = $this->nextNomorLaporan('LH');
+
+            return (int) $this->create($data);
+        });
+    }
+
+    public function resubmit(int $id, array $data): bool {
+        $report = $this->find($id);
+        if (!$report || !in_array($report['status'] ?? '', ['Draf', 'Ditolak'], true)) {
+            throw new LogicException('Hanya laporan Draf atau Ditolak yang dapat disubmit ulang');
+        }
+
+        return $this->withNomorLaporanLock('LH', function () use ($id, $data, $report): bool {
+            $data['status'] = 'Submitted';
+            $data['nomor_laporan'] = !empty($report['nomor_laporan'])
+                ? $report['nomor_laporan']
+                : $this->nextNomorLaporan('LH');
+            $data['verified_by'] = null;
+            $data['verified_at'] = null;
+            $data['catatan_verifikasi'] = null;
+
+            return $this->update($id, $data);
+        });
+    }
+
+    private function withNomorLaporanLock(string $prefix, callable $callback) {
         $year = date('Y');
         $month = date('m');
         $lockName = "nomor_laporan_{$prefix}_{$year}{$month}";
@@ -546,19 +739,25 @@ protected $fillable = [
         }
         
         try {
-            $stmt = $this->db->prepare(
-                "SELECT COUNT(*) FROM laporan_hama 
-                 WHERE YEAR(created_at) = ? AND MONTH(created_at) = ? 
-                 AND status != 'Draf'"
-            );
-            $stmt->execute([$year, $month]);
-            $count = (int)$stmt->fetchColumn() + 1;
-            
-            return sprintf('%s-%s%s-%04d', $prefix, $year, $month, $count);
+            return $callback();
         } finally {
             $stmt = $this->db->prepare("SELECT RELEASE_LOCK(?)");
             $stmt->execute([$lockName]);
         }
+    }
+
+    private function nextNomorLaporan(string $prefix): string {
+        $yearMonth = date('Ym');
+        $numberPrefix = $prefix . '-' . $yearMonth . '-';
+        $stmt = $this->db->prepare(
+            'SELECT COALESCE(MAX(CAST(RIGHT(nomor_laporan, 4) AS UNSIGNED)), 0)
+             FROM laporan_hama
+             WHERE nomor_laporan LIKE ?'
+        );
+        $stmt->execute([$numberPrefix . '%']);
+        $sequence = (int) $stmt->fetchColumn() + 1;
+
+        return sprintf('%s-%04d', rtrim($numberPrefix, '-'), $sequence);
     }
 
     /**
@@ -663,7 +862,8 @@ protected $fillable = [
                     SUM(CASE WHEN status = 'Diverifikasi' THEN 1 ELSE 0 END) as terverifikasi,
                     SUM(CASE WHEN status = 'Draf' THEN 1 ELSE 0 END) as draf,
                     SUM(CASE WHEN status = 'Ditolak' THEN 1 ELSE 0 END) as ditolak,
-                    SUM(CASE WHEN tingkat_keparahan = 'Berat' THEN 1 ELSE 0 END) as keparahan_berat,
+                    SUM(CASE WHEN status IN ('Submitted', 'Diverifikasi')
+                                  AND tingkat_keparahan = 'Berat' THEN 1 ELSE 0 END) as keparahan_berat,
                     SUM(CASE WHEN status IN ('Submitted', 'Diverifikasi') THEN luas_serangan ELSE 0 END) as total_luas,
                     SUM(CASE WHEN status IN ('Submitted', 'Diverifikasi') THEN populasi ELSE 0 END) as total_populasi
                 FROM laporan_hama {$whereSQL}";
@@ -726,7 +926,8 @@ protected $fillable = [
                     0 as pending,
                     SUM(luas_serangan) as total_luas
                 FROM laporan_hama
-                WHERE YEAR(tanggal) = :year";
+                WHERE YEAR(tanggal) = :year
+                AND status IN ('Submitted', 'Diverifikasi')";
 
             if ($userId !== null) {
                 $sql .= " AND user_id = :user_id";
@@ -799,6 +1000,8 @@ protected $fillable = [
         $sql = "
             SELECT
                 lh.id,
+                lh.nomor_laporan,
+                lh.user_id,
                 lh.tanggal,
                 lh.lokasi,
                 lh.latitude,
@@ -930,6 +1133,31 @@ protected $fillable = [
             ->leftJoin('master_desa md', 'lh.desa_id = md.id')
             ->leftJoin('master_kecamatan mk', 'md.kecamatan_id = mk.id')
             ->leftJoin('master_kabupaten mkab', 'mk.kabupaten_id = mkab.id')
+            ->where('lh.id', $id)
+            ->first();
+    }
+
+    /**
+     * Get report detail by ID for detail view
+     * Includes laporan data, OPT info, pelapor (reporter), and verifikator
+     */
+    public function getDetailById($id) {
+        $qb = new QueryBuilder();
+        return $qb->table('laporan_hama lh')
+            ->select([
+                'lh.*',
+                'mo.kode_opt',
+                'mo.nama_opt',
+                'mo.jenis',
+                'mo.etl_acuan',
+                'mo.deskripsi AS rekomendasi',
+                'u.nama_lengkap as pelapor_nama',
+                'u.email as pelapor_email',
+                'v.nama_lengkap as verifikator_nama'
+            ])
+            ->leftJoin('master_opt mo', 'lh.master_opt_id = mo.id')
+            ->leftJoin('users u', 'lh.user_id = u.id')
+            ->leftJoin('users v', 'lh.verified_by = v.id')
             ->where('lh.id', $id)
             ->first();
     }
@@ -1169,21 +1397,14 @@ protected $fillable = [
 
             // Status filter
             if (!empty($filters['status'])) {
-                $statusVal = trim((string)$filters['status']);
-                $statusMap = [
-                    'draft' => 'Draf',
-                    'draf' => 'Draf',
-                    'submitted' => 'Submitted',
-                    'diverifikasi' => 'Diverifikasi',
-                    'verified' => 'Diverifikasi',
-                    'ditolak' => 'Ditolak',
-                    'rejected' => 'Ditolak',
-                    'diarsipkan' => 'Diarsipkan',
-                    'archived' => 'Diarsipkan',
-                ];
-                $normalizedStatus = $statusMap[strtolower($statusVal)] ?? $statusVal;
-                $where[] = 'lh.status = ?';
-                $params[] = $normalizedStatus;
+                $normalizedStatus = self::normalizeStatusFilter((string) $filters['status']);
+                if ($normalizedStatus === 'Aktif') {
+                    $where[] = 'lh.status IN (?, ?)';
+                    array_push($params, ...self::ACTIVE_STATUSES);
+                } else {
+                    $where[] = 'lh.status = ?';
+                    $params[] = $normalizedStatus;
+                }
                 error_log("[LaporanHama::fetchPaginated] Filtering by status={$normalizedStatus}");
             }
 
@@ -1209,6 +1430,15 @@ protected $fillable = [
                 error_log("[LaporanHama::fetchPaginated] Filtering by kecamatan_id={$filters['kecamatan_id']}");
             }
 
+            if (!empty($filters['date_from'])) {
+                $where[] = 'lh.tanggal >= ?';
+                $params[] = $filters['date_from'];
+            }
+            if (!empty($filters['date_to'])) {
+                $where[] = 'lh.tanggal <= ?';
+                $params[] = $filters['date_to'];
+            }
+
             $whereSQL = implode(' AND ', $where);
             error_log("[LaporanHama::fetchPaginated] WHERE clause: $whereSQL");
             error_log("[LaporanHama::fetchPaginated] Params: " . json_encode($params));
@@ -1221,6 +1451,8 @@ protected $fillable = [
             error_log("[LaporanHama::fetchPaginated] Total records: $total");
 
             // Total pages
+            // PERBAIKAN 10: Hard limit 5.000 records per page
+            $perPage = min($perPage, 5000);
             $totalPages = $perPage > 0 ? max(1, (int)ceil($total / $perPage)) : 1;
             $page = max(1, min($page, $totalPages));
 
@@ -1273,14 +1505,7 @@ protected $fillable = [
             }
 
             // Status counts for filter badges
-            $statusSQL = "SELECT status, COUNT(*) as cnt FROM laporan_hama lh WHERE " . ($userId !== null ? "lh.user_id = ? AND " : "") . "1=1 GROUP BY status";
-            $sParams = $userId !== null ? [$userId] : [];
-            $sStmt = $this->db->prepare($statusSQL);
-            $sStmt->execute($sParams);
-            $statusCounts = [];
-            while ($r = $sStmt->fetch(PDO::FETCH_ASSOC)) {
-                $statusCounts[$r['status']] = (int)$r['cnt'];
-            }
+            $statusCounts = $this->getStatusCounts($userId);
             error_log("[LaporanHama::fetchPaginated] Status counts: " . json_encode($statusCounts));
 
             return [

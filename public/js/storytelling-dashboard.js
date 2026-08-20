@@ -2,7 +2,7 @@
  * Storytelling Dashboard JavaScript Module
  * 
  * Handles data storytelling dashboard interactions, chart rendering,
- * and AJAX communication for production causality analysis.
+ * and AJAX communication for rule-based production relationship analysis.
  * 
  * @version 1.0.0
  * @author JAGAPADI System - Data Storytelling Module
@@ -22,6 +22,9 @@ const StorytellingDashboard = (function() {
     const state = {
         correlationChart: null,
         currentAnalysis: null,
+        analysisKey: null,
+        filterDirty: false,
+        chartRequestId: 0,
         isAnalyzing: false
     };
     
@@ -51,6 +54,8 @@ const StorytellingDashboard = (function() {
         narasiOtomatis: null,
         narasiFinal: null,
         existingWarning: null,
+        staleWarning: null,
+        dataQuality: null,
         
         // Chart
         correlationChart: null,
@@ -64,7 +69,7 @@ const StorytellingDashboard = (function() {
     // Timer state
     let processTimer = null;
     let processStartTime = 0;
-    const WARNING_THRESHOLD = 300; // 5 minutes in seconds
+    const WARNING_THRESHOLD = 20;
 
     /**
      * Initialize the dashboard
@@ -77,6 +82,9 @@ const StorytellingDashboard = (function() {
         
         // Bind event listeners
         bindEvents();
+
+        // Chart must exist before the first response is rendered.
+        initChart();
         
         // Load recent analyses on start
         loadRecentAnalyses();
@@ -87,7 +95,11 @@ const StorytellingDashboard = (function() {
     /**
      * Helper to handle fetch requests and check for 401/403 session timeout
      */
-    const FETCH_TIMEOUT_MS = 30000;
+    const FETCH_TIMEOUT_MS = 35000;
+
+    function endpoint(path) {
+        return `${config.baseUrl.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
+    }
 
     async function apiFetch(url, options = {}) {
         const controller = new AbortController();
@@ -101,10 +113,12 @@ const StorytellingDashboard = (function() {
 
             clearTimeout(timeoutId);
 
-            if (response.status === 401 || response.status === 403) {
+            const redirectedToLogin = response.redirected
+                && /\/auth\/login\/?(?:\?|$)/.test(response.url);
+            if (response.status === 401 || response.status === 403 || redirectedToLogin) {
                 showAlert('Sesi Anda telah habis. Mengalihkan ke halaman login...', 'warning');
                 setTimeout(() => {
-                    window.location.href = `${config.baseUrl}/auth/login`;
+                    window.location.href = endpoint('auth/login');
                 }, 2000);
                 throw new Error('Unauthorized');
             }
@@ -114,14 +128,7 @@ const StorytellingDashboard = (function() {
             clearTimeout(timeoutId);
 
             if (error.name === 'AbortError') {
-                throw new Error('Permintaan timeout. Server tidak merespons dalam 30 detik. Silakan coba lagi.');
-            }
-
-            if (error.message === 'Unauthorized') {
-                return {
-                    json: async () => ({ success: false, error: 'Unauthorized' }),
-                    ok: false
-                };
+                throw new Error('Permintaan timeout. Server tidak merespons dalam 35 detik. Silakan coba lagi.');
             }
 
             throw error;
@@ -156,11 +163,25 @@ const StorytellingDashboard = (function() {
         elements.narasiOtomatis = document.getElementById('narasi-otomatis');
         elements.narasiFinal = document.getElementById('narasi-final');
         elements.existingWarning = document.getElementById('existing-warning');
+        elements.staleWarning = document.getElementById('stale-warning');
+        elements.dataQuality = document.getElementById('data-quality');
         
         // Loading
         elements.loadingOverlay = document.getElementById('loading-overlay');
         elements.timerDisplay = document.getElementById('timer-display');
         elements.warningDisplay = document.getElementById('loading-warning');
+        elements.analysisMethod = document.getElementById('analysis-method');
+        elements.analysisMonths = document.getElementById('analysis-months');
+        elements.analysisParameter = document.getElementById('analysis-parameter');
+        elements.analysisParameterHelp = document.getElementById('analysis-parameter-help');
+        elements.analysisVariable = document.getElementById('analysis-variable');
+        elements.analysisVariableWrapper = document.getElementById('analysis-variable-wrapper');
+        elements.btnRunMethod = document.getElementById('btn-run-method');
+        elements.methodResult = document.getElementById('method-analysis-result');
+        elements.methodTitle = document.getElementById('method-analysis-title');
+        elements.methodSummary = document.getElementById('method-analysis-summary');
+        elements.methodMetrics = document.getElementById('method-analysis-metrics');
+        elements.methodMeta = document.getElementById('method-analysis-meta');
     }
     
     /**
@@ -190,6 +211,71 @@ const StorytellingDashboard = (function() {
         elements.filterBulan.addEventListener('change', handleFilterChange);
         elements.filterTahun.addEventListener('change', handleFilterChange);
         elements.filterKecamatan.addEventListener('change', handleFilterChange);
+        if (elements.analysisMethod) {
+            elements.analysisMethod.addEventListener('change', updateMethodControls);
+            elements.btnRunMethod.addEventListener('click', handleRunMethod);
+            updateMethodControls();
+        }
+    }
+
+    function updateMethodControls() {
+        const method = elements.analysisMethod.value;
+        const settings = {
+            trend: {value: 3, min: 2, max: 12, step: 1, help: 'Window moving average'},
+            correlation: {value: 3, min: 3, max: 24, step: 1, help: 'Minimum 3 pasangan data'},
+            predictive: {value: 3, min: 1, max: 12, step: 1, help: 'Horizon prediksi (bulan)'},
+            clustering: {value: 3, min: 2, max: 5, step: 1, help: 'Jumlah segmen'},
+            outlier: {value: 3.5, min: 2, max: 10, step: 0.1, help: 'Ambang modified z-score'}
+        };
+        const setting = settings[method];
+        elements.analysisParameter.value = setting.value;
+        elements.analysisParameter.min = setting.min;
+        elements.analysisParameter.max = setting.max;
+        elements.analysisParameter.step = setting.step;
+        elements.analysisParameterHelp.textContent = setting.help;
+        elements.analysisVariableWrapper.style.display = method === 'correlation' ? 'block' : 'none';
+    }
+
+    async function handleRunMethod() {
+        const wilayahId = elements.filterKecamatan.value;
+        if (!wilayahId) {
+            showAlert('Pilih kecamatan terlebih dahulu', 'warning');
+            return;
+        }
+        const method = elements.analysisMethod.value;
+        const parameter = Number(elements.analysisParameter.value);
+        const parameters = method === 'trend' ? {window: parameter}
+            : method === 'correlation' ? {variable: elements.analysisVariable.value}
+            : method === 'predictive' ? {horizon: parameter}
+            : method === 'clustering' ? {clusters: parameter}
+            : {threshold: parameter};
+        elements.btnRunMethod.disabled = true;
+        try {
+            const response = await apiFetch(endpoint('storytelling/runMethod'), {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRF-Token': config.csrfToken},
+                body: JSON.stringify({
+                    bulan: Number(elements.filterBulan.value),
+                    tahun: Number(elements.filterTahun.value),
+                    wilayah_id: Number(wilayahId),
+                    method,
+                    months: Number(elements.analysisMonths.value),
+                    parameters
+                })
+            });
+            const result = await response.json();
+            if (!result.success) throw new Error(result.error || 'Analisis gagal dijalankan.');
+            const data = result.data;
+            elements.methodTitle.textContent = elements.analysisMethod.options[elements.analysisMethod.selectedIndex].text;
+            elements.methodSummary.textContent = data.summary;
+            elements.methodMetrics.textContent = JSON.stringify(data.metrics, null, 2);
+            elements.methodMeta.textContent = `${data.sample_size} observasi • algoritme ${data.algorithm_version}`;
+            elements.methodResult.style.display = 'block';
+        } catch (error) {
+            showAlert(error.message || 'Analisis gagal dijalankan.', 'danger');
+        } finally {
+            elements.btnRunMethod.disabled = false;
+        }
     }
     
     /**
@@ -247,7 +333,7 @@ const StorytellingDashboard = (function() {
                 plugins: {
                     title: {
                         display: true,
-                        text: 'Korelasi Luas Panen dengan Lagging Indicators (6 Bulan Terakhir)'
+                        text: 'Perbandingan Produksi Bulanan dan Indikator Lag-1'
                     },
                     legend: {
                         position: 'top',
@@ -333,7 +419,7 @@ async function handleAnalyze() {
 
             updateLoadingMessage('Memproses Data... Menghubungkan variabel eksogen');
 
-            const response = await apiFetch(`${config.baseUrl}/storytelling/generateAnalysis`, {
+            const response = await apiFetch(endpoint('storytelling/generateAnalysis'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
@@ -346,21 +432,26 @@ async function handleAnalyze() {
                 })
             });
 
-            if (!response.ok && response.status !== 400) {
-                if (response.status === 401 || response.status === 403) return;
-            }
-
             updateLoadingMessage('Memproses Data... Mengurai hasil analisis');
 
-            const result = await response.json();
+            let result;
+            try {
+                const responseText = await response.text();
+                result = JSON.parse(responseText);
+            } catch (jsonErr) {
+                console.error('Invalid JSON response:', jsonErr);
+                throw new Error('Respons dari server tidak dapat diproses (format JSON tidak valid). Silakan coba lagi atau hubungi administrator.');
+            }
 
-            if (result.success) {
+            if (result && result.success) {
                 state.currentAnalysis = result;
+                state.analysisKey = filterKey();
+                state.filterDirty = false;
                 displayAnalysisResult(result);
                 updateChart(result.chart_data);
                 showAlert('Analisis berhasil dibuat!', 'success');
             } else {
-                throw new Error(result.error || 'Gagal melakukan analisis');
+                throw new Error((result && result.error) || 'Gagal melakukan analisis');
             }
 
         } catch (error) {
@@ -390,11 +481,8 @@ async function handleAnalyze() {
         // Update analysis panel
         elements.faktorPenyebab.value = result.faktor_penyebab_utama;
         elements.narasiOtomatis.value = result.narasi_otomatis;
-        
-        // Copy to final narasi if empty
-        if (!elements.narasiFinal.value.trim()) {
-            elements.narasiFinal.value = result.narasi_otomatis;
-        }
+        // A new analysis must never retain the official narrative of an old filter.
+        elements.narasiFinal.value = result.narasi_otomatis;
         
         // Update risk scores
         updateRiskScores(result.skor_risiko);
@@ -405,6 +493,11 @@ async function handleAnalyze() {
         } else {
             elements.existingWarning.style.display = 'none';
         }
+
+        if (elements.staleWarning) elements.staleWarning.style.display = 'none';
+        elements.btnSaveAnalysis.disabled = false;
+        elements.btnPreview.disabled = false;
+        renderDataQuality(result.data_quality);
     }
     
     /**
@@ -418,7 +511,7 @@ async function handleAnalyze() {
         
         // Animate counter updates
         animateCounter(elements.kpiLuasPanen, produksi.total_luas_panen, 2);
-        animateCounter(elements.kpiCurahHujan, curahHujan.avg_curah_hujan, 1);
+        animateCounter(elements.kpiCurahHujan, curahHujan.total_curah_hujan, 1);
         animateCounter(elements.kpiLaporanHama, hama.total_laporan_hama, 0);
         animateCounter(elements.kpiSkorRisiko, skor.skor_risiko_total, 0);
     }
@@ -427,9 +520,9 @@ async function handleAnalyze() {
      * Update risk score badges
      */
     function updateRiskScores(skorRisiko) {
-        elements.scoreCuaca.textContent = `Cuaca: ${skorRisiko.skor_risiko_cuaca}`;
-        elements.scoreHama.textContent = `Hama: ${skorRisiko.skor_risiko_hama}`;
-        elements.scoreTotal.textContent = `Total: ${skorRisiko.skor_risiko_total}`;
+        elements.scoreCuaca.textContent = `Cuaca: ${scoreLabel(skorRisiko.skor_risiko_cuaca)}`;
+        elements.scoreHama.textContent = `Hama: ${scoreLabel(skorRisiko.skor_risiko_hama)}`;
+        elements.scoreTotal.textContent = `Total: ${scoreLabel(skorRisiko.skor_risiko_total)}`;
         
         // Update risk level classes
         updateRiskClass(elements.scoreCuaca, skorRisiko.skor_risiko_cuaca);
@@ -442,6 +535,12 @@ async function handleAnalyze() {
      */
     function updateRiskClass(element, score) {
         element.classList.remove('risk-low', 'risk-medium', 'risk-high');
+
+        if (score === null || score === undefined) {
+            element.classList.add('risk-unavailable');
+            return;
+        }
+        element.classList.remove('risk-unavailable');
         
         if (score > 70) {
             element.classList.add('risk-high');
@@ -456,6 +555,11 @@ async function handleAnalyze() {
      * Animate counter with easing
      */
     function animateCounter(element, targetValue, decimals = 0) {
+        if (targetValue === null || targetValue === undefined || !Number.isFinite(Number(targetValue))) {
+            element.textContent = '-';
+            return;
+        }
+        targetValue = Number(targetValue);
         const startValue = parseFloat(element.textContent.replace(/[^\d.-]/g, '')) || 0;
         const duration = 1500; // 1.5 seconds
         const startTime = performance.now();
@@ -496,7 +600,7 @@ async function handleAnalyze() {
      * Handle save analysis
      */
     async function handleSaveAnalysis() {
-        if (!state.currentAnalysis) {
+        if (!state.currentAnalysis || state.filterDirty) {
             showAlert('Tidak ada analisis untuk disimpan', 'warning');
             return;
         }
@@ -504,12 +608,12 @@ async function handleAnalyze() {
         try {
             // Prepare data for saving
             const saveData = {
-                ...state.currentAnalysis,
+                periode: state.currentAnalysis.periode,
                 narasi_final: elements.narasiFinal.value.trim(),
                 faktor_penyebab_override: elements.faktorPenyebab.value
             };
             
-            const response = await apiFetch(`${config.baseUrl}/storytelling/store`, {
+            const response = await apiFetch(endpoint('storytelling/store'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -547,7 +651,7 @@ async function handleAnalyze() {
      * Handle preview functionality
      */
     function handlePreview() {
-        if (!state.currentAnalysis) {
+        if (!state.currentAnalysis || state.filterDirty) {
             showAlert('Tidak ada analisis untuk di-preview', 'warning');
             return;
         }
@@ -573,11 +677,17 @@ async function handleAnalyze() {
         
         // Reset state
         state.currentAnalysis = null;
+        state.analysisKey = null;
+        state.filterDirty = false;
         
         // Reset UI
         elements.analysisResult.style.display = 'none';
         elements.defaultState.style.display = 'block';
         elements.existingWarning.style.display = 'none';
+        if (elements.staleWarning) elements.staleWarning.style.display = 'none';
+        if (elements.dataQuality) elements.dataQuality.textContent = '-';
+        elements.btnSaveAnalysis.disabled = true;
+        elements.btnPreview.disabled = true;
         
         // Reset KPI cards
         elements.kpiLuasPanen.textContent = '-';
@@ -603,6 +713,13 @@ async function handleAnalyze() {
         const bulan = elements.filterBulan.value;
         const tahun = elements.filterTahun.value;
         const wilayahId = elements.filterKecamatan.value;
+
+        if (state.currentAnalysis && state.analysisKey !== filterKey()) {
+            state.filterDirty = true;
+            if (elements.staleWarning) elements.staleWarning.style.display = 'block';
+            elements.btnSaveAnalysis.disabled = true;
+            elements.btnPreview.disabled = true;
+        }
         
         if (bulan && tahun && wilayahId) {
             updateChartData(bulan, tahun, wilayahId);
@@ -613,13 +730,15 @@ async function handleAnalyze() {
      * Update chart data based on filters
      */
     async function updateChartData(bulan, tahun, wilayahId) {
+        const requestId = ++state.chartRequestId;
         try {
-            const response = await apiFetch(`${config.baseUrl}/storytelling/getChartData?bulan=${bulan}&tahun=${tahun}&wilayah_id=${wilayahId}&months=6`);
+            const query = new URLSearchParams({bulan, tahun, wilayah_id: wilayahId, months: '6'});
+            const response = await apiFetch(endpoint(`storytelling/getChartData?${query}`));
             if (!response.ok) return;
             
             const result = await response.json();
             
-            if (result.success) {
+            if (result.success && requestId === state.chartRequestId) {
                 updateChart(result.data);
             }
         } catch (error) {
@@ -706,22 +825,56 @@ function showLoading(show) {
          }
      }
 
-     function updateLoadingMessage(message) {
+    function updateLoadingMessage(message) {
          const msgEl = document.getElementById('loading-message');
          if (msgEl) {
              msgEl.textContent = message;
          }
      }
+
+    function filterKey() {
+        return [
+            elements.filterTahun.value,
+            String(elements.filterBulan.value).padStart(2, '0'),
+            elements.filterKecamatan.value
+        ].join(':');
+    }
+
+    function scoreLabel(score) {
+        return score === null || score === undefined ? '-' : String(score);
+    }
+
+    function renderDataQuality(quality) {
+        if (!elements.dataQuality) return;
+        if (!quality) {
+            elements.dataQuality.textContent = 'Tidak tersedia';
+            return;
+        }
+
+        const issues = Array.isArray(quality.issues) ? quality.issues : [];
+        elements.dataQuality.textContent = issues.length > 0
+            ? `${quality.level}: ${issues.join(' ')}`
+            : quality.level;
+    }
+
+    function escapeHtml(value) {
+        const div = document.createElement('div');
+        div.textContent = String(value ?? '');
+        return div.innerHTML;
+    }
     
     function showAlert(message, type = 'info') {
         // Create alert element
         const alertDiv = document.createElement('div');
         alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
         alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 10000; min-width: 300px;';
-        alertDiv.innerHTML = `
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
+        const text = document.createElement('span');
+        text.textContent = String(message);
+        const close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'btn-close';
+        close.setAttribute('data-bs-dismiss', 'alert');
+        alertDiv.append(text, close);
         
         document.body.appendChild(alertDiv);
         
@@ -749,6 +902,15 @@ function showLoading(show) {
     }
     
     function showPreviewModal(data) {
+        const safe = {
+            periode: escapeHtml(data.periode),
+            kecamatan: escapeHtml(data.kecamatan),
+            faktor: escapeHtml(data.faktor_penyebab),
+            narrative: escapeHtml(data.narasi_final),
+            weather: escapeHtml(scoreLabel(data.skor_risiko.skor_risiko_cuaca)),
+            pest: escapeHtml(scoreLabel(data.skor_risiko.skor_risiko_hama)),
+            total: escapeHtml(scoreLabel(data.skor_risiko.skor_risiko_total))
+        };
         // Create modal HTML
         const modalHtml = `
             <div class="modal fade" id="previewModal" tabindex="-1">
@@ -761,30 +923,30 @@ function showLoading(show) {
                         <div class="modal-body">
                             <div class="card">
                                 <div class="card-header bg-primary text-white">
-                                    <h6 class="mb-0">Analisis Produksi Padi - ${data.periode}</h6>
+                                    <h6 class="mb-0">Analisis Produksi Padi - ${safe.periode}</h6>
                                 </div>
                                 <div class="card-body">
                                     <div class="row mb-3">
                                         <div class="col-md-6">
-                                            <strong>Wilayah:</strong> ${data.kecamatan}
+                                            <strong>Wilayah:</strong> ${safe.kecamatan}
                                         </div>
                                         <div class="col-md-6">
-                                            <strong>Faktor Penyebab:</strong> 
-                                            <span class="badge bg-secondary">${data.faktor_penyebab}</span>
+                                            <strong>Indikasi Faktor Terkait:</strong>
+                                            <span class="badge bg-secondary">${safe.faktor}</span>
                                         </div>
                                     </div>
                                     <div class="row mb-3">
                                         <div class="col-md-12">
                                             <strong>Skor Risiko:</strong>
-                                            <span class="badge bg-info">Cuaca: ${data.skor_risiko.skor_risiko_cuaca}</span>
-                                            <span class="badge bg-warning">Hama: ${data.skor_risiko.skor_risiko_hama}</span>
-                                            <span class="badge bg-danger">Total: ${data.skor_risiko.skor_risiko_total}</span>
+                                            <span class="badge bg-info">Cuaca: ${safe.weather}</span>
+                                            <span class="badge bg-warning">Hama: ${safe.pest}</span>
+                                            <span class="badge bg-danger">Total: ${safe.total}</span>
                                         </div>
                                     </div>
                                     <div class="mb-3">
                                         <strong>Narasi Resmi:</strong>
                                         <div class="border p-3 mt-2 bg-light">
-                                            ${data.narasi_final}
+                                            ${safe.narrative}
                                         </div>
                                     </div>
                                 </div>
@@ -830,7 +992,7 @@ function showLoading(show) {
         
         tbody.innerHTML = '<tr><td colspan="5" class="text-center">Loading...</td></tr>';
     
-        apiFetch(`${config.baseUrl}/storytelling/getRecent`)
+        apiFetch(endpoint('storytelling/getRecent'))
             .then(response => {
                 if (!response.ok) throw new Error('Failed to load');
                 return response.json();
@@ -858,16 +1020,40 @@ function showLoading(show) {
     
         data.forEach(row => {
             const tr = document.createElement('tr');
-            const statusBadge = row.status_analisis === 'published' ? 'success' : (row.status_analisis === 'draft' ? 'warning' : 'secondary');
-            tr.innerHTML = `
-                <td>${row.periode_bulan}/${row.periode_tahun}</td>
-                <td>${row.nama_kecamatan || '-'}</td>
-                <td>${row.faktor_penyebab_utama}</td>
-                <td><span class="badge badge-${statusBadge}">${row.status_analisis}</span></td>
-                <td>
-                    <button class="btn btn-sm btn-info" onclick="viewAnalysis(${row.id})" title="Lihat"><i class="fas fa-eye"></i></button>
-                </td>
-            `;
+            const values = [
+                `${row.periode_bulan}/${row.periode_tahun}`,
+                row.nama_kecamatan || '-',
+                row.faktor_penyebab_utama || '-'
+            ];
+            values.forEach(value => {
+                const td = document.createElement('td');
+                td.textContent = String(value);
+                tr.appendChild(td);
+            });
+
+            const statusCell = document.createElement('td');
+            const status = document.createElement('span');
+            const badge = row.status_analisis === 'published'
+                ? 'success'
+                : (row.status_analisis === 'draft' ? 'warning' : 'secondary');
+            status.className = `badge badge-${badge}`;
+            status.textContent = row.status_analisis || '-';
+            statusCell.appendChild(status);
+            tr.appendChild(statusCell);
+
+            const actionCell = document.createElement('td');
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'btn btn-sm btn-info';
+            button.title = 'Lihat';
+            button.setAttribute('aria-label', 'Lihat analisis');
+            const icon = document.createElement('i');
+            icon.className = 'fas fa-eye';
+            button.appendChild(icon);
+            button.addEventListener('click', () => viewAnalysis(Number(row.id)));
+            actionCell.appendChild(button);
+            tr.appendChild(actionCell);
+
             tbody.appendChild(tr);
         });
     }
@@ -884,8 +1070,26 @@ function showLoading(show) {
 })();
 
 // Global functions for table actions
-function viewAnalysis(id) {
-    // Implementation for viewing existing analysis
-    console.log('View analysis:', id);
-    // This could open a modal or navigate to a detail page
+async function viewAnalysis(id) {
+    try {
+        const response = await fetch(
+            `${window.location.origin}${window.location.pathname.replace(/\/storytelling\/?$/, '')}`
+            + `/storytelling/getAnalysis?id=${encodeURIComponent(id)}`,
+            {headers: {'Accept': 'application/json'}}
+        );
+        if (response.redirected && /\/auth\/login\/?(?:\?|$)/.test(response.url)) {
+            window.location.href = response.url;
+            return;
+        }
+        const result = await response.json();
+        if (!result.success) throw new Error(result.error || 'Analisis tidak ditemukan');
+
+        const row = result.data;
+        const text = row.narasi_final || row.narasi_otomatis || 'Narasi tidak tersedia.';
+        window.alert(
+            `${row.periode_bulan}/${row.periode_tahun} — ${row.nama_kecamatan || '-'}\n\n${text}`
+        );
+    } catch (error) {
+        window.alert(error.message || 'Gagal memuat analisis.');
+    }
 }

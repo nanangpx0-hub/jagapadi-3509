@@ -48,6 +48,12 @@ class Logger
         }
 
         $timestamp = date('Y-m-d H:i:s');
+
+        // Korelasi antar log: sertakan request_id (trace ID) bila tersedia.
+        if (isset($_SERVER['JAGAPADI_REQUEST_ID'])) {
+            $context = ['request_id' => $_SERVER['JAGAPADI_REQUEST_ID']] + $context;
+        }
+
         $contextJson = !empty($context) ? ' ' . json_encode($context) : '';
         $line = "[$timestamp] $level: $message$contextJson" . PHP_EOL;
 

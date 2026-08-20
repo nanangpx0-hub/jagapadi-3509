@@ -4,8 +4,8 @@
 
     <!-- Footer -->
     <footer class="main-footer">
-        <strong>Copyright &copy; 2025 <a href="#">JAGAPADI</a>.</strong>
-        Dikembangkan oleh Nanang Pamungkas | BPS Kabupaten Jember
+        <strong>Copyright &copy; 2026 <a href="#">JAGAPADI</a>.</strong>
+        Dikembangkan oleh Tim PLS | BPS Kabupaten Jember
         <div class="float-right d-none d-sm-inline-block">
             <b>Version</b> 1.0.0
         </div>
@@ -14,11 +14,12 @@
 
 <!-- jQuery (dimuat di header.php) -->
 <!-- Bootstrap 4 -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="<?= BASE_URL ?>public/vendor/js/bootstrap.bundle.min.js"></script>
 <!-- AdminLTE App -->
-<script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js"></script>
-<!-- Chart.js -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script src="<?= BASE_URL ?>public/vendor/js/adminlte.min.js"></script>
+<!-- Sinkronisasi state parent/submenu sidebar -->
+<script src="<?= BASE_URL ?>public/js/sidebar-state.js"></script>
+<!-- Chart.js dimuat di header.php (v4.4.0) — jangan dimuat duplikat -->
 <!-- Custom JavaScript -->
 <script src="<?= BASE_URL ?>public/js/validation.js"></script>
 <script src="<?= BASE_URL ?>public/js/loading.js"></script>

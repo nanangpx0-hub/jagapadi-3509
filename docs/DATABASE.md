@@ -242,6 +242,40 @@ Counter atomik untuk generate nomor laporan. Bukan AUTO_INCREMENT — dikelola a
 | tanggal | DATE | PK — Tanggal laporan |
 | counter | INT UNSIGNED | Counter harian (default 0) |
 
+### 14. Feedback
+
+`feedback` menyimpan saran/aduan Petugas, termasuk jenis, judul, deskripsi,
+prioritas, status, lampiran, catatan Admin, pemroses, dan timestamp. Tabel
+`feedback_votes` menyimpan vote unik per user, sedangkan
+`feedback_status_history` menjadi audit trail setiap perubahan status.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | BIGINT UNSIGNED (PK) | ID feedback |
+| user_id | INT UNSIGNED (FK users) | Pembuat (Petugas) |
+| jenis_feedback | VARCHAR(50) | `bug`, `fitur_baru`, `peningkatan` |
+| judul | VARCHAR(255) | Judul (validasi 5–255 karakter, multibyte) |
+| deskripsi | TEXT | Isi (validasi 20–5000 karakter, multibyte) |
+| prioritas | VARCHAR(20) | `rendah`, `medium` (default), `tinggi` |
+| status | VARCHAR(20) | `diterima` (default), `dalam_proses`, `selesai`, `ditolak` |
+| attachment_url | VARCHAR(500) | Path lampiran relatif ke `public/` |
+| admin_notes | TEXT | Catatan Admin (disimpan mentah, di-escape saat output) |
+| processed_by | INT UNSIGNED (FK users) | Admin pemroses |
+| processed_at | DATETIME | Waktu diproses |
+| vote_count | INT | Sinkron dari `feedback_votes` |
+| created_at / updated_at | TIMESTAMP | Timestamp |
+
+Index: `user_id`, `jenis_feedback`, `prioritas`, `status`, `processed_by`,
+`created_at` (semua MUL).
+
+Data global hanya dibaca Admin. Query daftar Petugas selalu diberi filter
+`feedback.user_id` dari session dan tidak mempercayai `user_id` dari request.
+Penulisan `feedback` + `feedback_status_history` dibungkus transaksi database
+agar tidak pernah menyisakan data parsial. Vote: Petugas hanya dapat berinteraksi
+dengan feedback miliknya sendiri (IDOR ditolak HTTP 403); vote ke diri sendiri
+ditolak HTTP 400. Direktori upload `public/uploads/feedback/` dilindungi
+`.htaccess` (eksekusi PHP/skrip diblokir).
+
 ---
 
 ## Status Laporan & Arti Bisnis

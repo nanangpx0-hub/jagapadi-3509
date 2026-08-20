@@ -158,7 +158,7 @@ class UserController extends Controller {
         fputcsv($output, ['ID', 'Nama Lengkap', 'Username', 'Email', 'Role', 'Status', 'Tanggal Registrasi']);
 
         foreach ($users as $user) {
-            fputcsv($output, [
+            $csvRow = $this->sanitizeCsvRow([
                 $user['id'],
                 $user['nama_lengkap'],
                 $user['username'],
@@ -167,6 +167,7 @@ class UserController extends Controller {
                 $user['status'],
                 $user['created_at']
             ]);
+            fputcsv($output, $csvRow);
         }
         fclose($output);
         exit;

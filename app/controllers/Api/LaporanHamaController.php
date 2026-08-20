@@ -39,7 +39,7 @@ class LaporanHamaController extends BaseApiController {
             });
             
             // Apply user-based filtering for petugas
-            if ($_SESSION['role'] === 'petugas') {
+            if (($_SESSION['role'] ?? '') === 'petugas') {
                 $filters['user_id'] = $_SESSION['user_id'];
             }
             

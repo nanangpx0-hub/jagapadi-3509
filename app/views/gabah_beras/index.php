@@ -288,10 +288,10 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
 </div>
 
 <!-- Leaflet CSS -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="<?= BASE_URL ?>public/vendor/css/leaflet.css" />
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="<?= BASE_URL ?>public/vendor/js/chart.umd.min.js"></script>
+<script src="<?= BASE_URL ?>public/vendor/js/leaflet.js"></script>
 
 <script>
 const BASE_URL = '<?= BASE_URL ?>';

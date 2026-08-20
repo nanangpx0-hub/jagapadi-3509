@@ -17,11 +17,44 @@ class DashboardMapApiController extends BaseApiController {
         $this->aggregator = new DashboardDataAggregator();
     }
     
+    // =========================================
+    // DEFENSE-IN-DEPTH AUTHENTICATION
+    // =========================================
+    
+    private function assertAuthenticated(): void {
+        if (empty($_SESSION['user_id'])) {
+            $this->jsonResponse(['success' => false, 'error' => 'Unauthorized'], 401);
+            exit;
+        }
+    }
+    
+    private function getPetugasUserId(): ?int {
+        $role   = $_SESSION['role'] ?? '';
+        $userId = $_SESSION['user_id'] ?? null;
+ 
+        if ($role !== 'petugas') {
+            return null;
+        }
+ 
+        $id = filter_var($userId, FILTER_VALIDATE_INT);
+        if ($id === false || $id <= 0) {
+            return null;
+        }
+ 
+        return $id;
+    }
+    
+    // =========================================
+    // LAYER ENDPOINT
+    // =========================================
+    
     /**
      * Get available map layers
      * GET /api/dashboard/map/layers
      */
     public function layers() {
+        $this->assertAuthenticated();
+        
         try {
             $layers = [
                 [
@@ -30,7 +63,8 @@ class DashboardMapApiController extends BaseApiController {
                     'description' => 'Lokasi laporan serangan hama dan OPT',
                     'icon' => 'bug',
                     'color' => '#dc3545',
-                    'enabled' => true
+                    'enabled' => true,
+                    'scope' => 'user'
                 ],
                 [
                     'id' => 'irigasi',
@@ -38,7 +72,8 @@ class DashboardMapApiController extends BaseApiController {
                     'description' => 'Daerah irigasi dan debit air',
                     'icon' => 'water',
                     'color' => '#0d6efd',
-                    'enabled' => true
+                    'enabled' => true,
+                    'scope' => 'kabupaten'
                 ],
                 [
                     'id' => 'rainfall',
@@ -46,7 +81,8 @@ class DashboardMapApiController extends BaseApiController {
                     'description' => 'Data curah hujan per kecamatan',
                     'icon' => 'cloud-rain',
                     'color' => '#198754',
-                    'enabled' => true
+                    'enabled' => true,
+                    'scope' => 'kabupaten'
                 ],
                 [
                     'id' => 'wind',
@@ -54,7 +90,8 @@ class DashboardMapApiController extends BaseApiController {
                     'description' => 'Data kecepatan angin',
                     'icon' => 'wind',
                     'color' => '#6f42c1',
-                    'enabled' => true
+                    'enabled' => true,
+                    'scope' => 'kabupaten'
                 ]
             ];
             
@@ -64,43 +101,63 @@ class DashboardMapApiController extends BaseApiController {
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
         } catch (Exception $e) {
-            $this->errorResponse('Gagal memuat data layers: ' . $e->getMessage());
+            $this->errorResponse('Gagal memuat data layers');
         }
     }
+    
+    // =========================================
+    // HAMA MAP ENDPOINT
+    // =========================================
     
     /**
      * Get hama/pest distribution data for map
      * GET /api/dashboard/map/hama
      */
     public function hama() {
+        $this->assertAuthenticated();
+        
         try {
-            $filters = [
-                'year' => $_GET['year'] ?? date('Y'),
-                'status' => $_GET['status'] ?? ''
-            ];
+            $rawYear   = $_GET['year'] ?? date('Y');
+            $rawStatus = $_GET['status'] ?? '';
+            $year      = filter_var($rawYear, FILTER_VALIDATE_INT);
+            $year      = ($year !== false && $year >= 2000 && $year <= (int)date('Y') + 1)
+                         ? $year : (int)date('Y');
+            $allowedStatuses = ['', 'Submitted', 'Diverifikasi'];
+            $status    = in_array($rawStatus, $allowedStatuses, true) ? $rawStatus : '';
+            $userId    = $this->getPetugasUserId();
+            $filters   = ['year' => $year, 'status' => $status, 'user_id' => $userId];
             
             $data = $this->aggregator->getHamaMapData($filters);
             
             // Transform to GeoJSON format
             $geojson = $this->toGeoJSON($data, 'hama');
             
+            $responseScope = ($userId !== null) ? 'user' : 'kabupaten';
+            
             $this->jsonResponse([
                 'success' => true,
                 'data' => $geojson,
                 'count' => count($data),
-                'filters' => $filters,
+                'scope' => $responseScope,
+                'filters' => ['year' => $year, 'status' => $status],
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
         } catch (Exception $e) {
-            $this->errorResponse('Gagal memuat data hama: ' . $e->getMessage());
+            $this->errorResponse('Gagal memuat data hama');
         }
     }
+    
+    // =========================================
+    // IRIGASI ENDPOINT
+    // =========================================
     
     /**
      * Get irrigation data for map
      * GET /api/dashboard/map/irigasi
      */
     public function irigasi() {
+        $this->assertAuthenticated();
+        
         try {
             $data = $this->aggregator->getIrrigationByArea();
             
@@ -108,22 +165,30 @@ class DashboardMapApiController extends BaseApiController {
                 'success' => true,
                 'data' => $data,
                 'count' => count($data),
+                'scope' => 'kabupaten',
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
         } catch (Exception $e) {
-            $this->errorResponse('Gagal memuat data irigasi: ' . $e->getMessage());
+            $this->errorResponse('Gagal memuat data irigasi');
         }
     }
     
+    // =========================================
+    // WEATHER ENDPOINT
+    // =========================================
+    
     /**
-     * Get weather data for map
+     * Get weather data for map (rainfall + wind)
      * GET /api/dashboard/map/weather
      */
     public function weather() {
+        $this->assertAuthenticated();
+        
         try {
-            $filters = [
-                'days' => $_GET['days'] ?? 7
-            ];
+            $rawDays = $_GET['days'] ?? 30;
+            $days    = filter_var($rawDays, FILTER_VALIDATE_INT);
+            $days    = ($days !== false && $days >= 1 && $days <= 365) ? $days : 30;
+            $filters = ['days' => $days];
             
             $rainfallData = $this->aggregator->getWeatherMapData($filters);
             
@@ -132,59 +197,118 @@ class DashboardMapApiController extends BaseApiController {
                 'data' => [
                     'rainfall' => $rainfallData
                 ],
+                'scope' => 'kabupaten',
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
         } catch (Exception $e) {
-            $this->errorResponse('Gagal memuat data cuaca: ' . $e->getMessage());
+            $this->errorResponse('Gagal memuat data cuaca');
         }
     }
+    
+    // =========================================
+    // WIND ENDPOINT
+    // =========================================
+    
+    /**
+     * Get wind speed data for map
+     * GET /api/dashboard/map/wind
+     */
+    public function wind() {
+        $this->assertAuthenticated();
+        
+        try {
+            $rawDays = $_GET['days'] ?? 30;
+            $days    = filter_var($rawDays, FILTER_VALIDATE_INT);
+            $days    = ($days !== false && $days >= 1 && $days <= 365) ? $days : 30;
+            $filters = ['days' => $days];
+            
+            $windData = $this->aggregator->getWindMapData($filters);
+            
+            $this->jsonResponse([
+                'success' => true,
+                'data' => [
+                    'wind' => $windData
+                ],
+                'scope' => 'kabupaten',
+                'timestamp' => date('Y-m-d H:i:s')
+            ]);
+        } catch (Exception $e) {
+            $this->errorResponse('Gagal memuat data kecepatan angin');
+        }
+    }
+    
+    // =========================================
+    // ALL MAP DATA ENDPOINT
+    // =========================================
     
     /**
      * Get all map data combined
      * GET /api/dashboard/map/all
      */
     public function all() {
+        $this->assertAuthenticated();
+        
         try {
             $filters = [
                 'year' => $_GET['year'] ?? date('Y')
             ];
+            $userId = $this->getPetugasUserId();
+            if ($userId !== null) {
+                $filters['user_id'] = $userId;
+            }
             
             $data = $this->aggregator->getMapLayersData($filters);
+            
+            $responseScope = ($userId !== null) ? 'user' : 'kabupaten';
             
             $this->jsonResponse([
                 'success' => true,
                 'data' => $data,
-                'timestamp' => date('Y-m-d H:i:s')
+                'timestamp' => date('Y-m-d H:i:s'),
+                'scope' => $responseScope
             ]);
         } catch (Exception $e) {
-            $this->errorResponse('Gagal memuat data peta: ' . $e->getMessage());
+            $this->errorResponse('Gagal memuat data peta');
         }
     }
+    
+    // =========================================
+    // HAMA SUMMARY ENDPOINT
+    // =========================================
     
     /**
      * Get hama summary by kecamatan
      * GET /api/dashboard/map/hamaSummary
      */
     public function hamaSummary() {
+        $this->assertAuthenticated();
+        
         try {
-            $year = $_GET['year'] ?? date('Y');
-            $data = $this->aggregator->getHamaByKecamatan($year);
+            $rawYear = $_GET['year'] ?? date('Y');
+            $year    = filter_var($rawYear, FILTER_VALIDATE_INT);
+            $year    = ($year !== false && $year >= 2000 && $year <= (int)date('Y') + 1)
+                       ? $year : (int)date('Y');
+            
+            $userId = $this->getPetugasUserId();
+            $data = $this->aggregator->getHamaByKecamatan($year, $userId);
             
             $this->jsonResponse([
                 'success' => true,
                 'data' => $data,
                 'count' => count($data),
                 'year' => $year,
+                'scope' => ($userId !== null) ? 'user' : 'kabupaten',
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
         } catch (Exception $e) {
-            $this->errorResponse('Gagal memuat summary hama: ' . $e->getMessage());
+            $this->errorResponse('Gagal memuat summary hama');
         }
     }
     
-    /**
-     * Convert data to GeoJSON format
-     */
+    // =========================================
+    // TO GEOJSON HELPER
+    // =========================================
+    
     private function toGeoJSON($data, $type = 'point') {
         $features = [];
         

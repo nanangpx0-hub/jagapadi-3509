@@ -46,7 +46,7 @@ class IrigasiScraper {
     }
     
     /**
-     * Run the scraper simulation
+     * Generate deterministic simulation data for an explicitly selected period.
      */
     public function run($options = []) {
         $startTime = microtime(true);
@@ -66,6 +66,17 @@ class IrigasiScraper {
         ];
         
         try {
+            $date = DateTime::createFromFormat('!Y-m-d', (string) $tanggal);
+            if (!$date || $date->format('Y-m-d') !== $tanggal) {
+                throw new InvalidArgumentException('Tanggal harus menggunakan format Y-m-d yang valid');
+            }
+            if ($tanggal > date('Y-m-d')) {
+                throw new InvalidArgumentException('Data simulasi tidak boleh dibuat untuk tanggal masa depan');
+            }
+            if ($lokasi !== null && !isset(self::DAM_DETAILS[$lokasi])) {
+                throw new InvalidArgumentException('Daerah irigasi tidak terdaftar');
+            }
+
             // Get target locations
             $targets = $lokasi ? [$lokasi] : array_keys(self::DAM_DETAILS);
             
@@ -73,12 +84,10 @@ class IrigasiScraper {
             $month = (int)date('m', strtotime($tanggal));
             $isWetSeason = ($month >= 11 || $month <= 3);
             
-            $seasonFactor = $isWetSeason 
-                ? (rand(90, 120) / 100)  // 0.9 - 1.2
-                : (rand(40, 80) / 100);  // 0.4 - 0.8
+            $seasonBase = $isWetSeason ? 1.05 : 0.60;
             
             // Log season context
-            $this->log("Seasonal context: " . ($isWetSeason ? "Musim Hujan" : "Musim Kemarau") . ", Factor: {$seasonFactor}");
+            $this->log("Seasonal context: " . ($isWetSeason ? "Musim Hujan" : "Musim Kemarau"));
             
             foreach ($targets as $damName) {
                 if (!isset(self::DAM_DETAILS[$damName])) continue;
@@ -93,8 +102,10 @@ class IrigasiScraper {
                 
                 // Generate debit based on norm and season
                 // Add daily fluctuation ±10%
-                $fluctuation = 1 + (rand(-10, 10) / 100);
-                $debit = round($details['norm_debit'] * $seasonFactor * $fluctuation);
+                $seed = (int) sprintf('%u', crc32($tanggal . '|' . $damName));
+                $seasonVariation = (($seed % 21) - 10) / 100;
+                $dailyVariation = ((intdiv($seed, 21) % 21) - 10) / 100;
+                $debit = round($details['norm_debit'] * ($seasonBase + $seasonVariation) * (1 + $dailyVariation));
                 
                 // Determine status
                 $ratio = $debit / $details['norm_debit'];
@@ -109,7 +120,8 @@ class IrigasiScraper {
                     'luas_sawah' => $details['luas_layanan'],
                     'debit_air' => $debit,
                     'status_pintu' => $statusPintu,
-                    'keterangan' => "Data observasi harian. Cuaca: " . ($isWetSeason ? "Mendung/Hujan" : "Cerah")
+                    'metode_data' => 'simulasi',
+                    'keterangan' => 'Data simulasi internal berbasis norma debit dan pola musim; bukan hasil observasi lapangan.'
                 ];
                 
                 // Save

@@ -81,6 +81,7 @@ class LaporanHamaValidatorTest extends TestCase
         $this->assertArrayHasKey('tingkat_keparahan', $errors);
         $this->assertArrayHasKey('luas_serangan', $errors);
         $this->assertArrayHasKey('populasi', $errors);
+        $this->assertArrayHasKey('foto', $errors);
     }
 
     public function testSubmitInvalidDateHandledGracefully(): void
@@ -95,6 +96,7 @@ class LaporanHamaValidatorTest extends TestCase
                 'tingkat_keparahan' => 'Ringan',
                 'luas_serangan' => 1,
                 'populasi' => 10,
+                'foto_url' => 'assets/uploads/laporan-hama/test.jpg',
             ]);
             $this->assertArrayHasKey('tanggal', $errors);
         } catch (\RuntimeException $e) {
@@ -112,5 +114,24 @@ class LaporanHamaValidatorTest extends TestCase
     {
         $errors = LaporanHamaValidator::validateDraft(['alamat_lengkap' => str_repeat('a', 301)]);
         $this->assertArrayHasKey('alamat_lengkap', $errors);
+    }
+
+    public function testSubmitRejectsMissingPhoto(): void
+    {
+        $errors = LaporanHamaValidator::validateSubmit([
+            'tanggal' => '2026-08-12',
+            'master_opt_id' => 1,
+            'kabupaten_id' => 1,
+            'kecamatan_id' => 1,
+            'desa_id' => 1,
+            'tingkat_keparahan' => 'Ringan',
+            'luas_serangan' => 1,
+            'populasi' => 10,
+        ]);
+
+        $this->assertSame(
+            'Foto laporan wajib disertakan sebelum laporan dapat dikirim.',
+            $errors['foto'] ?? null
+        );
     }
 }

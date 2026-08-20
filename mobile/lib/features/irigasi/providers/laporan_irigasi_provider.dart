@@ -22,41 +22,75 @@ class LaporanIrigasiProvider extends ChangeNotifier {
   int get total => _total;
   bool get hasMore => _list.length < _total;
 
-  Future<void> loadList({bool refresh = false, String? status}) async {
-    if (refresh) { _page = 1; _list = []; }
-    _loading = true; _error = null; notifyListeners();
+  Future<void> loadList({bool refresh = false, String? status, String? search}) async {
+    if (refresh) {
+      _page = 1;
+      _list = [];
+    }
+    _loading = true;
+    _error = null;
+    notifyListeners();
     final q = <String, dynamic>{'page': _page, 'limit': 20, 'include_draft': 'true'};
     if (status != null && status != 'all') q['status'] = status;
-    final res = await api.get('/laporan-irigasi', queryParams: q);
-    if (res.success && res.data != null) {
-      final raw = res.data!['data'] as List<dynamic>? ?? [];
-      final items = raw.map((e) => LaporanIrigasi.fromJson({'data': e})).toList();
-      if (refresh) {
-        _list = items;
+    if (search != null && search.trim().isNotEmpty) q['q'] = search.trim();
+
+    try {
+      final res = await api.get('/laporan-irigasi', queryParams: q);
+      if (res.success && res.data != null) {
+        final raw = res.data!['data'] as List<dynamic>? ?? [];
+        final items = raw.map((e) {
+          if (e is Map<String, dynamic>) {
+            return LaporanIrigasi.fromJson(e);
+          }
+          return LaporanIrigasi.fromJson(Map<String, dynamic>.from(e as Map));
+        }).toList();
+        if (refresh) {
+          _list = items;
+        } else {
+          _list.addAll(items);
+        }
+        final meta = res.data!['meta'] as Map<String, dynamic>?;
+        _total = meta?['total'] as int? ?? items.length;
+        _page++;
       } else {
-        _list.addAll(items);
+        _error = res.message ?? 'Gagal memuat data laporan irigasi';
       }
-      final meta = res.data!['meta'] as Map<String, dynamic>?;
-      _total = meta?['total'] as int? ?? items.length;
-      _page++;
-    } else { _error = res.message; }
-    _loading = false; notifyListeners();
+    } catch (e) {
+      _error = 'Terjadi kesalahan saat memuat data: $e';
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
   }
 
   Future<void> loadDetail(int id) async {
-    _loading = true; _error = null; notifyListeners();
-    final res = await api.get('/laporan-irigasi/$id');
-    if (res.success && res.data != null) {
-      _detail = LaporanIrigasi.fromJson(res.data!);
-    } else {
-      _error = res.message;
+    _loading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final res = await api.get('/laporan-irigasi/$id');
+      if (res.success && res.data != null) {
+        _detail = LaporanIrigasi.fromJson(res.data!);
+      } else {
+        _error = res.message ?? 'Gagal memuat detail laporan irigasi';
+      }
+    } catch (e) {
+      _error = 'Terjadi kesalahan saat memuat detail: $e';
+    } finally {
+      _loading = false;
+      notifyListeners();
     }
-    _loading = false; notifyListeners();
   }
 
-  Future<Map<String, dynamic>?> save(Map<String, dynamic> data, {int? id}) async {
+  Future<Map<String, dynamic>?> save(
+    Map<String, dynamic> data, {
+    int? id,
+    Map<String, String>? headers,
+  }) async {
     _loading = true; _fieldErrors = null; notifyListeners();
-    final res = id != null ? await api.put('/laporan-irigasi/$id', data: data) : await api.post('/laporan-irigasi', data: data);
+    final res = id != null
+        ? await api.put('/laporan-irigasi/$id', data: data, headers: headers)
+        : await api.post('/laporan-irigasi', data: data, headers: headers);
     _loading = false; notifyListeners();
     if (res.success) return res.data;
     if (res.errors != null) _fieldErrors = res.errors;

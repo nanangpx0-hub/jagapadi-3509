@@ -3,6 +3,13 @@ android/app/google-services.json
 **/google-services.json
 *.service_account.json
 
+# Release Secrets & KeyStore
+android/key.properties
+android/app/key.properties
+*.jks
+*.keystore
+dist/
+
 # Flutter
 .dart_tool/
 build/
@@ -14,7 +21,6 @@ android/local.properties
 .packages
 .pub-cache/
 .pub/
-pubspec.lock
 
 # IDE
 .idea/

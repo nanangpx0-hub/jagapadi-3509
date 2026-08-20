@@ -24,7 +24,7 @@ class IrigasiScraperController extends Controller {
     }
     
     protected function checkAdmin() {
-        if ($_SESSION['role'] !== 'admin') {
+        if (($_SESSION['role'] ?? '') !== 'admin') {
             $_SESSION['error'] = 'Anda tidak memiliki akses';
             header('Location: ' . BASE_URL . '/dashboard');
             exit;
@@ -36,15 +36,16 @@ class IrigasiScraperController extends Controller {
      */
     public function index() {
         $this->checkAuth();
-        
+
+        $displayDate = $this->model->getLatestDate() ?? date('Y-m-d');
         $data = [
             'title' => 'Monitoring Irigasi - JAGAPADI',
             'page_title' => 'Monitoring Debit Air & Irigasi Jember',
             'daerahIrigasi' => $this->model->getDaerahIrigasiList(),
-            'currentDate' => date('Y-m-d')
+            'currentDate' => $displayDate
         ];
         
-        $data['statistics'] = $this->model->getStatistics(date('Y-m-d'));
+        $data['statistics'] = $this->model->getStatistics(['tanggal' => $displayDate]);
         
         // Initial charts data (last 30 days)
         $data['trendData'] = $this->model->getDebitTrend();
@@ -60,10 +61,12 @@ class IrigasiScraperController extends Controller {
         header('Content-Type: application/json');
         
         try {
+            $displayDate = $_GET['tanggal'] ?? $this->model->getLatestDate() ?? date('Y-m-d');
             $filters = [
-                'tanggal' => $_GET['tanggal'] ?? date('Y-m-d'),
+                'tanggal' => $displayDate,
                 'daerah_irigasi' => $_GET['lokasi'] ?? null,
                 'status_pintu' => $_GET['status'] ?? null,
+                'metode_data' => $_GET['metode'] ?? null,
                 'limit' => $_GET['limit'] ?? 50,
                 'offset' => $_GET['offset'] ?? 0
             ];
@@ -73,7 +76,7 @@ class IrigasiScraperController extends Controller {
             
             $data = $this->model->getAll($filters);
             $total = $this->model->countAll($filters);
-            $statistics = $this->model->getStatistics($filters['tanggal'] ?? date('Y-m-d'));
+            $statistics = $this->model->getStatistics($filters);
             
             // Format for datatable
             $formattedData = array_map(function($row) {
@@ -84,6 +87,7 @@ class IrigasiScraperController extends Controller {
                     'luas_sawah' => DataIrigasi::formatNumber($row['luas_sawah']) . ' Ha',
                     'debit_air' => DataIrigasi::formatNumber($row['debit_air']) . ' L/det',
                     'status_pintu' => $row['status_pintu'],
+                    'metode_data' => $row['metode_data'] ?? 'manual',
                     'keterangan' => $row['keterangan']
                 ];
             }, $data);
@@ -92,6 +96,7 @@ class IrigasiScraperController extends Controller {
                 'success' => true,
                 'data' => $formattedData,
                 'total' => $total,
+                'tanggal' => $displayDate,
                 'statistics' => [
                     'total_lokasi' => $statistics['total_lokasi'],
                     'rata_debit' => DataIrigasi::formatNumber($statistics['rata_debit']) . ' L/det',
@@ -114,7 +119,7 @@ class IrigasiScraperController extends Controller {
         header('Content-Type: application/json');
         
         try {
-            $days = $_GET['days'] ?? 30;
+            $days = max(1, min(365, (int) ($_GET['days'] ?? 30)));
             $data = $this->model->getDebitTrend($days);
             
             $labels = [];
@@ -150,6 +155,7 @@ class IrigasiScraperController extends Controller {
     public function runScraper() {
         $this->checkAuth();
         $this->checkAdmin(); // Only admin can trigger scraping
+        $this->requireRequestMethod(['POST']);
         
         header('Content-Type: application/json');
         
@@ -185,7 +191,9 @@ class IrigasiScraperController extends Controller {
         
         $filters = [
             'tanggal' => $_GET['tanggal'] ?? date('Y-m-d'),
-            'daerah_irigasi' => $_GET['lokasi'] ?? null 
+            'daerah_irigasi' => $_GET['lokasi'] ?? null,
+            'status_pintu' => $_GET['status'] ?? null,
+            'metode_data' => $_GET['metode'] ?? null
         ];
         
         $filters = array_filter($filters);
@@ -197,18 +205,20 @@ class IrigasiScraperController extends Controller {
         header('Content-Disposition: attachment; filename="' . $filename . '"');
         
         $output = fopen('php://output', 'w');
-        fputcsv($output, ['Tanggal', 'Daerah Irigasi', 'Kecamatan', 'Luas Layanan (Ha)', 'Debit (L/det)', 'Status', 'Keterangan']);
+        fputcsv($output, ['Tanggal', 'Daerah Irigasi', 'Kecamatan', 'Luas Layanan (Ha)', 'Debit (L/det)', 'Status', 'Metode Data', 'Keterangan']);
         
         foreach ($data as $row) {
-            fputcsv($output, [
+            $csvRow = $this->sanitizeCsvRow([
                 $row['tanggal'],
                 $row['daerah_irigasi'],
                 $row['kecamatan'],
                 $row['luas_sawah'],
                 $row['debit_air'],
                 $row['status_pintu'],
+                $row['metode_data'] ?? 'manual',
                 $row['keterangan']
             ]);
+            fputcsv($output, $csvRow);
         }
         
         fclose($output);

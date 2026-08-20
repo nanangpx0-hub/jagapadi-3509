@@ -89,6 +89,12 @@
     border-color: #1e7e34;
 }
 
+.btn-filter.active[data-filter="aktif"] {
+    background: linear-gradient(180deg, #28a745 0%, #218838 100%);
+    color: #ffffff;
+    border-color: #1e7e34;
+}
+
 .btn-filter.active[data-filter="ditolak"] {
     background: linear-gradient(180deg, #dc3545 0%, #c82333 100%);
     color: #ffffff;

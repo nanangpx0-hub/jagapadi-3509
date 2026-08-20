@@ -1,0 +1,438 @@
+openapi: 3.0.3
+info:
+  title: JAGAPADI API
+  description: >-
+    API integrasi eksternal dan data pertanian (BPS) untuk JAGAPADI —
+    Jember Agrikultur Gapai Prestasi Digital.
+    Semua endpoint eksternal wajib dikirim header `X-API-Key` atau
+    `Authorization: Bearer <token>`.
+  version: 1.0.0
+  contact:
+    name: JAGAPADI Team
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost/jagapadi-3509
+    description: Local development (Laragon)
+  - url: https://example.com
+    description: Production
+
+tags:
+  - name: Eksternal
+    description: Endpoint integrasi pihak eksternal (Simitra, SBML)
+  - name: BPS
+    description: Data pertanian dari BPS WebAPI
+
+paths:
+  /api/external/report:
+    post:
+      tags: [Eksternal]
+      summary: Submit laporan hama/OPT dari integrasi eksternal
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitReportRequest"
+      responses:
+        "201":
+          description: Laporan berhasil dibuat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  data:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      nomor_laporan: { type: string }
+        "400":
+          description: Field wajib tidak lengkap / JSON tidak valid
+        "405":
+          description: Method tidak diizinkan
+        "429":
+          description: Rate limit terlampaui
+  /api/external/mitra:
+    get:
+      tags: [Eksternal]
+      summary: Daftar mitra Simitra aktif
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Daftar mitra
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+  /api/external/kegiatan:
+    get:
+      tags: [Eksternal]
+      summary: Daftar kegiatan Simitra aktif
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Daftar kegiatan
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+  /api/external/honor:
+    post:
+      tags: [Eksternal]
+      summary: Tambah pencatatan honor POP (petugas lapangan) per pelaporan
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [laporan_hama_id, mitra_id, kegiatan_id, jumlah_honor]
+              properties:
+                laporan_hama_id: { type: integer, example: 1 }
+                mitra_id: { type: integer, example: 2 }
+                kegiatan_id: { type: integer, example: 3 }
+                jumlah_honor: { type: number, example: 150000 }
+                catatan: { type: string }
+      responses:
+        "201":
+          description: Honor tercatat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  data:
+                    type: object
+                    properties:
+                      id: { type: integer }
+        "400":
+          description: Field wajib tidak lengkap / nilai numerik tidak valid
+        "405":
+          description: Method tidak diizinkan
+  /api/external/validate-sbml:
+    get:
+      tags: [Eksternal]
+      summary: Validasi sisa pagu honor SBML untuk suatu kegiatan
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: kegiatan_id
+          in: query
+          required: true
+          schema: { type: integer, example: 3 }
+      responses:
+        "200":
+          description: Status pagu honor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  data:
+                    type: object
+                    properties:
+                      pagu_honor: { type: number }
+                      total_used: { type: number }
+                      remaining: { type: number }
+                      is_valid: { type: boolean }
+        "400":
+          description: kegiatan_id tidak valid
+        "404":
+          description: Kegiatan tidak ditemukan
+  /api/v1/bps/data:
+    get:
+      tags: [BPS]
+      summary: Data pertanian BPS (paginated, multi-province)
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: tahun
+          in: query
+          schema: { type: integer, example: 2025 }
+        - name: kabupaten
+          in: query
+          schema: { type: string, example: "KABUPATEN JEMBER" }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20, maximum: 100 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: Data BPS
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  meta:
+                    type: object
+                    properties:
+                      total: { type: integer }
+                      limit: { type: integer }
+                      offset: { type: integer }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        tahun: { type: integer }
+                        kode_provinsi: { type: string }
+                        kabupaten_kota: { type: string }
+                        luas_panen: { type: number }
+                        produksi_gabah: { type: number }
+                        produksi_beras: { type: number }
+                        produktivitas: { type: number }
+  /api/v1/bps/statistics:
+    get:
+      tags: [BPS]
+      summary: Statistik agregat BPS per tahun
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: tahun
+          in: query
+          schema: { type: integer, example: 2025 }
+      responses:
+        "200":
+          description: Statistik
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  tahun: { type: integer }
+                  statistics:
+                    type: object
+                    properties:
+                      jumlah_kabupaten: { type: integer }
+                      total_luas_panen: { type: number }
+                      total_produksi_gabah: { type: number }
+                      total_produksi_beras: { type: number }
+                      rata_produktivitas: { type: number }
+  /api/v1/bps/trend:
+    get:
+      tags: [BPS]
+      summary: Tren produksi beberapa tahun
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: start
+          in: query
+          schema: { type: integer, example: 2020 }
+        - name: end
+          in: query
+          schema: { type: integer, example: 2025 }
+      responses:
+        "200":
+          description: Tren
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  meta:
+                    type: object
+                    properties:
+                      start_year: { type: integer }
+                      end_year: { type: integer }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        tahun: { type: integer }
+                        total_luas_panen: { type: number }
+                        total_produksi_gabah: { type: number }
+                        rata_produktivitas: { type: number }
+                        jumlah_kabupaten: { type: integer }
+  /api/v1/bps/provinsi:
+    get:
+      tags: [BPS]
+      summary: Daftar provinsi yang didukung (multi-province)
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Daftar provinsi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+  /api/v1/bps/kabupaten-list:
+    get:
+      tags: [BPS]
+      summary: Daftar kabupaten per provinsi
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: kode_provinsi
+          in: query
+          schema: { type: string, example: "35" }
+      responses:
+        "200":
+          description: Daftar kabupaten
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+  /api/v1/bps/scrape:
+    post:
+      tags: [BPS]
+      summary: Antrekan job scraping BPS (background queue)
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tahun: { type: integer, example: 2025 }
+                source:
+                  type: string
+                  enum: [simulasi, resmi_webapi, auto]
+                  default: auto
+                kabupaten: { type: string, example: "KABUPATEN JEMBER" }
+                skenario:
+                  type: string
+                  enum: [baseline, optimis, pesimis]
+                  default: baseline
+      responses:
+        "202":
+          description: Job diantrekan
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  job_id: { type: integer }
+                  message: { type: string }
+                  meta:
+                    type: object
+                    properties:
+                      tahun: { type: integer }
+                      source: { type: string }
+                      kabupaten: { type: string }
+                      skenario: { type: string }
+        "405":
+          description: Method tidak diizinkan
+  /api/v1/bps/status/{jobId}:
+    get:
+      tags: [BPS]
+      summary: Status job scraping BPS
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Status job
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      job_id: { type: integer }
+                      tahun: { type: integer }
+                      kabupaten: { type: string, nullable: true }
+                      source: { type: string }
+                      skenario: { type: string }
+                      status:
+                        type: string
+                        enum: [pending, running, completed, failed]
+                      progress: { type: integer }
+                      error_message: { type: string, nullable: true }
+        "400":
+          description: Job ID tidak diberikan
+        "404":
+          description: Job tidak ditemukan
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    SubmitReportRequest:
+      type: object
+      required: [master_opt_id, tanggal, lokasi, tingkat_keparahan]
+      properties:
+        master_opt_id: { type: integer, example: 1 }
+        tanggal: { type: string, format: date, example: "2026-08-09" }
+        lokasi:
+          type: object
+          required: [latitude, longitude, kecamatan]
+          properties:
+            latitude: { type: number, example: -8.1706 }
+            longitude: { type: number, example: 113.7003 }
+            kecamatan: { type: string, example: "PATRANG" }
+            desa: { type: string }
+            alamat: { type: string }
+        tingkat_keparahan:
+          type: string
+          enum: [Rendah, Sedang, Berat]
+        deskripsi: { type: string }
+        foto:
+          type: array
+          items: { type: string, format: binary }
+
+security:
+  - ApiKeyAuth: []
+  - BearerAuth: []

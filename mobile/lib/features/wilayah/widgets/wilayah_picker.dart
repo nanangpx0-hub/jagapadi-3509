@@ -49,6 +49,25 @@ class _WilayahPickerState extends State<WilayahPicker> {
   }
 
   @override
+  void didUpdateWidget(covariant WilayahPicker oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.kabupatenId != oldWidget.kabupatenId ||
+        widget.kecamatanId != oldWidget.kecamatanId ||
+        widget.desaId != oldWidget.desaId) {
+      final shouldLoadKecamatan = widget.kabupatenId != _kabId;
+      final shouldLoadDesa = widget.kecamatanId != _kecId;
+      setState(() {
+        _kabId = widget.kabupatenId;
+        _kecId = widget.kecamatanId;
+        _desaId = widget.desaId;
+      });
+      final w = context.read<WilayahProvider>();
+      if (shouldLoadKecamatan && _kabId != null) w.loadKecamatan(_kabId!);
+      if (shouldLoadDesa && _kecId != null) w.loadDesa(_kecId!);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final w = context.watch<WilayahProvider>();
     return Column(
@@ -76,7 +95,8 @@ class _WilayahPickerState extends State<WilayahPicker> {
           label: 'Kecamatan',
           value: _kecId,
           items: w.kecamatanList,
-          loading: w.loading,
+          loading: w.loadingKecamatan,
+          enabled: _kabId != null,
           errorText: widget.errorKecamatan,
           onChanged: (v) {
             setState(() {
@@ -93,7 +113,8 @@ class _WilayahPickerState extends State<WilayahPicker> {
           label: 'Desa',
           value: _desaId,
           items: w.desaList,
-          loading: w.loading,
+          loading: w.loadingDesa,
+          enabled: _kecId != null,
           errorText: widget.errorDesa,
           onChanged: (v) {
             setState(() => _desaId = v);
@@ -101,6 +122,31 @@ class _WilayahPickerState extends State<WilayahPicker> {
           },
           textFn: (e) => (e).nama,
         ),
+        if (w.error != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            w.error!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: w.loading || w.loadingKecamatan || w.loadingDesa
+                  ? null
+                  : () {
+                      if (_kecId != null) {
+                        w.loadDesa(_kecId!);
+                      } else if (_kabId != null) {
+                        w.loadKecamatan(_kabId!);
+                      } else {
+                        w.loadKabupaten();
+                      }
+                    },
+              icon: const Icon(Icons.refresh),
+              label: const Text('Muat Ulang Data Wilayah'),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -111,6 +157,7 @@ class _Dropdown<T> extends StatelessWidget {
   final int? value;
   final List<T> items;
   final bool loading;
+  final bool enabled;
   final String? errorText;
   final ValueChanged<int?> onChanged;
   final String Function(T) textFn;
@@ -120,6 +167,7 @@ class _Dropdown<T> extends StatelessWidget {
     required this.value,
     required this.items,
     required this.loading,
+    this.enabled = true,
     this.errorText,
     required this.onChanged,
     required this.textFn,
@@ -128,18 +176,36 @@ class _Dropdown<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<int>(
-      initialValue: items.any((e) => (e is Kabupaten ? (e as Kabupaten).id : e is Kecamatan ? (e as Kecamatan).id : (e as Desa).id) == value)
+      initialValue: items.any((e) =>
+              (e is Kabupaten
+                  ? (e as Kabupaten).id
+                  : e is Kecamatan
+                      ? (e as Kecamatan).id
+                      : (e as Desa).id) ==
+              value)
           ? value
           : null,
-      decoration: InputDecoration(labelText: label, errorText: errorText),
+      decoration: InputDecoration(
+        labelText: label,
+        errorText: errorText,
+        helperText: loading
+            ? 'Memuat data $label…'
+            : enabled && items.isEmpty
+                ? 'Data belum tersedia'
+                : null,
+      ),
       items: [
-        const DropdownMenuItem(value: null, child: Text('Pilih $label')),
+        DropdownMenuItem(value: null, child: Text('Pilih $label')),
         ...items.map((e) {
-          final id = e is Kabupaten ? e.id : e is Kecamatan ? e.id : (e as Desa).id;
+          final id = e is Kabupaten
+              ? e.id
+              : e is Kecamatan
+                  ? e.id
+                  : (e as Desa).id;
           return DropdownMenuItem(value: id, child: Text(textFn(e)));
         }),
       ],
-      onChanged: loading ? null : onChanged,
+      onChanged: loading || !enabled ? null : onChanged,
     );
   }
 }

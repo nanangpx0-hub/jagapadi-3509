@@ -14,18 +14,115 @@ class DashboardChartsApiController extends BaseApiController {
     private $aggregator;
     
     public function __construct() {
+        // Authentication middleware has already populated $_SESSION. These
+        // chart endpoints are read-only, so release PHP's exclusive session
+        // lock before running aggregate queries. Otherwise navigation in the
+        // same browser session is blocked until the chart request finishes.
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+
         $this->aggregator = new DashboardDataAggregator();
     }
+    
+    // =========================================
+    // DEFENSE-IN-DEPTH AUTHENTICATION
+    // =========================================
+    
+    private function assertAuthenticated(): void {
+        if (empty($_SESSION['user_id'])) {
+            $this->jsonResponse(['success' => false, 'error' => 'Unauthorized'], 401);
+            exit;
+        }
+    }
+    
+    private function isDevEnvironment(): bool {
+        return in_array(
+            strtolower((string)(getenv('APP_ENV') ?: 'production')),
+            ['local', 'development', 'dev'],
+            true
+        );
+    }
+    
+    private function handleApiException(string $label, Throwable $e): never {
+        error_log(sprintf(
+            '[DashboardChartsApi::%s] %s | user_id=%s role=%s',
+            $label,
+            $e->getMessage(),
+            $_SESSION['user_id'] ?? 'null',
+            $_SESSION['role'] ?? 'null'
+        ));
+        $message = $this->isDevEnvironment()
+            ? "Gagal memuat data {$label}: " . $e->getMessage()
+            : "Gagal memuat data {$label}.";
+        $this->errorResponse($message, 500);
+        exit;
+    }
+    
+    private function resolveYear(): int {
+        $raw = $_GET['year'] ?? date('Y');
+        $year = filter_var($raw, FILTER_VALIDATE_INT);
+        $current = (int) date('Y');
+        return ($year !== false && $year >= 2000 && $year <= $current + 1)
+            ? $year
+            : $current;
+    }
+    
+    private function resolveDays(int $default = 30, int $min = 1, int $max = 365): int {
+        $raw = $_GET['days'] ?? $default;
+        $days = filter_var($raw, FILTER_VALIDATE_INT);
+        return ($days !== false && $days >= $min && $days <= $max) ? $days : $default;
+    }
+    
+    private function resolveMonths(int $default = 6, int $min = 1, int $max = 24): int {
+        $raw = $_GET['months'] ?? $default;
+        $months = filter_var($raw, FILTER_VALIDATE_INT);
+        return ($months !== false && $months >= $min && $months <= $max) ? $months : $default;
+    }
+    
+    // =========================================
+    // RATE LIMITING HELPER
+    // =========================================
+    
+    private function assertRateLimit(string $action, int $max = 30, int $window = 60): void {
+        $userId = (int)($_SESSION['user_id'] ?? 0);
+        $key    = "charts_api_{$action}_{$userId}";
+        // Rate limiter hanya di development jika Security class ada, di produksi
+        // kemungkinan besar middleware rate_limit di Router yang menangani ini.
+        // Namun kita tambahkan defense-in-depth di sini dengan fallback aman:
+        if (class_exists('Security') && method_exists('Security', 'checkRateLimit')) {
+            if (Security::checkRateLimit($key, $max, $window) === true) {
+                http_response_code(429);
+                header('Retry-After: ' . $window);
+                $this->jsonResponse([
+                    'success' => false,
+                    'error'   => 'Too many requests',
+                    'message' => 'Terlalu banyak permintaan. Coba lagi dalam beberapa saat.',
+                ], 429);
+                exit;
+            }
+        }
+    }
+    
+    // =========================================
+    // RAINFALL ENDPOINT
+    // =========================================
     
     /**
      * Get rainfall time-series data
      * GET /api/dashboard/charts/rainfall
      */
     public function rainfall() {
+        $this->assertAuthenticated();
+        $this->assertRateLimit('rainfall', 30, 60);
+        
         try {
+            $year = $this->resolveYear();
+            $month = null; // full year series, skip monthly filter at controller level
+            
             $filters = [
-                'year' => $_GET['year'] ?? date('Y'),
-                'month' => $_GET['month'] ?? null
+                'year' => $year,
+                'month' => $month
             ];
             
             $data = $this->aggregator->getRainfallSummary($filters);
@@ -40,20 +137,29 @@ class DashboardChartsApiController extends BaseApiController {
                 'year' => $data['year'],
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
-        } catch (Exception $e) {
-            $this->errorResponse('Gagal memuat data curah hujan: ' . $e->getMessage());
+        } catch (Throwable $e) {
+            $this->handleApiException('curah hujan', $e);
         }
     }
+    
+    // =========================================
+    // WIND ENDPOINT
+    // =========================================
     
     /**
      * Get wind speed time-series data
      * GET /api/dashboard/charts/wind
      */
     public function wind() {
+        $this->assertAuthenticated();
+        $this->assertRateLimit('wind', 30, 60);
+        
         try {
+            $year = $this->resolveYear();
+            
             $filters = [
-                'year' => $_GET['year'] ?? date('Y'),
-                'month' => $_GET['month'] ?? null
+                'year' => $year,
+                'month' => null
             ];
             
             $data = $this->aggregator->getWindSummary($filters);
@@ -68,19 +174,30 @@ class DashboardChartsApiController extends BaseApiController {
                 'year' => $data['year'],
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
-        } catch (Exception $e) {
-            $this->errorResponse('Gagal memuat data kecepatan angin: ' . $e->getMessage());
+        } catch (Throwable $e) {
+            $this->handleApiException('kecepatan angin', $e);
         }
     }
+    
+    // =========================================
+    // WEATHER ENDPOINT
+    // =========================================
     
     /**
      * Get weather combined data (rainfall + wind)
      * GET /api/dashboard/charts/weather
      */
     public function weather() {
+        $this->assertAuthenticated();
+        $this->assertRateLimit('weather', 60, 60);
+        
         try {
+            $year = $this->resolveYear();
+            $days = $this->resolveDays(7, 1, 30);  // max 30 hari untuk alert
+            
             $filters = [
-                'year' => $_GET['year'] ?? date('Y')
+                'year' => $year,
+                'days' => $_GET['days'] ?? 7
             ];
             
             $data = $this->aggregator->getWeatherSummary($filters);
@@ -90,18 +207,25 @@ class DashboardChartsApiController extends BaseApiController {
                 'data' => $data,
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
-        } catch (Exception $e) {
-            $this->errorResponse('Gagal memuat data cuaca: ' . $e->getMessage());
+        } catch (Throwable $e) {
+            $this->handleApiException('cuaca', $e);
         }
     }
+    
+    // =========================================
+    // PRICES ENDPOINT
+    // =========================================
     
     /**
      * Get price trend data
      * GET /api/dashboard/charts/prices
      */
     public function prices() {
+        $this->assertAuthenticated();
+        $this->assertRateLimit('prices', 20, 60);
+        
         try {
-            $months = $_GET['months'] ?? 6;
+            $months = $this->resolveMonths();
             
             $data = $this->aggregator->getPriceSummary(['months' => $months]);
             
@@ -117,22 +241,27 @@ class DashboardChartsApiController extends BaseApiController {
                 ],
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
-        } catch (Exception $e) {
-            $this->errorResponse('Gagal memuat data harga: ' . $e->getMessage());
+        } catch (Throwable $e) {
+            $this->handleApiException('harga komoditas', $e);
         }
     }
+    
+    // =========================================
+    // PRODUCTION ENDPOINT
+    // =========================================
     
     /**
      * Get production/BPS data
      * GET /api/dashboard/charts/production
      */
     public function production() {
+        $this->assertAuthenticated();
+        $this->assertRateLimit('production', 20, 60);
+        
         try {
-            $filters = [
-                'year' => $_GET['year'] ?? date('Y')
-            ];
+            $year = $this->resolveYear();
             
-            $data = $this->aggregator->getProductionSummary($filters);
+            $data = $this->aggregator->getProductionSummary(['year' => $year]);
             
             // Format for charts
             $trendChart = $this->formatProductionTrendData($data['trend']);
@@ -151,20 +280,45 @@ class DashboardChartsApiController extends BaseApiController {
                 ],
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
-        } catch (Exception $e) {
-            $this->errorResponse('Gagal memuat data produksi: ' . $e->getMessage());
+        } catch (Throwable $e) {
+            $this->handleApiException('produksi', $e);
         }
     }
+    
+    // =========================================
+    // HAMA ENDPOINT (scoped untuk petugas)
+    // =========================================
     
     /**
      * Get hama/pest statistics data
      * GET /api/dashboard/charts/hama
      */
     public function hama() {
+        $this->assertAuthenticated();
+        $this->assertRateLimit('hama', 30, 60);
+        
         try {
-            $filters = [
-                'year' => $_GET['year'] ?? date('Y')
-            ];
+            $year = $this->resolveYear();
+            $userId = $this->getPetugasUserId();
+            $filters = ['year' => $year];
+            if ($userId !== null) {
+                $filters['user_id'] = $userId;
+            }
+
+            // Dual-scope: admin/operator dapat memfilter per kecamatan dan/atau
+            // memasukkan laporan Draf milik sendiri.
+            if (isset($_GET['kecamatan_id'])) {
+                $filters['kecamatan_id'] = (int) $_GET['kecamatan_id'];
+            }
+            if (isset($_GET['scope']) && $_GET['scope'] === 'territory') {
+                $filters['scope'] = 'territory';
+            }
+            $includeDraft = isset($_GET['include_draft'])
+                ? filter_var($_GET['include_draft'], FILTER_VALIDATE_BOOLEAN)
+                : false;
+            if ($includeDraft) {
+                $filters['include_draft'] = true;
+            }
             
             $data = $this->aggregator->getHamaSummary($filters);
             
@@ -182,6 +336,8 @@ class DashboardChartsApiController extends BaseApiController {
                 'total_laporan'
             );
             
+            $responseScope = ($userId !== null) ? 'user' : 'kabupaten';
+            
             $this->jsonResponse([
                 'success' => true,
                 'data' => [
@@ -190,18 +346,26 @@ class DashboardChartsApiController extends BaseApiController {
                     'topOPTChart' => $topOPTChart,
                     'byKecamatan' => $data['byKecamatan']
                 ],
+                'scope' => $responseScope,
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
-        } catch (Exception $e) {
-            $this->errorResponse('Gagal memuat data hama: ' . $e->getMessage());
+        } catch (Throwable $e) {
+            $this->handleApiException('hama', $e);
         }
     }
+    
+    // =========================================
+    // IRRIGATION ENDPOINT
+    // =========================================
     
     /**
      * Get irrigation data for charts
      * GET /api/dashboard/charts/irrigation
      */
     public function irrigation() {
+        $this->assertAuthenticated();
+        $this->assertRateLimit('irrigation', 20, 60);
+        
         try {
             $data = $this->aggregator->getIrrigationSummary();
             
@@ -224,23 +388,31 @@ class DashboardChartsApiController extends BaseApiController {
                 ],
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
-        } catch (Exception $e) {
-            $this->errorResponse('Gagal memuat data irigasi: ' . $e->getMessage());
+        } catch (Throwable $e) {
+            $this->handleApiException('irigasi', $e);
         }
     }
+    
+    // =========================================
+    // SUMMARY ENDPOINT
+    // =========================================
     
     /**
      * Get all dashboard summary data
      * GET /api/dashboard/charts/summary
      */
     public function summary() {
+        $this->assertAuthenticated();
+        $this->assertRateLimit('summary', 60, 60);
+        
         try {
-            $year = $_GET['year'] ?? date('Y');
+            $year = $this->resolveYear();
+            $userId = $this->getPetugasUserId();
             
             $this->jsonResponse([
                 'success' => true,
                 'data' => [
-                    'hama' => $this->aggregator->getHamaStats($year),
+                    'hama' => $this->aggregator->getHamaStats($year, $userId),
                     'weather' => [
                         'rainfall' => $this->aggregator->getRainfallSummary(['year' => $year])['statistics'],
                         'wind' => $this->aggregator->getWindSummary(['year' => $year])['statistics']
@@ -253,20 +425,37 @@ class DashboardChartsApiController extends BaseApiController {
                 'availableYears' => $this->aggregator->getAvailableYears(),
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
-        } catch (Exception $e) {
-            $this->errorResponse('Gagal memuat summary: ' . $e->getMessage());
+        } catch (Throwable $e) {
+            $this->handleApiException('summary', $e);
         }
     }
     
+    // =========================================
+    // EXPORT ENDPOINT
+    // =========================================
+    
     /**
-     * Export data to CSV
+     * Export data to CSV or JSON
      * GET /api/dashboard/charts/export
      */
     public function export() {
+        $this->assertAuthenticated();
+        $this->assertRateLimit('export', 5, 60);  // file download - batas ketat
+        
         try {
-            $type = $_GET['type'] ?? 'hama';
+            $type   = $_GET['type'] ?? 'hama';
             $format = $_GET['format'] ?? 'csv';
-            $year = $_GET['year'] ?? date('Y');
+            $year   = $this->resolveYear();
+            
+            // Validasi type dan format
+            $allowedTypes   = ['rainfall', 'wind', 'prices', 'production', 'hama', 'irrigation'];
+            $allowedFormats = ['csv', 'json'];
+            $type   = in_array($_GET['type'] ?? '', $allowedTypes, true)
+                      ? $_GET['type']
+                      : 'hama';
+            $format = in_array($_GET['format'] ?? '', $allowedFormats, true)
+                      ? $_GET['format']
+                      : 'csv';
             
             $data = [];
             $filename = '';
@@ -298,9 +487,18 @@ class DashboardChartsApiController extends BaseApiController {
                     
                 case 'hama':
                 default:
-                    $result = $this->aggregator->getHamaByKecamatan($year);
-                    $data = $result;
-                    $filename = "sebaran_hama_{$year}";
+                    $userId = $this->getPetugasUserId();
+                    $includeDraft = filter_var($_GET['include_draft'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                    $exportKecamatanId = isset($_GET['kecamatan_id']) ? (int) $_GET['kecamatan_id'] : null;
+                    if ($userId !== null) {
+                        // Petugas: ekspor detail laporan milik mereka (termasuk Draf jika diminta)
+                        $result = $this->aggregator->getHamaDetailForExport($year, $userId, null, $includeDraft);
+                        $filename = "laporan_hama_saya_{$year}";
+                    } else {
+                        // Admin/operator: ekspor agregat per kecamatan
+                        $result = $this->aggregator->getHamaByKecamatan($year, $userId, $exportKecamatanId, $includeDraft);
+                        $filename = "sebaran_hama_{$year}";
+                    }
                     break;
             }
             
@@ -309,11 +507,14 @@ class DashboardChartsApiController extends BaseApiController {
                 return;
             }
             
+            // Harden Content-Disposition filename
+            $safeFilename = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $filename);
+            
             if ($format === 'csv') {
-                $csv = $this->aggregator->exportToCSV($data, $filename);
+                $csv = $this->aggregator->exportToCSV($data, $safeFilename);
                 
                 header('Content-Type: text/csv; charset=utf-8');
-                header('Content-Disposition: attachment; filename="' . $filename . '.csv"');
+                header('Content-Disposition: attachment; filename="' . $safeFilename . '.csv"');
                 echo $csv;
                 exit;
             }
@@ -322,11 +523,11 @@ class DashboardChartsApiController extends BaseApiController {
             $this->jsonResponse([
                 'success' => true,
                 'data' => $data,
-                'filename' => $filename
+                'filename' => $safeFilename
             ]);
             
-        } catch (Exception $e) {
-            $this->errorResponse('Gagal mengekspor data: ' . $e->getMessage());
+        } catch (Throwable $e) {
+            $this->handleApiException('export', $e);
         }
     }
     
@@ -462,7 +663,7 @@ class DashboardChartsApiController extends BaseApiController {
             'labels' => $labels,
             'datasets' => [
                 [
-                    'label' => 'Rata-rata Debit (m³/s)',
+                    'label' => 'Rata-rata Debit (L/det)',
                     'data' => $values,
                     'borderColor' => '#0d6efd',
                     'fill' => true,
@@ -492,5 +693,15 @@ class DashboardChartsApiController extends BaseApiController {
                 ]
             ]
         ];
+    }
+    
+    private function getPetugasUserId(): ?int {
+        $role   = $_SESSION['role'] ?? '';
+        $userId = $_SESSION['user_id'] ?? null;
+        if ($role !== 'petugas') {
+            return null;
+        }
+        $id = filter_var($userId, FILTER_VALIDATE_INT);
+        return ($id !== false && $id > 0) ? $id : null;
     }
 }

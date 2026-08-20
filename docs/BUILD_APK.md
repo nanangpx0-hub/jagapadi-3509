@@ -1,155 +1,94 @@
-# Build APK JAGAPADI
+# Build & Distribusi APK JAGAPADI
 
-Panduan singkat untuk membangun APK Flutter JAGAPADI dari folder `mobile/`.
+> **Sistem Pelaporan Pertanian Kab. Jember — Role Petugas Lapangan**  
+> Panduan resmi konfigurasi, signing, dan otomatisasi build release APK Flutter JAGAPADI.
 
-## 1. Ringkasan
+---
 
-- Aplikasi Flutter berada di folder `mobile/`
-- Backend API harus dapat diakses dari emulator/perangkat
-- FCM adalah fitur opsional
-- Jangan commit file rahasia seperti `google-services.json`, `*.jks`, atau `key.properties`
+## 1. Prasyarat Tools & SDK
 
-## 2. Prasyarat tools
+- **Flutter SDK**: 3.x (Dart ^3.0.0)
+- **JDK**: 17
+- **Android SDK**: API 35 (minSdk 24)
+- **Gradle**: 8.x
+- `flutter doctor` harus hijau pada bagian Android toolchain.
 
-- Flutter SDK
-- Android Studio atau Android SDK command-line tools
-- JDK 17
-- Android SDK API level yang sesuai
-- `flutter doctor` harus lolos bagian Android
+---
 
-## 3. Siapkan project Android (jika belum ada platform)
+## 2. Struktur Konfigurasi Signing & ProGuard
 
-Folder `mobile/android/app` sudah ada di repo, tetapi struktur Android harus lengkap sebelum build.
-Jika folder Android tidak lengkap, jalankan:
+Konfigurasi build release menggunakan ProGuard / R8 minification dan signing otomatis via `key.properties`.
 
-```powershell
-cd c:\laragon\www\jagapadi-3509\mobile
-flutter create . --platforms android
-```
+File terdaftar di repo:
+- `mobile/android/app/proguard-rules.pro` — aturan ProGuard/R8
+- `mobile/android/key.properties.example` — template konfigurasi keystore
+- `mobile/scripts/build_release.sh` — script build otomatis (Linux/macOS)
+- `mobile/scripts/build_release.bat` — script build otomatis (Windows)
 
-> Jangan menimpa folder `lib/` secara buta. Jalankan hanya jika Android platform belum ada atau tidak lengkap.
+---
 
-## 4. Konfigurasi API base URL
+## 3. Menyiapkan Keystore Production
 
-Aplikasi membaca base URL API dari `--dart-define=API_BASE_URL=...`.
-Nilai default di `mobile/lib/core/config.dart` adalah:
-
-- Emulator Android: `http://10.0.2.2:8080/api/v1`
-- Device fisik / desktop: `http://localhost:8080/api/v1`
-
-### Contoh dev (emulator)
-
-```powershell
-cd c:\laragon\www\jagapadi-3509\mobile
-flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8080/api/v1
-```
-
-### Contoh production
-
-```powershell
-flutter run --dart-define=API_BASE_URL=https://domain-anda.com/api/v1
-```
-
-> Untuk dev, `10.0.2.2` adalah host machine dari emulator Android.
-> Untuk production, gunakan HTTPS tanpa trailing slash di akhir.
-
-## 5. Firebase / FCM (opsional)
-
-Jika ingin push notification:
-
-- Siapkan project Firebase
-- Download `google-services.json`
-- Letakkan di `mobile/android/app/google-services.json`
-- Backend harus memiliki `FCM_ENABLED=true` dan `FCM_SERVER_KEY` di `backend/.env`
-- Repo sudah mengabaikan `mobile/android/app/google-services.json` dan `*.service_account.json`
-- Template file tersedia di `mobile/android/app/google-services.json.example`
-
-## 6. Build APK debug
-
-```powershell
-cd c:\laragon\www\jagapadi-3509\mobile
-flutter pub get
-flutter build apk --debug
-```
-
-Output biasanya di:
-
-```text
-mobile/build/app/outputs/flutter-apk/app-debug.apk
-```
-
-Install ke emulator/perangkat:
-
-```powershell
-adb install -r .\build\app\outputs\flutter-apk\app-debug.apk
-```
-
-## 7. Build APK release
-
-### 7.1 Keystore
-
-Buat keystore secara lokal dan simpan di luar repo:
+Jalankan perintah berikut untuk membuat file keystore release:
 
 ```powershell
 keytool -genkeypair -v -keystore C:\keystore\jagapadi-release.jks -storetype JKS -keyalg RSA -keysize 2048 -validity 10000 -alias jagapadi
 ```
 
-Buat file `android/key.properties` di luar kontrol versi dan isi:
+Salin template `mobile/android/key.properties.example` ke `mobile/android/key.properties`:
 
 ```properties
-storePassword=<keystore-password>
-keyPassword=<key-password>
+storeFile=C:/keystore/jagapadi-release.jks
+storePassword=PASSWORD_KEYSTORE_ANDA
 keyAlias=jagapadi
-storeFile=C:\keystore\jagapadi-release.jks
+keyPassword=PASSWORD_KEY_ANDA
 ```
 
-Jika `android/app/build.gradle` belum dikonfigurasi, tambahkan signing config minimal untuk `release`.
+> **PERINGATAN SEKURITAS**: File `key.properties` dan `*.jks` **TIDAK BOLEH** di-commit ke Git repo! (sudah ada di `.gitignore`).
 
-### 7.2 Build release
+---
 
-```powershell
+## 4. Menjalankan Build Release Otomatis
+
+Gunakan script yang tersedia di `mobile/scripts/`:
+
+### Windows
+
+```cmd
 cd c:\laragon\www\jagapadi-3509\mobile
-flutter build apk --release
+.\scripts\build_release.bat https://jagapadi.jemberkab.go.id/api/v1
 ```
 
-Split per ABI:
+### Linux / macOS
 
-```powershell
-flutter build apk --release --split-per-abi
+```bash
+cd mobile
+chmod +x scripts/build_release.sh
+./scripts/build_release.sh https://jagapadi.jemberkab.go.id/api/v1
 ```
 
-### 7.3 App Bundle (opsional)
+Hasil build APK akan ditempatkan secara otomatis di folder `mobile/dist/`:
+- `jagapadi-arm64-v8a-release.apk` (Perangkat modern 64-bit — disarankan)
+- `jagapadi-armeabi-v7a-release.apk` (Perangkat Android lama 32-bit)
+- `jagapadi-x86_64-release.apk` (Emulator 64-bit)
 
-```powershell
-flutter build appbundle --release
-```
+---
 
-## 8. Install & uji di perangkat
+## 5. Parameter --dart-define
 
-- Aktifkan USB debugging atau install dari sumber tidak dikenal
-- Pastikan perangkat dan backend berada di jaringan yang sama jika menggunakan IP lokal
-- Login petugas/admin
-- Uji minimal:
-  - login
-  - daftar laporan
-  - buat draft laporan
-  - submit laporan
-  - verifikasi jika role admin tersedia
+Parameter wajib yang harus disertakan saat build:
 
-## 9. Troubleshooting APK
+| Parameter | Contoh | Kegunaan |
+|---|---|---|
+| `--dart-define=API_BASE_URL` | `https://jagapadi.jemberkab.go.id/api/v1` | URL Backend API Production |
 
-- `flutter doctor` issue: perbaiki SDK/JDK/Android licenses
-- `minSdk` / `compileSdk` error: cek Android SDK dan Gradle plugin
-- Cleartext HTTP blocked: gunakan `10.0.2.2` untuk emulator atau HTTPS untuk device/production
-- SSL handshake: cek sertifikat backend
-- Connection refused: pastikan backend berjalan di port yang benar
-- Firebase error: periksa `google-services.json` dan package name
-- Signing gagal: cek `key.properties`, keystore, alias, dan password
+---
 
-## 10. Checklist rilis APK internal
+## 6. Checklist Sebelum Rilis Produksi
 
-- [ ] API URL production HTTPS
-- [ ] Backend `APP_DEBUG=false`
-- [ ] Keystore aman di luar git
-- [ ] `versionName` / `versionCode` sesuai kebutuhan
-- [ ] Login + 1 laporan hama + 1 laporan irigasi diuji
+- [ ] `API_BASE_URL` menggunakan protocol HTTPS resmi
+- [ ] Backend `APP_DEBUG=false` di `backend/.env`
+- [ ] `key.properties` dan `*.jks` tersimpan aman & tidak ter-commit ke git
+- [ ] `google-services.json` ada di `mobile/android/app/` (jika menggunakan FCM)
+- [ ] `flutter analyze` 0 error / warning kritis
+- [ ] Direct test login & offline draft queue di device fisik / emulator

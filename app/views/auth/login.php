@@ -10,9 +10,9 @@ require_once ROOT_PATH . '/app/core/Security.php';
     <title>Login - JAGAPADI</title>
 
     <!-- AdminLTE CSS -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/css/adminlte.min.css">
+    <link rel="stylesheet" href="<?= BASE_URL ?>public/vendor/css/adminlte.min.css">
     <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="<?= BASE_URL ?>public/vendor/css/fontawesome-all.min.css">
     
     <style>
         .login-page {
@@ -99,13 +99,7 @@ require_once ROOT_PATH . '/app/core/Security.php';
             <?php endif; ?>
 
             <form action="<?= BASE_URL ?>auth/login" method="post">
-                <?php 
-                // Generate CSRF token if not exists
-                if (!isset($_SESSION['csrf_token'])) {
-                    $_SESSION['csrf_token'] = Security::generateCsrfToken();
-                }
-                ?>
-                <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+                <input type="hidden" name="csrf_token" value="<?= Security::generateCsrfToken() ?>">
                 <div class="input-group mb-3">
                     <input type="text" name="username" class="form-control" placeholder="Username" required autofocus>
                     <div class="input-group-append">
@@ -148,11 +142,11 @@ require_once ROOT_PATH . '/app/core/Security.php';
 </div>
 
 <!-- jQuery -->
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="<?= BASE_URL ?>public/vendor/js/jquery-3.6.0.min.js"></script>
 <!-- Bootstrap 4 -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="<?= BASE_URL ?>public/vendor/js/bootstrap.bundle.min.js"></script>
 <!-- AdminLTE App -->
-<script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js"></script>
+<script src="<?= BASE_URL ?>public/vendor/js/adminlte.min.js"></script>
 
 <script>
     function togglePassword() {

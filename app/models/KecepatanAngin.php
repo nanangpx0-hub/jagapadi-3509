@@ -34,7 +34,7 @@ class KecepatanAngin {
             $sql .= " AND MONTH(tanggal) = ?";
             $params[] = $filters['month'];
         }
-        
+
         if (!empty($filters['start_date'])) {
             $sql .= " AND tanggal >= ?";
             $params[] = $filters['start_date'];
@@ -53,8 +53,8 @@ class KecepatanAngin {
         $sql .= " ORDER BY tanggal DESC, lokasi ASC";
         
         if (isset($filters['limit'])) {
-            $limit = (int) $filters['limit'];
-            $offset = isset($filters['offset']) ? (int) $filters['offset'] : 0;
+            $limit = max(1, min(500, (int) $filters['limit']));
+            $offset = isset($filters['offset']) ? max(0, (int) $filters['offset']) : 0;
             $sql .= " LIMIT {$limit} OFFSET {$offset}";
         }
         
@@ -78,6 +78,16 @@ class KecepatanAngin {
         if (!empty($filters['month'])) {
             $sql .= " AND MONTH(tanggal) = ?";
             $params[] = $filters['month'];
+        }
+
+        if (!empty($filters['start_date'])) {
+            $sql .= " AND tanggal >= ?";
+            $params[] = $filters['start_date'];
+        }
+
+        if (!empty($filters['end_date'])) {
+            $sql .= " AND tanggal <= ?";
+            $params[] = $filters['end_date'];
         }
         
         if (!empty($filters['sumber_data_like'])) {
@@ -116,9 +126,7 @@ class KecepatanAngin {
                     arah_angin_desc = IF(VALUES(arah_angin_desc) IS NOT NULL, VALUES(arah_angin_desc), arah_angin_desc),
                     satuan = VALUES(satuan),
                     sumber_data = VALUES(sumber_data),
-                    keterangan = CONCAT(keterangan, 
-                        IF(keterangan IS NULL OR keterangan = '', '', ' | '),
-                        VALUES(keterangan)),
+                    keterangan = VALUES(keterangan),
                     updated_at = NOW()";
 
         $stmt = $this->db->prepare($sql);
@@ -204,7 +212,8 @@ class KecepatanAngin {
                     MIN(kecepatan_angin) as minimum,
                     MAX(kecepatan_max) as puncak_maksimum,
                     COUNT(*) as total_records,
-                    COUNT(CASE WHEN kecepatan_angin > 10 THEN 1 END) as hari_berangin
+                    COUNT(DISTINCT CASE WHEN kecepatan_angin > 10 THEN tanggal END) as hari_berangin,
+                    COUNT(DISTINCT tanggal) as jumlah_hari
                 FROM {$this->table} WHERE 1=1";
         $params = [];
         
@@ -217,6 +226,21 @@ class KecepatanAngin {
             $sql .= " AND MONTH(tanggal) = ?";
             $params[] = $filters['month'];
         }
+
+        if (!empty($filters['start_date'])) {
+            $sql .= " AND tanggal >= ?";
+            $params[] = $filters['start_date'];
+        }
+
+        if (!empty($filters['end_date'])) {
+            $sql .= " AND tanggal <= ?";
+            $params[] = $filters['end_date'];
+        }
+
+        if (!empty($filters['sumber_data_like'])) {
+            $sql .= " AND sumber_data LIKE ?";
+            $params[] = $filters['sumber_data_like'];
+        }
         
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
@@ -226,7 +250,7 @@ class KecepatanAngin {
     /**
      * Get monthly average
      */
-    public function getMonthlyAverage($year = null) {
+    public function getMonthlyAverage($year = null, $filters = []) {
         $year = $year ?: date('Y');
         
         $sql = "SELECT 
@@ -235,20 +259,26 @@ class KecepatanAngin {
                     ROUND(SUM(kecepatan_angin), 2) as total,
                     MAX(kecepatan_max) as maksimum
                 FROM {$this->table}
-                WHERE YEAR(tanggal) = ?
-                GROUP BY MONTH(tanggal)
-                ORDER BY bulan";
+                WHERE YEAR(tanggal) = ?";
+        $params = [$year];
+
+        if (!empty($filters['sumber_data_like'])) {
+            $sql .= " AND sumber_data LIKE ?";
+            $params[] = $filters['sumber_data_like'];
+        }
+
+        $sql .= " GROUP BY MONTH(tanggal) ORDER BY bulan";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$year]);
+        $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     
     /**
      * Get yearly summary
      */
-    public function getYearlySummary($years = 5) {
-        $years = (int) $years;
+    public function getYearlySummary($years = 5, $filters = []) {
+        $years = max(1, min(50, (int) $years));
         $sql = "SELECT 
                     YEAR(tanggal) as tahun,
                     ROUND(AVG(kecepatan_angin), 2) as rata_rata,
@@ -256,12 +286,20 @@ class KecepatanAngin {
                     MAX(kecepatan_max) as maksimum,
                     COUNT(*) as jumlah_data
                 FROM {$this->table}
-                GROUP BY YEAR(tanggal)
+                WHERE 1=1";
+        $params = [];
+
+        if (!empty($filters['sumber_data_like'])) {
+            $sql .= " AND sumber_data LIKE ?";
+            $params[] = $filters['sumber_data_like'];
+        }
+
+        $sql .= " GROUP BY YEAR(tanggal)
                 ORDER BY tahun DESC
                 LIMIT {$years}";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute();
+        $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     
@@ -292,6 +330,21 @@ class KecepatanAngin {
             $sql .= " AND YEAR(tanggal) = ?";
             $params[] = $filters['year'];
         }
+
+        if (!empty($filters['month'])) {
+            $sql .= " AND MONTH(tanggal) = ?";
+            $params[] = $filters['month'];
+        }
+
+        if (!empty($filters['start_date'])) {
+            $sql .= " AND tanggal >= ?";
+            $params[] = $filters['start_date'];
+        }
+
+        if (!empty($filters['end_date'])) {
+            $sql .= " AND tanggal <= ?";
+            $params[] = $filters['end_date'];
+        }
         
         $sql .= " GROUP BY sumber_data ORDER BY jumlah DESC";
         
@@ -305,7 +358,7 @@ class KecepatanAngin {
     /**
      * Get trend analysis
      */
-    public function getTrendAnalysis($startYear = null, $endYear = null) {
+    public function getTrendAnalysis($startYear = null, $endYear = null, $filters = []) {
         $endYear = $endYear ?: date('Y');
         $startYear = $startYear ?: ($endYear - 4);
         
@@ -316,19 +369,24 @@ class KecepatanAngin {
                     MAX(kecepatan_max) as maksimum,
                     COUNT(*) as jumlah_data
                 FROM {$this->table}
-                WHERE YEAR(tanggal) BETWEEN ? AND ?
-                GROUP BY YEAR(tanggal), MONTH(tanggal)
+                WHERE YEAR(tanggal) BETWEEN ? AND ?";
+        $params = [$startYear, $endYear];
+        if (!empty($filters['sumber_data_like'])) {
+            $sql .= " AND sumber_data LIKE ?";
+            $params[] = $filters['sumber_data_like'];
+        }
+        $sql .= " GROUP BY YEAR(tanggal), MONTH(tanggal)
                 ORDER BY tahun, bulan";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$startYear, $endYear]);
+        $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     
     /**
      * Get seasonal pattern
      */
-    public function getSeasonalPattern($year = null) {
+    public function getSeasonalPattern($year = null, $filters = []) {
         $year = $year ?: date('Y');
         
         $sql = "SELECT 
@@ -342,25 +400,37 @@ class KecepatanAngin {
                         ELSE 'Angin Lemah'
                     END as klasifikasi
                 FROM {$this->table}
-                WHERE YEAR(tanggal) = ?
-                GROUP BY MONTH(tanggal)
+                WHERE YEAR(tanggal) = ?";
+        $params = [$year];
+        if (!empty($filters['sumber_data_like'])) {
+            $sql .= " AND sumber_data LIKE ?";
+            $params[] = $filters['sumber_data_like'];
+        }
+        $sql .= " GROUP BY MONTH(tanggal)
                 ORDER BY bulan";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$year]);
+        $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     
     /**
      * Get anomalies
      */
-    public function getAnomalies($year = null, $threshold = 2.0) {
+    public function getAnomalies($year = null, $threshold = 2.0, $filters = []) {
         $year = $year ?: date('Y');
-        
+        $threshold = max(0.1, min(10.0, (float) $threshold));
+        $sourceSql = '';
+        $sourceParams = [];
+        if (!empty($filters['sumber_data_like'])) {
+            $sourceSql = " AND sumber_data LIKE ?";
+            $sourceParams[] = $filters['sumber_data_like'];
+        }
+
         $statsSQL = "SELECT AVG(kecepatan_angin) as mean, STDDEV(kecepatan_angin) as stddev 
-                     FROM {$this->table} WHERE YEAR(tanggal) = ?";
+                     FROM {$this->table} WHERE YEAR(tanggal) = ?{$sourceSql}";
         $stmt = $this->db->prepare($statsSQL);
-        $stmt->execute([$year]);
+        $stmt->execute(array_merge([$year], $sourceParams));
         $stats = $stmt->fetch(PDO::FETCH_ASSOC);
         
         $mean = floatval($stats['mean'] ?? 0);
@@ -371,11 +441,11 @@ class KecepatanAngin {
                     id, tanggal, lokasi, kecepatan_angin, kecepatan_max, sumber_data,
                     'Tinggi' as tipe_anomali
                 FROM {$this->table}
-                WHERE YEAR(tanggal) = ? AND kecepatan_angin > ?
+                WHERE YEAR(tanggal) = ?{$sourceSql} AND kecepatan_angin > ?
                 ORDER BY kecepatan_angin DESC";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$year, $upperLimit]);
+        $stmt->execute(array_merge([$year], $sourceParams, [$upperLimit]));
         
         return [
             'statistics' => [
@@ -390,18 +460,24 @@ class KecepatanAngin {
     /**
      * Get simple prediction
      */
-    public function getSimplePrediction($months = 3) {
+    public function getSimplePrediction($months = 3, $filters = []) {
+        $months = max(1, min(12, (int) $months));
         $sql = "SELECT 
                     DATE_FORMAT(tanggal, '%Y-%m') as periode,
                     ROUND(AVG(kecepatan_angin), 2) as rata_rata
                 FROM {$this->table}
-                WHERE tanggal >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
-                GROUP BY DATE_FORMAT(tanggal, '%Y-%m')
+                WHERE tanggal >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)";
+        $params = [];
+        if (!empty($filters['sumber_data_like'])) {
+            $sql .= " AND sumber_data LIKE ?";
+            $params[] = $filters['sumber_data_like'];
+        }
+        $sql .= " GROUP BY DATE_FORMAT(tanggal, '%Y-%m')
                 ORDER BY periode DESC
                 LIMIT 12";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute();
+        $stmt->execute($params);
         $historicalData = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         if (count($historicalData) < 3) {
@@ -432,7 +508,7 @@ class KecepatanAngin {
     /**
      * Get wind data by location
      */
-    public function getWindByLocation($year = null, $month = null) {
+    public function getWindByLocation($year = null, $month = null, $filters = []) {
         $year = $year ?: date('Y');
         
         $sql = "SELECT 
@@ -448,6 +524,11 @@ class KecepatanAngin {
             $sql .= " AND MONTH(tanggal) = ?";
             $params[] = $month;
         }
+
+        if (!empty($filters['sumber_data_like'])) {
+            $sql .= " AND sumber_data LIKE ?";
+            $params[] = $filters['sumber_data_like'];
+        }
         
         $sql .= " GROUP BY lokasi ORDER BY rata_rata DESC";
         
@@ -459,7 +540,8 @@ class KecepatanAngin {
     /**
      * Get alerts for high wind speed
      */
-    public function getAlerts($threshold = 30.0, $days = 7) {
+    public function getAlerts($threshold = 30.0, $days = 7, $filters = []) {
+        $days = max(1, min(365, (int) $days));
         $sql = "SELECT 
                     id, tanggal, lokasi, kecepatan_angin, kecepatan_max, sumber_data,
                     CASE 
@@ -469,35 +551,47 @@ class KecepatanAngin {
                     END as level
                 FROM {$this->table}
                 WHERE tanggal >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-                  AND kecepatan_angin > ?
-                ORDER BY kecepatan_angin DESC";
+                  AND kecepatan_angin > ?";
+        $params = [$threshold, $threshold, $days, $threshold];
+        if (!empty($filters['sumber_data_like'])) {
+            $sql .= " AND sumber_data LIKE ?";
+            $params[] = $filters['sumber_data_like'];
+        }
+        $sql .= " ORDER BY kecepatan_angin DESC";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$threshold, $threshold, $days, $threshold]);
+        $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     
     /**
      * Get daily data
      */
-    public function getDailyData($year = null, $month = null) {
+    public function getDailyData($year = null, $month = null, $filters = []) {
         $year = $year ?: date('Y');
         $month = $month ?: date('n');
         
         $sql = "SELECT 
                     DAY(tanggal) as hari,
                     tanggal,
-                    kecepatan_angin,
-                    kecepatan_max,
-                    arah_angin_desc,
-                    lokasi,
-                    sumber_data
+                    ROUND(AVG(kecepatan_angin), 2) as kecepatan_angin,
+                    MAX(COALESCE(kecepatan_max, kecepatan_angin)) as kecepatan_max,
+                    COUNT(*) as jumlah_lokasi
                 FROM {$this->table}
-                WHERE YEAR(tanggal) = ? AND MONTH(tanggal) = ?
+                WHERE YEAR(tanggal) = ? AND MONTH(tanggal) = ?";
+        $params = [$year, $month];
+
+        if (!empty($filters['sumber_data_like'])) {
+            $sql .= " AND sumber_data LIKE ?";
+            $params[] = $filters['sumber_data_like'];
+        }
+
+        $sql .= "
+                GROUP BY tanggal
                 ORDER BY tanggal";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$year, $month]);
+        $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     
@@ -571,7 +665,8 @@ class KecepatanAngin {
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 INDEX idx_tanggal (tanggal),
-                INDEX idx_lokasi (lokasi)
+                INDEX idx_lokasi (lokasi),
+                UNIQUE KEY uk_tgl_lokasi (tanggal, lokasi)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
             
             $this->db->exec($sql);
@@ -595,6 +690,10 @@ class KecepatanAngin {
      * Convert wind direction degrees to compass direction
      */
     public static function degreesToDirection($degrees) {
+        $degrees = fmod((float) $degrees, 360.0);
+        if ($degrees < 0) {
+            $degrees += 360.0;
+        }
         $directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
         $index = round($degrees / 45) % 8;
         return $directions[$index];

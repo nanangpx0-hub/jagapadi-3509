@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>ER Diagram JAGAPADI</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;background:#eef5f0;font-family:Arial,sans-serif;color:#17352a}body{width:1600px;height:1100px;overflow:hidden}.canvas{position:relative;width:3200px;height:2200px;transform:scale(.5);transform-origin:top left;background:linear-gradient(135deg,#f8fcf9,#e9f4ed)}header{position:absolute;left:90px;top:55px;z-index:5}h1{margin:0;color:#14532d;font-size:48px;letter-spacing:1px}header p{font-size:22px;margin:9px 0;color:#517064}.legend{position:absolute;right:90px;top:58px;display:flex;gap:28px;font-size:18px;z-index:5}.key{display:flex;align-items:center;gap:8px}.dot{width:18px;height:18px;border-radius:4px}.pk{background:#f6c453}.fk{background:#80c7a4}.rel{height:4px;width:38px;background:#5d7f70}.module{position:absolute;border-radius:26px;border:2px dashed;padding:58px 25px 25px}.module>h2{position:absolute;left:28px;top:13px;margin:0;font-size:22px;letter-spacing:1.5px}.wilayah{left:55px;top:155px;width:725px;height:770px;border-color:#8bbfa3;background:#e8f6ee}.wilayah h2{color:#26734c}.laporan{left:810px;top:155px;width:1540px;height:1130px;border-color:#5ba0cc;background:#eef8fe}.laporan h2{color:#17658f}.akses{left:2380px;top:155px;width:765px;height:1130px;border-color:#a78bca;background:#f6f1fb}.akses h2{color:#68449a}.analitik{left:55px;top:960px;width:725px;height:1165px;border-color:#e1a64b;background:#fff8e8}.analitik h2{color:#9b6517}.operasi{left:810px;top:1320px;width:2335px;height:805px;border-color:#d78686;background:#fff1f1}.operasi h2{color:#a14242}.entity{position:absolute;width:320px;background:white;border-radius:15px;box-shadow:0 8px 22px #17352a22;border:2px solid #aac3b7;overflow:hidden;z-index:3}.entity h3{font-size:21px;margin:0;padding:14px 17px;color:white;background:#26734c}.entity ul{list-style:none;margin:0;padding:9px 0 12px}.entity li{font:17px Consolas,monospace;padding:5px 15px;white-space:nowrap}.entity li+li{border-top:1px solid #edf2ef}.badge{display:inline-block;width:31px;text-align:center;border-radius:5px;margin-right:8px;padding:2px 0;font:bold 13px Arial}.badge.pk{color:#5d4300}.badge.fk{color:#084b2e}.badge.attr{background:#e8eeeb;color:#60746b}.laporan .entity h3{background:#2477a5}.akses .entity h3{background:#7752a6}.analitik .entity h3{background:#b57920}.operasi .entity h3{background:#b44d4d}.edge{position:absolute;inset:0;z-index:1;pointer-events:none}.edge path{fill:none;stroke:#638174;stroke-width:4}.edge text{font:bold 17px Arial;fill:#365548;paint-order:stroke;stroke:#f6fbf7;stroke-width:7px}.footer{position:absolute;right:85px;bottom:26px;color:#60766c;font-size:17px;z-index:5}
+</style>
+</head>
+<body><div class="canvas">
+<header><h1>ER DIAGRAM — JAGAPADI</h1><p>Jember Agrikultur Gapai Prestasi Digital · Skema inti aplikasi · 15 Agustus 2026</p></header>
+<div class="legend"><span class="key"><i class="dot pk"></i> Primary Key</span><span class="key"><i class="dot fk"></i> Foreign Key</span><span class="key"><i class="rel"></i> Relasi 1:N</span></div>
+<section class="module wilayah"><h2>MASTER WILAYAH & OPT</h2>
+ <article class="entity" style="left:25px;top:70px"><h3>master_kabupaten</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge attr">UQ</b>kode</li><li><b class="badge attr">A</b>nama_kabupaten</li></ul></article>
+ <article class="entity" style="left:375px;top:70px"><h3>master_kecamatan</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge fk">FK</b>kabupaten_id</li><li><b class="badge attr">UQ</b>kode</li><li><b class="badge attr">A</b>nama_kecamatan</li></ul></article>
+ <article class="entity" style="left:375px;top:325px"><h3>master_desa</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge fk">FK</b>kecamatan_id</li><li><b class="badge attr">UQ</b>kode</li><li><b class="badge attr">A</b>nama_desa</li></ul></article>
+ <article class="entity" style="left:25px;top:500px"><h3>master_opt</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge attr">UQ</b>nama_opt</li><li><b class="badge attr">A</b>jenis</li><li><b class="badge attr">A</b>etl_acuan</li><li><b class="badge attr">A</b>aktif</li></ul></article>
+</section>
+<section class="module laporan"><h2>TRANSAKSI PELAPORAN</h2>
+ <article class="entity" style="left:30px;top:75px"><h3>laporan_hama</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge fk">FK</b>user_id</li><li><b class="badge fk">FK</b>master_opt_id</li><li><b class="badge fk">FK</b>kabupaten/kecamatan/desa_id</li><li><b class="badge fk">FK</b>verified_by</li><li><b class="badge attr">A</b>nomor_laporan, status</li><li><b class="badge attr">A</b>tanggal, lokasi, koordinat</li></ul></article>
+ <article class="entity" style="left:405px;top:75px"><h3>laporan_irigasi</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge fk">FK</b>user_id</li><li><b class="badge fk">FK</b>kabupaten/kecamatan/desa_id</li><li><b class="badge fk">FK</b>verified_by</li><li><b class="badge attr">A</b>nomor_laporan, status</li><li><b class="badge attr">A</b>kondisi_fisik, debit_air</li></ul></article>
+ <article class="entity" style="left:780px;top:75px"><h3>laporan_pupuk</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge fk">FK</b>user_id</li><li><b class="badge fk">FK</b>wilayah_id</li><li><b class="badge fk">FK</b>verified_by</li><li><b class="badge attr">A</b>jenis, jumlah, status</li></ul></article>
+ <article class="entity" style="left:1155px;top:75px"><h3>laporan_panen</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge fk">FK</b>user_id</li><li><b class="badge fk">FK</b>wilayah_id</li><li><b class="badge fk">FK</b>verified_by</li><li><b class="badge attr">A</b>komoditas, produksi, status</li></ul></article>
+ <article class="entity" style="left:30px;top:430px"><h3>laporan_cuaca</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge fk">FK</b>user_id</li><li><b class="badge fk">FK</b>wilayah_id</li><li><b class="badge fk">FK</b>verified_by</li><li><b class="badge attr">A</b>suhu, hujan, angin, status</li></ul></article>
+ <article class="entity" style="left:405px;top:430px"><h3>laporan_alat_sarana</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge fk">FK</b>user_id</li><li><b class="badge fk">FK</b>wilayah_id</li><li><b class="badge fk">FK</b>verified_by</li><li><b class="badge attr">A</b>jenis_alat, kondisi, status</li></ul></article>
+ <article class="entity" style="left:780px;top:430px"><h3>laporan_status_history</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge fk">FK</b>laporan_id</li><li><b class="badge fk">FK</b>changed_by</li><li><b class="badge attr">A</b>status_lama, status_baru</li><li><b class="badge attr">A</b>changed_at</li></ul></article>
+ <article class="entity" style="left:1155px;top:430px"><h3>nomor_laporan_counter</h3><ul><li><b class="badge pk">PK</b>prefix + tanggal</li><li><b class="badge attr">A</b>counter</li></ul></article>
+ <article class="entity" style="left:30px;top:750px"><h3>tags</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge attr">UQ</b>nama</li></ul></article>
+ <article class="entity" style="left:405px;top:750px"><h3>laporan_hama_tags</h3><ul><li><b class="badge pk">PK</b>laporan_hama_id + tag_id</li><li><b class="badge fk">FK</b>laporan_hama_id</li><li><b class="badge fk">FK</b>tag_id</li></ul></article>
+</section>
+<section class="module akses"><h2>AKSES, AUDIT & UMPAN BALIK</h2>
+ <article class="entity" style="left:35px;top:75px"><h3>users</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge attr">UQ</b>username, email</li><li><b class="badge attr">A</b>password</li><li><b class="badge attr">A</b>role, aktif</li></ul></article>
+ <article class="entity" style="left:390px;top:75px"><h3>notifications</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge fk">FK</b>user_id</li><li><b class="badge attr">A</b>type, title, body</li><li><b class="badge attr">A</b>read_at</li></ul></article>
+ <article class="entity" style="left:35px;top:355px"><h3>device_tokens</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge fk">FK</b>user_id</li><li><b class="badge attr">UQ</b>token</li><li><b class="badge attr">A</b>platform, last_seen_at</li></ul></article>
+ <article class="entity" style="left:390px;top:355px"><h3>activity_log</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge fk">FK</b>user_id</li><li><b class="badge attr">A</b>action, description</li><li><b class="badge attr">A</b>ip_address</li></ul></article>
+ <article class="entity" style="left:35px;top:650px"><h3>feedback</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge fk">FK</b>user_id, processed_by</li><li><b class="badge attr">A</b>kategori, status</li><li><b class="badge attr">A</b>judul, deskripsi</li></ul></article>
+ <article class="entity" style="left:390px;top:650px"><h3>feedback_votes</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge fk">FK</b>feedback_id</li><li><b class="badge fk">FK</b>user_id</li></ul></article>
+ <article class="entity" style="left:35px;top:900px"><h3>feedback_status_history</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge fk">FK</b>feedback_id</li><li><b class="badge fk">FK</b>changed_by</li><li><b class="badge attr">A</b>status_lama, status_baru</li></ul></article>
+</section>
+<section class="module analitik"><h2>DATA IKLIM & ANALITIK</h2>
+ <article class="entity" style="left:25px;top:75px"><h3>kecepatan_angin</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge attr">UQ</b>tanggal + lokasi</li><li><b class="badge attr">A</b>kecepatan_angin</li><li><b class="badge attr">A</b>sumber_data</li></ul></article>
+ <article class="entity" style="left:375px;top:75px"><h3>curah_hujan</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge attr">A</b>tanggal, lokasi</li><li><b class="badge attr">A</b>curah_hujan</li><li><b class="badge attr">A</b>sumber_data</li></ul></article>
+ <article class="entity" style="left:25px;top:350px"><h3>data_pertanian_bps</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge attr">A</b>tahun, komoditas</li><li><b class="badge attr">A</b>luas_panen, produksi</li><li><b class="badge attr">A</b>sumber_data</li></ul></article>
+ <article class="entity" style="left:375px;top:350px"><h3>data_ksa_bulanan</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge attr">A</b>tahun, bulan</li><li><b class="badge attr">A</b>luas_panen, produksi</li><li><b class="badge attr">A</b>metode_data</li></ul></article>
+ <article class="entity" style="left:25px;top:640px"><h3>produksi_gabah</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge fk">FK</b>kecamatan_id</li><li><b class="badge attr">A</b>periode, produksi</li></ul></article>
+ <article class="entity" style="left:375px;top:640px"><h3>analisis_produksi_bulanan</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge attr">A</b>bulan, tahun, wilayah_id</li><li><b class="badge attr">A</b>skor, narasi, status</li></ul></article>
+ <article class="entity" style="left:25px;top:895px"><h3>harga_komoditas</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge attr">A</b>tanggal, komoditas</li><li><b class="badge attr">A</b>harga, pasar</li></ul></article>
+</section>
+<section class="module operasi"><h2>IRIGASI CERDAS & OPERASIONAL</h2>
+ <article class="entity" style="left:30px;top:75px"><h3>sensor_pengairan</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge attr">A</b>kode_sensor, lokasi</li><li><b class="badge attr">A</b>status</li></ul></article>
+ <article class="entity" style="left:395px;top:75px"><h3>pembacaan_sensor</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge fk">FK</b>sensor_id</li><li><b class="badge attr">A</b>kelembapan, debit</li><li><b class="badge attr">A</b>recorded_at</li></ul></article>
+ <article class="entity" style="left:760px;top:75px"><h3>irrigation_rules</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge attr">A</b>nama_rule, kondisi</li><li><b class="badge attr">A</b>aksi, aktif</li></ul></article>
+ <article class="entity" style="left:1125px;top:75px"><h3>irrigation_rule_logs</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge attr">A</b>rule_id, hasil</li><li><b class="badge attr">A</b>executed_at</li></ul></article>
+ <article class="entity" style="left:1490px;top:75px"><h3>pengairan_otomatis</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge attr">A</b>lokasi, status</li><li><b class="badge attr">A</b>mulai, selesai</li></ul></article>
+ <article class="entity" style="left:1855px;top:75px"><h3>scraping_job_queue</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge attr">A</b>jenis, payload</li><li><b class="badge attr">A</b>status, attempts</li></ul></article>
+ <article class="entity" style="left:30px;top:405px"><h3>audit_log_wilayah</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge fk">FK</b>admin_id</li><li><b class="badge attr">A</b>tabel, aksi</li><li><b class="badge attr">A</b>data_lama, data_baru</li></ul></article>
+ <article class="entity" style="left:395px;top:405px"><h3>jwt_blacklist</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge attr">UQ</b>jti</li><li><b class="badge attr">A</b>expires_at</li></ul></article>
+ <article class="entity" style="left:760px;top:405px"><h3>schema_migrations</h3><ul><li><b class="badge pk">PK</b>id</li><li><b class="badge attr">UQ</b>migration</li><li><b class="badge attr">A</b>batch, executed_at</li></ul></article>
+</section>
+<svg class="edge" width="3200" height="2200" viewBox="0 0 3200 2200">
+ <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#638174"/></marker></defs>
+ <path d="M400 350 H430" marker-end="url(#arrow)"/><text x="397" y="338">1:N</text>
+ <path d="M605 480 V525" marker-end="url(#arrow)"/><text x="615" y="508">1:N</text>
+ <path d="M2735 345 C2300 315,1550 270,1190 300" marker-end="url(#arrow)"/><text x="2200" y="285">pelapor / verifikator</text>
+ <path d="M400 750 C560 800,720 530,840 400" marker-end="url(#arrow)"/><text x="610" y="660">jenis OPT</text>
+ <path d="M605 650 C760 650,780 440,840 420" marker-end="url(#arrow)"/><text x="675" y="615">wilayah</text>
+ <path d="M2735 345 C2500 620,2350 720,1995 730" marker-end="url(#arrow)"/><text x="2390" y="590">changed_by</text>
+ <path d="M1175 1090 H1215" marker-end="url(#arrow)"/><text x="1170" y="1075">N:M</text>
+ <path d="M2735 345 V510" marker-end="url(#arrow)"/><text x="2750" y="440">1:N</text>
+ <path d="M2735 345 C2860 390,2915 485,2915 510" marker-end="url(#arrow)"/>
+ <path d="M2735 345 C2680 660,2570 880,2570 930" marker-end="url(#arrow)"/>
+ <path d="M2725 1045 H2770" marker-end="url(#arrow)"/><text x="2715" y="1030">1:N</text>
+ <path d="M2535 1145 C2650 1180,2700 1200,2700 1230" marker-end="url(#arrow)"/>
+ <path d="M605 650 C600 1260,350 1480,350 1660" marker-end="url(#arrow)"/><text x="410" y="1360">kecamatan</text>
+ <path d="M1185 1565 H1225" marker-end="url(#arrow)"/><text x="1180" y="1550">1:N</text>
+ <path d="M2735 345 C2800 1100,1100 1530,1000 1850" marker-end="url(#arrow)"/><text x="1980" y="1310">admin</text>
+</svg>
+<div class="footer">Notasi: garis menunjukkan foreign key yang dideklarasikan · tabel log/cache sekunder diringkas agar diagram tetap terbaca</div>
+</div></body></html>

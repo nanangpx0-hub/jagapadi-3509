@@ -116,6 +116,46 @@ class Security
         return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
     }
 
+    private static function readCounter(string $key): int
+    {
+        $val = $_SESSION['brute_force'][$key] ?? 0;
+        return (int) $val;
+    }
+
+    private static function writeCounter(string $key, int $value): void
+    {
+        $_SESSION['brute_force'][$key] = $value;
+    }
+
+    public static function checkBruteForce(string $key, int $maxAttempts, int $windowSeconds): bool
+    {
+        $count = self::readCounter($key);
+        if ($count >= $maxAttempts) {
+            $attemptTime = $_SESSION['brute_force_time'][$key] ?? 0;
+            if ($attemptTime > 0 && (time() - $attemptTime) < $windowSeconds) {
+                return true;
+            }
+            // Window expired, reset
+            self::writeCounter($key, 0);
+        }
+        return false;
+    }
+
+    public static function incrementBruteForce(string $key): void
+    {
+        $count = self::readCounter($key) + 1;
+        self::writeCounter($key, $count);
+        if ($count === 1) {
+            $_SESSION['brute_force_time'][$key] = time();
+        }
+    }
+
+    public static function clearBruteForce(string $key): void
+    {
+        self::writeCounter($key, 0);
+        unset($_SESSION['brute_force_time'][$key]);
+    }
+
     /**
      * Mitigasi spreadsheet/formula injection (CSV / XLSX).
      * Sel yang diawali karakter berbahaya (= + - @ tab CR) diprefix

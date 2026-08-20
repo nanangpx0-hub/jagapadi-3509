@@ -61,9 +61,63 @@
                         <input type="text" name="alamat_lengkap" class="form-control" value="<?= htmlspecialchars($laporan['alamat_lengkap'] ?? '') ?>">
                     </div>
 
-                    <input type="hidden" name="kabupaten_id" value="<?= htmlspecialchars($laporan['kabupaten_id'] ?? '') ?>">
-                    <input type="hidden" name="kecamatan_id" value="<?= htmlspecialchars($laporan['kecamatan_id'] ?? '') ?>">
-                    <input type="hidden" name="desa_id" value="<?= htmlspecialchars($laporan['desa_id'] ?? '') ?>">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label>Kabupaten <span class="text-danger">*</span></label>
+                                <select name="kabupaten_id" id="kabupatenSelect" class="form-control" required autocomplete="off">
+                                    <option value="">-- Pilih Kabupaten --</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label>Kecamatan <span class="text-danger">*</span></label>
+                                <select name="kecamatan_id" id="kecamatanSelect" class="form-control" required autocomplete="off">
+                                    <option value="">-- Pilih Kecamatan --</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label>Desa <span class="text-danger">*</span></label>
+                                <select name="desa_id" id="desaSelect" class="form-control" required autocomplete="off">
+                                    <option value="">-- Pilih Desa --</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Foto</label>
+                        <?php if(!empty($laporan['foto_url'])): ?>
+                        <div class="mb-2">
+                            <img src="<?= BASE_URL . 'public/' . htmlspecialchars($laporan['foto_url']) ?>" class="img-thumbnail" style="max-width: 300px; max-height: 300px;" alt="Foto Laporan">
+                            <div class="custom-control custom-checkbox mt-2">
+                                <input type="checkbox" class="custom-control-input" id="hapusFotoCheck" name="hapus_foto" value="1">
+                                <label class="custom-control-label text-danger" for="hapusFotoCheck">
+                                    <i class="fas fa-trash"></i> Hapus foto ini
+                                </label>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+                        <div class="input-group">
+                            <div class="custom-file">
+                                <input type="file" name="foto" class="custom-file-input" id="fotoInput" accept="image/jpeg,image/png,image/webp">
+                                <label class="custom-file-label" for="fotoInput">
+                                    <?= !empty($laporan['foto_url']) ? 'Ganti foto...' : 'Pilih foto...' ?>
+                                </label>
+                            </div>
+                        </div>
+                        <small class="text-muted">Format: JPG, PNG, WEBP. Maksimal 2MB. Biarkan kosong jika tidak ingin mengganti foto.</small>
+                        <div id="fotoPreview" class="mt-2" style="display: none;">
+                            <strong>Preview Foto Baru:</strong><br>
+                            <img id="previewImg" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" style="max-width: 300px; max-height: 300px;" class="img-thumbnail mt-2">
+                            <button type="button" class="btn btn-sm btn-danger mt-2" onclick="clearFotoPreview()">
+                                <i class="fas fa-times"></i> Batalkan
+                            </button>
+                        </div>
+                    </div>
 
                     <div class="form-group">
                         <label>Deskripsi</label>
@@ -99,3 +153,159 @@
 </div>
 
 <?php include ROOT_PATH . '/app/views/layouts/footer.php'; ?>
+<script>
+// ============================================================================
+// CASCADING DROPDOWN WILAYAH — Edit Laporan Lainnya
+// Pola sama dengan laporan/edit.php; gunakan real DB id dari response API
+// ============================================================================
+(function () {
+    'use strict';
+
+    const BASE_URL       = '<?= BASE_URL ?>';
+    const savedKabId     = <?= json_encode((string)($laporan['kabupaten_id'] ?? '')) ?>;
+    const savedKecId     = <?= json_encode((string)($laporan['kecamatan_id'] ?? '')) ?>;
+    const savedDesaId    = <?= json_encode((string)($laporan['desa_id'] ?? '')) ?>;
+
+    async function fetchJSON(url) {
+        try {
+            const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+            if (!r.ok) return { status: 'error', data: [] };
+            return await r.json();
+        } catch (e) {
+            return { status: 'error', data: [] };
+        }
+    }
+
+    async function loadKabupaten(selectedId) {
+        const sel = document.getElementById('kabupatenSelect');
+        if (!sel) return;
+        sel.disabled = true;
+        const resp = await fetchJSON(BASE_URL + 'wilayah/kabupaten');
+        if (resp.status !== 'success' || !Array.isArray(resp.data)) {
+            sel.disabled = false;
+            return;
+        }
+        resp.data.forEach(row => {
+            const opt = new Option(row.nama_kabupaten, String(row.id ?? ''));
+            if (String(row.id) === String(selectedId)) opt.selected = true;
+            sel.appendChild(opt);
+        });
+        sel.disabled = false;
+    }
+
+    async function loadKecamatan(kabupatenId, selectedId) {
+        const sel     = document.getElementById('kecamatanSelect');
+        const selDesa = document.getElementById('desaSelect');
+        if (!sel) return;
+        sel.innerHTML     = '<option value="">-- Pilih Kecamatan --</option>';
+        if (selDesa) selDesa.innerHTML = '<option value="">-- Pilih Desa --</option>';
+        if (!kabupatenId || kabupatenId === 'unknown') return;
+        sel.disabled = true;
+        const resp = await fetchJSON(BASE_URL + 'wilayah/kecamatan/' + encodeURIComponent(kabupatenId));
+        if (resp.status === 'success' && Array.isArray(resp.data)) {
+            resp.data.forEach(row => {
+                const opt = new Option(row.nama_kecamatan, String(row.id ?? ''));
+                if (String(row.id) === String(selectedId)) opt.selected = true;
+                sel.appendChild(opt);
+            });
+        }
+        sel.disabled = false;
+    }
+
+    async function loadDesa(kecamatanId, selectedId) {
+        const sel = document.getElementById('desaSelect');
+        if (!sel) return;
+        sel.innerHTML = '<option value="">-- Pilih Desa --</option>';
+        if (!kecamatanId || kecamatanId === 'unknown') return;
+        sel.disabled = true;
+        const resp = await fetchJSON(BASE_URL + 'wilayah/desa/' + encodeURIComponent(kecamatanId));
+        if (resp.status === 'success' && Array.isArray(resp.data)) {
+            resp.data.forEach(row => {
+                const opt = new Option(row.nama_desa, String(row.id ?? ''));
+                if (String(row.id) === String(selectedId)) opt.selected = true;
+                sel.appendChild(opt);
+            });
+        }
+        sel.disabled = false;
+    }
+
+    const kabSel = document.getElementById('kabupatenSelect');
+    const kecSel = document.getElementById('kecamatanSelect');
+    if (kabSel) {
+        kabSel.addEventListener('change', function () {
+            loadKecamatan(this.value, '');
+        });
+    }
+    if (kecSel) {
+        kecSel.addEventListener('change', function () {
+            loadDesa(this.value, '');
+        });
+    }
+
+    (async () => {
+        await loadKabupaten(savedKabId);
+        if (savedKabId) {
+            await loadKecamatan(savedKabId, savedKecId);
+        }
+        if (savedKecId) {
+            await loadDesa(savedKecId, savedDesaId);
+        }
+    })();
+
+})();
+</script>
+<script>
+// ============================================================================
+// FOTO — preview & logika hapus foto (Edit Laporan Lainnya)
+// ============================================================================
+(function () {
+    'use strict';
+
+    const fotoInput = document.getElementById('fotoInput');
+    const hapusFotoCheck = document.getElementById('hapusFotoCheck');
+
+    if (fotoInput) {
+        fotoInput.addEventListener('change', function (e) {
+            const file = e.target.files[0];
+            const label = document.querySelector('.custom-file-label');
+
+            if (!file) {
+                label.textContent = '<?= !empty($laporan['foto_url']) ? 'Ganti foto...' : 'Pilih foto...' ?>';
+                document.getElementById('fotoPreview').style.display = 'none';
+                return;
+            }
+
+            if (file.size > 2 * 1024 * 1024) {
+                alert('Ukuran file terlalu besar! Maksimal 2MB');
+                e.target.value = '';
+                label.textContent = '<?= !empty($laporan['foto_url']) ? 'Ganti foto...' : 'Pilih foto...' ?>';
+                document.getElementById('fotoPreview').style.display = 'none';
+                return;
+            }
+
+            label.textContent = file.name;
+
+            // Jika user memilih foto baru, batal otomatis opsi hapus foto
+            if (hapusFotoCheck) {
+                hapusFotoCheck.checked = false;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function (ev) {
+                document.getElementById('previewImg').src = ev.target.result;
+                document.getElementById('fotoPreview').style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    if (hapusFotoCheck) {
+        hapusFotoCheck.addEventListener('change', function () {
+            if (this.checked && fotoInput && fotoInput.files.length > 0) {
+                this.checked = false;
+                alert('Hapus foto lama terlebih dahulu, atau biarkan file baru menggantikannya.');
+            }
+        });
+    }
+})();
+</script>

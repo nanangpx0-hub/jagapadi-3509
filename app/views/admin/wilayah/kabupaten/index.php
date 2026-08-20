@@ -175,16 +175,16 @@ if (!isset($_SESSION['csrf_token'])) {
     </div>
 </div>
 <!-- DataTables CSS - Load in head -->
-<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap4.min.css">
-<link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap4.min.css">
+<link rel="stylesheet" href="<?= BASE_URL ?>public/vendor/css/dataTables.bootstrap4.min.css">
+<link rel="stylesheet" href="<?= BASE_URL ?>public/vendor/css/responsive.bootstrap4.min.css">
 
 <?php require_once __DIR__ . '/../../../layouts/footer.php'; ?>
 
 <!-- DataTables JS - Load AFTER jQuery (from footer) -->
-<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap4.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.7/js/dataTables.responsive.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.7/js/responsive.bootstrap4.min.js"></script>
+<script src="<?= BASE_URL ?>public/vendor/js/dataTables-1.13.7.min.js"></script>
+<script src="<?= BASE_URL ?>public/vendor/js/dataTables.bootstrap4.min.js"></script>
+<script src="<?= BASE_URL ?>public/vendor/js/dataTables.responsive.min.js"></script>
+<script src="<?= BASE_URL ?>public/vendor/js/responsive.bootstrap4.min.js"></script>
 
 <script>
 $(document).ready(function() {

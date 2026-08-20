@@ -11,6 +11,7 @@ use App\Helpers\LaporanStatus;
 use App\Helpers\NomorLaporanGenerator;
 use App\Models\ActivityLog;
 use App\Models\LaporanHama;
+use App\Models\LaporanStatusHistory;
 use App\Services\DashboardService;
 
 class LaporanHamaService
@@ -326,26 +327,64 @@ class LaporanHamaService
 
     public static function archive(int $id, int $adminId, ?string $catatan, string $ip, string $userAgent): array
     {
-        $existing = LaporanHama::findAccessibleById($id, ['id' => $adminId, 'role' => 'admin']);
-        if ($existing === null) {
-            return ['success' => false, 'error' => 'NotFound', 'message' => 'Laporan tidak ditemukan.', 'code' => 404];
+        $catatanTrimmed = $catatan !== null ? trim($catatan) : null;
+        if ($catatanTrimmed !== null && mb_strlen($catatanTrimmed) > 2000) {
+            return [
+                'success' => false,
+                'error' => 'ValidationError',
+                'message' => 'Catatan pengarsipan maksimal 2000 karakter.',
+                'code' => 422,
+            ];
         }
+
+        $pdo = Database::connect();
+        $pdo->beginTransaction();
 
         try {
-            LaporanStatus::assertCanTransition($existing['status'], LaporanStatus::DIARSIPKAN, 'admin');
-        } catch (\DomainException $e) {
-            return ['success' => false, 'error' => 'Conflict', 'message' => $e->getMessage(), 'code' => 409];
+            $existing = LaporanHama::findAccessibleById($id, ['id' => $adminId, 'role' => 'admin']);
+            if ($existing === null) {
+                $pdo->rollBack();
+                return ['success' => false, 'error' => 'NotFound', 'message' => 'Laporan tidak ditemukan.', 'code' => 404];
+            }
+
+            try {
+                LaporanStatus::assertCanTransition($existing['status'], LaporanStatus::DIARSIPKAN, 'admin');
+            } catch (\DomainException $e) {
+                $pdo->rollBack();
+                return ['success' => false, 'error' => 'Conflict', 'message' => $e->getMessage(), 'code' => 409];
+            }
+
+            if (!LaporanHama::archiveVerified($id)) {
+                $pdo->rollBack();
+                return [
+                    'success' => false,
+                    'error' => 'Conflict',
+                    'message' => 'Status laporan berubah selama proses pengarsipan.',
+                    'code' => 409,
+                ];
+            }
+
+            LaporanStatusHistory::record(
+                $id,
+                (string) $existing['status'],
+                LaporanStatus::DIARSIPKAN,
+                $adminId,
+                $catatanTrimmed
+            );
+
+            $desc = 'Laporan hama diarsipkan oleh admin';
+            if ($catatanTrimmed !== null && $catatanTrimmed !== '') {
+                $desc .= ': ' . $catatanTrimmed;
+            }
+            ActivityLog::log($adminId, 'laporan_hama_archived', 'laporan_hama', $id, $desc, $ip, $userAgent);
+
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
         }
-
-        $catatanTrimmed = $catatan !== null ? trim($catatan) : null;
-
-        LaporanHama::updateStatusAndVerification($id, LaporanStatus::DIARSIPKAN, $adminId, $catatanTrimmed);
-
-        $desc = 'Laporan hama diarsipkan oleh admin';
-        if ($catatanTrimmed !== null && $catatanTrimmed !== '') {
-            $desc .= ': ' . $catatanTrimmed;
-        }
-        ActivityLog::log($adminId, 'laporan_hama_archived', 'laporan_hama', $id, $desc, $ip, $userAgent);
 
         $laporan = LaporanHama::findWithRelations($id);
 

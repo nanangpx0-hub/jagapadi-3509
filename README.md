@@ -48,17 +48,24 @@ jagapadi/
 
 ## Dokumentasi (Folder `docs/`)
 
+> **Mulai dari sini**: [`docs/README.md`](docs/README.md) — pusat katalog dokumentasi berdasarkan peran.
+> **Dokumen induk lengkap**: [`docs/DOKUMENTASI_PROYEK.md`](docs/DOKUMENTASI_PROYEK.md) (pendahuluan, persyaratan, instalasi, penggunaan, arsitektur + diagram, struktur proyek, API, kontribusi, troubleshooting, pemeliharaan & rilis, pengujian dokumentasi).
+
 | File | Deskripsi |
 |------|-----------|
+| `README.md` | Pusat katalog dokumentasi (pilih dokumen sesuai peran) |
+| `DOKUMENTASI_PROYEK.md` | Dokumen induk lengkap seluruh aspek proyek (v1.0.0) |
+| `PANDUAN_PENGGUNA.md` | Panduan pengguna web & Android (petugas & admin) |
 | `BLUEPRINT.md` | Ringkasan arsitektur, modul v1, status laporan, kebijakan Draf |
 | `TUTORIAL_BUILD.md` | Tahapan pembangunan 0–14 |
 | `API.md` | Kontrak API (`/api/v1`, JSON, JWT, `include_draft`) |
 | `DATABASE.md` | Skema database aktual, migrasi & seed |
+| `AKSES_WEB_BACKEND.md` | Panduan akses web backend (lokal & production) |
+| `BUILD_APK.md` | Panduan build APK Android |
 | `DEPLOY.md` | **Panduan deployment production (Nginx, TLS, backup, cron)** |
 | `SMOKE_TEST.md` | Prosedur smoke test post-deploy |
 | `GO_LIVE_CHECKLIST.md` | Checklist go-live |
 | `QA_CHECKLIST.md` | Checklist regresi manual |
-| `Dokumentasi-aplikasi-jagapadi-3509.md` | Dokumen referensi lengkap (blueprint detail) |
 
 ---
 
@@ -81,6 +88,15 @@ cd jagapadi-3509
   1. `cd backend`
   2. `composer install`
   3. `php -S localhost:8080 -t public`
+
+### E2E Testing (Playwright)
+- Base URL default: `http://localhost:8080`
+- Override via environment variable:
+  ```bash
+  BASE_URL=http://localhost:8080 npx playwright test
+  ```
+- Pastikan backend server running di port yang sesuai sebelum menjalankan test.
+- Global setup menyimpan session state untuk setiap role di `e2e/auth/`.
 
 ### Build APK
 - Panduan build debug/release: [docs/BUILD_APK.md](docs/BUILD_APK.md)

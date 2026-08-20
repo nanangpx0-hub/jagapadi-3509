@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Network Security Configuration — JAGAPADI Android (DEBUG ONLY)
+  ===============================================================
+  File ini HANYA aktif saat debug build.
+  Mengizinkan HTTP cleartext ke host pengembangan lokal.
+
+  TIDAK ADA konten file ini yang masuk ke production APK.
+  Laragon berjalan di port 80 (Apache default) di mesin ini.
+
+  Host yang diizinkan:
+  - 10.0.2.2      : emulator AVD (alias ke localhost mesin host)
+  - localhost      : fallback lokal
+  - 127.0.0.1     : fallback lokal
+  - 192.168.10.5  : IP LAN mesin pengembangan saat ini
+
+  Jika IP LAN mesin berubah, update entri 192.168.x.x di bawah ini.
+  Atau gunakan: adb reverse tcp:80 tcp:80 agar cukup pakai 10.0.2.2
+-->
+<network-security-config>
+
+  <!-- DEBUG: izinkan user CA untuk tools seperti Charles Proxy / mitmproxy -->
+  <base-config cleartextTrafficPermitted="false">
+    <trust-anchors>
+      <certificates src="system"/>
+      <!-- User-installed CA diizinkan di debug untuk keperluan inspeksi traffic -->
+      <certificates src="user"/>
+    </trust-anchors>
+  </base-config>
+
+  <!-- Emulator AVD: 10.0.2.2 → localhost mesin host, port 80 -->
+  <domain-config cleartextTrafficPermitted="true">
+    <domain includeSubdomains="false">10.0.2.2</domain>
+  </domain-config>
+
+  <!-- Localhost fallback -->
+  <domain-config cleartextTrafficPermitted="true">
+    <domain includeSubdomains="false">localhost</domain>
+    <domain includeSubdomains="false">127.0.0.1</domain>
+  </domain-config>
+
+  <!-- IP LAN mesin pengembangan -->
+  <domain-config cleartextTrafficPermitted="true">
+    <domain includeSubdomains="false">192.168.10.5</domain>
+  </domain-config>
+
+</network-security-config>

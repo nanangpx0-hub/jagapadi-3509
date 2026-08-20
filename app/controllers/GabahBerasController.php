@@ -7,50 +7,16 @@
  * @author JAGAPADI System
  */
 
-class GabahBerasController {
+class GabahBerasController extends Controller {
     
     private $model;
     private $analyticsService;
     
     public function __construct() {
+        parent::__construct();
         require_once ROOT_PATH . '/app/models/ProduksiGabah.php';
         $this->model = new ProduksiGabah();
-    }
-    
-    private function checkAuth() {
-        if (!isset($_SESSION['user_id'])) {
-            header('Location: ' . BASE_URL . 'auth/login');
-            exit;
-        }
-    }
-
-    private function requireStateChangingRequest($methods = ['POST']): void {
-        $allowedMethods = array_map('strtoupper', (array)$methods);
-        $requestMethod = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
-
-        if (!in_array($requestMethod, $allowedMethods, true)) {
-            http_response_code(405);
-            header('Allow: ' . implode(', ', $allowedMethods));
-            echo '405 - Method Not Allowed';
-            exit;
-        }
-
-        $token = Security::getRequestCsrfToken();
-        if (!Security::validateCsrfToken($token)) {
-            http_response_code(403);
-            $_SESSION['flash_message'] = 'Token keamanan tidak valid';
-            $_SESSION['flash_type'] = 'danger';
-            header('Location: ' . BASE_URL . 'gabahBeras');
-            exit;
-        }
-    }
-    
-    private function getAnalyticsService() {
-        if (!$this->analyticsService) {
-            require_once ROOT_PATH . '/app/services/GabahBerasAnalytics.php';
-            $this->analyticsService = new GabahBerasAnalytics();
-        }
-        return $this->analyticsService;
+        $this->analyticsService = null;
     }
     
     /**
@@ -339,12 +305,33 @@ class GabahBerasController {
         if (!in_array($_SESSION['role'], ['admin', 'operator'])) {
             $_SESSION['flash_message'] = 'Anda tidak memiliki akses untuk verifikasi';
             $_SESSION['flash_type'] = 'danger';
-            header('Location: ' . BASE_URL . 'gabahBeras');
+            $this->redirect('gabahBeras');
             exit;
         }
         $this->requireStateChangingRequest(['POST', 'PATCH']);
         
-        $status = $_POST['status'] ?? 'verified';
+        // Validasi status record sebelum verifikasi
+        $record = $this->model->getById($id);
+        if (!$record) {
+            $_SESSION['flash_message'] = 'Data tidak ditemukan';
+            $_SESSION['flash_type'] = 'danger';
+            $this->redirect('gabahBeras/detail/' . $id);
+            exit;
+        }
+        
+        // Hanya record dengan status 'pending' yang bisa diverifikasi
+        if ($record['status'] !== 'pending') {
+            $_SESSION['flash_message'] = 'Hanya data berstatus "Menunggu" yang dapat diverifikasi';
+            $_SESSION['flash_type'] = 'warning';
+            $this->redirect('gabahBeras/detail/' . $id);
+            exit;
+        }
+        
+        // Whitelist status yang diizinkan untuk diset saat verifikasi
+        $allowedStatuses = ['verified', 'rejected'];
+        $status = in_array($_POST['status'] ?? '', $allowedStatuses, true)
+            ? $_POST['status']
+            : 'verified';
         
         if ($this->model->verify($id, $_SESSION['user_id'], $status)) {
             $_SESSION['flash_message'] = 'Data berhasil diverifikasi';
@@ -354,8 +341,7 @@ class GabahBerasController {
             $_SESSION['flash_type'] = 'danger';
         }
         
-        header('Location: ' . BASE_URL . 'gabahBeras/detail/' . $id);
-        exit;
+        $this->redirect('gabahBeras/detail/' . $id);
     }
     
     /**
@@ -496,20 +482,38 @@ class GabahBerasController {
         $allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
         $maxSize = 5 * 1024 * 1024; // 5MB
         
+        // Validate MIME type first
         if (!in_array($file['type'], $allowedTypes)) {
             return ['success' => false, 'error' => 'Tipe file tidak diizinkan'];
+        }
+        
+        // Validate magic bytes (file signature)
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mime = finfo_file($finfo, $file['tmp_name']);
+        finfo_close($finfo);
+        
+        if (!$mime || !in_array($mime, $allowedTypes)) {
+            return ['success' => false, 'error' => 'Tipe file tidak valid (magic bytes tidak sesuai)'];
         }
         
         if ($file['size'] > $maxSize) {
             return ['success' => false, 'error' => 'Ukuran file terlalu besar (max 5MB)'];
         }
         
-        $uploadDir = ROOT_PATH . '/public/uploads/gabah_beras/';
+        $uploadDir = ROOT_PATH . '/storage/uploads/gabah_beras/';
         if (!is_dir($uploadDir)) {
             mkdir($uploadDir, 0755, true);
         }
         
-        $filename = 'gabah_' . time() . '_' . uniqid() . '.' . pathinfo($file['name'], PATHINFO_EXTENSION);
+        // Extract file extension from magic bytes, not from filename
+        $extMap = [
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/gif' => 'gif'
+        ];
+        $extension = $extMap[$mime] ?? 'jpg';
+        
+        $filename = bin2hex(random_bytes(16)) . '.' . $extension;
         $destination = $uploadDir . $filename;
         
         if (move_uploaded_file($file['tmp_name'], $destination)) {

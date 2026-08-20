@@ -1,5 +1,11 @@
 <?php include ROOT_PATH . '/app/views/layouts/header.php'; ?>
 
+<?php if (!empty($isPetugasDashboard)): ?>
+    <?php require ROOT_PATH . '/app/views/dashboard/petugas.php'; ?>
+    <?php require_once ROOT_PATH . '/app/views/layouts/footer.php'; ?>
+    <?php return; ?>
+<?php endif; ?>
+
 <!-- Debug Info (only in development) -->
 <?php if (defined('ENVIRONMENT') && ENVIRONMENT === 'development'): ?>
 <div class="alert alert-info alert-dismissible fade show">
@@ -68,6 +74,26 @@
         </div>
     </div>
 </div>
+
+<?php if (($_SESSION['role'] ?? '') === 'petugas'): ?>
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card bg-gradient-success text-white shadow-sm">
+            <div class="card-body d-flex justify-content-between align-items-center flex-wrap py-3">
+                <div class="mb-2 mb-md-0">
+                    <h5 class="mb-1 font-weight-bold"><i class="fas fa-user-check mr-2"></i> Ringkasan Kinerja & Rekapitulasi Pelaporan</h5>
+                    <p class="mb-0 small text-white-50">Pantau progres draf laporan, status verifikasi admin, dan tren bulanan kinerja lapangan Anda.</p>
+                </div>
+                <div>
+                    <a href="<?= BASE_URL ?>laporan-lainnya/summary" class="btn btn-light btn-sm text-success font-weight-bold shadow-sm px-3">
+                        <i class="fas fa-chart-bar mr-1"></i> Buka Rekapitulasi Lengkap
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <!-- Map Section -->
 <div class="row">
@@ -336,7 +362,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Monthly Chart
-    const monthlyData = <?= json_encode($monthlyStats ?? []) ?>;
+    const monthlyData = <?= json_encode($monthlyStats ?? [], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
     
     // Generate all 12 months with default 0
@@ -395,7 +421,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Top Pests Chart
-    const topPestsData = <?= json_encode($topPests ?? []) ?>;
+    const topPestsData = <?= json_encode($topPests ?? [], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
     
     if (topPestsData.length === 0) {
         // Show "No data" message
@@ -495,7 +521,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     weight: 2,
                     fillOpacity: 0.8
                 });
-                m.bindPopup('<strong>' + (p.nama_opt || 'Unknown') + '</strong><br>' + p.tanggal + '<br>' + (p.lokasi || ''));
+                const popup = document.createElement('div');
+                const title = document.createElement('strong');
+                title.textContent = p.nama_opt || 'Unknown';
+                popup.appendChild(title);
+                popup.appendChild(document.createElement('br'));
+                popup.appendChild(document.createTextNode(p.tanggal || '-'));
+                popup.appendChild(document.createElement('br'));
+                popup.appendChild(document.createTextNode(p.lokasi || '-'));
+                m.bindPopup(popup);
                 hamaClusterHome.addLayer(m);
             });
         })

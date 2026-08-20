@@ -6,6 +6,12 @@ $successMsg = ErrorMessage::flashSuccess();
 $errorMsg = ErrorMessage::flash();
 ?>
 
+<?php if (($petugasReportType ?? null) === 'irigasi'): ?>
+    <?php require ROOT_PATH . '/app/views/reports/petugas_list.php'; ?>
+    <?php require_once ROOT_PATH . '/app/views/layouts/footer.php'; ?>
+    <?php return; ?>
+<?php endif; ?>
+
 <style>
 /* ===== TOMBOL AKSI STYLING (Matching laporan page design) ===== */
 .btn-action-group {
@@ -478,8 +484,8 @@ $errorMsg = ErrorMessage::flash();
 </style>
 
 <!-- DataTables CSS -->
-<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap4.min.css">
-<link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap4.min.css">
+<link rel="stylesheet" href="<?= BASE_URL ?>public/vendor/css/dataTables.bootstrap4.min.css">
+<link rel="stylesheet" href="<?= BASE_URL ?>public/vendor/css/responsive.bootstrap4.min.css">
 <style>
 #dataTable_wrapper .dataTables_filter,
 #dataTable_wrapper .dataTables_length { margin-bottom: 0.75rem; }
@@ -576,12 +582,12 @@ $errorMsg = ErrorMessage::flash();
                         </tr>
                     </thead>
                     <tbody>
-                        <?php $no = 0; ?>
+                        <?php $no = (($page ?? 1) - 1) * ($perPage ?? 25); ?>
                         <?php foreach ($laporan as $item): ?>
                         <tr>
                             <td class="text-center text-muted"><?= ++$no ?></td>
                             <td>
-                                <span class="badge badge-light border"><?= htmlspecialchars($item['no_laporan'] ?? '-') ?></span>
+                                <span class="badge badge-light border"><?= htmlspecialchars($item['nomor_laporan'] ?? '-') ?></span>
                             </td>
                             <td><?= date('d/m/Y', strtotime($item['tanggal'])) ?></td>
                             <td>
@@ -607,9 +613,9 @@ $errorMsg = ErrorMessage::flash();
                                     ];
                                     $rsCls = $repairStatusClass[$item['status_perbaikan'] ?? 'Belum Ditangani'] ?? 'secondary';
                                 ?>
-                                <span class="badge badge-<?= $rsCls ?>"><?= $item['status_perbaikan'] ?? 'Belum Ditangani' ?></span>
+                                <span class="badge badge-<?= $rsCls ?>"><?= htmlspecialchars($item['status_perbaikan'] ?? 'Belum Ditangani') ?></span>
                                 <?php if($item['kondisi_fisik']): ?>
-                                    <br><small>Kondisi: <?= $item['kondisi_fisik'] ?></small>
+                                    <br><small>Kondisi: <?= htmlspecialchars((string) $item['kondisi_fisik']) ?></small>
                                 <?php endif; ?>
                             </td>
                             <td>
@@ -622,23 +628,23 @@ $errorMsg = ErrorMessage::flash();
                                     ];
                                     $cls = $statusClass[$item['status']] ?? 'secondary';
                                 ?>
-                                <span class="badge badge-<?= $cls ?>"><?= $item['status'] ?></span>
+                                <span class="badge badge-<?= $cls ?>"><?= htmlspecialchars((string) $item['status']) ?></span>
                             </td>
                             <td>
-                                <div class="btn-action-group" data-row-id="<?= $item['id'] ?>">
+                                <div class="btn-action-group" data-row-id="<?= (int) $item['id'] ?>">
                                     <!-- View/Detail button - always available -->
-                                    <a href="<?= BASE_URL ?>irigasi/detail/<?= $item['id'] ?>" 
-                                       class="btn-action btn-action-info" 
+                                    <a href="<?= BASE_URL ?>irigasi/detail/<?= (int) $item['id'] ?>"
+                                       class="btn-action btn-action-info"
                                        title="Lihat Detail">
                                         <i class="fas fa-eye"></i>
                                     </a>
                                     
-                                    <?php if(in_array($userRole, ['admin', 'operator']) && $item['status'] == 'Submitted'): ?>
+                                    <?php if($userRole === 'admin' && $item['status'] == 'Submitted'): ?>
                                     <!-- Verification button -->
                                     <button type="button" 
                                             class="btn-action btn-action-success" 
                                             data-toggle="modal" 
-                                            data-target="#verifyModal<?= $item['id'] ?>"
+                                            data-target="#verifyModal<?= (int) $item['id'] ?>"
                                             title="Verifikasi">
                                         <i class="fas fa-check"></i>
                                     </button>
@@ -646,7 +652,7 @@ $errorMsg = ErrorMessage::flash();
                                     <button type="button" 
                                             class="btn-action btn-action-danger btn-reject" 
                                             data-toggle="modal" 
-                                            data-target="#verifyModal<?= $item['id'] ?>"
+                                            data-target="#verifyModal<?= (int) $item['id'] ?>"
                                             data-action="reject"
                                             title="Tolak">
                                         <i class="fas fa-times"></i>
@@ -655,8 +661,8 @@ $errorMsg = ErrorMessage::flash();
                                     
                                     <?php if(in_array($userRole, ['admin', 'operator', 'petugas']) && in_array($item['status'], ['Draf', 'Ditolak'])): ?>
                                     <!-- Edit button for draft/rejected -->
-                                    <a href="<?= BASE_URL ?>irigasi/edit/<?= $item['id'] ?>" 
-                                       class="btn-action btn-action-warning" 
+                                    <a href="<?= BASE_URL ?>irigasi/edit/<?= (int) $item['id'] ?>"
+                                       class="btn-action btn-action-warning"
                                        title="Edit">
                                         <i class="fas fa-edit"></i>
                                     </a>
@@ -664,7 +670,7 @@ $errorMsg = ErrorMessage::flash();
                                     
                                     <?php if($userRole == 'admin'): ?>
                                     <!-- Delete button - admin only -->
-                                    <form action="<?= BASE_URL ?>irigasi/delete/<?= $item['id'] ?>" method="POST" class="d-inline">
+                                    <form action="<?= BASE_URL ?>irigasi/delete/<?= (int) $item['id'] ?>" method="POST" class="d-inline">
                                         <?= Security::getCsrfField() ?>
                                         <button type="submit"
                                                 class="btn-action btn-action-danger"
@@ -677,11 +683,11 @@ $errorMsg = ErrorMessage::flash();
                                 </div>
                                 
                                 <!-- Modal Verifikasi -->
-                                <?php if(in_array($userRole, ['admin', 'operator']) && $item['status'] == 'Submitted'): ?>
-                                <div class="modal fade" id="verifyModal<?= $item['id'] ?>" tabindex="-1">
+                                <?php if($userRole === 'admin' && $item['status'] == 'Submitted'): ?>
+                                <div class="modal fade" id="verifyModal<?= (int) $item['id'] ?>" tabindex="-1">
                                     <div class="modal-dialog">
                                         <div class="modal-content">
-                                            <form action="<?= BASE_URL ?>irigasi/verify/<?= $item['id'] ?>" method="POST">
+                                            <form action="<?= BASE_URL ?>irigasi/verify/<?= (int) $item['id'] ?>" method="POST">
                                                 <div class="modal-header">
                                                     <h5 class="modal-title">Verifikasi Laporan</h5>
                                                     <button type="button" class="close" data-dismiss="modal">&times;</button>
@@ -690,7 +696,7 @@ $errorMsg = ErrorMessage::flash();
                                                     <input type="hidden" name="csrf_token" value="<?= Security::getCsrfToken() ?>">
                                                     <div class="form-group">
                                                         <label>Aksi</label>
-                                                        <select name="status" class="form-control" id="verifyStatus<?= $item['id'] ?>">
+                                                        <select name="status" class="form-control" id="verifyStatus<?= (int) $item['id'] ?>">
                                                             <option value="Diverifikasi">Terima (Verifikasi)</option>
                                                             <option value="Ditolak">Tolak</option>
                                                         </select>
@@ -715,6 +721,26 @@ $errorMsg = ErrorMessage::flash();
                     </tbody>
                 </table>
             </div>
+            <?php if (($totalPages ?? 1) > 1): ?>
+            <div class="d-flex flex-wrap justify-content-between align-items-center mt-3">
+                <small class="text-muted">
+                    Menampilkan <?= count($laporan) ?> dari <?= (int) ($total ?? 0) ?> laporan
+                </small>
+                <nav aria-label="Navigasi laporan irigasi">
+                    <ul class="pagination pagination-sm mb-0">
+                        <li class="page-item <?= ($page ?? 1) <= 1 ? 'disabled' : '' ?>">
+                            <a class="page-link" href="<?= BASE_URL ?>irigasi?page=<?= max(1, (int) ($page ?? 1) - 1) ?>">Sebelumnya</a>
+                        </li>
+                        <li class="page-item disabled">
+                            <span class="page-link">Halaman <?= (int) ($page ?? 1) ?> / <?= (int) ($totalPages ?? 1) ?></span>
+                        </li>
+                        <li class="page-item <?= ($page ?? 1) >= ($totalPages ?? 1) ? 'disabled' : '' ?>">
+                            <a class="page-link" href="<?= BASE_URL ?>irigasi?page=<?= min((int) ($totalPages ?? 1), (int) ($page ?? 1) + 1) ?>">Berikutnya</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+            <?php endif; ?>
         </div>
     </div>
 </div>
@@ -1379,9 +1405,9 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <!-- DataTables JS (jQuery sudah dimuat di head header.php) -->
-<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap4.min.js"></script>
-<script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
+<script src="<?= BASE_URL ?>public/vendor/js/dataTables-1.13.7.min.js"></script>
+<script src="<?= BASE_URL ?>public/vendor/js/dataTables.bootstrap4.min.js"></script>
+<script src="<?= BASE_URL ?>public/vendor/js/dataTables.responsive.min.js"></script>
 <script>
 $(function() {
     if ($.fn.DataTable && $('#dataTable').length) {
@@ -1391,7 +1417,7 @@ $(function() {
             lengthMenu: [10, 25, 50, 100],
             order: [[0, 'asc']],
             language: {
-                url: 'https://cdn.datatables.net/plug-ins/1.13.7/i18n/id.json'
+                url: '<?= BASE_URL ?>public/vendor/datatables/id-1.13.7.json'
             }
         });
     }

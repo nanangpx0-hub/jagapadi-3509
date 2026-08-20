@@ -103,6 +103,10 @@ class EvaluasiController extends Controller {
         if ($bulan < 1 || $bulan > 12) {
             $this->json(['success' => false, 'message' => 'Bulan tidak valid'], 400);
         }
+
+        if (!is_numeric($tahun) || (int) $tahun < 2000 || (int) $tahun > (int) date('Y')) {
+            $this->json(['success' => false, 'message' => 'Tahun tidak valid'], 400);
+        }
         
         // Execute snapshot
         $result = $this->model->snapshotEstimasi($bulan, $tahun);
@@ -146,6 +150,10 @@ class EvaluasiController extends Controller {
         
         if ($nilaiRilis === null || $nilaiRilis === '' || !is_numeric($nilaiRilis)) {
             $this->json(['success' => false, 'message' => 'Nilai rilis harus berupa angka'], 400);
+        }
+
+        if ((float) $nilaiRilis < 0) {
+            $this->json(['success' => false, 'message' => 'Nilai rilis tidak boleh negatif'], 400);
         }
         
         // Update
@@ -273,7 +281,9 @@ class EvaluasiController extends Controller {
             'nama_wilayah' => $_POST['nama_wilayah'] ?? null,
             'wilayah_id' => $_POST['wilayah_id'] ?? null,
             'luas_estimasi_daerah' => floatval($_POST['luas_estimasi_daerah'] ?? 0),
-            'luas_rilis_bps' => !empty($_POST['luas_rilis_bps']) ? floatval($_POST['luas_rilis_bps']) : null,
+            'luas_rilis_bps' => isset($_POST['luas_rilis_bps']) && $_POST['luas_rilis_bps'] !== ''
+                ? floatval($_POST['luas_rilis_bps'])
+                : null,
             'catatan_analisis' => $_POST['catatan_analisis'] ?? null
         ];
         
@@ -285,9 +295,17 @@ class EvaluasiController extends Controller {
         if (empty($data['periode_tahun'])) {
             $this->json(['success' => false, 'message' => 'Tahun harus diisi'], 400);
         }
+
+        if ((int) $data['periode_tahun'] < 2000 || (int) $data['periode_tahun'] > (int) date('Y')) {
+            $this->json(['success' => false, 'message' => 'Tahun tidak valid'], 400);
+        }
         
         if (empty($data['nama_wilayah'])) {
             $this->json(['success' => false, 'message' => 'Nama wilayah harus diisi'], 400);
+        }
+
+        if ($data['luas_estimasi_daerah'] < 0 || ($data['luas_rilis_bps'] !== null && $data['luas_rilis_bps'] < 0)) {
+            $this->json(['success' => false, 'message' => 'Nilai luas tidak boleh negatif'], 400);
         }
         
         $result = $this->model->insert($data);
@@ -315,10 +333,16 @@ class EvaluasiController extends Controller {
             'periode_tahun' => $_POST['periode_tahun'] ?? null,
             'nama_wilayah' => $_POST['nama_wilayah'] ?? null,
             'luas_estimasi_daerah' => floatval($_POST['luas_estimasi_daerah'] ?? 0),
-            'luas_rilis_bps' => !empty($_POST['luas_rilis_bps']) ? floatval($_POST['luas_rilis_bps']) : null,
+            'luas_rilis_bps' => isset($_POST['luas_rilis_bps']) && $_POST['luas_rilis_bps'] !== ''
+                ? floatval($_POST['luas_rilis_bps'])
+                : null,
             'catatan_analisis' => $_POST['catatan_analisis'] ?? null
         ];
         
+        if ($data['luas_estimasi_daerah'] < 0 || ($data['luas_rilis_bps'] !== null && $data['luas_rilis_bps'] < 0)) {
+            $this->json(['success' => false, 'message' => 'Nilai luas tidak boleh negatif'], 400);
+        }
+
         $result = $this->model->update($id, $data);
         $this->json($result, $result['success'] ? 200 : 400);
     }

@@ -1,6 +1,12 @@
 RewriteEngine On
 
-# Security headers
+# ── Nonaktifkan directory listing ─────────────────────────────────────────────
+# Mencegah Apache menampilkan daftar isi direktori (index of /) pada
+# direktori manapun yang tidak memiliki file index. Ini juga melindungi
+# dari paparan struktur file ke publik.
+Options -Indexes
+
+# ── Security headers ──────────────────────────────────────────────────────────
 <IfModule mod_headers.c>
     Header set X-Content-Type-Options "nosniff"
     Header set X-Frame-Options "DENY"
@@ -9,18 +15,21 @@ RewriteEngine On
     Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
 </IfModule>
 
-# Force HTTPS redirect (skip on localhost for local dev)
+# ── Force HTTPS (skip localhost & LAN untuk development) ──────────────────────
 RewriteCond %{HTTPS} off
 RewriteCond %{HTTP_HOST} !^localhost$ [NC]
 RewriteCond %{HTTP_HOST} !^127\.0\.0\.1$ [NC]
+RewriteCond %{HTTP_HOST} !^10\. [NC]
+RewriteCond %{HTTP_HOST} !^192\.168\. [NC]
+RewriteCond %{HTTP_HOST} !^172\.(1[6-9]|2[0-9]|3[0-1])\. [NC]
 RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
-# Block access to sensitive files
+# ── Block akses file sensitif ──────────────────────────────────────────────────
 <FilesMatch "\.(env|env\.local|git|md|log|sql)$">
     Require all denied
 </FilesMatch>
 
-# Route all non-file, non-directory requests to index.php
+# ── Route semua request non-file & non-direktori ke index.php ─────────────────
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^(.*)$ index.php [QSA,L]

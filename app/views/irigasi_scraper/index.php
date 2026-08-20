@@ -26,6 +26,11 @@
         </div>
     </div>
 
+    <div class="alert alert-warning border-left-warning shadow-sm" role="alert">
+        <strong>Sumber data:</strong> tombol “Ambil Data” menghasilkan <strong>simulasi internal</strong>
+        berbasis norma debit dan pola musim. Nilai tersebut bukan observasi sensor atau rilis instansi.
+    </div>
+
     <!-- Control Panel -->
     <div class="card shadow mb-4 border-left-info">
         <div class="card-body">
@@ -34,7 +39,8 @@
                 
                 <div class="col-md-3">
                     <label class="font-weight-bold small">Tanggal Observasi</label>
-                    <input type="date" class="form-control" id="filterDate" name="tanggal" value="<?= $data['currentDate'] ?>">
+                    <input type="date" class="form-control" id="filterDate" name="tanggal"
+                           max="<?= date('Y-m-d') ?>" value="<?= htmlspecialchars($data['currentDate']) ?>">
                 </div>
                 
                 <div class="col-md-3">
@@ -42,7 +48,7 @@
                     <select class="form-control" id="filterLokasi" name="lokasi">
                         <option value="">Semua Lokasi</option>
                         <?php foreach ($data['daerahIrigasi'] as $dam => $details): ?>
-                            <option value="<?= $dam ?>"><?= $dam ?></option>
+                            <option value="<?= htmlspecialchars($dam) ?>"><?= htmlspecialchars($dam) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -187,6 +193,7 @@
                             <th>Luas Layanan</th>
                             <th>Debit Air</th>
                             <th class="text-center">Status</th>
+                            <th>Metode</th>
                             <th>Keterangan</th>
                         </tr>
                     </thead>
@@ -240,24 +247,25 @@
                 maintainAspectRatio: false,
                 layout: { padding: { left: 10, right: 25, top: 25, bottom: 0 } },
                 scales: {
-                    xAxes: [{ time: { unit: 'date' }, gridLines: { display: false, drawBorder: false }, ticks: { maxTicksLimit: 7 } }],
-                    yAxes: [{ ticks: { maxTicksLimit: 5, padding: 10 }, gridLines: { color: "rgb(234, 236, 244)", zeroLineColor: "rgb(234, 236, 244)", drawBorder: false, borderDash: [2], zeroLineBorderDash: [2] } }],
+                    x: { grid: { display: false, drawBorder: false }, ticks: { maxTicksLimit: 7 } },
+                    y: { ticks: { maxTicksLimit: 5, padding: 10 }, grid: { color: "rgb(234, 236, 244)", drawBorder: false, borderDash: [2] } },
                 },
-                legend: { display: false },
-                tooltips: {
-                    backgroundColor: "rgb(255,255,255)",
-                    bodyFontColor: "#858796",
-                    titleMarginBottom: 10,
-                    titleFontColor: '#6e707e',
-                    titleFontSize: 14,
-                    borderColor: '#dddfeb',
-                    borderWidth: 1,
-                    xPadding: 15,
-                    yPadding: 15,
-                    displayColors: false,
-                    intersect: false,
-                    mode: 'index',
-                    caretPadding: 10,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: "rgb(255,255,255)",
+                        bodyColor: "#858796",
+                        titleMarginBottom: 10,
+                        titleColor: '#6e707e',
+                        titleFont: { size: 14 },
+                        borderColor: '#dddfeb',
+                        borderWidth: 1,
+                        padding: 15,
+                        displayColors: false,
+                        intersect: false,
+                        mode: 'index',
+                        caretPadding: 10,
+                    }
                 }
             }
         });
@@ -295,10 +303,14 @@
         tbody.innerHTML = '';
         
         if (data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted p-4">Tidak ada data untuk tanggal ini. Silakan klik "Ambil Data".</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted p-4">Tidak ada data untuk tanggal ini. Silakan klik "Ambil Data".</td></tr>';
             return;
         }
         
+        const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;'
+        })[char]);
+
         data.forEach((row, index) => {
             let badgeClass = 'status-aman';
             if (row.status_pintu === 'Waspada') badgeClass = 'status-waspada';
@@ -307,14 +319,15 @@
             const tr = `
                 <tr>
                     <td>${startNum + index + 1}</td>
-                    <td class="font-weight-bold">${row.daerah_irigasi}</td>
-                    <td>${row.kecamatan || '-'}</td>
-                    <td class="text-right">${row.luas_sawah}</td>
-                    <td class="text-right">${row.debit_air}</td>
+                    <td class="font-weight-bold">${escapeHtml(row.daerah_irigasi)}</td>
+                    <td>${escapeHtml(row.kecamatan || '-')}</td>
+                    <td class="text-right">${escapeHtml(row.luas_sawah)}</td>
+                    <td class="text-right">${escapeHtml(row.debit_air)}</td>
                     <td class="text-center">
-                        <span class="status-badge ${badgeClass}">${row.status_pintu}</span>
+                        <span class="status-badge ${badgeClass}">${escapeHtml(row.status_pintu)}</span>
                     </td>
-                    <td class="small text-muted">${row.keterangan || '-'}</td>
+                    <td><span class="badge badge-warning">${escapeHtml(row.metode_data || 'manual')}</span></td>
+                    <td class="small text-muted">${escapeHtml(row.keterangan || '-')}</td>
                 </tr>
             `;
             tbody.innerHTML += tr;

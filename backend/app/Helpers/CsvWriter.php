@@ -27,9 +27,35 @@ class CsvWriter
     {
         $safe = [];
         foreach ($row as $cell) {
-            $safe[] = \App\Core\Security::sanitizeCell($cell);
+            $safe[] = $this->sanitizeCell($cell);
         }
         fputcsv($this->handle, $safe, $this->separator);
+    }
+
+    /**
+     * Sanitize CSV cell value to prevent CSV injection attacks
+     * Prevents cells starting with =, +, -, @, \t, \r from being interpreted as formulas
+     * 
+     * @param mixed $value The value to sanitize
+     * @return string Safe CSV cell value
+     */
+    private function sanitizeCell($value): string {
+        if ($value === null) {
+            return '';
+        }
+        
+        $stringValue = (string)$value;
+        
+        // Check if the value starts with dangerous characters
+        $firstChar = mb_substr($stringValue, 0, 1);
+        $dangerousChars = ['=', '+', '-', '@', "\t", "\r"];
+        
+        if (in_array($firstChar, $dangerousChars, true)) {
+            // Prepend a single quote to prevent formula interpretation
+            return "'" . $stringValue;
+        }
+        
+        return $stringValue;
     }
 
     public function close(): void

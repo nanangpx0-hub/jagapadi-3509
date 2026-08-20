@@ -16,6 +16,9 @@ class DashboardDataAggregator {
         'production' => 86400,  // 24 hours
         'irrigation' => 1800,   // 30 minutes
         'hama' => 1800,         // 30 minutes
+        'hama_stats' => 300,    // 5 menit (petugas bisa submit laporan baru)
+        'hama_map'   => 300,    // 5 menit (data peta tidak perlu real-time)
+        'pipeline'  => 300,     // 5 menit (status pipeline petugas mendekati real-time)
         'lainnya' => 1800       // 30 minutes
     ];
     
@@ -40,16 +43,20 @@ class DashboardDataAggregator {
      * @return array
      */
     public function getWeatherSummary($filters = []) {
-        $cacheKey = 'weather_summary_' . md5(json_encode($filters));
+        $cacheKey = 'weather_summary_v3_' . md5(json_encode($filters));
         $cached = $this->getCache($cacheKey, 'weather');
         if ($cached !== null) {
             return $cached;
         }
         
+        $alerts = $this->getWeatherAlerts($filters);
+        $period = $this->getWeatherAlertPeriod($filters);
         $result = [
             'rainfall' => $this->getRainfallSummary($filters),
             'wind' => $this->getWindSummary($filters),
-            'alerts' => $this->getWeatherAlerts($filters),
+            'alerts' => $alerts,
+            'alert_count' => count($alerts),
+            'alert_period' => $period,
             'last_updated' => date('Y-m-d H:i:s')
         ];
         
@@ -61,131 +68,208 @@ class DashboardDataAggregator {
      * Get rainfall summary statistics
      */
     public function getRainfallSummary($filters = []) {
-        $year = $filters['year'] ?? date('Y');
-        $month = $filters['month'] ?? null;
+        $year = $this->normalizeYear($filters['year'] ?? null);
         
-        $sql = "SELECT 
-                    COUNT(*) as total_records,
-                    AVG(curah_hujan) as avg_rainfall,
-                    MAX(curah_hujan) as max_rainfall,
-                    MIN(curah_hujan) as min_rainfall,
-                    SUM(curah_hujan) as total_rainfall
-                FROM curah_hujan 
-                WHERE YEAR(tanggal) = :year";
-        
-        $params = [':year' => $year];
-        
-        if ($month) {
-            $sql .= " AND MONTH(tanggal) = :month";
-            $params[':month'] = $month;
+        // Caching
+        $cacheKey = 'rainfall_summary_' . $year;
+        $cached = $this->getCache($cacheKey, 'rainfall');
+        if ($cached !== null) {
+            return $cached;
         }
+        
+        $sql = "SELECT
+                    COUNT(*) as total_records,
+                    AVG(daily_rainfall) as avg_rainfall,
+                    MAX(daily_rainfall) as max_rainfall,
+                    MIN(daily_rainfall) as min_rainfall,
+                    SUM(daily_rainfall) as total_rainfall
+                FROM (
+                    SELECT tanggal, AVG(curah_hujan) AS daily_rainfall
+                    FROM curah_hujan
+                    WHERE tanggal >= :year_start AND tanggal < :year_end
+                      AND sumber_data NOT LIKE 'Simulasi%'";
+        
+        $range = $this->yearToDateRange($year);
+        $params = [':year_start' => $range['start'], ':year_end' => $range['end']];
+        
+        if (!empty($filters['month'])) {
+            $sql .= " AND MONTH(tanggal) = :month";
+            $params[':month'] = $filters['month'];
+        }
+        
+        $sql .= " GROUP BY tanggal) daily";
         
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         $stats = $stmt->fetch(PDO::FETCH_ASSOC);
         
         // Get monthly breakdown
-        $sql = "SELECT 
+        $sql = "SELECT
                     MONTH(tanggal) as bulan,
-                    AVG(curah_hujan) as avg_rainfall,
-                    SUM(curah_hujan) as total_rainfall,
+                    AVG(daily_rainfall) as avg_rainfall,
+                    SUM(daily_rainfall) as total_rainfall,
                     COUNT(*) as data_count
-                FROM curah_hujan 
-                WHERE YEAR(tanggal) = :year
+                FROM (
+                    SELECT tanggal, AVG(curah_hujan) AS daily_rainfall
+                    FROM curah_hujan
+                    WHERE tanggal >= :year_start AND tanggal < :year_end
+                      AND sumber_data NOT LIKE 'Simulasi%'
+                    GROUP BY tanggal
+                ) daily
                 GROUP BY MONTH(tanggal)
                 ORDER BY bulan";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([':year' => $year]);
+        $stmt->execute([':year_start' => $range['start'], ':year_end' => $range['end']]);
         $monthly = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        return [
+        $result = [
             'statistics' => $stats,
             'monthly' => $monthly,
             'year' => $year
         ];
+        
+        $this->setCache($cacheKey, $result, 'rainfall');
+        return $result;
     }
     
     /**
      * Get wind speed summary statistics
      */
     public function getWindSummary($filters = []) {
-        $year = $filters['year'] ?? date('Y');
-        $month = $filters['month'] ?? null;
+        $year = $this->normalizeYear($filters['year'] ?? null);
         
-        $sql = "SELECT 
-                    COUNT(*) as total_records,
-                    AVG(kecepatan_angin) as avg_speed,
-                    MAX(kecepatan_angin) as max_speed,
-                    MIN(kecepatan_angin) as min_speed
-                FROM kecepatan_angin 
-                WHERE YEAR(tanggal) = :year";
-        
-        $params = [':year' => $year];
-        
-        if ($month) {
-            $sql .= " AND MONTH(tanggal) = :month";
-            $params[':month'] = $month;
+        // Caching
+        $cacheKey = 'wind_summary_' . $year;
+        $cached = $this->getCache($cacheKey, 'wind');
+        if ($cached !== null) {
+            return $cached;
         }
+        
+        $sql = "SELECT
+                    COUNT(*) as total_records,
+                    AVG(daily_speed) as avg_speed,
+                    MAX(daily_speed) as max_speed,
+                    MIN(daily_speed) as min_speed
+                FROM (
+                    SELECT tanggal, AVG(kecepatan_angin) AS daily_speed
+                    FROM kecepatan_angin
+                    WHERE tanggal >= :year_start AND tanggal < :year_end
+                      AND sumber_data NOT LIKE 'Simulasi%'";
+        
+        $range = $this->yearToDateRange($year);
+        $params = [':year_start' => $range['start'], ':year_end' => $range['end']];
+        
+        if (!empty($filters['month'])) {
+            $sql .= " AND MONTH(tanggal) = :month";
+            $params[':month'] = $filters['month'];
+        }
+        
+        $sql .= " GROUP BY tanggal) daily";
         
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         $stats = $stmt->fetch(PDO::FETCH_ASSOC);
         
         // Get monthly breakdown
-        $sql = "SELECT 
+        $sql = "SELECT
                     MONTH(tanggal) as bulan,
-                    AVG(kecepatan_angin) as avg_speed,
-                    MAX(kecepatan_angin) as max_speed,
+                    AVG(daily_speed) as avg_speed,
+                    MAX(daily_speed) as max_speed,
                     COUNT(*) as data_count
-                FROM kecepatan_angin 
-                WHERE YEAR(tanggal) = :year
+                FROM (
+                    SELECT tanggal, AVG(kecepatan_angin) AS daily_speed
+                    FROM kecepatan_angin
+                    WHERE tanggal >= :year_start AND tanggal < :year_end
+                      AND sumber_data NOT LIKE 'Simulasi%'
+                    GROUP BY tanggal
+                ) daily
                 GROUP BY MONTH(tanggal)
                 ORDER BY bulan";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([':year' => $year]);
+        $stmt->execute([':year_start' => $range['start'], ':year_end' => $range['end']]);
         $monthly = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        return [
+        $result = [
             'statistics' => $stats,
             'monthly' => $monthly,
             'year' => $year
         ];
+        
+        $this->setCache($cacheKey, $result, 'wind');
+        return $result;
     }
     
     /**
      * Get weather alerts (high rainfall, strong winds)
      */
     public function getWeatherAlerts($filters = []) {
-        $days = $filters['days'] ?? 7;
+        $days = $this->normalizeDays($filters['days'] ?? 7);
+        $lookbackDays = $days - 1;
         $alerts = [];
         
         // High rainfall alerts (> 50mm)
         $sql = "SELECT tanggal, curah_hujan, kecamatan, 'high_rainfall' as alert_type
                 FROM curah_hujan 
                 WHERE curah_hujan > 50 
+                AND sumber_data NOT LIKE 'Simulasi%'
                 AND tanggal >= DATE_SUB(CURDATE(), INTERVAL :days DAY)
+                AND tanggal <= CURDATE()
                 ORDER BY tanggal DESC
                 LIMIT 10";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([':days' => $days]);
+        $stmt->execute([':days' => $lookbackDays]);
         $rainfallAlerts = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         // High wind speed alerts (> 30 km/h)
-        $sql = "SELECT tanggal, kecepatan_angin, kecamatan, 'high_wind' as alert_type
+        $sql = "SELECT tanggal, kecepatan_angin, lokasi AS kecamatan, 'high_wind' as alert_type
                 FROM kecepatan_angin 
                 WHERE kecepatan_angin > 30 
+                AND sumber_data NOT LIKE 'Simulasi%'
                 AND tanggal >= DATE_SUB(CURDATE(), INTERVAL :days DAY)
+                AND tanggal <= CURDATE()
                 ORDER BY tanggal DESC
                 LIMIT 10";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([':days' => $days]);
+        $stmt->execute([':days' => $lookbackDays]);
         $windAlerts = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         return array_merge($rainfallAlerts, $windAlerts);
+    }
+    
+    /**
+     * Describe the real calendar period and freshness of the alert sources.
+     */
+    private function getWeatherAlertPeriod($filters = []): array {
+        $days = $this->normalizeDays($filters['days'] ?? 7);
+        $startDate = date('Y-m-d', strtotime('-' . ($days - 1) . ' days'));
+        $endDate = date('Y-m-d');
+ 
+        $sql = "SELECT MAX(latest_date) AS data_until
+                FROM (
+                    SELECT MAX(tanggal) AS latest_date
+                    FROM curah_hujan
+                    WHERE sumber_data NOT LIKE 'Simulasi%'
+                    UNION ALL
+                    SELECT MAX(tanggal) AS latest_date
+                    FROM kecepatan_angin
+                    WHERE sumber_data NOT LIKE 'Simulasi%'
+                ) weather_sources";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute();
+        $dataUntil = $stmt->fetchColumn() ?: null;
+        $freshnessLimit = date('Y-m-d', strtotime('-1 day'));
+ 
+        return [
+            'days' => $days,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'data_until' => $dataUntil,
+            'is_stale' => $dataUntil === null || $dataUntil < $freshnessLimit,
+        ];
     }
     
     // =========================================
@@ -220,22 +304,33 @@ class DashboardDataAggregator {
      * Get latest prices for each commodity
      */
     public function getLatestPrices() {
-        $sql = "SELECT 
-                    jenis_komoditas as komoditas,
-                    harga,
-                    tanggal,
-                    sumber_data
-                FROM harga_komoditas h1
-                WHERE tanggal = (
-                    SELECT MAX(tanggal) 
-                    FROM harga_komoditas h2 
-                    WHERE h2.jenis_komoditas = h1.jenis_komoditas
-                )
-                ORDER BY jenis_komoditas";
+        $cacheKey = 'latest_prices';
+        $cached = $this->getCache($cacheKey, 'prices');
+        if ($cached !== null) {
+            return $cached;
+        }
+        
+        $sql = "SELECT
+                    h.jenis_komoditas AS komoditas,
+                    h.harga,
+                    h.tanggal,
+                    h.sumber_data
+                FROM harga_komoditas h
+                INNER JOIN (
+                    SELECT jenis_komoditas, MAX(tanggal) AS latest_date
+                    FROM harga_komoditas
+                    GROUP BY jenis_komoditas
+                ) latest
+                    ON latest.jenis_komoditas = h.jenis_komoditas
+                   AND latest.latest_date = h.tanggal
+                ORDER BY h.jenis_komoditas";
         
         $stmt = $this->db->prepare($sql);
         $stmt->execute();
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        $this->setCache($cacheKey, $result, 'prices');
+        return $result;
     }
     
     /**
@@ -315,11 +410,11 @@ class DashboardDataAggregator {
             return $cached;
         }
         
-        $year = $filters['year'] ?? date('Y');
+        $year = $this->normalizeYear($filters['year'] ?? null);
         
         $result = [
             'statistics' => $this->getProductionStats($year),
-            'trend' => $this->getProductionTrend(),
+            'trend' => $this->getProductionTrend(5, $year),
             'topProducers' => $this->getTopProducers($year),
             'last_updated' => date('Y-m-d H:i:s')
         ];
@@ -331,38 +426,57 @@ class DashboardDataAggregator {
     /**
      * Get production statistics for a year
      */
-    public function getProductionStats($year) {
+    public function getProductionStats(int|string $year): array {
+        $year = $this->normalizeYear($year);
+        $cacheKey = 'production_stats_' . $year;
+        $cached = $this->getCache($cacheKey, 'production');
+        if ($cached !== null) {
+            return $cached;
+        }
+        
+        $preferred = $this->preferredBpsDatasetSql();
         $sql = "SELECT 
                     SUM(luas_panen) as total_luas_panen,
                     SUM(produksi_gabah) as total_produksi_gabah,
                     SUM(produksi_beras) as total_produksi_beras,
-                    AVG(produktivitas) as avg_produktivitas,
+                    CASE WHEN SUM(luas_panen) > 0
+                         THEN SUM(produksi_gabah) / SUM(luas_panen) * 10
+                         ELSE 0 END as avg_produktivitas,
                     COUNT(DISTINCT kabupaten_kota) as total_kabupaten
-                FROM data_pertanian_bps 
+                FROM ({$preferred}) preferred_bps
                 WHERE tahun = :year";
         
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':year' => $year]);
-        return $stmt->fetch(PDO::FETCH_ASSOC);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        $this->setCache($cacheKey, $result, 'production');
+        return $result;
     }
     
     /**
      * Get production trend over years
      */
-    public function getProductionTrend($years = 5) {
+    public function getProductionTrend($years = 5, $endYear = null) {
+        $years = min(20, max(1, (int) $years));
+        $endYear = $this->normalizeYear($endYear);
+        $startYear = $endYear - $years + 1;
+        $preferred = $this->preferredBpsDatasetSql();
         $sql = "SELECT 
                     tahun,
                     SUM(luas_panen) as total_luas_panen,
                     SUM(produksi_gabah) as total_produksi_gabah,
                     SUM(produksi_beras) as total_produksi_beras,
-                    AVG(produktivitas) as avg_produktivitas
-                FROM data_pertanian_bps 
-                WHERE tahun >= YEAR(CURDATE()) - :years
+                    CASE WHEN SUM(luas_panen) > 0
+                         THEN SUM(produksi_gabah) / SUM(luas_panen) * 10
+                         ELSE 0 END as avg_produktivitas
+                FROM ({$preferred}) preferred_bps
+                WHERE tahun BETWEEN :start_year AND :end_year
                 GROUP BY tahun
                 ORDER BY tahun";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([':years' => $years]);
+        $stmt->execute([':start_year' => $startYear, ':end_year' => $endYear]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     
@@ -370,13 +484,16 @@ class DashboardDataAggregator {
      * Get top producing regions
      */
     public function getTopProducers($year, $limit = 10) {
+        $year = $this->normalizeYear($year);
+        $limit = min(100, max(1, (int) $limit));
+        $preferred = $this->preferredBpsDatasetSql();
         $sql = "SELECT 
                     kabupaten_kota as kabupaten,
                     luas_panen,
                     produksi_gabah,
                     produksi_beras,
                     produktivitas
-                FROM data_pertanian_bps 
+                FROM ({$preferred}) preferred_bps
                 WHERE tahun = :year
                 ORDER BY produksi_gabah DESC
                 LIMIT :limit";
@@ -386,6 +503,42 @@ class DashboardDataAggregator {
         $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Returns SQL subquery for the preferred BPS dataset.
+     *
+     * Menggunakan tabel data_pertanian_bps yang merupakan sumber utama
+     * data produksi pertanian dari BPS/KSA Ubinan.
+     */
+    private function preferredBpsDatasetSql(): string
+    {
+        return "SELECT
+                    tahun,
+                    kabupaten_kota,
+                    luas_panen,
+                    produksi_gabah,
+                    produksi_beras,
+                    produktivitas,
+                    keterangan
+                FROM (
+                    SELECT
+                        bps.*,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY bps.tahun, bps.kabupaten_kota
+                            ORDER BY CASE bps.sumber_data_type
+                                        WHEN 'ksa' THEN 1
+                                        WHEN 'resmi_webapi' THEN 2
+                                        WHEN 'manual' THEN 3
+                                        ELSE 4
+                                     END,
+                                     COALESCE(bps.is_validated, 0) DESC,
+                                     bps.id DESC
+                        ) AS source_rank
+                    FROM data_pertanian_bps bps
+                    WHERE COALESCE(bps.tipe_skenario, 'baseline') = 'baseline'
+                ) ranked_bps
+                WHERE source_rank = 1";
     }
     
     // =========================================
@@ -416,43 +569,58 @@ class DashboardDataAggregator {
     /**
      * Get irrigation statistics
      */
-    public function getIrrigationStats() {
+    public function getIrrigationStats(): array {
+        $cacheKey = 'irrigation_stats';
+        $cached = $this->getCache($cacheKey, 'irrigation');
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $latestDate = $this->getLatestIrrigationDate();
         $sql = "SELECT 
                     COUNT(*) as total_records,
                     AVG(debit_air) as avg_debit,
                     MAX(debit_air) as max_debit,
                     MIN(debit_air) as min_debit,
                     COUNT(DISTINCT daerah_irigasi) as total_daerah_irigasi
-                FROM data_irigasi 
-                WHERE tanggal >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)";
-        
+                FROM data_irigasi
+                WHERE tanggal >= DATE_SUB(:latest_date, INTERVAL 29 DAY)";
+
         $stmt = $this->db->prepare($sql);
-        $stmt->execute();
-        return $stmt->fetch(PDO::FETCH_ASSOC);
+        $stmt->execute([':latest_date' => $latestDate]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        $this->setCache($cacheKey, $result, 'irrigation');
+        return $result;
     }
-    
+
     /**
      * Get irrigation trend over days
      */
     public function getIrrigationTrend($days = 30) {
+        $days = $this->normalizeDays($days);
+        $latestDate = $this->getLatestIrrigationDate();
         $sql = "SELECT 
                     tanggal,
                     AVG(debit_air) as avg_debit,
                     SUM(debit_air) as total_debit
                 FROM data_irigasi 
-                WHERE tanggal >= DATE_SUB(CURDATE(), INTERVAL :days DAY)
+                WHERE tanggal >= DATE_SUB(:latest_date, INTERVAL :days DAY)
                 GROUP BY tanggal
                 ORDER BY tanggal";
-        
+
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([':days' => $days]);
+        $stmt->bindValue(':latest_date', $latestDate);
+        $stmt->bindValue(':days', $days, PDO::PARAM_INT);
+        $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-    
+
     /**
      * Get irrigation data by area
      */
     public function getIrrigationByArea() {
+        $latestDate = $this->getLatestIrrigationDate();
         $sql = "SELECT 
                     di.daerah_irigasi,
                     di.kecamatan,
@@ -464,13 +632,42 @@ class DashboardDataAggregator {
                     AVG(mk.longitude) as longitude
                 FROM data_irigasi di
                 LEFT JOIN master_kecamatan mk ON di.kecamatan = mk.nama_kecamatan
-                WHERE di.tanggal >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+                WHERE di.tanggal >= DATE_SUB(:latest_date, INTERVAL 29 DAY)
                 GROUP BY di.daerah_irigasi, di.kecamatan
                 ORDER BY avg_debit DESC";
-        
+
         $stmt = $this->db->prepare($sql);
-        $stmt->execute();
+        $stmt->execute([':latest_date' => $latestDate]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Ambil tanggal terbaru data irigasi, di-cache 30 menit.
+     * Menggantikan subquery berulang `(SELECT MAX(di2.tanggal) FROM data_irigasi di2)`
+     * yang sebelumnya dieksekusi di setiap query irigasi.
+     */
+    private function getLatestIrrigationDate(): string {
+        $cacheKey = 'irrigation_latest_date';
+        $cached = $this->getCache($cacheKey, 'irrigation');
+        if ($cached !== null && $cached !== '') {
+            return (string)$cached;
+        }
+
+        try {
+            $stmt = $this->db->prepare('SELECT MAX(tanggal) FROM data_irigasi');
+            $stmt->execute();
+            $date = (string)$stmt->fetchColumn();
+        } catch (PDOException $e) {
+            error_log('DashboardDataAggregator::getLatestIrrigationDate - ' . $e->getMessage());
+            $date = date('Y-m-d');
+        }
+
+        if ($date === '') {
+            $date = date('Y-m-d');
+        }
+
+        $this->setCache($cacheKey, $date, 'irrigation');
+        return $date;
     }
     
     // =========================================
@@ -479,70 +676,166 @@ class DashboardDataAggregator {
     
     /**
      * Get pest/hama summary
+     *
+     * @param array $filters
+     *        - year: int tahun
+     *        - scope: 'personal' | 'territory' (PILAR 1 dual-scope)
+     *        - user_id: int (scope personal)
+     *        - kecamatan_id: int (scope territory)
+     *        - include_draft: bool (scope personal menyertakan draf milik sendiri)
      */
     public function getHamaSummary($filters = []) {
-        $cacheKey = 'hama_summary_' . md5(json_encode($filters));
+        $scope = (($filters['scope'] ?? 'personal') === 'territory') ? 'territory' : 'personal';
+        $year = $this->normalizeYear($filters['year'] ?? null);
+        $userId = isset($filters['user_id']) ? (int)$filters['user_id'] : null;
+        $kecamatanId = isset($filters['kecamatan_id']) ? (int)$filters['kecamatan_id'] : null;
+        $includeDraft = !empty($filters['include_draft']);
+
+        // Scope teritori berbasis kecamatan: user_id TIDAK dipakai di klausa WHERE
+        // (hanya laporan Diverifikasi di kecamatan binaan).
+        $effectiveUserId = ($scope === 'territory') ? null : $userId;
+
+        $cacheKey = 'hama_summary_' . md5(json_encode([
+            'scope' => $scope,
+            'year' => $year,
+            'user_id' => $effectiveUserId,
+            'kecamatan_id' => $kecamatanId,
+            'include_draft' => $includeDraft,
+        ]));
+        $cached = $this->getCache($cacheKey, 'hama');
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $result = [
+            'statistics' => $this->getHamaStats($year, $effectiveUserId, $kecamatanId, $includeDraft),
+            'distribution' => $this->getHamaDistribution($year, $effectiveUserId, $kecamatanId, $includeDraft),
+            'topOPT' => $this->getTopOPT($year, 10, $effectiveUserId, $kecamatanId, $includeDraft),
+            'byKecamatan' => $this->getHamaByKecamatan($year, $effectiveUserId, $kecamatanId, $includeDraft),
+            'scope' => $scope,
+            'scope_kecamatan_id' => $kecamatanId,
+            'last_updated' => date('Y-m-d H:i:s')
+        ];
+
+        $this->setCache($cacheKey, $result, 'hama');
+        return $result;
+    }
+
+    /**
+     * Bangun klausa WHERE + parameter untuk scoping data hama.
+     *
+     * - territory: kecamatan_id + status Diverifikasi (wilayah binaan petugas).
+     * - personal  : user_id + (opsional) status IN ('Draf','Submitted','Diverifikasi')
+     *               bila include_draft=true, selain itu Submitted + Diverifikasi.
+     */
+    private function buildHamaScopeFilter(?int $userId, ?int $kecamatanId, bool $includeDraft): array {
+        $sql = '';
+        $params = [];
+
+        if ($kecamatanId !== null) {
+            $sql .= ' AND lh.kecamatan_id = :scope_kecamatan_id AND lh.status = :scope_status';
+            $params[':scope_kecamatan_id'] = $kecamatanId;
+            $params[':scope_status'] = 'Diverifikasi';
+            return ['sql' => $sql, 'params' => $params];
+        }
+
+        if ($userId !== null) {
+            $sql .= ' AND lh.user_id = :scope_user_id';
+            $params[':scope_user_id'] = $userId;
+        }
+
+        if ($includeDraft) {
+            $sql .= " AND lh.status IN ('Draf', 'Submitted', 'Diverifikasi')";
+        } else {
+            $sql .= " AND lh.status IN ('Submitted', 'Diverifikasi')";
+        }
+
+        return ['sql' => $sql, 'params' => $params];
+    }
+    
+    /**
+     * Get hama statistics
+     */
+    public function getHamaStats($year, ?int $userId = null, ?int $kecamatanId = null, bool $includeDraft = false): array {
+        $year = $this->normalizeYear($year);
+        $cacheKey = 'hama_stats_' . $year . '_' . ($userId ?? 'all') . '_' . ($kecamatanId ?? 'all') . '_' . ($includeDraft ? 'd' : 'nd');
         $cached = $this->getCache($cacheKey, 'hama');
         if ($cached !== null) {
             return $cached;
         }
         
-        $year = $filters['year'] ?? date('Y');
+        $scope = $this->buildHamaScopeFilter($userId, $kecamatanId, $includeDraft);
+        $sql = "SELECT 
+                    COUNT(*) as total_laporan,
+                    SUM(CASE WHEN lh.status = 'Diverifikasi' THEN 1 ELSE 0 END) as terverifikasi,
+                    SUM(CASE WHEN lh.status = 'Submitted' THEN 1 ELSE 0 END) as pending,
+                    SUM(CASE WHEN lh.tingkat_keparahan = 'Berat' THEN 1 ELSE 0 END) as berat,
+                    SUM(CASE WHEN lh.tingkat_keparahan = 'Sedang' THEN 1 ELSE 0 END) as sedang,
+                    SUM(CASE WHEN lh.tingkat_keparahan = 'Ringan' THEN 1 ELSE 0 END) as ringan,
+                    SUM(lh.luas_serangan) as total_luas_serangan
+                FROM laporan_hama lh 
+                WHERE lh.tanggal >= :year_start AND lh.tanggal < :year_end"
+            . $scope['sql'];
         
-        $result = [
-            'statistics' => $this->getHamaStats($year),
-            'distribution' => $this->getHamaDistribution($year),
-            'topOPT' => $this->getTopOPT($year),
-            'byKecamatan' => $this->getHamaByKecamatan($year),
-            'last_updated' => date('Y-m-d H:i:s')
-        ];
+        $range = $this->yearToDateRange($year);
+        $params = array_merge(
+            [':year_start' => $range['start'], ':year_end' => $range['end']],
+            $scope['params']
+        );
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
         
         $this->setCache($cacheKey, $result, 'hama');
         return $result;
     }
     
     /**
-     * Get hama statistics
-     */
-    public function getHamaStats($year) {
-        $sql = "SELECT 
-                    COUNT(*) as total_laporan,
-                    SUM(CASE WHEN status IN ('Submitted', 'Diverifikasi') THEN 1 ELSE 0 END) as terverifikasi,
-                    0 as pending,
-                    SUM(CASE WHEN tingkat_keparahan = 'Berat' THEN 1 ELSE 0 END) as berat,
-                    SUM(CASE WHEN tingkat_keparahan = 'Sedang' THEN 1 ELSE 0 END) as sedang,
-                    SUM(CASE WHEN tingkat_keparahan = 'Ringan' THEN 1 ELSE 0 END) as ringan,
-                    SUM(luas_serangan) as total_luas_serangan
-                FROM laporan_hama 
-                WHERE YEAR(tanggal) = :year";
-        
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([':year' => $year]);
-        return $stmt->fetch(PDO::FETCH_ASSOC);
-    }
-    
-    /**
      * Get monthly hama distribution
      */
-    public function getHamaDistribution($year) {
+    public function getHamaDistribution($year, ?int $userId = null, ?int $kecamatanId = null, bool $includeDraft = false) {
+        $year = $this->normalizeYear($year);
+        $cacheKey = 'hama_dist_' . $year . '_' . ($userId ?? 'all') . '_' . ($kecamatanId ?? 'all') . '_' . ($includeDraft ? 'd' : 'nd');
+        $cached = $this->getCache($cacheKey, 'hama');
+        if ($cached !== null) {
+            return $cached;
+        }
+        
+        $scope = $this->buildHamaScopeFilter($userId, $kecamatanId, $includeDraft);
         $sql = "SELECT 
-                    MONTH(tanggal) as bulan,
+                    MONTH(lh.tanggal) as bulan,
                     COUNT(*) as total_laporan,
-                    SUM(luas_serangan) as total_luas
-                FROM laporan_hama 
-                WHERE YEAR(tanggal) = :year
-                GROUP BY MONTH(tanggal)
+                    SUM(lh.luas_serangan) as total_luas
+                FROM laporan_hama lh 
+                WHERE lh.tanggal >= :year_start AND lh.tanggal < :year_end"
+            . $scope['sql'];
+        
+        $range = $this->yearToDateRange($year);
+        $params = array_merge(
+            [':year_start' => $range['start'], ':year_end' => $range['end']],
+            $scope['params']
+        );
+
+        $sql .= "
+                GROUP BY MONTH(lh.tanggal)
                 ORDER BY bulan";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([':year' => $year]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $stmt->execute($params);
+        $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        $this->setCache($cacheKey, $result, 'hama');
+        return $result;
     }
     
     /**
      * Get top OPT
      */
-    public function getTopOPT($year, $limit = 10) {
+    public function getTopOPT($year, $limit = 10, ?int $userId = null, ?int $kecamatanId = null, bool $includeDraft = false) {
+        $year = $this->normalizeYear($year);
+        $limit = min(100, max(1, (int) $limit));
+        $scope = $this->buildHamaScopeFilter($userId, $kecamatanId, $includeDraft);
         $sql = "SELECT 
                     mo.nama_opt,
                     mo.jenis,
@@ -550,14 +843,26 @@ class DashboardDataAggregator {
                     SUM(lh.luas_serangan) as total_luas
                 FROM laporan_hama lh
                 JOIN master_opt mo ON lh.master_opt_id = mo.id
-                WHERE YEAR(lh.tanggal) = :year
-                AND lh.status IN ('Submitted', 'Diverifikasi')
+                WHERE lh.tanggal >= :year_start AND lh.tanggal < :year_end"
+            . $scope['sql'];
+
+        $range = $this->yearToDateRange($year);
+        $params = array_merge(
+            [':year_start' => $range['start'], ':year_end' => $range['end']],
+            $scope['params']
+        );
+ 
+        $sql .= "
                 GROUP BY lh.master_opt_id, mo.nama_opt, mo.jenis
                 ORDER BY total_laporan DESC
                 LIMIT :limit";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->bindValue(':year', $year, PDO::PARAM_INT);
+        $stmt->bindValue(':year_start', $range['start'], PDO::PARAM_INT);
+        $stmt->bindValue(':year_end', $range['end'], PDO::PARAM_INT);
+        foreach ($scope['params'] as $key => $value) {
+            $stmt->bindValue($key, $value, is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR);
+        }
         $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -566,7 +871,15 @@ class DashboardDataAggregator {
     /**
      * Get hama by kecamatan for map
      */
-    public function getHamaByKecamatan($year) {
+    public function getHamaByKecamatan($year, ?int $userId = null, ?int $kecamatanId = null, bool $includeDraft = false) {
+        $year = $this->normalizeYear($year);
+        $cacheKey = 'hama_by_kec_' . $year . '_' . ($userId ?? 'all') . '_' . ($kecamatanId ?? 'all') . '_' . ($includeDraft ? 'd' : 'nd');
+        $cached = $this->getCache($cacheKey, 'hama');
+        if ($cached !== null) {
+            return $cached;
+        }
+        
+        $scope = $this->buildHamaScopeFilter($userId, $kecamatanId, $includeDraft);
         $sql = "SELECT 
                     mk.id as kecamatan_id,
                     mk.nama_kecamatan,
@@ -577,15 +890,26 @@ class DashboardDataAggregator {
                     AVG(lh.longitude) as lng
                 FROM laporan_hama lh
                 LEFT JOIN master_desa md ON lh.desa_id = md.id
-                LEFT JOIN master_kecamatan mk ON md.kecamatan_id = mk.id
-                WHERE YEAR(lh.tanggal) = :year
-                AND lh.status IN ('Submitted', 'Diverifikasi')
+                LEFT JOIN master_kecamatan mk ON COALESCE(lh.kecamatan_id, md.kecamatan_id) = mk.id
+                WHERE lh.tanggal >= :year_start AND lh.tanggal < :year_end"
+            . $scope['sql'];
+        
+        $range = $this->yearToDateRange($year);
+        $params = array_merge(
+            [':year_start' => $range['start'], ':year_end' => $range['end']],
+            $scope['params']
+        );
+ 
+        $sql .= "
                 GROUP BY mk.id, mk.nama_kecamatan
                 ORDER BY total_laporan DESC";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([':year' => $year]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $stmt->execute($params);
+        $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        $this->setCache($cacheKey, $result, 'hama');
+        return $result;
     }
     
     // =========================================
@@ -600,6 +924,7 @@ class DashboardDataAggregator {
             'hama' => $this->getHamaMapData($filters),
             'irrigation' => $this->getIrrigationMapData($filters),
             'weather' => $this->getWeatherMapData($filters),
+            'wind' => $this->getWindMapData($filters),
             'last_updated' => date('Y-m-d H:i:s')
         ];
     }
@@ -608,10 +933,13 @@ class DashboardDataAggregator {
      * Get hama map data with coordinates
      */
     public function getHamaMapData($filters = []) {
-        $year = $filters['year'] ?? date('Y');
+        $year = $this->normalizeYear($filters['year'] ?? null);
         $status = $filters['status'] ?? '';
-        
-        $sql = "SELECT 
+        $userId = isset($filters['user_id']) ? (int) $filters['user_id'] : null;
+        $kecamatanId = isset($filters['kecamatan_id']) ? (int) $filters['kecamatan_id'] : null;
+        $includeDraft = (bool) ($filters['include_draft'] ?? false);
+
+        $sql = "SELECT
                     lh.id,
                     lh.tanggal,
                     lh.lokasi,
@@ -624,22 +952,35 @@ class DashboardDataAggregator {
                     mo.jenis as jenis_opt
                 FROM laporan_hama lh
                 LEFT JOIN master_opt mo ON lh.master_opt_id = mo.id
-                WHERE YEAR(lh.tanggal) = :year
-                AND lh.status IN ('Submitted', 'Diverifikasi')
+                WHERE lh.tanggal >= :year_start AND lh.tanggal < :year_end
                 AND lh.latitude IS NOT NULL
                 AND lh.longitude IS NOT NULL";
-        
-        if ($status === 'Submitted' || $status === 'Diverifikasi') {
-            $sql .= " AND lh.status = :status";
+
+        $range = $this->yearToDateRange($year);
+        $params = [':year_start' => $range['start'], ':year_end' => $range['end']];
+
+        if ($userId !== null) {
+            $sql .= ' AND lh.user_id = :user_id';
+            $params[':user_id'] = $userId;
         }
-        
+
+        if ($kecamatanId !== null) {
+            $sql .= ' AND lh.kecamatan_id = :scope_kecamatan_id';
+            $params[':scope_kecamatan_id'] = $kecamatanId;
+        }
+
+        $exactStatus = in_array($status, ['Submitted', 'Diverifikasi', 'Draf'], true) ? $status : '';
+        if ($exactStatus !== '') {
+            $sql .= ' AND lh.status = :status';
+            $params[':status'] = $exactStatus;
+        } elseif ($includeDraft) {
+            $sql .= " AND lh.status IN ('Draf', 'Submitted', 'Diverifikasi')";
+        } else {
+            $sql .= " AND lh.status IN ('Submitted', 'Diverifikasi')";
+        }
+
         $sql .= " ORDER BY lh.tanggal DESC";
-        
-        $params = [':year' => $year];
-        if ($status === 'Submitted' || $status === 'Diverifikasi') {
-            $params[':status'] = $status;
-        }
-        
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -658,24 +999,116 @@ class DashboardDataAggregator {
      * Get weather map data by location
      */
     public function getWeatherMapData($filters = []) {
-        $sql = "SELECT 
-                    kecamatan_id,
-                    kecamatan,
-                    AVG(curah_hujan) as avg_rainfall,
-                    MAX(curah_hujan) as max_rainfall,
-                    latitude,
-                    longitude
-                FROM curah_hujan 
-                WHERE tanggal >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
-                AND latitude IS NOT NULL
-                AND longitude IS NOT NULL
-                GROUP BY kecamatan_id, kecamatan, latitude, longitude";
-        
+        $days = $this->normalizeDays($filters['days'] ?? 30);
+        $sql = "SELECT
+                    ch.kecamatan_id,
+                    COALESCE(mk.nama_kecamatan, ch.kecamatan, ch.lokasi) AS kecamatan,
+                    AVG(ch.curah_hujan) as avg_rainfall,
+                    MAX(ch.curah_hujan) as max_rainfall,
+                    COALESCE(AVG(ch.latitude), mk.latitude) AS latitude,
+                    COALESCE(AVG(ch.longitude), mk.longitude) AS longitude
+                FROM curah_hujan ch
+                LEFT JOIN master_kecamatan mk ON ch.kecamatan_id = mk.id
+                WHERE ch.tanggal >= DATE_SUB(
+                    (SELECT MAX(ch2.tanggal) FROM curah_hujan ch2
+                     WHERE ch2.sumber_data NOT LIKE 'Simulasi%'),
+                    INTERVAL :days DAY
+                )
+                AND ch.sumber_data NOT LIKE 'Simulasi%'
+                GROUP BY ch.kecamatan_id, COALESCE(mk.nama_kecamatan, ch.kecamatan, ch.lokasi),
+                         mk.latitude, mk.longitude
+                HAVING latitude IS NOT NULL AND longitude IS NOT NULL";
+ 
         try {
             $stmt = $this->db->prepare($sql);
+            $stmt->bindValue(':days', $days, PDO::PARAM_INT);
             $stmt->execute();
             return $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (PDOException $e) {
+            return [];
+        }
+    }
+ 
+    /**
+     * Get wind speed map data by location.
+     * Joins kecepatan_angin with master_kecamatan to obtain coordinates.
+     * The lokasi field in kecepatan_angin follows format "Kecamatan, Jember".
+     */
+    public function getWindMapData($filters = []) {
+        $days = $this->normalizeDays($filters['days'] ?? 30);
+        $sql = "SELECT 
+                    TRIM(SUBSTRING_INDEX(k.lokasi, ',', 1)) as kecamatan,
+                    k.lokasi as lokasi,
+                    AVG(k.kecepatan_angin) as avg_wind_speed,
+                    MAX(k.kecepatan_angin) as max_wind_speed,
+                    MIN(k.kecepatan_angin) as min_wind_speed,
+                    COUNT(*) as total_records,
+                    mk.latitude,
+                    mk.longitude
+                FROM kecepatan_angin k
+                INNER JOIN master_kecamatan mk
+                    ON TRIM(SUBSTRING_INDEX(k.lokasi, ',', 1)) = mk.nama_kecamatan
+                WHERE k.tanggal >= DATE_SUB(
+                    (SELECT MAX(k2.tanggal) FROM kecepatan_angin k2
+                     WHERE k2.sumber_data NOT LIKE 'Simulasi%'),
+                    INTERVAL :days DAY
+                )
+                AND k.kecepatan_angin IS NOT NULL
+                AND k.sumber_data NOT LIKE 'Simulasi%'
+                GROUP BY TRIM(SUBSTRING_INDEX(k.lokasi, ',', 1)), k.lokasi, mk.latitude, mk.longitude
+                ORDER BY avg_wind_speed DESC";
+        
+        try {
+            $stmt = $this->db->prepare($sql);
+            $stmt->bindValue(':days', $days, PDO::PARAM_INT);
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            return [];
+        }
+    }
+    
+    /**
+     * Get hama detail for export (per laporan, not aggregated by kecamatan)
+     */
+    public function getHamaDetailForExport(int $year, int $userId, ?int $kecamatanId = null, bool $includeDraft = false): array {
+        $range = $this->yearToDateRange($year);
+        $scope = $this->buildHamaScopeFilter($userId, $kecamatanId, $includeDraft);
+        $sql = "SELECT
+                    lh.tanggal,
+                    lh.lokasi,
+                    mo.nama_opt,
+                    mo.jenis AS jenis_opt,
+                    lh.tingkat_keparahan,
+                    lh.luas_serangan,
+                    lh.populasi,
+                    lh.status,
+                    mk.nama_kecamatan,
+                    md.nama_desa,
+                    lh.catatan
+                FROM laporan_hama lh
+                LEFT JOIN master_opt mo ON lh.master_opt_id = mo.id
+                LEFT JOIN master_kecamatan mk ON lh.kecamatan_id = mk.id
+                LEFT JOIN master_desa md ON lh.desa_id = md.id
+                WHERE lh.tanggal >= :year_start
+                AND lh.tanggal < :year_end"
+            . $scope['sql'];
+
+        $params = array_merge(
+            [':year_start' => $range['start'], ':year_end' => $range['end']],
+            $scope['params']
+        );
+
+        $sql .= "
+                ORDER BY lh.tanggal DESC
+                LIMIT 1000";
+
+        try {
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($params);
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            error_log('DashboardDataAggregator::getHamaDetailForExport - ' . $e->getMessage());
             return [];
         }
     }
@@ -688,7 +1121,7 @@ class DashboardDataAggregator {
      * Get cached data
      */
     private function getCache($key, $type = 'weather') {
-        $file = $this->cacheDir . $key . '.json';
+        $file = $this->cacheDir . sha1($key) . '.json';
         
         if (!file_exists($file)) {
             return null;
@@ -702,30 +1135,49 @@ class DashboardDataAggregator {
         }
         
         $data = file_get_contents($file);
-        return json_decode($data, true);
+        if ($data === false) {
+            return null;
+        }
+        $payload = json_decode($data, true);
+        return is_array($payload) ? ($payload['data'] ?? null) : null;
     }
     
     /**
      * Set cache data
      */
     private function setCache($key, $data, $type = 'weather') {
-        $file = $this->cacheDir . $key . '.json';
-        file_put_contents($file, json_encode($data));
+        $payload = ['type' => $type, 'key' => $key, 'data' => $data, 'created' => time()];
+        $file = $this->cacheDir . sha1($key) . '.json';
+        file_put_contents($file, json_encode($payload), LOCK_EX);
     }
     
     /**
      * Clear cache by type or all
      */
     public function clearCache($type = null) {
-        $files = glob($this->cacheDir . '*.json');
+        $files = glob($this->cacheDir . '*.json') ?: [];
         
         foreach ($files as $file) {
             if ($type === null) {
-                unlink($file);
-            } elseif (strpos(basename($file), $type) === 0) {
-                unlink($file);
+                @unlink($file);
+                continue;
+            }
+            $raw = @file_get_contents($file);
+            if ($raw === false) {
+                continue;
+            }
+            $payload = json_decode($raw, true);
+            if (is_array($payload) && ($payload['type'] ?? '') === $type) {
+                @unlink($file);
             }
         }
+    }
+    
+    /**
+     * Clear lainnya cache
+     */
+    public function clearLainnyaCache() {
+        $this->clearCache('lainnya');
     }
     
     // =========================================
@@ -743,9 +1195,16 @@ class DashboardDataAggregator {
             fputcsv($output, array_keys($data[0]));
         }
         
-        // Data rows
+        // Data rows (sanitasi terhadap formula injection: =, +, -, @, TAB, CR)
         foreach ($data as $row) {
-            fputcsv($output, $row);
+            $csvRow = array_map(function ($val) {
+                if (is_string($val) && strlen($val) > 0
+                    && in_array($val[0], ['=', '+', '-', '@', "\t", "\r"], true)) {
+                    return "'" . $val;
+                }
+                return $val;
+            }, $row);
+            fputcsv($output, $csvRow);
         }
         
         rewind($output);
@@ -792,11 +1251,11 @@ class DashboardDataAggregator {
         
         return $allYears;
     }
-
+    
     // =========================================
     // LAPORAN LAINNYA DATA
     // =========================================
-
+    
     /**
      * Get laporan lainnya summary for dashboard
      */
@@ -806,40 +1265,45 @@ class DashboardDataAggregator {
         if ($cached !== null) {
             return $cached;
         }
-
+ 
         $year = $filters['year'] ?? date('Y');
-
+        $includeDraft = filter_var($filters['include_draft'] ?? false, FILTER_VALIDATE_BOOLEAN);
+ 
         $result = [
-            'statistics' => $this->getLainnyaStats($year),
+            'statistics' => $this->getLainnyaStats($year, $includeDraft),
             'byJenis' => $this->getLainnyaByJenis($year),
             'trend' => $this->getLainnyaTrend($year),
             'last_updated' => date('Y-m-d H:i:s')
         ];
-
+ 
         $this->setCache($cacheKey, $result, 'lainnya');
         return $result;
     }
-
+ 
     /**
      * Get laporan lainnya statistics
      */
-    public function getLainnyaStats($year) {
+    public function getLainnyaStats($year, bool $includeDraft = false) {
+        $year = $this->normalizeYear($year);
+        $whereStatus = $includeDraft ? "" : " AND status <> 'draft'";
         $sql = "SELECT
                     COUNT(*) as total_laporan,
-                    SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END) as draf,
+                    (SELECT COUNT(*) FROM laporan_lainnya WHERE YEAR(tanggal_kejadian) = ? AND status = 'draft') as draf,
                     SUM(CASE WHEN status = 'verified' THEN 1 ELSE 0 END) as diverifikasi
                 FROM laporan_lainnya
-                WHERE YEAR(tanggal_kejadian) = :year";
+                WHERE YEAR(tanggal_kejadian) = ?" . $whereStatus;
 
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([':year' => $year]);
+        $stmt->execute([$year, $year]);
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
-
+ 
     /**
      * Get laporan lainnya breakdown by jenis
      */
     public function getLainnyaByJenis($year, $limit = 10) {
+        $year = $this->normalizeYear($year);
+        $limit = min(100, max(1, (int) $limit));
         $sql = "SELECT
                     mjl.nama as jenis_nama,
                     mjl.kode as jenis_kode,
@@ -848,39 +1312,69 @@ class DashboardDataAggregator {
                 FROM laporan_lainnya ll
                 LEFT JOIN master_jenis_laporan mjl ON ll.jenis_id = mjl.id
                 WHERE YEAR(ll.tanggal_kejadian) = :year
+                  AND ll.status <> 'draft'
                 GROUP BY mjl.id, mjl.nama, mjl.kode
                 ORDER BY total_laporan DESC
                 LIMIT :limit";
-
+ 
         $stmt = $this->db->prepare($sql);
         $stmt->bindValue(':year', $year, PDO::PARAM_INT);
         $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-
+ 
     /**
      * Get laporan lainnya monthly trend
      */
     public function getLainnyaTrend($year) {
+        $year = $this->normalizeYear($year);
         $sql = "SELECT
                     MONTH(tanggal_kejadian) as bulan,
                     COUNT(*) as total,
                     SUM(CASE WHEN status = 'verified' THEN 1 ELSE 0 END) as diverifikasi
                 FROM laporan_lainnya
                 WHERE YEAR(tanggal_kejadian) = :year
+                  AND status <> 'draft'
                 GROUP BY MONTH(tanggal_kejadian)
                 ORDER BY bulan";
-
+ 
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':year' => $year]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-
-    /**
-     * Clear lainnya cache
-     */
-    public function clearLainnyaCache() {
-        $this->clearCache('lainnya');
+ 
+    // =========================================
+    // HELPER: year to date range
+    // =========================================
+    
+    private function yearToDateRange(int $year): array {
+        return [
+            'start' => $year . '-01-01',
+            'end'   => ($year + 1) . '-01-01',
+        ];
+    }
+ 
+    private function normalizeYear($year): int {
+        $currentYear = (int) date('Y');
+        $value = filter_var($year, FILTER_VALIDATE_INT);
+        if ($value === false || $value < 2000 || $value > $currentYear + 1) {
+            return $currentYear;
+        }
+ 
+        return (int) $value;
+    }
+ 
+    private function normalizeMonth($month): ?int {
+        if ($month === null || $month === '') {
+            return null;
+        }
+ 
+        $value = filter_var($month, FILTER_VALIDATE_INT);
+        return $value !== false && $value >= 1 && $value <= 12 ? (int) $value : null;
+    }
+ 
+    private function normalizeDays($days): int {
+        return min(365, max(1, (int) $days));
     }
 }

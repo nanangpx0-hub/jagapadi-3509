@@ -106,7 +106,8 @@
  <div class="legend-item"><div class="legend-color" style="background:#ffc107"></div><span>Serangan Hama Sedang</span></div>
  <div class="legend-item"><div class="legend-color" style="background:#198754"></div><span>Serangan Hama Ringan</span></div>
  <div class="legend-item"><div class="legend-color" style="background:#0d6efd"></div><span>Infrastruktur Irigasi</span></div>
- <div class="legend-item"><div class="legend-color" style="background:#17a2b8"></div><span>Stasiun Curah Hujan</span></div>
+  <div class="legend-item"><div class="legend-color" style="background:#17a2b8"></div><span>Stasiun Curah Hujan</span></div>
+  <div class="legend-item"><div class="legend-color" style="background:#6f42c1"></div><span>Kecepatan Angin</span></div>
  </div>
  </div>
  <div class="info-panel" id="infoPanel">
@@ -135,18 +136,24 @@
  <div class="icon"><i class="fas fa-water"></i></div>
  </div>
  </div>
- <div class="col-md-3 col-6">
- <div class="small-box bg-success">
- <div class="inner"><h3 id="statRainfall">0</h3><p>Stasiun Cuaca</p></div>
- <div class="icon"><i class="fas fa-cloud-rain"></i></div>
- </div>
- </div>
- <div class="col-md-3 col-6">
- <div class="small-box bg-warning">
- <div class="inner"><h3 id="statKecamatan">0</h3><p>Kecamatan</p></div>
- <div class="icon"><i class="fas fa-map-marker-alt"></i></div>
- </div>
- </div>
+  <div class="col-md-3 col-6">
+  <div class="small-box bg-success">
+  <div class="inner"><h3 id="statRainfall">0</h3><p>Stasiun Cuaca</p></div>
+  <div class="icon"><i class="fas fa-cloud-rain"></i></div>
+  </div>
+  </div>
+  <div class="col-md-3 col-6">
+  <div class="small-box bg-info">
+  <div class="inner"><h3 id="statWind">0</h3><p>Stasiun Angin</p></div>
+  <div class="icon"><i class="fas fa-wind"></i></div>
+  </div>
+  </div>
+  <div class="col-md-3 col-6">
+  <div class="small-box bg-warning">
+  <div class="inner"><h3 id="statKecamatan">0</h3><p>Kecamatan</p></div>
+  <div class="icon"><i class="fas fa-map-marker-alt"></i></div>
+  </div>
+  </div>
 </div>
 
 <script>
@@ -154,6 +161,15 @@ var mapConfig = { center: [-8.1845, 113.6681], zoom: 10, minZoom: 8, maxZoom: 18
 var map;
 var layers = {};
 var activeFilters = { year: <?= date('Y') ?>, status: '' };
+
+function escapeHtml(value) {
+  return String(value === null || value === undefined ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 var layerColors = {
   hama: { Berat: '#dc3545', Sedang: '#ffc107', Ringan: '#198754' },
   irigasi: '#0d6efd', rainfall: '#17a2b8', wind: '#6f42c1'
@@ -219,7 +235,7 @@ function loadLayerData(layerId) {
 }
 
 function loadHamaData(year, status) {
-  fetch('<?= BASE_URL ?>api/dashboard/map/hama?year=' + year + '&status=' + status)
+  fetch('<?= BASE_URL ?>api/dashboard/map/hama?year=' + encodeURIComponent(year) + '&status=' + encodeURIComponent(status))
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.success) {
@@ -242,15 +258,23 @@ function renderHamaMarkers(geojson) {
     var marker = L.circleMarker([coords[1], coords[0]], {
       radius: 8, fillColor: color, color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.8
     });
-    var opt = props.nama_opt || 'Unknown';
-    var tgl = props.tanggal || '-';
-    var lok = props.lokasi || '-';
-    var kep = props.tingkat_keparahan || '-';
-    var luas = props.luas_serangan || '0';
-    var pop = props.populasi || '0';
+    var raw = {
+      opt: props.nama_opt || 'Unknown',
+      tanggal: props.tanggal || '-',
+      lokasi: props.lokasi || '-',
+      keparahan: props.tingkat_keparahan || '-',
+      luas: props.luas_serangan || '0',
+      populasi: props.populasi || '0'
+    };
+    var opt = escapeHtml(raw.opt);
+    var tgl = escapeHtml(raw.tanggal);
+    var lok = escapeHtml(raw.lokasi);
+    var kep = escapeHtml(raw.keparahan);
+    var luas = escapeHtml(raw.luas);
+    var pop = escapeHtml(raw.populasi);
     marker.bindPopup('<div style="min-width:200px;"><h6 class="mb-2">' + opt + '</h6><table class="table table-sm table-borderless mb-0"><tr><td><strong>Tanggal:</strong></td><td>' + tgl + '</td></tr><tr><td><strong>Lokasi:</strong></td><td>' + lok + '</td></tr><tr><td><strong>Keparahan:</strong></td><td>' + kep + '</td></tr><tr><td><strong>Luas:</strong></td><td>' + luas + ' Ha</td></tr><tr><td><strong>Populasi:</strong></td><td>' + pop + '</td></tr></table></div>');
     marker.on('click', function() {
-      showInfoPanel('Laporan Hama', { 'OPT': opt, 'Tanggal': tgl, 'Lokasi': lok, 'Keparahan': kep, 'Luas': luas + ' Ha', 'Populasi': pop });
+      showInfoPanel('Laporan Hama', { 'OPT': raw.opt, 'Tanggal': raw.tanggal, 'Lokasi': raw.lokasi, 'Keparahan': raw.keparahan, 'Luas': raw.luas + ' Ha', 'Populasi': raw.populasi });
     });
     layers.hama.addLayer(marker);
   });
@@ -278,8 +302,9 @@ function renderIrigasiMarkers(data) {
     if (!byKec[kec]) { byKec[kec] = { items: [], latitude: item.latitude, longitude: item.longitude }; }
     byKec[kec].items.push(item);
   });
-  Object.keys(byKec).forEach(function(kecamatan) {
-    var group = byKec[kecamatan];
+  Object.keys(byKec).forEach(function(kecamatanKey) {
+    var group = byKec[kecamatanKey];
+    var kecamatan = escapeHtml(kecamatanKey);
     if (!group.latitude || !group.longitude) return;
     var totalDebit = 0;
     group.items.forEach(function(i) { totalDebit += parseFloat(i.avg_debit || 0); });
@@ -290,17 +315,17 @@ function renderIrigasiMarkers(data) {
     var popupHtml = '<div style="min-width:220px;"><h6 class="mb-2">' + kecamatan + '</h6><table class="table table-sm table-borderless mb-0">';
     var sliced = group.items.slice(0, 5);
     sliced.forEach(function(item) {
-      popupHtml += '<tr><td><strong>' + (item.daerah_irigasi || '-') + ':</strong></td><td>' + parseFloat(item.avg_debit || 0).toFixed(1) + ' m\u00B3/s (rata-rata)</td></tr>';
+      popupHtml += '<tr><td><strong>' + escapeHtml(item.daerah_irigasi || '-') + ':</strong></td><td>' + parseFloat(item.avg_debit || 0).toFixed(1) + ' L/det (rata-rata)</td></tr>';
     });
     if (group.items.length > 5) {
       popupHtml += '<tr><td colspan="2"><em>...dan ' + (group.items.length - 5) + ' daerah lainnya</em></td></tr>';
     }
     popupHtml += '<tr><td><strong>Total daerah:</strong></td><td>' + group.items.length + '</td></tr>';
-    popupHtml += '<tr><td><strong>Rata-rata debit:</strong></td><td>' + avgDebit.toFixed(1) + ' m\u00B3/s</td></tr>';
+    popupHtml += '<tr><td><strong>Rata-rata debit:</strong></td><td>' + avgDebit.toFixed(1) + ' L/det</td></tr>';
     popupHtml += '</table></div>';
     marker.bindPopup(popupHtml);
     marker.on('click', function() {
-      showInfoPanel('Irigasi - ' + kecamatan, { 'Kecamatan': kecamatan, 'Jumlah Daerah': group.items.length, 'Rata-rata Debit': avgDebit.toFixed(1) + ' m\u00B3/s', 'Periode': '30 hari terakhir' });
+      showInfoPanel('Irigasi - ' + kecamatanKey, { 'Kecamatan': kecamatanKey, 'Jumlah Daerah': group.items.length, 'Rata-rata Debit': avgDebit.toFixed(1) + ' L/det', 'Periode': '30 hari hingga data terbaru' });
     });
     layers.irigasi.addLayer(marker);
   });
@@ -312,12 +337,15 @@ function loadWeatherData() {
     .then(function(data) {
       if (data.success && data.data && data.data.rainfall) {
         var count = data.data.rainfall.length;
-        document.getElementById('count-rainfall').textContent = count + ' stasiun';
+        document.getElementById('count-rainfall').textContent = count + ' kecamatan';
         document.getElementById('statRainfall').textContent = count;
         renderWeatherMarkers(data.data.rainfall);
       }
     })
-    .catch(function() {});
+    .catch(function() {
+      var el = document.getElementById('count-rainfall');
+      if (el) { el.textContent = '0 kecamatan'; }
+    });
 }
 
 function renderWeatherMarkers(data) {
@@ -328,7 +356,7 @@ function renderWeatherMarkers(data) {
     var marker = L.circleMarker([item.latitude, item.longitude], {
       radius: 10, fillColor: layerColors.rainfall, color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.7
     });
-    var kec = item.kecamatan || 'Unknown';
+    var kec = escapeHtml(item.kecamatan || 'Unknown');
     var avg = item.avg_rainfall ? parseFloat(item.avg_rainfall).toFixed(1) : '0.0';
     var max = item.max_rainfall ? parseFloat(item.max_rainfall).toFixed(1) : '0.0';
     marker.bindPopup('<div style="min-width:180px;"><h6 class="mb-2">' + kec + '</h6><table class="table table-sm table-borderless mb-0"><tr><td><strong>Rata-rata:</strong></td><td>' + avg + ' mm</td></tr><tr><td><strong>Maksimum:</strong></td><td>' + max + ' mm</td></tr></table></div>');
@@ -336,8 +364,42 @@ function renderWeatherMarkers(data) {
   });
 }
 
+function renderWindMarkers(data) {
+  layers.wind.clearLayers();
+  if (!data) { return; }
+  data.forEach(function(item) {
+    if (!item || !item.latitude || !item.longitude) return;
+    var marker = L.circleMarker([parseFloat(item.latitude), parseFloat(item.longitude)], {
+      radius: 8, fillColor: layerColors.wind, color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.7
+    });
+    var kecRaw = item.kecamatan || 'Unknown';
+    var kec = escapeHtml(kecRaw);
+    var avg = item.avg_wind_speed ? parseFloat(item.avg_wind_speed).toFixed(1) : '0.0';
+    var max = item.max_wind_speed ? parseFloat(item.max_wind_speed).toFixed(1) : '0.0';
+    var count = item.total_records || 0;
+    marker.bindPopup('<div style="min-width:180px;"><h6 class="mb-2">' + kec + '</h6><table class="table table-sm table-borderless mb-0"><tr><td><strong>Rata-rata:</strong></td><td>' + avg + ' km/h</td></tr><tr><td><strong>Maksimum:</strong></td><td>' + max + ' km/h</td></tr><tr><td><strong>Data:</strong></td><td>' + count + ' catatan</td></tr></table></div>');
+    marker.on('click', function() {
+      showInfoPanel('Kecepatan Angin - ' + kecRaw, { 'Kecamatan': kecRaw, 'Rata-rata': avg + ' km/h', 'Maksimum': max + ' km/h', 'Jumlah': count + ' catatan' });
+    });
+    layers.wind.addLayer(marker);
+  });
+}
+
 function loadWindData() {
-  document.getElementById('count-wind').textContent = '0 stasiun';
+  fetch('<?= BASE_URL ?>api/dashboard/map/wind')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.success && data.data && data.data.wind) {
+        var count = data.data.wind.length;
+        document.getElementById('count-wind').textContent = count + ' kecamatan';
+        document.getElementById('statWind').textContent = count;
+        renderWindMarkers(data.data.wind);
+      }
+    })
+    .catch(function() {
+      var el = document.getElementById('count-wind');
+      if (el) { el.textContent = '0 kecamatan'; }
+    });
 }
 
 function loadKecamatanSummary() {
@@ -370,7 +432,8 @@ function showInfoPanel(title, data) {
     Object.keys(data).forEach(function(key) {
       var val = data[key];
       if (val && key !== 'id') {
-        html += '<div class="info-row"><span>' + key.replace(/_/g, ' ').replace(/\b\w/g, function(l) { return l.toUpperCase(); }) + '</span><span>' + val + '</span></div>';
+        var label = key.replace(/_/g, ' ').replace(/\b\w/g, function(l) { return l.toUpperCase(); });
+        html += '<div class="info-row"><span>' + escapeHtml(label) + '</span><span>' + escapeHtml(val) + '</span></div>';
       }
     });
   }

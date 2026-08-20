@@ -39,7 +39,7 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
         <strong>Tanggal:</strong> <?= $currentDay ?> |
         <strong>Status Snapshot:</strong> 
         <?php if ($canSnapshot): ?>
-            <span class="badge badge-success">Dapat di-snapshot (sebelum tgl 10)</span>
+            <span class="badge badge-success">Snapshot tersedia</span>
         <?php else: ?>
             <span class="badge badge-warning">Terkunci (setelah tgl 10)</span>
         <?php endif; ?>
@@ -546,7 +546,7 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                     
                     <div class="alert alert-warning">
                         <i class="fas fa-exclamation-triangle"></i>
-                        <strong>Perhatian:</strong> Data snapshot akan terkunci setelah tanggal 10 dan tidak dapat diubah.
+                        <strong>Sumber:</strong> snapshot menggunakan luas panen KSA BPS bulanan pada periode yang dipilih.
                     </div>
                 </div>
                 <div class="modal-footer">

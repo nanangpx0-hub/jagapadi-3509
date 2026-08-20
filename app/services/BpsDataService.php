@@ -61,8 +61,23 @@ class BpsDataService {
             'errors' => []
         ];
         
+        $recordCount = is_array($records) ? count($records) : 0;
+        $this->log("Processing {$recordCount} records (force_refresh: " . ($forceRefresh ? 'true' : 'false') . ", skip_validation: " . ($skipValidation ? 'true' : 'false') . ")");
+        
         foreach ($records as $record) {
             try {
+                $validation = ['valid' => true, 'issues' => []];
+                // Ensure required fields exist
+                if (empty($record['tahun'])) {
+                    throw new Exception("Missing 'tahun' field in record");
+                }
+                if (empty($record['kabupaten_kota'])) {
+                    throw new Exception("Missing 'kabupaten_kota' field in record");
+                }
+                if (empty($record['luas_panen'])) {
+                    throw new Exception("Missing 'luas_panen' field for {$record['kabupaten_kota']}");
+                }
+                
                 // Apply conversions
                 $record = $this->applyConversions($record);
                 
@@ -85,8 +100,11 @@ class BpsDataService {
                 
                 // Check existing
                 $existing = $this->model->getByYearAndKabupaten(
-                    $record['tahun'], 
-                    $record['kabupaten_kota']
+                    $record['tahun'],
+                    $record['kabupaten_kota'],
+                    $record['sumber_data_type'] ?? 'simulasi',
+                    $record['tipe_skenario'] ?? 'baseline',
+                    $record['kode_provinsi'] ?? '35'
                 );
                 
                 if ($existing && !$forceRefresh) {
@@ -112,16 +130,30 @@ class BpsDataService {
                     'kabupaten' => $record['kabupaten_kota'] ?? 'Unknown',
                     'error' => $e->getMessage()
                 ];
-                $this->log("Error processing record: " . $e->getMessage(), 'ERROR');
+                $kabName = $record['kabupaten_kota'] ?? 'Unknown';
+                $this->log("Error processing record [{$kabName}]: " . $e->getMessage(), 'ERROR');
             }
         }
         
-        $result['success'] = $result['records_success'] > 0;
+        $result['success'] = ($result['records_success'] > 0 || $result['records_skipped'] > 0);
+        
+        $this->log(sprintf(
+            "Processing complete: %d success, %d failed, %d skipped, %d anomalies, %d errors",
+            $result['records_success'],
+            $result['records_failed'],
+            $result['records_skipped'],
+            count($result['anomalies']),
+            count($result['errors'])
+        ));
         
         // Update yearly summary if any records saved
         if ($result['records_success'] > 0 && !empty($records)) {
-            $tahun = $records[0]['tahun'] ?? date('Y');
-            $this->updateYearlySummary($tahun);
+            $uniqueYears = array_unique(array_column($records, 'tahun'));
+            foreach ($uniqueYears as $tahun) {
+                if (!empty($tahun)) {
+                    $this->updateYearlySummary($tahun);
+                }
+            }
         }
         
         return $result;
@@ -137,7 +169,8 @@ class BpsDataService {
      */
     public function applyConversions($record) {
         // Convert gabah to beras
-        if (isset($record['produksi_gabah'])) {
+        if ((!isset($record['produksi_beras']) || $record['produksi_beras'] === null)
+            && isset($record['produksi_gabah'])) {
             $record['produksi_beras'] = round($record['produksi_gabah'] * self::CONVERSION_RATE);
         }
         
@@ -154,9 +187,14 @@ class BpsDataService {
         
         // Ensure sumber_data is set
         if (!isset($record['sumber_data'])) {
-            $record['sumber_data'] = $record['sumber_data_type'] === 'resmi_webapi' 
-                ? 'BPS WebAPI Resmi'
-                : 'Simulasi (Berdasarkan Data BPS Jawa Timur)';
+            $sourceType = $record['sumber_data_type'] ?? 'simulasi';
+            $sourceLabels = [
+                'ksa' => 'KSA BPS',
+                'resmi_webapi' => 'BPS WebAPI Resmi',
+                'manual' => 'Input Manual',
+                'simulasi' => 'Simulasi (Berdasarkan Data BPS Jawa Timur)',
+            ];
+            $record['sumber_data'] = $sourceLabels[$sourceType] ?? 'Sumber Tidak Diketahui';
         }
         
         return $record;
@@ -235,6 +273,7 @@ class BpsDataService {
     private function saveRecord($record, $existing = null) {
         $data = [
             'tahun' => $record['tahun'],
+            'kode_provinsi' => $record['kode_provinsi'] ?? '35',
             'kabupaten_kota' => $record['kabupaten_kota'],
             'kode_wilayah' => $record['kode_wilayah'] ?? null,
             'luas_panen' => $record['luas_panen'],
@@ -267,7 +306,13 @@ class BpsDataService {
         
         try {
             // Get the record ID
-            $saved = $this->model->getByYearAndKabupaten($record['tahun'], $record['kabupaten_kota']);
+            $saved = $this->model->getByYearAndKabupaten(
+                $record['tahun'],
+                $record['kabupaten_kota'],
+                $record['sumber_data_type'] ?? 'simulasi',
+                $record['tipe_skenario'] ?? 'baseline',
+                $record['kode_provinsi'] ?? '35'
+            );
             if (!$saved) return;
             
             foreach ($issues as $issue) {
@@ -302,7 +347,11 @@ class BpsDataService {
         $this->createSummaryTableIfNotExists();
         
         try {
-            $stats = $this->model->getStatistics($tahun);
+            $stats = $this->model->getStatistics($tahun, [
+                'tipe_skenario' => 'baseline',
+                'is_validated' => 1,
+                'preferred_only' => true,
+            ]);
             
             $sql = "INSERT INTO bps_yearly_summary 
                     (tahun, total_kabupaten, total_luas_panen, total_produksi_gabah, 

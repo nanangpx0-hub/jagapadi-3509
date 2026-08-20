@@ -13,11 +13,13 @@ class LaporanLainnyaController extends Controller {
 
     private JenisLaporan $jenisModel;
     private LaporanLainnya $laporanModel;
+    private CacheManager $cache;
 
     public function __construct() {
         parent::__construct();
         $this->jenisModel = new JenisLaporan();
         $this->laporanModel = new LaporanLainnya();
+        $this->cache = CacheManager::getInstance();
     }
 
     public function index() {
@@ -28,11 +30,37 @@ class LaporanLainnyaController extends Controller {
         $dateFrom = $_GET['date_from'] ?? '';
         $dateTo = $_GET['date_to'] ?? '';
         $search = $_GET['search'] ?? '';
+        $includeDraftRaw = $_GET['include_draft'] ?? null;
+
+        // Default: petugas selalu melihat draft miliknya; admin/operator default exclude draft (AGENTS.md)
+        $includeDraft = $includeDraftRaw !== null
+            ? in_array(strtolower((string)$includeDraftRaw), ['1', 'true', 'yes'], true)
+            : ($_SESSION['role'] ?? '') === 'petugas';
+
+        // ============ Validasi Filter Tanggal (Perbaikan 3d) ============
+        if ($dateFrom !== '') {
+            $df = DateTime::createFromFormat('Y-m-d', $dateFrom);
+            if (!$df || $df->format('Y-m-d') !== $dateFrom) {
+                $dateFrom = ''; // abaikan filter tidak valid
+            }
+        }
+        if ($dateTo !== '') {
+            $dt = DateTime::createFromFormat('Y-m-d', $dateTo);
+            if (!$dt || $dt->format('Y-m-d') !== $dateTo) {
+                $dateTo = ''; // abaikan filter tidak valid
+            }
+        }
+        // Pastikan date_from <= date_to jika keduanya diset
+        if ($dateFrom !== '' && $dateTo !== '' && $dateFrom > $dateTo) {
+            $dateFrom = '';
+            $dateTo = '';
+        }
 
         $filters = [];
         if ($status !== '') {
             $filters['status'] = $status;
         }
+        $filters['include_draft'] = $includeDraft;
         if ($jenisId !== '') {
             $filters['jenis_id'] = (int)$jenisId;
         }
@@ -49,6 +77,14 @@ class LaporanLainnyaController extends Controller {
             $filters['search'] = $search;
         }
 
+        // Scoping petugas: model tidak baca $_SESSION (Perbaikan 1),
+        // jadi filter user_id & show_own_draft dipaksa eksplisit dari controller (Perbaikan 8)
+        $currentUser = $this->getCurrentUser();
+        if ($currentUser['role'] === 'petugas') {
+            $filters['user_id'] = (int)$currentUser['id'];
+            $filters['show_own_draft'] = true;
+        }
+
         $page = max(1, intval($_GET['page'] ?? 1));
         $perPage = 20;
         $offset = ($page - 1) * $perPage;
@@ -56,10 +92,14 @@ class LaporanLainnyaController extends Controller {
         $laporan = $this->laporanModel->getAllWithFilters($filters, $perPage, $offset);
         $total = $this->laporanModel->getCountWithFilters($filters);
         $totalPages = ceil($total / $perPage);
-        $jenisList = $this->jenisModel->findAllActive();
-        $currentUser = $this->getCurrentUser();
+        $jenisList = $this->cache->remember(
+            'jenis_laporan:active',
+            fn() => $this->jenisModel->findAllActive(),
+            3600
+        );
 
         $this->view('laporan-lainnya/index', [
+            'title' => 'Laporan Lainnya',
             'laporan' => $laporan,
             'total' => $total,
             'page' => $page,
@@ -71,6 +111,7 @@ class LaporanLainnyaController extends Controller {
             'dateFrom' => $dateFrom,
             'dateTo' => $dateTo,
             'search' => $search,
+            'includeDraft' => $includeDraft,
             'jenisList' => $jenisList,
             'currentUser' => $currentUser,
         ]);
@@ -91,6 +132,7 @@ class LaporanLainnyaController extends Controller {
         }
 
         $this->view('laporan-lainnya/create', [
+            'title' => 'Buat Laporan Lainnya',
             'jenisList' => $jenisList,
             'currentUser' => $currentUser,
             'users' => $users,
@@ -117,19 +159,17 @@ class LaporanLainnyaController extends Controller {
         // ==============================================
         // PHASE 1 SECURITY: Submission rate limiting
         // ==============================================
+        // Rate limiter berbasis IP/keseluruhan aktivitas (Security::checkBruteForce),
+        // bukan $_SESSION yang bisa di-bypass. Pengecekan dilakukan SETELAH honeypot
+        // dan SEBELUM validasi input agar counter hanya bertambah untuk request
+        // yang benar-benar lolos anti-bot.
         $user = $this->getCurrentUser();
-        $rateLimitKey = 'laporan_lainnya_submit_' . $user['id'];
-        $lastSubmit = $_SESSION[$rateLimitKey] ?? 0;
-        $cooldownSeconds = 30;
-
-        if (time() - $lastSubmit < $cooldownSeconds) {
-            $remaining = $cooldownSeconds - (time() - $lastSubmit);
-            $_SESSION['error'] = "Mohon tunggu {$remaining} detik sebelum mengirim laporan berikutnya.";
+        $rateLimitKey = 'laporan_lainnya_store_' . $user['id'];
+        if (Security::checkBruteForce($rateLimitKey, maxAttempts: 10, timeWindow: 3600)) {
+            $_SESSION['error'] = 'Terlalu banyak pengiriman laporan. Coba lagi dalam 1 jam.';
             $this->redirect('laporan-lainnya/create');
             return;
         }
-
-        $_SESSION[$rateLimitKey] = time();
 
         $userRole = $user['role'];
 
@@ -172,6 +212,8 @@ class LaporanLainnyaController extends Controller {
                 $validationErrors[] = 'Format tanggal tidak valid';
             } elseif ($date > new DateTime()) {
                 $validationErrors[] = 'Tanggal kejadian tidak boleh di masa depan';
+            } elseif ($date < new DateTime('-10 years')) {
+                $validationErrors[] = 'Tanggal kejadian tidak boleh lebih dari 10 tahun yang lalu';
             }
         }
 
@@ -188,6 +230,43 @@ class LaporanLainnyaController extends Controller {
             }
 
             $dataJson[$fieldName] = $value;
+        }
+
+        // ============ Type Coercion Field Dinamis (Perbaikan 3c) ============
+        foreach ($fields as $field) {
+            $fieldName = $field['name'];
+            $value = $dataJson[$fieldName] ?? null;
+
+            // Type coercion berdasarkan field type
+            if ($value !== null && $value !== '') {
+                switch ($field['type'] ?? 'text') {
+                    case 'number':
+                    case 'integer':
+                        if (!is_numeric($value)) {
+                            $validationErrors[] = "Field '{$field['label']}' harus berupa angka";
+                        } else {
+                            $dataJson[$fieldName] = (float)$value;
+                        }
+                        break;
+                    case 'date':
+                        $d = DateTime::createFromFormat('Y-m-d', (string)$value);
+                        if (!$d || $d->format('Y-m-d') !== $value) {
+                            $validationErrors[] = "Field '{$field['label']}' harus berupa tanggal valid (YYYY-MM-DD)";
+                        }
+                        break;
+                    case 'text':
+                    case 'textarea':
+                        if (mb_strlen((string)$value) > 2000) {
+                            $validationErrors[] = "Field '{$field['label']}' maksimal 2000 karakter";
+                        }
+                        break;
+                }
+            }
+        }
+
+        // ============ Validasi Panjang Deskripsi (Perbaikan 3b) ============
+        if (!empty($data['deskripsi']) && mb_strlen($data['deskripsi']) > 5000) {
+            $validationErrors[] = 'Deskripsi maksimal 5000 karakter';
         }
 
         // ============ Validasi Wilayah & Alamat (per role) ============
@@ -284,7 +363,6 @@ class LaporanLainnyaController extends Controller {
             $file = $_FILES['foto'];
             $maxSize = 2 * 1024 * 1024; // 2MB
             $allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-            $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
 
             $finfo = finfo_open(FILEINFO_MIME_TYPE);
             $mimeType = finfo_file($finfo, $file['tmp_name']);
@@ -296,9 +374,16 @@ class LaporanLainnyaController extends Controller {
                 return;
             }
 
-            $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-            if (!in_array($extension, $allowedExtensions)) {
-                $_SESSION['error'] = 'Ekstensi file tidak diizinkan. Hanya JPG, PNG, dan WEBP yang diizinkan.';
+            // Ekstensi diturunkan dari MIME yang sudah divalidasi (bukan dari nama file user)
+            $extension = match ($mimeType) {
+                'image/jpeg', 'image/jpg' => 'jpg',
+                'image/png' => 'png',
+                'image/webp' => 'webp',
+                default => null,
+            };
+
+            if ($extension === null) {
+                $_SESSION['error'] = 'Tipe file tidak diizinkan. Hanya JPG, PNG, dan WEBP yang diizinkan.';
                 $this->redirect('laporan-lainnya/create');
                 return;
             }
@@ -336,14 +421,12 @@ class LaporanLainnyaController extends Controller {
 
         // ============ Simpan Laporan ============
         try {
-            $kodeLaporan = $this->laporanModel->generateKodeLaporan();
-
             $reportData = [
                 'user_id' => $targetUserId,
                 'jenis_id' => $jenisId,
                 'kabupaten_id' => $kabupatenResolvedId,
                 'kecamatan_id' => $kecamatanResolvedId,
-                'kode_laporan' => $kodeLaporan,
+                'kode_laporan' => null,
                 'desa_id' => $desaResolvedId,
                 'alamat_lengkap' => $alamatLengkap ?: null,
                 'foto_url' => $fotoUrl,
@@ -359,7 +442,8 @@ class LaporanLainnyaController extends Controller {
 
             if ($reportId) {
                 $this->logActivity('Create', 'laporan_lainnya', $reportId, 'Laporan lainnya baru dibuat');
-                $successMessage = "Laporan #{$reportId} berhasil dibuat dan langsung masuk sebagai laporan aktif.";
+                $this->clearDashboardCache();
+                $successMessage = "Laporan #{$reportId} berhasil dibuat dan disimpan sebagai draf. Kirim laporan untuk masuk ke antrian verifikasi.";
 
                 if ($userRole === 'admin' && $targetUserId != $user['id']) {
                     $userModel = $this->model('User');
@@ -376,23 +460,35 @@ class LaporanLainnyaController extends Controller {
                 $this->redirect('laporan-lainnya/create');
             }
         } catch (PDOException $e) {
-            error_log("Database error creating laporan lainnya: " . $e->getMessage());
-            $errorMessage = 'Terjadi kesalahan database saat menyimpan laporan.';
-
-            if (strpos($e->getMessage(), 'NOT NULL') !== false) {
-                $errorMessage .= ' Pastikan semua field wajib sudah diisi.';
-            } elseif (strpos($e->getMessage(), 'FOREIGN KEY') !== false) {
-                $errorMessage .= ' Data referensi tidak valid (user atau jenis laporan tidak ditemukan).';
-            } elseif (strpos($e->getMessage(), 'Duplicate entry') !== false) {
-                $errorMessage .= ' Data duplikat terdeteksi.';
+            error_log(sprintf('[LaporanLainnya::store] PDO: %s | user_id=%s',
+                $e->getMessage(), $_SESSION['user_id'] ?? 'null'));
+            // Pesan spesifik untuk error DB yang umum
+            $msg = 'Terjadi kesalahan database saat menyimpan laporan.';
+            if (str_contains($e->getMessage(), 'NOT NULL')) {
+                $msg .= ' Pastikan semua field wajib sudah diisi.';
+            } elseif (str_contains($e->getMessage(), 'FOREIGN KEY')) {
+                $msg .= ' Data referensi tidak valid.';
             }
+            $_SESSION['error'] = $msg;
+            $this->redirect('laporan-lainnya/create');
+            return;
+        } catch (Throwable $e) {
+            error_log(sprintf('[LaporanLainnya::store] Error: %s | user_id=%s',
+                $e->getMessage(), $_SESSION['user_id'] ?? 'null'));
+            $isDev = in_array(strtolower((string)(getenv('APP_ENV') ?: 'production')),
+                              ['local', 'development', 'dev'], true);
+            $_SESSION['error'] = $isDev
+                ? 'Terjadi kesalahan: ' . htmlspecialchars($e->getMessage())
+                : 'Terjadi kesalahan saat menyimpan laporan. Silakan coba lagi.';
+            $this->redirect('laporan-lainnya/create');
+        }
+    }
 
-            $_SESSION['error'] = $errorMessage;
-            $this->redirect('laporan-lainnya/create');
-        } catch (Exception $e) {
-            error_log("Error creating laporan lainnya: " . $e->getMessage());
-            $_SESSION['error'] = 'Terjadi kesalahan saat menyimpan laporan: ' . htmlspecialchars($e->getMessage());
-            $this->redirect('laporan-lainnya/create');
+    private function clearDashboardCache(): void {
+        try {
+            CacheManager::getInstance()->clearPrefix('dashboard:');
+        } catch (Throwable $e) {
+            error_log('Failed to clear dashboard cache: ' . $e->getMessage());
         }
     }
 
@@ -466,6 +562,38 @@ class LaporanLainnyaController extends Controller {
             $dataJson[$fieldName] = $value;
         }
 
+        // ============ Type Coercion Field Dinamis (Perbaikan 3c) ============
+        foreach ($fields as $field) {
+            $fieldName = $field['name'];
+            $value = $dataJson[$fieldName] ?? null;
+
+            // Type coercion berdasarkan field type
+            if ($value !== null && $value !== '') {
+                switch ($field['type'] ?? 'text') {
+                    case 'number':
+                    case 'integer':
+                        if (!is_numeric($value)) {
+                            $validationErrors[] = "Field '{$field['label']}' harus berupa angka";
+                        } else {
+                            $dataJson[$fieldName] = (float)$value;
+                        }
+                        break;
+                    case 'date':
+                        $d = DateTime::createFromFormat('Y-m-d', (string)$value);
+                        if (!$d || $d->format('Y-m-d') !== $value) {
+                            $validationErrors[] = "Field '{$field['label']}' harus berupa tanggal valid (YYYY-MM-DD)";
+                        }
+                        break;
+                    case 'text':
+                    case 'textarea':
+                        if (mb_strlen((string)$value) > 2000) {
+                            $validationErrors[] = "Field '{$field['label']}' maksimal 2000 karakter";
+                        }
+                        break;
+                }
+            }
+        }
+
         $kabupatenId = $data['kabupaten_id'] ?? '';
         $kecamatanId = $data['kecamatan_id'] ?? '';
         $desaId = $data['desa_id'] ?? '';
@@ -476,13 +604,59 @@ class LaporanLainnyaController extends Controller {
         }
 
         $tanggalKejadian = $data['tanggal_kejadian'] ?? '';
-        if (!empty($tanggalKejadian)) {
+        // Tanggal kejadian wajib (Perbaikan 3a): tidak boleh dikosongkan saat update
+        if (empty($tanggalKejadian)) {
+            $validationErrors[] = 'Tanggal kejadian wajib diisi';
+        } else {
             $date = DateTime::createFromFormat('Y-m-d', $tanggalKejadian);
             if (!$date || $date->format('Y-m-d') !== $tanggalKejadian) {
                 $validationErrors[] = 'Format tanggal tidak valid';
             } elseif ($date > new DateTime()) {
                 $validationErrors[] = 'Tanggal kejadian tidak boleh di masa depan';
+            } elseif ($date < new DateTime('-10 years')) {
+                $validationErrors[] = 'Tanggal kejadian tidak boleh lebih dari 10 tahun yang lalu';
             }
+        }
+
+        // ============ Validasi Panjang Deskripsi (Perbaikan 3b) ============
+        if (!empty($data['deskripsi']) && mb_strlen($data['deskripsi']) > 5000) {
+            $validationErrors[] = 'Deskripsi maksimal 5000 karakter';
+        }
+
+        // ============ Validasi Alamat (per role) ============
+        $userRole = $_SESSION['role'] ?? '';
+        if ($userRole === 'petugas' && strlen($alamatLengkap) < 10) {
+            $validationErrors[] = 'Alamat lengkap wajib diisi minimal 10 karakter untuk petugas';
+        }
+        if ($userRole === 'operator' && strlen($alamatLengkap) < 5) {
+            $validationErrors[] = 'Alamat lengkap wajib diisi minimal 5 karakter';
+        }
+        if ($userRole === 'admin' && empty($alamatLengkap)) {
+            $validationErrors[] = 'Alamat lengkap wajib diisi';
+        }
+
+        // ============ Validasi Koordinat GPS ============
+        $latitude = !empty($data['latitude']) ? $data['latitude'] : null;
+        $longitude = !empty($data['longitude']) ? $data['longitude'] : null;
+
+        if ($latitude !== null && $longitude !== null) {
+            $lat = (float)$latitude;
+            $lon = (float)$longitude;
+
+            if ($lat < -90 || $lat > 90) {
+                $validationErrors[] = 'Latitude harus antara -90 dan 90';
+            }
+            if ($lon < -180 || $lon > 180) {
+                $validationErrors[] = 'Longitude harus antara -180 dan 180';
+            }
+
+            require_once ROOT_PATH . '/app/helpers/GeoValidator.php';
+            $geoValidation = GeoValidator::validateJemberCoordinates($lat, $lon);
+            if (!$geoValidation['valid']) {
+                $validationErrors[] = $geoValidation['message'];
+            }
+        } elseif (($latitude === null) !== ($longitude === null)) {
+            $validationErrors[] = 'Kedua koordinat (Latitude dan Longitude) harus diisi bersama';
         }
 
         if (!empty($validationErrors)) {
@@ -493,6 +667,8 @@ class LaporanLainnyaController extends Controller {
 
         // ============ Upload Foto (dengan kompresi otomatis) ============
         $fotoUrl = $laporan['foto_url'] ?? null;
+        $oldPhotoToDelete = null; // foto lama dihapus hanya SETELAH upload baru berhasil (Perbaikan 4)
+        $newPhotoPath = null; // file foto baru: dibersihkan bila update DB gagal
         if (isset($_FILES['foto']) && $_FILES['foto']['error'] == 0) {
             require_once ROOT_PATH . '/app/helpers/ImageCompressor.php';
 
@@ -504,7 +680,6 @@ class LaporanLainnyaController extends Controller {
             $file = $_FILES['foto'];
             $maxSize = 2 * 1024 * 1024; // 2MB
             $allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-            $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
 
             $finfo = finfo_open(FILEINFO_MIME_TYPE);
             $mimeType = finfo_file($finfo, $file['tmp_name']);
@@ -516,29 +691,30 @@ class LaporanLainnyaController extends Controller {
                 return;
             }
 
-            $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-            if (!in_array($extension, $allowedExtensions)) {
-                $_SESSION['error'] = 'Ekstensi file tidak diizinkan. Hanya JPG, PNG, dan WEBP yang diizinkan.';
+            // Ekstensi diturunkan dari MIME yang sudah divalidasi (bukan dari nama file user)
+            $extension = match ($mimeType) {
+                'image/jpeg', 'image/jpg' => 'jpg',
+                'image/png' => 'png',
+                'image/webp' => 'webp',
+                default => null,
+            };
+
+            if ($extension === null) {
+                $_SESSION['error'] = 'Tipe file tidak diizinkan. Hanya JPG, PNG, dan WEBP yang diizinkan.';
                 $this->redirect("laporan-lainnya/edit/{$id}");
                 return;
             }
 
-            // Hapus foto lama jika ada
-            if (!empty($fotoUrl)) {
-                $oldFilePath = ROOT_PATH . '/public/' . $fotoUrl;
-                if (file_exists($oldFilePath)) {
-                    unlink($oldFilePath);
-                }
-            }
-
             $fileName = bin2hex(random_bytes(16)) . '.' . $extension;
             $targetPath = $uploadDir . $fileName;
+            $newPhotoPath = $targetPath;
 
             if ($file['size'] > $maxSize) {
                 $compressor = new ImageCompressor();
                 $result = $compressor->compress($file['tmp_name'], $targetPath, $maxSize);
 
                 if ($result['success']) {
+                    $oldPhotoToDelete = !empty($fotoUrl) ? ROOT_PATH . '/public/' . $fotoUrl : null;
                     $fotoUrl = 'uploads/laporan-lainnya/' . $fileName;
 
                     if ($result['compressed']) {
@@ -553,6 +729,7 @@ class LaporanLainnyaController extends Controller {
                 }
             } else {
                 if (move_uploaded_file($file['tmp_name'], $targetPath)) {
+                    $oldPhotoToDelete = !empty($fotoUrl) ? ROOT_PATH . '/public/' . $fotoUrl : null;
                     $fotoUrl = 'uploads/laporan-lainnya/' . $fileName;
                 } else {
                     $_SESSION['error'] = 'Gagal mengupload file.';
@@ -560,6 +737,15 @@ class LaporanLainnyaController extends Controller {
                     return;
                 }
             }
+        }
+
+        // ============ Hapus Foto (tanpa upload baru), file dihapus SETELAH DB berhasil diupdate (Perbaikan 4) ============
+        $photoToDeleteAfterUpdate = null;
+        if (!empty($data['hapus_foto']) && $data['hapus_foto'] === '1' && empty($_FILES['foto']['name'])) {
+            if (!empty($fotoUrl)) {
+                $photoToDeleteAfterUpdate = ROOT_PATH . '/public/' . $fotoUrl;
+            }
+            $fotoUrl = null;
         }
 
         $kabupatenResolvedId = null;
@@ -601,17 +787,61 @@ class LaporanLainnyaController extends Controller {
             'tanggal_kejadian' => $tanggalKejadian ?: null,
             'data_json' => json_encode($dataJson, JSON_UNESCAPED_UNICODE),
             'deskripsi' => $data['deskripsi'] ?? null,
-            'latitude' => !empty($data['latitude']) ? (float)$data['latitude'] : null,
-            'longitude' => !empty($data['longitude']) ? (float)$data['longitude'] : null,
+            'latitude' => $latitude !== null ? (float)$latitude : null,
+            'longitude' => $longitude !== null ? (float)$longitude : null,
             'foto_url' => $fotoUrl,
         ];
 
-        $success = $this->laporanModel->updateReport($id, $updateData);
+        try {
+            $success = $this->laporanModel->updateReport($id, $updateData);
+        } catch (PDOException $e) {
+            // Bersihkan file foto baru bila DB gagal (hindari file yatim)
+            if ($newPhotoPath !== null && is_file($newPhotoPath)) {
+                @unlink($newPhotoPath);
+            }
+            error_log(sprintf('[LaporanLainnya::update] PDO: %s | user_id=%s',
+                $e->getMessage(), $_SESSION['user_id'] ?? 'null'));
+            $msg = 'Terjadi kesalahan database saat memperbarui laporan.';
+            if (str_contains($e->getMessage(), 'NOT NULL')) {
+                $msg .= ' Pastikan semua field wajib sudah diisi.';
+            } elseif (str_contains($e->getMessage(), 'FOREIGN KEY')) {
+                $msg .= ' Data referensi tidak valid.';
+            }
+            $_SESSION['error'] = $msg;
+            $this->redirect("laporan-lainnya/edit/{$id}");
+            return;
+        } catch (Throwable $e) {
+            // Bersihkan file foto baru bila DB gagal (hindari file yatim)
+            if ($newPhotoPath !== null && is_file($newPhotoPath)) {
+                @unlink($newPhotoPath);
+            }
+            error_log(sprintf('[LaporanLainnya::update] Error: %s | user_id=%s',
+                $e->getMessage(), $_SESSION['user_id'] ?? 'null'));
+            $isDev = in_array(strtolower((string)(getenv('APP_ENV') ?: 'production')),
+                              ['local', 'development', 'dev'], true);
+            $_SESSION['error'] = $isDev
+                ? 'Terjadi kesalahan: ' . htmlspecialchars($e->getMessage())
+                : 'Terjadi kesalahan saat memperbarui laporan. Silakan coba lagi.';
+            $this->redirect("laporan-lainnya/edit/{$id}");
+            return;
+        }
 
         if ($success) {
+            // Hapus foto lama hanya SETELAH update DB berhasil (Perbaikan 4)
+            if ($photoToDeleteAfterUpdate !== null && is_file($photoToDeleteAfterUpdate)) {
+                @unlink($photoToDeleteAfterUpdate);
+            }
+            if ($oldPhotoToDelete !== null && is_file($oldPhotoToDelete)) {
+                @unlink($oldPhotoToDelete);
+            }
             $this->logActivity('Update', 'laporan_lainnya', $id, 'Laporan lainnya diperbarui');
+            $this->clearDashboardCache();
             $_SESSION['success'] = 'Laporan lainnya berhasil diperbarui';
         } else {
+            // File foto baru tidak jadi dipakai karena DB gagal
+            if ($newPhotoPath !== null && is_file($newPhotoPath)) {
+                @unlink($newPhotoPath);
+            }
             $_SESSION['error'] = 'Gagal memperbarui laporan';
         }
 
@@ -624,6 +854,12 @@ class LaporanLainnyaController extends Controller {
 
         if (!$laporan) {
             $_SESSION['error'] = 'Laporan tidak ditemukan';
+            $this->redirect('laporan-lainnya');
+            return;
+        }
+
+        if (($_SESSION['role'] ?? '') === 'petugas' && $laporan['user_id'] != $_SESSION['user_id']) {
+            $_SESSION['error'] = 'Anda tidak memiliki akses ke laporan ini';
             $this->redirect('laporan-lainnya');
             return;
         }
@@ -649,8 +885,8 @@ class LaporanLainnyaController extends Controller {
             return;
         }
 
-        if ($laporan['status'] !== 'draft') {
-            $_SESSION['error'] = 'Hanya laporan berstatus draft yang dapat disubmit';
+        if (!in_array($laporan['status'], ['draft', 'rejected'], true)) {
+            $_SESSION['error'] = 'Hanya laporan berstatus draft atau rejected yang dapat disubmit';
             $this->redirect("laporan-lainnya/show/{$id}");
             return;
         }
@@ -661,16 +897,128 @@ class LaporanLainnyaController extends Controller {
             return;
         }
 
-        $success = $this->laporanModel->submitReport($id);
+        $user = $this->getCurrentUser();
+        try {
+            $success = $this->laporanModel->submitReport($id, (int)$user['id'], $user['role']);
+        } catch (LogicException $e) {
+            $_SESSION['error'] = $e->getMessage();
+            $this->redirect("laporan-lainnya/show/{$id}");
+            return;
+        } catch (InvalidArgumentException $e) {
+            $_SESSION['error'] = $e->getMessage();
+            $this->redirect('laporan-lainnya');
+            return;
+        }
 
         if ($success) {
-            $this->logActivity('Submit', 'laporan_lainnya', $id, 'Laporan lainnya disubmit dan otomatis diverifikasi');
+            $this->logActivity('Submit', 'laporan_lainnya', $id, 'Laporan lainnya disubmit dan masuk antrian verifikasi');
+            $this->clearDashboardCache();
             $_SESSION['success'] = 'Laporan berhasil disubmit dan masuk antrian verifikasi';
         } else {
             $_SESSION['error'] = 'Gagal submit laporan';
         }
 
         $this->redirect('laporan-lainnya');
+    }
+
+    public function verify(int $id) {
+        $this->checkRole(['admin'], 'Hanya admin yang dapat memverifikasi laporan');
+        $this->requireStateChangingRequest();
+
+        $laporan = $this->laporanModel->getById($id);
+        if (!$laporan) {
+            $_SESSION['error'] = 'Laporan tidak ditemukan';
+            $this->redirect('laporan-lainnya');
+            return;
+        }
+
+        if ($laporan['status'] !== 'submitted') {
+            $_SESSION['error'] = 'Hanya laporan berstatus Submitted yang dapat diverifikasi';
+            $this->redirect("laporan-lainnya/show/{$id}");
+            return;
+        }
+
+        $user = $this->getCurrentUser();
+        $catatan = trim($_POST['catatan_verifikasi'] ?? '');
+        $success = $this->laporanModel->verifyReport($id, (int)$user['id'], $catatan);
+
+        if ($success) {
+            $this->logActivity('Verify', 'laporan_lainnya', $id, 'Laporan lainnya diverifikasi');
+            $this->clearDashboardCache();
+            $_SESSION['success'] = 'Laporan berhasil diverifikasi';
+        } else {
+            $_SESSION['error'] = 'Gagal memverifikasi laporan';
+        }
+
+        $this->redirect("laporan-lainnya/show/{$id}");
+    }
+
+    public function reject(int $id) {
+        $this->checkRole(['admin'], 'Hanya admin yang dapat menolak laporan');
+        $this->requireStateChangingRequest();
+
+        $laporan = $this->laporanModel->getById($id);
+        if (!$laporan) {
+            $_SESSION['error'] = 'Laporan tidak ditemukan';
+            $this->redirect('laporan-lainnya');
+            return;
+        }
+
+        if ($laporan['status'] !== 'submitted') {
+            $_SESSION['error'] = 'Hanya laporan berstatus Submitted yang dapat ditolak';
+            $this->redirect("laporan-lainnya/show/{$id}");
+            return;
+        }
+
+        $catatan = trim($_POST['catatan_verifikasi'] ?? '');
+        if ($catatan === '') {
+            $_SESSION['error'] = 'Alasan penolakan wajib diisi';
+            $this->redirect("laporan-lainnya/show/{$id}");
+            return;
+        }
+
+        $user = $this->getCurrentUser();
+        $success = $this->laporanModel->rejectReport($id, (int)$user['id'], $catatan);
+
+        if ($success) {
+            $this->logActivity('Reject', 'laporan_lainnya', $id, 'Laporan lainnya ditolak: ' . $catatan);
+            $this->clearDashboardCache();
+            $_SESSION['success'] = 'Laporan berhasil ditolak';
+        } else {
+            $_SESSION['error'] = 'Gagal menolak laporan';
+        }
+
+        $this->redirect("laporan-lainnya/show/{$id}");
+    }
+
+    public function archive(int $id) {
+        $this->checkRole(['admin'], 'Hanya admin yang dapat mengarsipkan laporan');
+        $this->requireStateChangingRequest();
+
+        $laporan = $this->laporanModel->getById($id);
+        if (!$laporan) {
+            $_SESSION['error'] = 'Laporan tidak ditemukan';
+            $this->redirect('laporan-lainnya');
+            return;
+        }
+
+        if (!in_array($laporan['status'], ['verified', 'submitted', 'rejected'], true)) {
+            $_SESSION['error'] = 'Hanya laporan berstatus Submitted, Diverifikasi, atau Ditolak yang dapat diarsipkan';
+            $this->redirect("laporan-lainnya/show/{$id}");
+            return;
+        }
+
+        $success = $this->laporanModel->archiveReport($id);
+
+        if ($success) {
+            $this->logActivity('Archive', 'laporan_lainnya', $id, 'Laporan lainnya diarsipkan');
+            $this->clearDashboardCache();
+            $_SESSION['success'] = 'Laporan berhasil diarsipkan';
+        } else {
+            $_SESSION['error'] = 'Gagal mengarsipkan laporan';
+        }
+
+        $this->redirect("laporan-lainnya/show/{$id}");
     }
 
     public function destroy(int $id) {
@@ -694,11 +1042,184 @@ class LaporanLainnyaController extends Controller {
 
         if ($success) {
             $this->logActivity('Delete', 'laporan_lainnya', $id, 'Laporan lainnya dihapus');
+            $this->clearDashboardCache();
             $_SESSION['success'] = 'Laporan berhasil dihapus';
         } else {
             $_SESSION['error'] = 'Gagal menghapus laporan';
         }
 
         $this->redirect('laporan-lainnya');
+    }
+
+    /**
+     * Display performance summary/report for petugas
+     * This method is restricted to petugas role only
+     */
+    public function summary(): void {
+        $this->report();
+    }
+
+    /**
+     * Display performance report for petugas (menu: Report)
+     * Alias baru untuk summary() — URL: /laporan-lainnya/report
+     * This method is restricted to petugas role only
+     */
+    public function report(): void {
+        $this->checkRole(['petugas'], 'Akses khusus untuk Petugas Lapangan.');
+        
+        $currentUser = $this->getCurrentUser();
+        $userId = (int)$currentUser['id'];
+        
+        // Get current year or from request
+        $year = (int)($_GET['year'] ?? date('Y'));
+        
+        // Validate year range
+        if ($year < 2020 || $year > (date('Y') + 1)) {
+            $year = (int)date('Y');
+        }
+
+        // Get performance data using the new model methods
+        $performanceSummary = $this->laporanModel->getPetugasPerformanceSummary($userId, $year);
+        $monthlyTrend = $this->laporanModel->getPetugasMonthlyTrend($userId, $year);
+        $jenisBreakdown = $this->laporanModel->getPetugasBreakdownByJenis($userId, $year);
+        
+        // Get recent reports for the user
+        $recentReports = $this->laporanModel->getPetugasReportList($userId, [], 10, 0);
+
+        $this->view('laporan-lainnya/report', [
+            'title' => 'Report',
+            'year' => $year,
+            'performanceSummary' => $performanceSummary,
+            'monthlyTrend' => $monthlyTrend,
+            'jenisBreakdown' => $jenisBreakdown,
+            'recentReports' => $recentReports,
+            'currentUser' => $currentUser,
+        ]);
+    }
+
+    /**
+     * Export petugas reports to CSV format
+     * This method is restricted to petugas role only
+     */
+    public function export() {
+        $this->checkRole(['petugas'], 'Akses khusus untuk Petugas Lapangan.');
+        $this->requireStateChangingRequest();
+
+        $currentUser = $this->getCurrentUser();
+        $userId = (int)$currentUser['id'];
+        
+        // Get filters from request
+        $year = (int)($_POST['year'] ?? date('Y'));
+        $status = $_POST['status'] ?? '';
+        $jenisId = $_POST['jenis_id'] ?? '';
+        
+        // Validate year range
+        if ($year < 2020 || $year > (date('Y') + 1)) {
+            $year = (int)date('Y');
+        }
+
+        // Build filters
+        $filters = [];
+        if ($status !== '') {
+            $filters['status'] = $status;
+        }
+        if ($jenisId !== '') {
+            $filters['jenis_id'] = (int)$jenisId;
+        }
+        
+        // Add date range filter for the year
+        $filters['date_from'] = "{$year}-01-01";
+        $filters['date_to'] = "{$year}-12-31";
+
+        try {
+            // Get all reports for the user with filters
+            $reports = $this->laporanModel->getPetugasReportList($userId, $filters, 10000, 0);
+            
+            if (empty($reports)) {
+                $_SESSION['error'] = 'Tidak ada data untuk diekspor';
+                $this->redirect('laporan-lainnya/report');
+                return;
+            }
+
+            // Set headers for CSV download
+            header('Content-Type: text/csv; charset=UTF-8');
+            header('Content-Disposition: attachment; filename="laporan-lainnya-' . $userId . '-' . $year . '.csv"');
+            header('Cache-Control: no-store, no-cache, must-revalidate');
+            header('Pragma: no-cache');
+            
+            // Open output stream
+            $output = fopen('php://output', 'w');
+            if ($output === false) {
+                throw new RuntimeException('Cannot open output stream');
+            }
+            
+            // Write UTF-8 BOM
+            fwrite($output, "\xEF\xBB\xBF");
+            
+            // CSV headers
+            $headers = [
+                'ID',
+                'Kode Laporan',
+                'Tanggal Kejadian',
+                'Status',
+                'Jenis Laporan',
+                'Desa',
+                'Kecamatan',
+                'Kabupaten',
+                'Alamat Lengkap',
+                'Deskripsi',
+                'Latitude',
+                'Longitude',
+                'Diverifikasi Oleh',
+                'Tanggal Verifikasi',
+                'Catatan Verifikasi',
+                'Dibuat Pada',
+                'Diperbarui Pada'
+            ];
+            
+            // Sanitize headers for CSV injection prevention
+            $sanitizedHeaders = array_map([Security::class, 'sanitizeCell'], $headers);
+            fputcsv($output, $sanitizedHeaders);
+            
+            // Write data rows
+            foreach ($reports as $report) {
+                $row = [
+                    $report['id'] ?? '',
+                    $report['kode_laporan'] ?? '',
+                    $report['tanggal_kejadian'] ?? '',
+                    $report['status'] ?? '',
+                    $report['jenis_nama'] ?? '',
+                    $report['nama_desa'] ?? '',
+                    $report['nama_kecamatan'] ?? '',
+                    $report['nama_kabupaten'] ?? '',
+                    $report['alamat_lengkap'] ?? '',
+                    $report['deskripsi'] ?? '',
+                    $report['latitude'] ?? '',
+                    $report['longitude'] ?? '',
+                    $report['verifikator_nama'] ?? '',
+                    $report['verified_at'] ?? '',
+                    $report['catatan_verifikasi'] ?? '',
+                    $report['created_at'] ?? '',
+                    $report['updated_at'] ?? ''
+                ];
+                
+                // Sanitize row for CSV injection prevention
+                $sanitizedRow = array_map([Security::class, 'sanitizeCell'], $row);
+                fputcsv($output, $sanitizedRow);
+            }
+            
+            fclose($output);
+            
+            // Log export activity
+            $this->logActivity('Export', 'laporan_lainnya', 0, 
+                'Export laporan lainnya untuk user_id=' . $userId . ' tahun=' . $year . ' jumlah=' . count($reports));
+            
+            exit;
+            
+        } catch (Exception $e) {
+            error_log('Export failed: ' . $e->getMessage());
+            $_SESSION['error'] = 'Gagal mengekspor data: ' . $e->getMessage();
+            $this->redirect('laporan-lainnya/report');
+        }
     }
 }

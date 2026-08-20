@@ -14,12 +14,12 @@ class OptController extends Controller {
         
         // Get filter parameters
         $page = max(1, intval($_GET['page'] ?? 1));
-        $perPage = intval($_GET['per_page'] ?? 10);
+        $perPage = max(1, min(100, intval($_GET['per_page'] ?? 10)));
         $search = trim($_GET['search'] ?? '');
         
         $filters = [];
         if (!empty($_GET['jenis'])) {
-            $filters['jenis'] = $_GET['jenis'];
+            $filters['jenis'] = strtolower(trim((string) $_GET['jenis']));
         }
         if (!empty($_GET['status_karantina'])) {
             $filters['status_karantina'] = $_GET['status_karantina'];
@@ -64,7 +64,7 @@ class OptController extends Controller {
      * Create new OPT
      */
     public function create() {
-        $this->checkRole(['admin', 'operator']);
+        $this->checkRole(['admin']);
         
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
@@ -83,7 +83,7 @@ class OptController extends Controller {
                 'nama_opt' => trim($_POST['nama_opt'] ?? ''),
                 'nama_ilmiah' => trim($_POST['nama_ilmiah'] ?? ''),
                 'nama_lokal' => trim($_POST['nama_lokal'] ?? ''),
-                'jenis' => $_POST['jenis'] ?? '',
+                'jenis' => strtolower(trim((string) ($_POST['jenis'] ?? ''))),
                 'kingdom' => trim($_POST['kingdom'] ?? ''),
                 'filum' => trim($_POST['filum'] ?? ''),
                 'kelas' => trim($_POST['kelas'] ?? ''),
@@ -93,7 +93,7 @@ class OptController extends Controller {
                 'status_karantina' => $_POST['status_karantina'] ?? 'Tidak',
                 'tingkat_bahaya' => $_POST['tingkat_bahaya'] ?? 'Sedang',
                 'deskripsi' => trim($_POST['deskripsi'] ?? ''),
-                'etl_acuan' => isset($_POST['etl_acuan']) ? (int)$_POST['etl_acuan'] : 0,
+                'etl_acuan' => isset($_POST['etl_acuan']) && $_POST['etl_acuan'] !== '' ? (float) $_POST['etl_acuan'] : null,
                 'rekomendasi' => trim($_POST['rekomendasi'] ?? ''),
                 'referensi' => trim($_POST['referensi'] ?? ''),
                 'foto_url' => $_POST['foto_url'] ?? null
@@ -116,6 +116,8 @@ class OptController extends Controller {
             }
             if (empty($postData['jenis'])) {
                 $errors[] = 'Jenis OPT wajib dipilih';
+            } elseif (!in_array($postData['jenis'], ['hama', 'penyakit', 'gulma'], true)) {
+                $errors[] = 'Jenis OPT tidak valid';
             }
             
             if (!empty($errors)) {
@@ -166,7 +168,7 @@ class OptController extends Controller {
                 }
             } catch (PDOException $e) {
                 error_log('OPT Create - Database Error: ' . $e->getMessage());
-                $_SESSION['error'] = 'Gagal menyimpan data ke database: ' . $e->getMessage();
+                $_SESSION['error'] = 'Gagal menyimpan data ke database. Pastikan kode dan nama OPT tidak duplikat.';
                 $_SESSION['form_data'] = $postData;
                 $this->redirect('opt/create');
             } catch (Exception $e) {
@@ -196,7 +198,7 @@ class OptController extends Controller {
      * Edit OPT
      */
     public function edit($id) {
-        $this->checkRole(['admin', 'operator']);
+        $this->checkRole(['admin']);
         
         $opt = $this->optModel->find($id);
         if (!$opt) {
@@ -212,7 +214,7 @@ class OptController extends Controller {
                 'nama_opt' => trim($_POST['nama_opt'] ?? ''),
                 'nama_ilmiah' => trim($_POST['nama_ilmiah'] ?? ''),
                 'nama_lokal' => trim($_POST['nama_lokal'] ?? ''),
-                'jenis' => $_POST['jenis'] ?? '',
+                'jenis' => strtolower(trim((string) ($_POST['jenis'] ?? ''))),
                 'kingdom' => trim($_POST['kingdom'] ?? ''),
                 'filum' => trim($_POST['filum'] ?? ''),
                 'kelas' => trim($_POST['kelas'] ?? ''),
@@ -222,7 +224,7 @@ class OptController extends Controller {
                 'status_karantina' => $_POST['status_karantina'] ?? 'Tidak',
                 'tingkat_bahaya' => $_POST['tingkat_bahaya'] ?? 'Sedang',
                 'deskripsi' => trim($_POST['deskripsi'] ?? ''),
-                'etl_acuan' => isset($_POST['etl_acuan']) ? (int)$_POST['etl_acuan'] : 0,
+                'etl_acuan' => isset($_POST['etl_acuan']) && $_POST['etl_acuan'] !== '' ? (float) $_POST['etl_acuan'] : null,
                 'rekomendasi' => trim($_POST['rekomendasi'] ?? ''),
                 'referensi' => trim($_POST['referensi'] ?? '')
             ];
@@ -232,6 +234,12 @@ class OptController extends Controller {
                 if (empty($postData[$field])) {
                     $postData[$field] = null;
                 }
+            }
+
+            if (empty($postData['nama_opt']) || !in_array($postData['jenis'], ['hama', 'penyakit', 'gulma'], true)) {
+                $_SESSION['error'] = 'Nama dan jenis OPT harus valid';
+                $this->redirect('opt/edit/' . $id);
+                return;
             }
             
             // Get old photo path
@@ -272,7 +280,8 @@ class OptController extends Controller {
                 $_SESSION['success'] = 'Data OPT berhasil diupdate';
                 $this->redirect('opt');
             } catch (Exception $e) {
-                $_SESSION['error'] = 'Gagal mengupdate data: ' . $e->getMessage();
+                error_log('OPT Update Error: ' . $e->getMessage());
+                $_SESSION['error'] = 'Gagal mengupdate data OPT. Periksa kembali nilai yang dimasukkan.';
                 $this->redirect('opt/edit/' . $id);
             }
         }
@@ -297,16 +306,22 @@ class OptController extends Controller {
         
         $opt = $this->optModel->find($id);
         if ($opt) {
+            if ($this->optModel->isUsedInReports($id)) {
+                $_SESSION['error'] = 'Data OPT tidak dapat dihapus karena sudah digunakan pada laporan hama';
+                $this->redirect('opt');
+                return;
+            }
+
             // Delete image if exists
             $photoPath = $opt['foto_url'] ?? $opt['gambar'] ?? null;
-            if (!empty($photoPath)) {
-                require_once ROOT_PATH . '/app/helpers/OptPhotoUploader.php';
-                $uploader = new OptPhotoUploader();
-                $uploader->deletePhoto($photoPath);
+            if ($this->optModel->delete($id)) {
+                if (!empty($photoPath)) {
+                    require_once ROOT_PATH . '/app/helpers/OptPhotoUploader.php';
+                    $uploader = new OptPhotoUploader();
+                    $uploader->deletePhoto($photoPath);
+                }
+                $_SESSION['success'] = 'Data OPT berhasil dihapus';
             }
-            
-            $this->optModel->delete($id);
-            $_SESSION['success'] = 'Data OPT berhasil dihapus';
         } else {
             $_SESSION['error'] = 'Data tidak ditemukan';
         }
@@ -342,9 +357,10 @@ class OptController extends Controller {
         // Get filter parameters
         $search = trim($_GET['search'] ?? '');
         $filters = [];
-        if (!empty($_GET['jenis'])) $filters['jenis'] = $_GET['jenis'];
+        if (!empty($_GET['jenis'])) $filters['jenis'] = strtolower(trim((string) $_GET['jenis']));
         if (!empty($_GET['status_karantina'])) $filters['status_karantina'] = $_GET['status_karantina'];
         if (!empty($_GET['tingkat_bahaya'])) $filters['tingkat_bahaya'] = $_GET['tingkat_bahaya'];
+        if (!empty($_GET['kingdom'])) $filters['kingdom'] = $_GET['kingdom'];
         
         $data = $this->optModel->getForExport($filters, $search ?: null);
         
@@ -434,9 +450,10 @@ class OptController extends Controller {
         // Get filter parameters
         $search = trim($_GET['search'] ?? '');
         $filters = [];
-        if (!empty($_GET['jenis'])) $filters['jenis'] = $_GET['jenis'];
+        if (!empty($_GET['jenis'])) $filters['jenis'] = strtolower(trim((string) $_GET['jenis']));
         if (!empty($_GET['status_karantina'])) $filters['status_karantina'] = $_GET['status_karantina'];
         if (!empty($_GET['tingkat_bahaya'])) $filters['tingkat_bahaya'] = $_GET['tingkat_bahaya'];
+        if (!empty($_GET['kingdom'])) $filters['kingdom'] = $_GET['kingdom'];
         
         $data = $this->optModel->getForExport($filters, $search ?: null);
         
@@ -607,7 +624,7 @@ class OptController extends Controller {
      * AJAX endpoint for photo upload
      */
     public function uploadPhoto() {
-        $this->checkRole(['admin', 'operator']);
+        $this->checkRole(['admin']);
         $this->requireStateChangingRequest(['POST']);
         
         header('Content-Type: application/json');
@@ -758,7 +775,7 @@ class OptController extends Controller {
      * Delete photo file
      */
     public function deletePhoto() {
-        $this->checkRole(['admin', 'operator']);
+        $this->checkRole(['admin']);
         $this->requireStateChangingRequest(['POST', 'DELETE']);
         
         header('Content-Type: application/json');

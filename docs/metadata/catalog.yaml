@@ -1,0 +1,316 @@
+schema_version: 1.0.0
+catalog_id: jagapadi-metadata
+official_name: Buku Metadata JAGAPADI
+description: Katalog machine-readable untuk dua runtime aplikasi JAGAPADI.
+owner: Tim Pengembang JAGAPADI
+last_verified: 2026-08-20
+language: id-ID
+sources_of_truth:
+  priority:
+    - runtime_database
+    - routes_middleware_controllers
+    - migrations
+    - automated_tests
+    - api_openapi_contracts
+    - architecture_documentation
+  runtime_database: jagapadi_local
+  migration_registry: schema_migrations
+runtimes:
+  root_integrated:
+    name: Runtime Root/Integrated
+    owner: Tim Backend Web
+    version: repository-current
+    updated_at: 2026-08-20
+    front_controller: index.php
+    routes:
+      - config/web_routes.php
+      - app/core/Router.php
+    authentication: session_csrf
+    dependencies: [root_database, server_rendered_views]
+  backend_v1:
+    name: Backend v1
+    owner: Tim Backend API
+    version: v1
+    updated_at: 2026-08-20
+    front_controller: backend/public/index.php
+    routes: [backend/config/routes.php]
+    api_base_path: /api/v1
+    authentication: jwt_bearer
+    dependencies: [backend_database, flutter_mobile]
+classifications:
+  - identity_access
+  - master_data
+  - field_reporting
+  - feedback
+  - notification
+  - analytics_dashboard
+  - integration_environmental
+  - audit_operations
+  - legacy_backup
+entities:
+  users:
+    official_name: Pengguna
+    module: identity_access
+    owner: Admin Sistem
+    version: migration-022-compatible
+    updated_at: 2026-08-20
+    table: users
+    primary_key: {name: id, type: int unsigned}
+    description: Identitas, role, status akun, dan revokasi token pengguna.
+    sensitive_fields: [password, email, token_version]
+    dependencies: [notifications, device_tokens, jwt_blacklist, reports, feedback]
+  wilayah:
+    official_name: Hierarki Wilayah
+    module: master_data
+    owner: Admin Wilayah
+    version: migration-013-compatible
+    updated_at: 2026-08-20
+    tables: [master_kabupaten, master_kecamatan, master_desa]
+    hierarchy: master_kabupaten.id -> master_kecamatan.kabupaten_id -> master_desa.kecamatan_id
+    description: Referensi lokasi administratif untuk laporan dan agregat.
+    dependencies: [reports, maps, exports]
+  master_opt:
+    official_name: Master OPT
+    module: master_data
+    owner: Admin Pertanian
+    version: migration-016
+    updated_at: 2026-08-20
+    table: master_opt
+    primary_key: {name: id, type: int unsigned}
+    description: Taksonomi, ambang kendali, foto, dan rekomendasi OPT.
+    dependencies: [laporan_hama]
+  laporan_hama:
+    official_name: Laporan Hama/OPT
+    module: field_reporting
+    owner: Petugas pemilik; Admin workflow
+    version: backend-v1-current
+    updated_at: 2026-08-20
+    table: laporan_hama
+    description: Observasi serangan OPT beserta lokasi, dampak, foto, dan workflow verifikasi.
+    primary_key: {name: id, type: bigint unsigned}
+    status_enum: [Draf, Submitted, Diverifikasi, Ditolak, Diarsipkan]
+    ownership_field: user_id
+    dependencies: [users, master_opt, wilayah, laporan_status_history, notifications]
+  laporan_irigasi:
+    official_name: Laporan Kondisi Irigasi
+    module: field_reporting
+    owner: Petugas pemilik; Admin workflow
+    version: backend-v1-current
+    updated_at: 2026-08-20
+    table: laporan_irigasi
+    description: Observasi kondisi saluran, debit, layanan, tindakan, dan workflow verifikasi.
+    primary_key: {name: id, type: bigint unsigned}
+    status_enum: [Draf, Submitted, Diverifikasi, Ditolak, Diarsipkan]
+    ownership_field: user_id
+    dependencies: [users, wilayah, laporan_status_history, notifications]
+  laporan_lainnya:
+    official_name: Laporan Fenomena Lainnya
+    module: field_reporting
+    owner: Petugas pemilik; Admin workflow
+    version: root-integrated-current
+    updated_at: 2026-08-20
+    tables: [laporan_lainnya, master_jenis_laporan]
+    description: Fenomena lapangan dinamis di luar Hama dan Irigasi pada runtime root.
+    primary_key: {name: id, type: bigint unsigned}
+    status_enum_legacy: [draft, submitted, verified, rejected, archived]
+    ownership_field: user_id
+    dependencies: [users, wilayah, master_jenis_laporan]
+    warning: Status memakai vocabulary legacy berbahasa Inggris pada runtime root.
+  laporan_tambahan_v1:
+    official_name: Laporan Tambahan Backend v1
+    module: field_reporting
+    owner: Petugas pemilik; Admin workflow
+    version: migration-021
+    updated_at: 2026-08-20
+    tables: [laporan_pupuk, laporan_panen, laporan_cuaca, laporan_alat_sarana]
+    description: Empat domain laporan tambahan dengan pola workflow Backend v1.
+    dependencies: [users, wilayah, notifications, idempotency_keys]
+    deployment_state: Source tersedia; verifikasi schema_migrations per target.
+  feedback:
+    official_name: Feedback/Saran/Aduan
+    module: feedback
+    owner: Petugas pemilik; Admin pengelola
+    version: migration-014
+    updated_at: 2026-08-20
+    tables: [feedback, feedback_status_history, feedback_votes]
+    description: Saran/aduan Petugas, status penanganan Admin, history, dan voting legacy.
+    primary_key: {name: id, type: int unsigned}
+    ownership_field: user_id
+    statuses: [diterima, dalam_proses, selesai, ditolak]
+    dependencies: [users, notifications]
+  notifications:
+    official_name: Notifikasi Pengguna
+    module: notification
+    owner: Pengguna penerima
+    version: migration-009
+    updated_at: 2026-08-20
+    table: notifications
+    description: Inbox event sistem yang dimiliki penerima dan memiliki status baca.
+    primary_key: {name: id, type: bigint unsigned}
+    ownership_field: user_id
+    dependencies: [users, report_workflow, feedback]
+  device_tokens:
+    official_name: Token Perangkat
+    module: notification
+    owner: Pengguna pemilik perangkat
+    version: migration-010
+    updated_at: 2026-08-20
+    table: device_tokens
+    description: Registrasi channel push per perangkat pengguna.
+    primary_key: {name: id, type: bigint unsigned}
+    sensitive_fields: [token, user_agent]
+    ownership_field: user_id
+    dependencies: [users, fcm]
+  jwt_blacklist:
+    official_name: Daftar Revokasi JWT
+    module: identity_access
+    owner: Sistem Autentikasi
+    version: migration-011
+    updated_at: 2026-08-20
+    table: jwt_blacklist
+    description: Registry JTI yang direvoke sampai waktu kedaluwarsa.
+    primary_key: {name: jti, type: varchar(64)}
+    sensitive_fields: [jti]
+    dependencies: [users, api_auth_middleware]
+  idempotency_keys:
+    official_name: Kunci Idempotensi
+    module: audit_operations
+    owner: Sistem API
+    version: migration-022
+    updated_at: 2026-08-20
+    table: idempotency_keys
+    description: Penyimpanan fingerprint dan hasil request mutasi untuk replay aman.
+    dependencies: [users, mutating_api_endpoints]
+    deployment_state: Verifikasi schema_migrations per target.
+  audit:
+    official_name: Audit dan Riwayat Status
+    module: audit_operations
+    owner: Sistem Operasi
+    version: migration-020
+    updated_at: 2026-08-20
+    tables: [activity_log, laporan_status_history, audit_log_wilayah]
+    description: Jejak actor, aksi, perubahan status, dan perubahan wilayah.
+    dependencies: [users, reports, master_data]
+  environmental_analytics:
+    official_name: Data Lingkungan dan Analitik
+    module: integration_environmental
+    owner: Tim Data/Statistik
+    version: repository-current
+    updated_at: 2026-08-20
+    tables:
+      - curah_hujan
+      - kecepatan_angin
+      - harga_komoditas
+      - data_pertanian_bps
+      - data_ksa_bulanan
+      - produksi_gabah
+      - evaluasi_akurasi_panen
+      - analisis_produksi_bulanan
+    description: Data eksternal/observasi untuk statistik lingkungan, harga, dan produksi.
+    dependencies: [external_sources, wilayah, dashboards, exports]
+api_groups:
+  auth:
+    owner: Tim Backend API
+    version: v1
+    updated_at: 2026-08-20
+    paths: [/auth/login, /auth/refresh, /auth/logout, /auth/change-password, /me]
+    description: Login, refresh access token, logout, pergantian password, dan profil.
+    security: JWT except login
+    dependencies: [users, jwt_blacklist]
+  reports:
+    owner: Tim Pelaporan
+    version: v1
+    updated_at: 2026-08-20
+    path_patterns:
+      - "/laporan-hama/**"
+      - "/laporan-irigasi/**"
+      - "/laporan-pupuk/**"
+      - "/laporan-panen/**"
+      - "/laporan-cuaca/**"
+      - "/laporan-alat-sarana/**"
+    description: CRUD, draft, workflow, dan foto seluruh domain laporan Backend v1.
+    security: JWT, role, ownership, optional idempotency
+    dependencies: [report_entities, wilayah, notifications]
+  dashboard:
+    owner: Tim Analitik
+    version: v1
+    updated_at: 2026-08-20
+    path_patterns: [/dashboard/stats, "/dashboard/charts/**", "/dashboard/map/**"]
+    description: Statistik, grafik, dan data geospasial dengan scope role/pemilik.
+    security: JWT and user scoping
+    default_include_draft: false
+    dependencies: [reports, cache]
+  feedback_root:
+    owner: Tim Backend Web
+    version: root-integrated-current
+    updated_at: 2026-08-20
+    path_patterns: ["/feedback/**", "/api/feedback/**"]
+    description: Form pribadi Petugas dan rekap global khusus Admin pada runtime root.
+    security: session, CSRF for mutation, Admin for global API
+    dependencies: [feedback, users]
+ui_components:
+  report_list_petugas:
+    official_name: Daftar Laporan Petugas
+    owner: Tim Web
+    version: 1.0.0
+    updated_at: 2026-08-20
+    file: app/views/reports/petugas_list.php
+    description: Partial filter, tabel, aksi, dan pagination Hama/Irigasi Petugas.
+    dependencies: [laporan_hama, laporan_irigasi, session_auth]
+  dashboard_petugas:
+    official_name: Dashboard Petugas
+    owner: Tim Web
+    version: 1.0.0
+    updated_at: 2026-08-20
+    file: app/views/dashboard/petugas.php
+    description: Kartu status, grafik Lainnya, dan tiga daftar laporan terbaru Petugas.
+    dependencies: [reports, charts, Chart.js]
+  feedback_petugas:
+    official_name: Riwayat Feedback Petugas
+    owner: Tim Web
+    version: 1.0.0
+    updated_at: 2026-08-20
+    file: app/views/feedback/petugas_history.php
+    description: Form entry point dan riwayat feedback pribadi tanpa rekap global.
+    dependencies: [feedback, session_auth]
+configuration:
+  environment:
+    owner: DevOps
+    version: repository-current
+    updated_at: 2026-08-20
+    files: [.env.example, backend/.env.example]
+    description: Template variabel runtime tanpa nilai secret aktual.
+    classification: confidential_at_runtime
+    rule: Never commit real secrets.
+  api:
+    owner: Tim Backend
+    version: repository-current
+    updated_at: 2026-08-20
+    files: [config/api_config.php, backend/config/routes.php]
+    description: Konfigurasi integrasi root dan registrasi endpoint Backend v1.
+  deployment:
+    owner: DevOps
+    version: repository-current
+    updated_at: 2026-08-20
+    files: [.htaccess, backend/public/index.php, docs/DEPLOY.md]
+    description: Entry point publik, aturan web server, dan prosedur deployment.
+non_functional:
+  security: [RBAC, ownership, CSRF, JWT, prepared_statements, output_escaping, upload_validation]
+  reliability: [transactions, atomic_report_number, idempotency, cache_invalidation]
+  observability: [request_id, structured_log, activity_log, status_history, health]
+  performance: [pagination, bounded_limits, indexes, cache, eager_loading]
+  portability: [PHP_8_2, MariaDB_MySQL, utf8mb4, cPanel]
+maintenance:
+  change_triggers:
+    - schema_or_migration_change
+    - route_or_contract_change
+    - role_or_ownership_change
+    - UI_component_change
+    - configuration_or_dependency_change
+  required_checks:
+    - compare_runtime_database
+    - compare_schema_migrations
+    - compare_routes_and_middleware
+    - validate_openapi
+    - run_relevant_tests
+    - update_metadata_book_and_catalog

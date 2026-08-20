@@ -366,16 +366,6 @@
                 <div class="trend" id="trend-wind">km/jam</div>
             </div>
         </div>
-        <div class="stat-card">
-            <div class="icon" style="background: linear-gradient(135deg, #ffc107, #e0a800);">
-                <i class="fas fa-exclamation-triangle"></i>
-            </div>
-            <div class="content">
-                <div class="value" id="stat-weather-alerts">0</div>
-                <div class="label">Peringatan Cuaca</div>
-                <div class="trend" id="trend-alerts">7 hari terakhir</div>
-            </div>
-        </div>
     </div>
     
     <div class="row">
@@ -626,7 +616,7 @@
             <div class="content">
                 <div class="value" id="stat-avg-debit">-</div>
                 <div class="label">Rata-rata Debit Air</div>
-                <div class="trend" id="trend-avg-debit">m³/s</div>
+                <div class="trend" id="trend-avg-debit">L/det</div>
             </div>
         </div>
         <div class="stat-card">
@@ -646,7 +636,7 @@
             <div class="content">
                 <div class="value" id="stat-max-debit">-</div>
                 <div class="label">Debit Maksimum</div>
-                <div class="trend" id="trend-max-debit">m³/s</div>
+                <div class="trend" id="trend-max-debit">L/det</div>
             </div>
         </div>
     </div>
@@ -684,11 +674,25 @@
 
 <script>
 // Global variables
+var BASE_URL    = <?= json_encode(rtrim(BASE_URL, '/') . '/') ?>;
+var IS_PETUGAS  = <?= json_encode(($_SESSION['role'] ?? '') === 'petugas') ?>;
+var CURRENT_YEAR = <?= json_encode((int)date('Y')) ?>;
 let charts = {};
 let activeFilters = {
-    year: <?= date('Y') ?>,
+    year: CURRENT_YEAR,
     period: 6
 };
+const chartRequests = new Map;
+
+// Escape HTML
+function escapeHtml(value) {
+    return String(value === null || value === undefined ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
 
 // Chart colors
 const chartColors = {
@@ -705,8 +709,70 @@ const chartColors = {
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadWeatherData();
-    loadSummaryData();
 });
+
+function fetchChartData(requestKey, url) {
+    const previousRequest = chartRequests.get(requestKey);
+    if (previousRequest) {
+        previousRequest.abort();
+    }
+
+    const controller = new AbortController();
+    chartRequests.set(requestKey, controller);
+
+    return fetch(url, {
+        signal: controller.signal,
+        headers: { Accept: 'application/json' }
+    }).then(response => {
+        if (!response.ok) {
+            throw new Error(`Permintaan gagal (HTTP ${response.status})`);
+        }
+
+        return response.json();
+    }).finally(() => {
+        if (chartRequests.get(requestKey) === controller) {
+            chartRequests.delete(requestKey);
+        }
+    });
+}
+
+function handleChartLoadError(label, error, canvasId) {
+    if (error.name === 'AbortError') return;
+    console.warn('Chart error [' + label + ']:', error);
+    if (canvasId) {
+        showChartError(canvasId,
+            'Gagal memuat data ' + label + '. Klik Refresh untuk mencoba lagi.');
+    }
+}
+
+function showChartError(canvasId, message) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const parent = canvas.parentElement;
+    let errorDiv = parent.querySelector('.chart-error-msg');
+    if (!errorDiv) {
+        errorDiv = document.createElement('div');
+        errorDiv.className = 'chart-error-msg text-center text-muted py-4';
+        parent.appendChild(errorDiv);
+    }
+    errorDiv.innerHTML = '<i class="fas fa-exclamation-circle text-warning"></i> '
+        + escapeHtml(message);
+    canvas.style.display = 'none';
+}
+
+function cleanupChartPage() {
+    chartRequests.forEach(controller => controller.abort());
+    chartRequests.clear();
+
+    Object.values(charts).forEach(chart => {
+        if (chart && typeof chart.destroy === 'function') {
+            chart.destroy();
+        }
+    });
+    charts = {};
+}
+
+window.addEventListener('pagehide', cleanupChartPage, { once: true });
 
 // Switch tabs
 function switchTab(tabId) {
@@ -752,42 +818,63 @@ function applyFilters() {
     switchTab(activeTab);
 }
 
-// Load summary data
-function loadSummaryData() {
-    fetch(`<?= BASE_URL ?>api/dashboard/charts/summary?year=${activeFilters.year}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Update summary stats across all tabs
-                console.log('Summary loaded:', data.data);
-            }
-        })
-        .catch(error => console.error('Error loading summary:', error));
-}
-
 // Load weather data
 function loadWeatherData() {
     // Rainfall
-    fetch(`<?= BASE_URL ?>api/dashboard/charts/rainfall?year=${activeFilters.year}`)
-        .then(response => response.json())
+    fetchChartData('rainfall', BASE_URL + 'api/dashboard/charts/rainfall?year=' + encodeURIComponent(activeFilters.year))
         .then(data => {
             if (data.success) {
                 renderRainfallChart(data.data);
                 updateWeatherStats(data.statistics);
             }
         })
-        .catch(error => console.error('Error loading rainfall:', error));
+        .catch(error => handleChartLoadError('rainfall', error));
     
     // Wind
-    fetch(`<?= BASE_URL ?>api/dashboard/charts/wind?year=${activeFilters.year}`)
-        .then(response => response.json())
+    fetchChartData('wind', BASE_URL + 'api/dashboard/charts/wind?year=' + encodeURIComponent(activeFilters.year))
         .then(data => {
             if (data.success) {
                 renderWindChart(data.data);
                 updateWindStats(data.statistics);
             }
         })
-        .catch(error => console.error('Error loading wind:', error));
+        .catch(error => handleChartLoadError('wind', error));
+
+    // Weather alerts use their own rolling seven-day calendar period. They
+    // must not inherit the annual chart filter or remain at the HTML default.
+}
+
+function updateWeatherAlerts(weather) {
+    const valueElement = document.getElementById('stat-weather-alerts');
+    const trendElement = document.getElementById('trend-alerts');
+    const period = weather?.alert_period;
+
+    if (!weather || !period) {
+        valueElement.textContent = '—';
+        trendElement.textContent = 'Data tidak tersedia';
+        trendElement.className = 'trend down';
+        return;
+    }
+
+    if (period.is_stale) {
+        valueElement.textContent = '—';
+        trendElement.textContent = period.data_until
+            ? `Data terakhir ${formatWeatherDate(period.data_until)}`
+            : 'Belum ada data cuaca';
+        trendElement.className = 'trend down';
+        return;
+    }
+
+    valueElement.textContent = String(Number(weather.alert_count ?? weather.alerts?.length ?? 0));
+    trendElement.textContent = `${period.days} hari terakhir`;
+    trendElement.className = 'trend';
+}
+
+function formatWeatherDate(value) {
+    const date = new Date(`${value}T00:00:00`);
+    return Number.isNaN(date.getTime())
+        ? value
+        : new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).format(date);
 }
 
 // Render rainfall chart
@@ -892,8 +979,7 @@ function updateWindStats(stats) {
 
 // Load prices data
 function loadPricesData() {
-    fetch(`<?= BASE_URL ?>api/dashboard/charts/prices?months=${activeFilters.period}`)
-        .then(response => response.json())
+    fetchChartData('prices', BASE_URL + 'api/dashboard/charts/prices?months=' + encodeURIComponent(activeFilters.period))
         .then(data => {
             if (data.success) {
                 renderPriceTrendChart(data.data.chart);
@@ -901,7 +987,7 @@ function loadPricesData() {
                 updatePriceStats(data.data.latest);
             }
         })
-        .catch(error => console.error('Error loading prices:', error));
+        .catch(error => handleChartLoadError('prices', error));
 }
 
 // Render price trend chart
@@ -996,8 +1082,7 @@ function updatePriceStats(latest) {
 
 // Load production data
 function loadProductionData() {
-    fetch(`<?= BASE_URL ?>api/dashboard/charts/production?year=${activeFilters.year}`)
-        .then(response => response.json())
+    fetchChartData('production', BASE_URL + 'api/dashboard/charts/production?year=' + encodeURIComponent(activeFilters.year))
         .then(data => {
             if (data.success) {
                 renderProductionTrendChart(data.data.trendChart);
@@ -1005,7 +1090,7 @@ function loadProductionData() {
                 updateProductionStats(data.data.statistics);
             }
         })
-        .catch(error => console.error('Error loading production:', error));
+        .catch(error => handleChartLoadError('production', error));
 }
 
 // Render production trend chart
@@ -1090,8 +1175,7 @@ function updateProductionStats(stats) {
 
 // Load hama data
 function loadHamaData() {
-    fetch(`<?= BASE_URL ?>api/dashboard/charts/hama?year=${activeFilters.year}`)
-        .then(response => response.json())
+    fetchChartData('hama', BASE_URL + 'api/dashboard/charts/hama?year=' + encodeURIComponent(activeFilters.year))
         .then(data => {
             if (data.success) {
                 renderHamaDistributionChart(data.data.distributionChart);
@@ -1099,7 +1183,7 @@ function loadHamaData() {
                 updateHamaStats(data.data.statistics);
             }
         })
-        .catch(error => console.error('Error loading hama:', error));
+        .catch(error => handleChartLoadError('hama', error));
 }
 
 // Render hama distribution chart
@@ -1189,8 +1273,7 @@ function updateHamaStats(stats) {
 
 // Load irrigation data
 function loadIrrigationData() {
-    fetch(`<?= BASE_URL ?>api/dashboard/charts/irrigation`)
-        .then(response => response.json())
+    fetchChartData('irrigation', BASE_URL + 'api/dashboard/charts/irrigation')
         .then(data => {
             if (data.success) {
                 renderIrrigationTrendChart(data.data.trendChart);
@@ -1198,7 +1281,7 @@ function loadIrrigationData() {
                 updateIrrigationStats(data.data.statistics);
             }
         })
-        .catch(error => console.error('Error loading irrigation:', error));
+        .catch(error => handleChartLoadError('irrigation', error));
 }
 
 // Render irrigation trend chart
@@ -1233,7 +1316,7 @@ function renderIrrigationTrendChart(data) {
                     beginAtZero: true,
                     title: {
                         display: true,
-                        text: 'm³/s'
+                        text: 'L/det'
                     }
                 }
             }
@@ -1309,7 +1392,7 @@ function exportData(format) {
     
     type = typeMap[activeTab] || type;
     
-    const url = `<?= BASE_URL ?>api/dashboard/charts/export?type=${type}&format=${format}&year=${activeFilters.year}`;
+    const url = BASE_URL + 'api/dashboard/charts/export?type=' + type + '&format=' + format + '&year=' + activeFilters.year;
     
     if (format === 'csv') {
         window.open(url, '_blank');

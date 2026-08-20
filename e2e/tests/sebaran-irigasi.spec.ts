@@ -1,6 +1,5 @@
 import { test, expect } from '@playwright/test';
-
-const BASE_URL = process.env.BASE_URL || 'http://localhost/jagapadi-3509';
+import { BASE } from '../base-url';
 
 // Use saved storageState from global-setup.js for authenticated session
 test.use({ storageState: 'auth/petugas.json' });
@@ -8,7 +7,7 @@ test.use({ storageState: 'auth/petugas.json' });
 test.describe('End-to-End Testing: Sebaran Irigasi - JAGAPADI', () => {
 
   test('1. Verify Sebaran Irigasi page loads with 0 PHP errors or deprecation warnings', async ({ page }) => {
-    await page.goto(`${BASE_URL}/irigasi`);
+    await page.goto(`${BASE}/irigasi`);
     await page.waitForLoadState('networkidle');
 
     const pageContent = await page.content();

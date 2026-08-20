@@ -8,7 +8,7 @@ use App\Core\Database;
 
 class NomorLaporanGenerator
 {
-    private const ALLOWED_PREFIXES = ['LH', 'LI'];
+    private const ALLOWED_PREFIXES = ['LH', 'LI', 'LP', 'LPA', 'LC', 'LAS'];
 
     public static function generate(string $prefix, string $tanggal): string
     {

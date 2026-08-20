@@ -10,6 +10,11 @@ use PDO;
 class LaporanHama extends Model
 {
     private const ALLOWED_FILTERS = ['status', 'tanggal_from', 'tanggal_to', 'kabupaten_id', 'kecamatan_id', 'desa_id', 'master_opt_id', 'tingkat_keparahan', 'q'];
+    private const ALLOWED_ORDER_COLS = [
+        'lh.tanggal', 'lh.created_at', 'lh.status',
+        'lh.tingkat_keparahan', 'lh.lokasi', 'lh.luas_serangan',
+        'mo.nama_opt', 'u.nama_lengkap',
+    ];
 
     protected static function table(): string
     {
@@ -54,7 +59,6 @@ class LaporanHama extends Model
         $sql = self::buildListQuery($conditions, $params, $filters);
 
         $countSql = preg_replace('/^SELECT lh\.\*.*?\bFROM\b/s', 'SELECT COUNT(*) FROM', $sql);
-        $countSql = preg_replace('/\s+ORDER BY.*/i', '', $countSql);
         $countStmt = $pdo->prepare($countSql);
         $countStmt->execute($params);
         $total = (int) $countStmt->fetchColumn();
@@ -77,7 +81,6 @@ class LaporanHama extends Model
         $sql = self::buildListQuery($conditions, $params, $filters);
 
         $countSql = preg_replace('/^SELECT lh\.\*.*?\bFROM\b/s', 'SELECT COUNT(*) FROM', $sql);
-        $countSql = preg_replace('/\s+ORDER BY.*/i', '', $countSql);
         $countStmt = $pdo->prepare($countSql);
         $countStmt->execute($params);
         $total = (int) $countStmt->fetchColumn();
@@ -105,6 +108,18 @@ class LaporanHama extends Model
         ");
         $stmt->execute([$status, $verifiedBy, $now, $catatanVerifikasi, $id]);
         return $stmt->rowCount() > 0;
+    }
+
+    public static function archiveVerified(int $id): bool
+    {
+        $pdo = self::db();
+        $stmt = $pdo->prepare(
+            "UPDATE `laporan_hama`
+             SET `status` = 'Diarsipkan'
+             WHERE `id` = ? AND `status` = 'Diverifikasi'"
+        );
+        $stmt->execute([$id]);
+        return $stmt->rowCount() === 1;
     }
 
     public static function resetVerification(int $id): bool
@@ -204,8 +219,20 @@ class LaporanHama extends Model
             $where = ' WHERE ' . implode(' AND ', $conditions);
         }
 
+        $orderCol = in_array($filters['order_col'] ?? '', self::ALLOWED_ORDER_COLS, true)
+        ? $filters['order_col']
+        : 'lh.tanggal';
+
+        $orderDir = in_array($filters['order_dir'] ?? 'DESC', ['ASC', 'DESC'], true)
+            ? $filters['order_dir']
+            : 'DESC';
+
+        if (count($conditions) > 0) {
+            $where = ' WHERE ' . implode(' AND ', $conditions);
+        }
+
         $sql .= $where;
-        $sql .= " ORDER BY lh.updated_at DESC, lh.id DESC";
+        $sql .= " ORDER BY " . $orderCol . ' ' . $orderDir;
 
         return $sql;
     }

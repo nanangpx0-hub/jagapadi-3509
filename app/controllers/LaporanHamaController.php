@@ -65,13 +65,14 @@ class LaporanHamaController extends Controller {
         fputcsv($output, ['TOP OPT']);
         fputcsv($output, ['Nama', 'Jenis', 'Jumlah', 'Total Luas', 'Avg Luas']);
         foreach ($data['pest_categories']['top_opt'] as $opt) {
-            fputcsv($output, [
+            $csvRow = $this->sanitizeCsvRow([
                 $opt['nama'],
                 $opt['jenis'],
                 $opt['jumlah'],
                 $opt['total_luas'],
                 $opt['avg_luas']
             ]);
+            fputcsv($output, $csvRow);
         }
         fputcsv($output, []);
         
@@ -79,7 +80,8 @@ class LaporanHamaController extends Controller {
         fputcsv($output, ['TOP KECAMATAN']);
         fputcsv($output, ['Nama', 'Jumlah', 'Total Luas']);
         foreach ($data['geographic']['top_kecamatan'] as $kc) {
-            fputcsv($output, [$kc['nama'], $kc['jumlah'], $kc['total_luas']]);
+            $csvRow = $this->sanitizeCsvRow([$kc['nama'], $kc['jumlah'], $kc['total_luas']]);
+            fputcsv($output, $csvRow);
         }
         fputcsv($output, []);
         
@@ -87,7 +89,8 @@ class LaporanHamaController extends Controller {
         fputcsv($output, ['TOP PELAPOR']);
         fputcsv($output, ['Nama', 'Role', 'Jumlah', 'Total Luas']);
         foreach ($data['role_analysis']['top_reporters'] as $r) {
-            fputcsv($output, [$r['nama'], $r['role'], $r['jumlah'], $r['total_luas']]);
+            $csvRow = $this->sanitizeCsvRow([$r['nama'], $r['role'], $r['jumlah'], $r['total_luas']]);
+            fputcsv($output, $csvRow);
         }
         
         fclose($output);

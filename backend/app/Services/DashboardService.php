@@ -230,8 +230,12 @@ class DashboardService
 
     private function countByStatus(string $table): array
     {
-        $sql = "SELECT status, COUNT(*) AS c FROM `{$table}` WHERE YEAR(tanggal) = :tahun";
-        $params = ['tahun' => $this->tahun];
+        $sql = "SELECT status, COUNT(*) AS c FROM `{$table}`
+                WHERE tanggal >= :year_start AND tanggal < :year_end AND " . $this->statusInClause();
+        $params = [
+            'year_start' => $this->tahun . '-01-01',
+            'year_end'   => ($this->tahun + 1) . '-01-01',
+        ];
 
         if ($table === 'laporan_hama') {
             $sql .= $this->userCondition();
@@ -264,8 +268,11 @@ class DashboardService
     private function sumLuasSerangan(): float
     {
         $sql = "SELECT COALESCE(SUM(luas_serangan), 0) AS total FROM `laporan_hama`
-                WHERE YEAR(tanggal) = :tahun AND " . $this->statusInClause();
-        $params = ['tahun' => $this->tahun];
+                WHERE tanggal >= :year_start AND tanggal < :year_end AND " . $this->statusInClause();
+        $params = [
+            'year_start' => $this->tahun . '-01-01',
+            'year_end'   => ($this->tahun + 1) . '-01-01',
+        ];
 
         $sql .= $this->userCondition();
         $params = array_merge($params, $this->userParam());
@@ -278,8 +285,11 @@ class DashboardService
     private function countByKeparahan(): array
     {
         $sql = "SELECT tingkat_keparahan, COUNT(*) AS c FROM `laporan_hama`
-                WHERE YEAR(tanggal) = :tahun AND " . $this->statusInClause();
-        $params = ['tahun' => $this->tahun];
+                WHERE tanggal >= :year_start AND tanggal < :year_end AND " . $this->statusInClause();
+        $params = [
+            'year_start' => $this->tahun . '-01-01',
+            'year_end'   => ($this->tahun + 1) . '-01-01',
+        ];
 
         $sql .= $this->userCondition();
         $params = array_merge($params, $this->userParam());
@@ -307,8 +317,11 @@ class DashboardService
         $sql = "SELECT o.id AS master_opt_id, o.nama_opt, COUNT(*) AS jumlah
                 FROM `laporan_hama` lh
                 JOIN `master_opt` o ON o.id = lh.master_opt_id
-                WHERE YEAR(lh.tanggal) = :tahun AND lh." . $this->statusInClause();
-        $params = ['tahun' => $this->tahun];
+                WHERE tanggal >= :year_start AND tanggal < :year_end AND lh." . $this->statusInClause();
+        $params = [
+            'year_start' => $this->tahun . '-01-01',
+            'year_end'   => ($this->tahun + 1) . '-01-01',
+        ];
 
         $sql .= $this->userCondition();
         $params = array_merge($params, $this->userParam());
@@ -343,8 +356,11 @@ class DashboardService
     private function countByField(string $table, string $field): array
     {
         $sql = "SELECT {$field}, COUNT(*) AS c FROM `{$table}`
-                WHERE YEAR(tanggal) = :tahun AND " . $this->statusInClause();
-        $params = ['tahun' => $this->tahun];
+                WHERE tanggal >= :year_start AND tanggal < :year_end AND " . $this->statusInClause();
+        $params = [
+            'year_start' => $this->tahun . '-01-01',
+            'year_end'   => ($this->tahun + 1) . '-01-01',
+        ];
 
         if ($this->userId !== null) {
             $sql .= ' AND user_id = :userId';
@@ -369,8 +385,11 @@ class DashboardService
     {
         $sql = "SELECT MONTH(tanggal) AS m, status, COUNT(*) AS c
                 FROM `laporan_hama`
-                WHERE YEAR(tanggal) = :tahun AND " . $this->statusInClause();
-        $params = ['tahun' => $this->tahun];
+                WHERE tanggal >= :year_start AND tanggal < :year_end AND " . $this->statusInClause();
+        $params = [
+            'year_start' => $this->tahun . '-01-01',
+            'year_end'   => ($this->tahun + 1) . '-01-01',
+        ];
 
         $sql .= $this->userCondition();
         $params = array_merge($params, $this->userParam());
@@ -407,8 +426,11 @@ class DashboardService
     {
         $sql = "SELECT MONTH(tanggal) AS m, tingkat_keparahan, COUNT(*) AS c
                 FROM `laporan_hama`
-                WHERE YEAR(tanggal) = :tahun AND " . $this->statusInClause();
-        $params = ['tahun' => $this->tahun];
+                WHERE tanggal >= :year_start AND tanggal < :year_end AND " . $this->statusInClause();
+        $params = [
+            'year_start' => $this->tahun . '-01-01',
+            'year_end'   => ($this->tahun + 1) . '-01-01',
+        ];
 
         $sql .= $this->userCondition();
         $params = array_merge($params, $this->userParam());
@@ -444,9 +466,11 @@ class DashboardService
     {
         $sql = "SELECT MONTH(tanggal) AS m, status, COUNT(*) AS c
                 FROM `laporan_irigasi`
-                WHERE YEAR(tanggal) = :tahun AND " . $this->statusInClause();
-        $params = ['tahun' => $this->tahun];
-
+                WHERE tanggal >= :year_start AND tanggal < :year_end AND " . $this->statusInClause();
+        $params = [
+            'year_start' => $this->tahun . '-01-01',
+            'year_end'   => ($this->tahun + 1) . '-01-01',
+        ];
         if ($this->userId !== null) {
             $sql .= ' AND user_id = :userId';
             $params['userId'] = $this->userId;
@@ -499,19 +523,22 @@ class DashboardService
         ?int $desaId = null
     ): array {
         $placeholders = implode(',', array_fill(0, count($statuses), '?'));
-        $sql = "SELECT lh.id, lh.nomor_laporan, lh.status, lh.tanggal,
+$sql = "SELECT lh.id, lh.nomor_laporan, lh.status, lh.tanggal,
                        lh.latitude, lh.longitude, lh.tingkat_keparahan,
                        o.nama_opt, md.nama_desa, mkc.nama_kecamatan
-                FROM `laporan_hama` lh
-                LEFT JOIN `master_opt` o ON o.id = lh.master_opt_id
-                LEFT JOIN `master_desa` md ON md.id = lh.desa_id
-                LEFT JOIN `master_kecamatan` mkc ON mkc.id = lh.kecamatan_id
-                WHERE lh.latitude IS NOT NULL AND lh.longitude IS NOT NULL
-                  AND lh.latitude != 0 AND lh.longitude != 0
-                  AND YEAR(lh.tanggal) = ?
-                  AND lh.status IN ({$placeholders})";
+                 FROM `laporan_hama` lh
+                 LEFT JOIN `master_opt` o ON o.id = lh.master_opt_id
+                 LEFT JOIN `master_desa` md ON md.id = lh.desa_id
+                 LEFT JOIN `master_kecamatan` mkc ON mkc.id = lh.kecamatan_id
+                 WHERE lh.latitude IS NOT NULL AND lh.longitude IS NOT NULL
+                   AND lh.latitude != 0 AND lh.longitude != 0
+                   AND lh.tanggal >= :year_start AND lh.tanggal < :year_end
+                   AND lh.status IN ({$placeholders})";
 
-        $params = [$this->tahun];
+        $params = [
+            'year_start' => $this->tahun . '-01-01',
+            'year_end'   => ($this->tahun + 1) . '-01-01',
+        ];
         $params = array_merge($params, $statuses);
 
         if ($masterOptId !== null) {
@@ -585,10 +612,13 @@ class DashboardService
                 LEFT JOIN `master_kecamatan` mkc ON mkc.id = li.kecamatan_id
                 WHERE li.latitude IS NOT NULL AND li.longitude IS NOT NULL
                   AND li.latitude != 0 AND li.longitude != 0
-                  AND YEAR(li.tanggal) = ?
+                  AND li.tanggal >= :year_start AND li.tanggal < :year_end
                   AND li.status IN ({$placeholders})";
 
-        $params = [$this->tahun];
+        $params = [
+            'year_start' => $this->tahun . '-01-01',
+            'year_end'   => ($this->tahun + 1) . '-01-01',
+        ];
         $params = array_merge($params, $statuses);
 
         if ($kecamatanId !== null) {

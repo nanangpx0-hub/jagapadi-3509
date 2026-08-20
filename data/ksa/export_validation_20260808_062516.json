@@ -1,0 +1,290 @@
+{
+    "total_records": 304,
+    "latest_year_records": 38,
+    "latest_year": 2025,
+    "kabupaten_list": {
+        "total_expected": 38,
+        "total_found": 38,
+        "total_missing": 0,
+        "missing": []
+    },
+    "data_completeness": {
+        "Bangkalan": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Banyuwangi": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Blitar": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Bojonegoro": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Bondowoso": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Gresik": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Jember": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Jombang": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Kediri": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Kota Batu": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Kota Blitar": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Kota Kediri": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Kota Madiun": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Kota Malang": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Kota Mojokerto": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Kota Pasuruan": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Kota Probolinggo": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Kota Surabaya": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Lamongan": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Lumajang": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Madiun": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Magetan": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Malang": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Mojokerto": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Nganjuk": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Ngawi": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Pacitan": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Pamekasan": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Pasuruan": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Ponorogo": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Probolinggo": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Sampang": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Sidoarjo": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Situbondo": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Sumenep": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Trenggalek": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Tuban": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        },
+        "Tulungagung": {
+            "luas_panen": "OK",
+            "produksi_gabah": "OK",
+            "produksi_beras": "OK",
+            "produktivitas": "OK",
+            "sumber_data": "Simulasi (Berdasarkan Data BPS Jawa Timur)"
+        }
+    },
+    "validation_errors": [],
+    "export_files": {
+        "full_export": {
+            "path": "C:\\laragon\\www\\jagapadi-3509/data/ksa/data_pertanian_bps_export_20260808_062516.csv",
+            "file_size_bytes": 59594
+        },
+        "latest_year_export": {
+            "path": "C:\\laragon\\www\\jagapadi-3509/data/ksa/data_pertanian_bps_2025.csv",
+            "file_size_bytes": 10703
+        }
+    }
+}

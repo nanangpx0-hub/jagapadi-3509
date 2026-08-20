@@ -76,9 +76,9 @@
                                     <label class="required">Jenis OPT</label>
                                     <select name="jenis" class="form-control" required id="jenisOpt">
                                         <option value="">-- Pilih Jenis --</option>
-                                        <option value="Hama" <?= ($form_data['jenis'] ?? '') == 'Hama' ? 'selected' : '' ?>>Hama</option>
-                                        <option value="Penyakit" <?= ($form_data['jenis'] ?? '') == 'Penyakit' ? 'selected' : '' ?>>Penyakit</option>
-                                        <option value="Gulma" <?= ($form_data['jenis'] ?? '') == 'Gulma' ? 'selected' : '' ?>>Gulma</option>
+                                        <option value="hama" <?= strtolower($form_data['jenis'] ?? '') === 'hama' ? 'selected' : '' ?>>Hama</option>
+                                        <option value="penyakit" <?= strtolower($form_data['jenis'] ?? '') === 'penyakit' ? 'selected' : '' ?>>Penyakit</option>
+                                        <option value="gulma" <?= strtolower($form_data['jenis'] ?? '') === 'gulma' ? 'selected' : '' ?>>Gulma</option>
                                     </select>
                                 </div>
                             </div>

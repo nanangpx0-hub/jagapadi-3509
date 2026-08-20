@@ -1,583 +1,408 @@
 <?php
-/**
- * Storytelling Controller
- * 
- * Controller untuk Dashboard Data Storytelling yang membantu statistisi
- * menjelaskan "MENGAPA" data produksi naik atau turun dengan menghubungkan
- * data variabel eksogen (Curah Hujan & Serangan Hama) sebagai Lagging Indicators.
- * 
- * @version 1.0.0
- * @author JAGAPADI System - Data Storytelling Module
- */
 
-class StorytellingController extends Controller {
-    
-    private $dataStoryService;
-    private $wilayahModel;
-    
-    public function __construct() {
-        // Load required services and models
+declare(strict_types=1);
+
+/**
+ * Web controller untuk fitur Data Storytelling.
+ */
+class StorytellingController extends Controller
+{
+    private DataStoryService $dataStoryService;
+    private StorytellingAnalysisService $analysisService;
+    private MasterKecamatan $wilayahModel;
+
+    public function __construct()
+    {
+        parent::__construct();
         require_once ROOT_PATH . '/app/services/DataStoryService.php';
+        require_once ROOT_PATH . '/app/services/StorytellingAnalysisService.php';
         require_once ROOT_PATH . '/app/models/MasterKecamatan.php';
-        
+
         $this->dataStoryService = new DataStoryService();
+        $this->analysisService = new StorytellingAnalysisService();
         $this->wilayahModel = new MasterKecamatan();
     }
-    
-    /**
-     * Check authentication
-     */
-    protected function checkAuth() {
-        if (!isset($_SESSION['user_id'])) {
-            header('Location: ' . BASE_URL . '/auth/login');
-            exit;
-        }
-    }
-    
-    /**
-     * Check if user has access to storytelling features
-     * Only statistisi, admin, and operator can access
-     */
-    protected function checkStorytellingAccess() {
-        $allowedRoles = ['admin', 'operator', 'statistisi'];
-        if (!in_array($_SESSION['role'], $allowedRoles)) {
-            $_SESSION['error'] = 'Anda tidak memiliki akses ke fitur Data Storytelling';
-            header('Location: ' . BASE_URL . '/dashboard');
-            exit;
-        }
-    }
-    
-    /**
-     * Dashboard utama Data Storytelling
-     */
-    public function index() {
+
+    public function index(): void
+    {
         $this->checkAuth();
         $this->checkStorytellingAccess();
-        
-        $data = [
+
+        $this->view('storytelling/index', [
             'title' => 'Dashboard Data Storytelling - JAGAPADI',
-            'page_title' => 'Data Storytelling: Analisis Kausalitas Produksi Padi',
+            'page_title' => 'Data Storytelling: Indikasi Faktor Produksi Padi',
             'user_role' => $_SESSION['role'],
             'user_name' => $_SESSION['nama_lengkap'] ?? 'User',
-            
-            // Data untuk dropdown filter
             'kecamatan_list' => $this->wilayahModel->getAllOrdered(),
             'current_month' => date('m'),
             'current_year' => date('Y'),
             'available_years' => $this->getAvailableYears(),
-            
-            // Data untuk cards (akan diupdate via AJAX)
             'initial_stats' => $this->getInitialStats(),
-            
-            // Recent analyses
-            'recent_analyses' => $this->getRecentAnalyses(5)
-        ];
-        
-        $this->view('storytelling/index', $data);
+            'recent_analyses' => $this->getRecentAnalyses(5),
+        ]);
     }
-    
-    /**
-     * AJAX handler untuk generate analisis preview
-     * Method: POST
-     * Expected params: bulan, tahun, wilayah_id
-     */
-public function generateAnalysis() {
-         $this->checkAuth();
-         $this->checkStorytellingAccess();
-         
-         header('Content-Type: application/json');
-         
-         set_time_limit(45);
-         
-         try {
-             $bulan = (int) ($_POST['bulan'] ?? 0);
-             $tahun = (int) ($_POST['tahun'] ?? 0);
-             $wilayahId = (int) ($_POST['wilayah_id'] ?? 0);
-             
-             if ($bulan < 1 || $bulan > 12) {
-                 throw new Exception('Bulan tidak valid (1-12)');
-             }
-             
-             if ($tahun < 2020 || $tahun > (date('Y') + 1)) {
-                 throw new Exception('Tahun tidak valid');
-             }
-             
-             if ($wilayahId <= 0) {
-                 throw new Exception('Wilayah harus dipilih');
-             }
-             
-             $this->logActivity('storytelling_analyze_start', "Analisis {$tahun}-{$bulan} wilayah #{$wilayahId} dimulai");
-             
-             $existingAnalysis = $this->checkExistingAnalysis($bulan, $tahun, $wilayahId);
-             
-             $analysisResult = $this->dataStoryService->analyzeCauses($bulan, $tahun, $wilayahId);
-             
-             if (!$analysisResult['success']) {
-                 throw new Exception($analysisResult['error'] ?? 'Gagal melakukan analisis');
-             }
-             
-             if ($existingAnalysis) {
-                 $analysisResult['existing_analysis'] = $existingAnalysis;
-                 $analysisResult['has_existing'] = true;
-             } else {
-                 $analysisResult['has_existing'] = false;
-             }
-             
-             $analysisResult['chart_data'] = $this->getChartData($bulan, $tahun, $wilayahId);
-             
-             $this->logActivity('storytelling_analyze_complete', "Analisis {$tahun}-{$bulan} wilayah #{$wilayahId} selesai");
-             
-             echo json_encode($analysisResult);
-             
-         } catch (Exception $e) {
-             error_log("[STORYTELLING] generateAnalysis error: " . $e->getMessage());
-             http_response_code(400);
-             echo json_encode([
-                 'success' => false,
-                 'error' => $e->getMessage()
-             ]);
-         }
-     }
-    
-    /**
-     * Menyimpan hasil analisis final ke database
-     * Method: POST
-     */
-    public function store() {
+
+    public function generateAnalysis(): void
+    {
         $this->checkAuth();
         $this->checkStorytellingAccess();
-        
-        header('Content-Type: application/json');
-        
+        $this->requireRequestMethod('POST');
+        $this->validateCsrfToken();
+
         try {
-            // Validate CSRF token (parent method handles failure internally)
-            $this->validateCsrfToken();
-            
-            // Get and validate input
+            [$bulan, $tahun, $wilayahId] = $this->validatedFilter($_POST);
+            $this->assertKecamatanExists($wilayahId);
+
+            $analysis = $this->dataStoryService->analyzeCauses($bulan, $tahun, $wilayahId);
+            if (!$analysis['success']) {
+                $status = ($analysis['error_code'] ?? '') === 'InsufficientData' ? 422 : 400;
+                $this->json($analysis, $status);
+            }
+
+            $existing = $this->checkExistingAnalysis($bulan, $tahun, $wilayahId);
+            $analysis['existing_analysis'] = $existing;
+            $analysis['has_existing'] = $existing !== null;
+            $analysis['chart_data'] = $this->dataStoryService->getChartData(
+                $bulan,
+                $tahun,
+                $wilayahId,
+                6
+            );
+
+            $this->logActivity(
+                'storytelling_analyze_complete',
+                "Analisis {$tahun}-{$bulan} wilayah #{$wilayahId} selesai"
+            );
+            $this->json($analysis);
+        } catch (Throwable $e) {
+            error_log('[STORYTELLING] generateAnalysis error: ' . $e->getMessage());
+            $this->json([
+                'success' => false,
+                'error_code' => 'InvalidRequest',
+                'error' => $this->safeErrorMessage($e, 'Gagal melakukan analisis.'),
+            ], 400);
+        }
+    }
+
+    public function store(): void
+    {
+        $this->checkAuth();
+        $this->checkStorytellingAccess();
+        $this->requireRequestMethod('POST');
+        $this->validateCsrfToken();
+
+        try {
             $input = $this->getJsonInput();
-            
-            $requiredFields = ['periode', 'produksi_data', 'lagging_indicators', 'faktor_penyebab_utama', 'skor_risiko', 'narasi_otomatis'];
-            foreach ($requiredFields as $field) {
-                if (!isset($input[$field])) {
-                    throw new Exception("Field {$field} wajib diisi");
-                }
-            }
-            
-            // Optional: narasi_final (edited by statistician)
-            if (isset($input['narasi_final']) && !empty(trim($input['narasi_final']))) {
-                $input['narasi_final'] = trim($input['narasi_final']);
-            }
-            
-            // Optional: faktor_penyebab_utama override
-            if (isset($input['faktor_penyebab_override'])) {
-                $validFactors = ['Cuaca Ekstrem', 'Serangan OPT', 'Normal', 'Alih Fungsi Lahan', 'Lainnya'];
-                if (in_array($input['faktor_penyebab_override'], $validFactors)) {
-                    $input['faktor_penyebab_utama'] = $input['faktor_penyebab_override'];
-                }
-            }
-            
-            // Save analysis using service
-            $result = $this->dataStoryService->saveAnalysis($input, $_SESSION['user_id']);
-            
-            if ($result['success']) {
-                // Log activity
-                $this->logActivity('storytelling_save', "Analisis {$input['periode']['tahun']}-{$input['periode']['bulan']} disimpan", $result['id']);
-                
-                echo json_encode([
-                    'success' => true,
-                    'message' => $result['message'],
-                    'analysis_id' => $result['id'],
-                    'action' => $result['action']
-                ]);
-            } else {
-                throw new Exception($result['message'] ?? 'Gagal menyimpan analisis');
-            }
-            
-        } catch (Exception $e) {
-            http_response_code(400);
-            echo json_encode([
-                'success' => false,
-                'error' => $e->getMessage()
-            ]);
-        }
-    }
-    
-    /**
-     * Get chart data for trend visualization (6 months)
-     */
-    public function getChartData() {
-        $this->checkAuth();
-        $this->checkStorytellingAccess();
-        
-        header('Content-Type: application/json');
-        
-        try {
-            $bulan = (int) ($_GET['bulan'] ?? date('m'));
-            $tahun = (int) ($_GET['tahun'] ?? date('Y'));
-            $wilayahId = (int) ($_GET['wilayah_id'] ?? 0);
-            $months = (int) ($_GET['months'] ?? 6);
-            
-            if ($wilayahId <= 0) {
-                throw new Exception('Wilayah harus dipilih');
-            }
-            
-            $chartData = $this->generateChartData($bulan, $tahun, $wilayahId, $months);
-            
-            echo json_encode([
-                'success' => true,
-                'data' => $chartData
-            ]);
-            
-        } catch (Exception $e) {
-            http_response_code(400);
-            echo json_encode([
-                'success' => false,
-                'error' => $e->getMessage()
-            ]);
-        }
-    }
-    
+            $result = $this->dataStoryService->saveAnalysis(
+                $input,
+                (int) $_SESSION['user_id']
+            );
 
+            $this->invalidateStorytellingStatsCache();
+            $this->logActivity(
+                'storytelling_save',
+                'Analisis disimpan dengan rekalkulasi server',
+                (int) $result['id']
+            );
 
-    /**
-     * Get list of recent analyses (Public API for AJAX)
-     */
-    public function getRecent() {
-        $this->checkAuth();
-        $this->checkStorytellingAccess();
-        
-        header('Content-Type: application/json');
-        
-        try {
-            $limit = (int) ($_GET['limit'] ?? 5);
-            $data = $this->getRecentAnalyses($limit);
-            
-            echo json_encode([
+            $this->json([
                 'success' => true,
-                'data' => $data
+                'message' => $result['message'],
+                'analysis_id' => $result['id'],
+                'action' => $result['action'],
             ]);
-        } catch (Exception $e) {
-            http_response_code(400);
-            echo json_encode([
+        } catch (Throwable $e) {
+            error_log('[STORYTELLING] store error: ' . $e->getMessage());
+            $this->json([
                 'success' => false,
-                'error' => $e->getMessage()
-            ]);
+                'error' => $this->safeErrorMessage($e, 'Gagal menyimpan analisis.'),
+            ], 422);
         }
     }
-    
-    /**
-     * Publish analysis as official news/report
-     */
-    public function publish() {
+
+    public function getChartData(): void
+    {
         $this->checkAuth();
         $this->checkStorytellingAccess();
-        
-        // Only admin and statistisi can publish
-        if (!in_array($_SESSION['role'], ['admin', 'statistisi'])) {
-            http_response_code(403);
-            echo json_encode([
-                'success' => false,
-                'error' => 'Anda tidak memiliki akses untuk mempublikasi analisis'
-            ]);
-            return;
-        }
-        
-        header('Content-Type: application/json');
-        
+
         try {
-            $analysisId = (int) ($_POST['analysis_id'] ?? 0);
-            
+            [$bulan, $tahun, $wilayahId] = $this->validatedFilter($_GET);
+            $this->assertKecamatanExists($wilayahId);
+            $months = max(1, min(24, (int) ($_GET['months'] ?? 6)));
+
+            $this->json([
+                'success' => true,
+                'data' => $this->dataStoryService->getChartData(
+                    $bulan,
+                    $tahun,
+                    $wilayahId,
+                    $months
+                ),
+            ]);
+        } catch (Throwable $e) {
+            $this->json([
+                'success' => false,
+                'error' => $this->safeErrorMessage($e, 'Gagal memuat grafik.'),
+            ], 400);
+        }
+    }
+
+    /** Run a selectable analysis method over server-owned storytelling data. */
+    public function runMethod(): void
+    {
+        $this->checkAuth();
+        $this->checkStorytellingAccess();
+        $this->requireRequestMethod('POST');
+        $this->validateCsrfToken();
+
+        try {
+            $input = str_contains($_SERVER['CONTENT_TYPE'] ?? '', 'application/json')
+                ? $this->getJsonInput()
+                : $_POST;
+            [$bulan, $tahun, $wilayahId] = $this->validatedFilter($input);
+            $this->assertKecamatanExists($wilayahId);
+            $method = strtolower(trim((string) ($input['method'] ?? 'trend')));
+            $months = max(6, min(24, (int) ($input['months'] ?? 12)));
+            $parameters = is_array($input['parameters'] ?? null) ? $input['parameters'] : [];
+            $chartData = $this->dataStoryService->getChartData(
+                $bulan,
+                $tahun,
+                $wilayahId,
+                $months
+            );
+
+            $this->json([
+                'success' => true,
+                'data' => $this->analysisService->analyze($method, $chartData, $parameters),
+                'data_window_months' => $months,
+            ]);
+        } catch (Throwable $e) {
+            $this->json([
+                'success' => false,
+                'error' => $this->safeErrorMessage($e, 'Gagal menjalankan metode analisis.'),
+            ], $e instanceof DomainException ? 422 : 400);
+        }
+    }
+
+    public function getRecent(): void
+    {
+        $this->checkAuth();
+        $this->checkStorytellingAccess();
+
+        $limit = max(1, min(50, (int) ($_GET['limit'] ?? 5)));
+        $this->json([
+            'success' => true,
+            'data' => $this->getRecentAnalyses($limit),
+        ]);
+    }
+
+    public function getAnalysis(): void
+    {
+        $this->checkAuth();
+        $this->checkStorytellingAccess();
+
+        $analysisId = (int) ($_GET['id'] ?? 0);
+        if ($analysisId <= 0) {
+            $this->json(['success' => false, 'error' => 'ID analisis tidak valid.'], 422);
+        }
+
+        $analysis = $this->dataStoryService->getAnalysisById($analysisId);
+        if ($analysis === null) {
+            $this->json(['success' => false, 'error' => 'Analisis tidak ditemukan.'], 404);
+        }
+
+        $this->json(['success' => true, 'data' => $analysis]);
+    }
+
+    public function publish(): void
+    {
+        $this->checkAuth();
+        $this->checkStorytellingAccess();
+        $this->requireRequestMethod('POST');
+        $this->validateCsrfToken();
+
+        if (!in_array($_SESSION['role'], ['admin', 'statistisi'], true)) {
+            $this->json([
+                'success' => false,
+                'error' => 'Anda tidak memiliki akses untuk mempublikasikan analisis.',
+            ], 403);
+        }
+
+        try {
+            $input = str_contains($_SERVER['CONTENT_TYPE'] ?? '', 'application/json')
+                ? $this->getJsonInput()
+                : $_POST;
+            $analysisId = (int) ($input['analysis_id'] ?? 0);
             if ($analysisId <= 0) {
-                throw new Exception('ID analisis tidak valid');
+                throw new InvalidArgumentException('ID analisis tidak valid.');
             }
-            
-            // Update status to published
-            $result = $this->publishAnalysis($analysisId, $_SESSION['user_id']);
-            
-            if ($result) {
-                echo json_encode([
-                    'success' => true,
-                    'message' => 'Analisis berhasil dipublikasi sebagai berita resmi'
-                ]);
-            } else {
-                throw new Exception('Gagal mempublikasi analisis');
-            }
-            
-        } catch (Exception $e) {
-            http_response_code(400);
-            echo json_encode([
-                'success' => false,
-                'error' => $e->getMessage()
+
+            $this->dataStoryService->publishAnalysis(
+                $analysisId,
+                (int) $_SESSION['user_id']
+            );
+            $this->invalidateStorytellingStatsCache();
+            $this->logActivity(
+                'storytelling_publish',
+                'Analisis dipublikasikan',
+                $analysisId
+            );
+
+            $this->json([
+                'success' => true,
+                'message' => 'Analisis berhasil dipublikasikan.',
             ]);
+        } catch (Throwable $e) {
+            $this->json([
+                'success' => false,
+                'error' => $this->safeErrorMessage($e, 'Gagal mempublikasikan analisis.'),
+            ], 422);
         }
     }
-    
-    /**
-     * Helper methods
-     */
-    
-    private function getAvailableYears(): array {
-        $currentYear = date('Y');
-        $years = [];
-        
-        // Get years from 3 years ago to next year
-        for ($year = $currentYear - 3; $year <= $currentYear + 1; $year++) {
-            $years[] = $year;
+
+    protected function checkStorytellingAccess(): void
+    {
+        $allowedRoles = ['admin', 'operator', 'statistisi'];
+        if (!in_array($_SESSION['role'] ?? '', $allowedRoles, true)) {
+            $_SESSION['error'] = 'Anda tidak memiliki akses ke fitur Data Storytelling';
+            $this->redirect('dashboard');
         }
-        
-        return $years;
     }
-    
-    private function getInitialStats(): array {
-        $cacheFile = ROOT_PATH . '/storage/cache/storytelling_stats.json';
-        $cacheDir = dirname($cacheFile);
-        
-        if (!is_dir($cacheDir)) {
-            mkdir($cacheDir, 0755, true);
+
+    private function validatedFilter(array $input): array
+    {
+        $bulan = filter_var($input['bulan'] ?? null, FILTER_VALIDATE_INT);
+        $tahun = filter_var($input['tahun'] ?? null, FILTER_VALIDATE_INT);
+        $wilayahId = filter_var($input['wilayah_id'] ?? null, FILTER_VALIDATE_INT);
+
+        if ($bulan === false || $bulan < 1 || $bulan > 12) {
+            throw new InvalidArgumentException('Bulan tidak valid (1–12).');
         }
-        
-        // Cache valid for 24 hours
-        if (file_exists($cacheFile) && (time() - filemtime($cacheFile) < 86400)) {
-            $cachedData = json_decode(file_get_contents($cacheFile), true);
-            if ($cachedData) {
-                return $cachedData;
-            }
+        if ($tahun === false || $tahun < 2000 || $tahun > ((int) date('Y') + 1)) {
+            throw new InvalidArgumentException('Tahun tidak valid.');
+        }
+        if ($wilayahId === false || $wilayahId <= 0) {
+            throw new InvalidArgumentException('Wilayah harus dipilih.');
         }
 
+        return [$bulan, $tahun, $wilayahId];
+    }
+
+    private function assertKecamatanExists(int $wilayahId): void
+    {
+        if ($this->wilayahModel->getById($wilayahId) === null) {
+            throw new InvalidArgumentException('Kecamatan tidak ditemukan.');
+        }
+    }
+
+    private function getAvailableYears(): array
+    {
         try {
-            $currentYear = date('Y');
-            
-            // Get basic stats for current year
-            $sql = "
-                SELECT 
-                    COUNT(*) as total_analyses,
-                    COUNT(CASE WHEN is_published = 1 THEN 1 END) as published_count,
-                    COUNT(CASE WHEN status_analisis = 'draft' THEN 1 END) as draft_count
-                FROM analisis_produksi_bulanan 
-                WHERE periode_tahun = ?
-            ";
-            
-            $stmt = Database::getInstance()->getConnection()->prepare($sql);
-            $stmt->execute([$currentYear]);
-            $result = $stmt->fetch(PDO::FETCH_ASSOC);
-            
-            $stats = [
+            $stmt = Database::getInstance()->getConnection()->query(
+                'SELECT DISTINCT tahun FROM produksi_gabah
+                 WHERE bulan IS NOT NULL AND status = \'verified\'
+                 ORDER BY tahun DESC'
+            );
+            $years = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+            if ($years !== []) {
+                return $years;
+            }
+        } catch (Throwable $e) {
+            error_log('[STORYTELLING] getAvailableYears error: ' . $e->getMessage());
+        }
+
+        $currentYear = (int) date('Y');
+        return range($currentYear, $currentYear - 4);
+    }
+
+    private function getInitialStats(): array
+    {
+        try {
+            $stmt = Database::getInstance()->getConnection()->prepare(
+                "SELECT COUNT(*) AS total_analyses,
+                        SUM(status_analisis = 'published') AS published_count,
+                        SUM(status_analisis = 'draft') AS draft_count
+                 FROM analisis_produksi_bulanan
+                 WHERE periode_tahun = ?"
+            );
+            $stmt->execute([(int) date('Y')]);
+            $result = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+            return [
                 'total_analyses' => (int) ($result['total_analyses'] ?? 0),
                 'published_count' => (int) ($result['published_count'] ?? 0),
-                'draft_count' => (int) ($result['draft_count'] ?? 0)
+                'draft_count' => (int) ($result['draft_count'] ?? 0),
             ];
-            
-            file_put_contents($cacheFile, json_encode($stats));
-            return $stats;
-        } catch (Exception $e) {
-            // Table might not exist yet, return default values
-            error_log("[STORYTELLING] getInitialStats error: " . $e->getMessage());
-            return [
-                'total_analyses' => 0,
-                'published_count' => 0,
-                'draft_count' => 0
-            ];
+        } catch (Throwable $e) {
+            error_log('[STORYTELLING] getInitialStats error: ' . $e->getMessage());
+            return ['total_analyses' => 0, 'published_count' => 0, 'draft_count' => 0];
         }
     }
-    
-    private function getRecentAnalyses(int $limit = 5): array {
+
+    private function getRecentAnalyses(int $limit): array
+    {
         try {
-            $sql = "
-                SELECT 
-                    apb.*,
-                    mk.nama_kecamatan,
-                    u.nama_lengkap as created_by_name
-                FROM analisis_produksi_bulanan apb
-                LEFT JOIN master_kecamatan mk ON apb.wilayah_id = mk.id
-                LEFT JOIN users u ON apb.created_by = u.id
-                ORDER BY apb.created_at DESC
-                LIMIT ?
-            ";
-            
-            $stmt = Database::getInstance()->getConnection()->prepare($sql);
-            $stmt->execute([$limit]);
-            
+            $stmt = Database::getInstance()->getConnection()->prepare(
+                'SELECT apb.*, mk.nama_kecamatan, u.nama_lengkap AS created_by_name
+                 FROM analisis_produksi_bulanan apb
+                 LEFT JOIN master_kecamatan mk ON apb.wilayah_id = mk.id
+                 LEFT JOIN users u ON apb.created_by = u.id
+                 ORDER BY apb.created_at DESC
+                 LIMIT ?'
+            );
+            $stmt->bindValue(1, $limit, PDO::PARAM_INT);
+            $stmt->execute();
             return $stmt->fetchAll(PDO::FETCH_ASSOC);
-        } catch (Exception $e) {
-            error_log("[STORYTELLING] getRecentAnalyses error: " . $e->getMessage());
+        } catch (Throwable $e) {
+            error_log('[STORYTELLING] getRecentAnalyses error: ' . $e->getMessage());
             return [];
         }
     }
-    
-    private function checkExistingAnalysis(int $bulan, int $tahun, int $wilayahId): ?array {
-        $sql = "
-            SELECT 
-                apb.*,
-                mk.nama_kecamatan,
-                u.nama_lengkap as created_by_name
-            FROM analisis_produksi_bulanan apb
-            LEFT JOIN master_kecamatan mk ON apb.wilayah_id = mk.id
-            LEFT JOIN users u ON apb.created_by = u.id
-            WHERE apb.periode_bulan = ? AND apb.periode_tahun = ? AND apb.wilayah_id = ?
-        ";
-        
-        $stmt = Database::getInstance()->getConnection()->prepare($sql);
+
+    private function checkExistingAnalysis(int $bulan, int $tahun, int $wilayahId): ?array
+    {
+        $stmt = Database::getInstance()->getConnection()->prepare(
+            'SELECT id, status_analisis, updated_at
+             FROM analisis_produksi_bulanan
+             WHERE periode_bulan = ? AND periode_tahun = ? AND wilayah_id = ?'
+        );
         $stmt->execute([$bulan, $tahun, $wilayahId]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        
         return $result ?: null;
     }
-    
-    private function generateChartData(int $bulan, int $tahun, int $wilayahId, int $months): array {
-        $chartData = [
-            'labels' => [],
-            'datasets' => [
-                [
-                    'label' => 'Luas Panen (Ha)',
-                    'type' => 'bar',
-                    'data' => [],
-                    'backgroundColor' => 'rgba(54, 162, 235, 0.6)',
-                    'borderColor' => 'rgba(54, 162, 235, 1)',
-                    'yAxisID' => 'y'
-                ],
-                [
-                    'label' => 'Curah Hujan (mm)',
-                    'type' => 'line',
-                    'data' => [],
-                    'backgroundColor' => 'rgba(255, 99, 132, 0.2)',
-                    'borderColor' => 'rgba(255, 99, 132, 1)',
-                    'yAxisID' => 'y1',
-                    'fill' => false
-                ],
-                [
-                    'label' => 'Laporan Hama',
-                    'type' => 'line',
-                    'data' => [],
-                    'backgroundColor' => 'rgba(255, 206, 86, 0.2)',
-                    'borderColor' => 'rgba(255, 206, 86, 1)',
-                    'yAxisID' => 'y2',
-                    'fill' => false
-                ]
-            ]
-        ];
-        
-        // Generate data for the last N months
-        for ($i = $months - 1; $i >= 0; $i--) {
-            $targetMonth = $bulan - $i;
-            $targetYear = $tahun;
-            
-            if ($targetMonth <= 0) {
-                $targetMonth += 12;
-                $targetYear--;
-            }
-            
-            $monthName = $this->getMonthName($targetMonth);
-            $chartData['labels'][] = "{$monthName} {$targetYear}";
-            
-            // Get production data
-            $produksiData = $this->getProductionDataForChart($targetMonth, $targetYear, $wilayahId);
-            $chartData['datasets'][0]['data'][] = $produksiData['luas_panen'];
-            
-            // Get weather data (lag -1 month)
-            $lagMonth = $targetMonth - 1;
-            $lagYear = $targetYear;
-            if ($lagMonth <= 0) {
-                $lagMonth += 12;
-                $lagYear--;
-            }
-            
-            $weatherData = $this->getWeatherDataForChart($lagMonth, $lagYear, $wilayahId);
-            $chartData['datasets'][1]['data'][] = $weatherData['curah_hujan'];
-            
-            $hamaData = $this->getHamaDataForChart($lagMonth, $lagYear, $wilayahId);
-            $chartData['datasets'][2]['data'][] = $hamaData['total_laporan'];
+
+    private function getJsonInput(): array
+    {
+        $raw = file_get_contents('php://input');
+        $data = json_decode($raw ?: '', true);
+        if (!is_array($data) || json_last_error() !== JSON_ERROR_NONE) {
+            throw new InvalidArgumentException('Format JSON tidak valid.');
         }
-        
-        return $chartData;
-    }
-    
-    private function getMonthName(int $month): string {
-        $months = [
-            1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr',
-            5 => 'Mei', 6 => 'Jun', 7 => 'Jul', 8 => 'Ags',
-            9 => 'Sep', 10 => 'Okt', 11 => 'Nov', 12 => 'Des'
-        ];
-        
-        return $months[$month] ?? 'Unknown';
-    }
-    
-    private function getProductionDataForChart(int $bulan, int $tahun, int $wilayahId): array {
-        $sql = "
-            SELECT COALESCE(SUM(luas_panen), 0) as luas_panen
-            FROM produksi_gabah pg
-            LEFT JOIN master_desa md ON pg.desa_id = md.id
-            WHERE MONTH(pg.tanggal_panen) = ? 
-              AND YEAR(pg.tanggal_panen) = ?
-              AND md.kecamatan_id = ?
-              AND pg.status_verifikasi = 'verified'
-        ";
-        
-        $stmt = Database::getInstance()->getConnection()->prepare($sql);
-        $stmt->execute([$bulan, $tahun, $wilayahId]);
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        return ['luas_panen' => (float) $result['luas_panen']];
-    }
-    
-    private function getWeatherDataForChart(int $bulan, int $tahun, int $wilayahId): array {
-        $sql = "
-            SELECT COALESCE(AVG(curah_hujan), 0) as curah_hujan
-            FROM curah_hujan
-            WHERE MONTH(tanggal) = ? 
-              AND YEAR(tanggal) = ?
-              AND kecamatan_id = ?
-        ";
-        
-        $stmt = Database::getInstance()->getConnection()->prepare($sql);
-        $stmt->execute([$bulan, $tahun, $wilayahId]);
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        return ['curah_hujan' => (float) $result['curah_hujan']];
-    }
-    
-    private function getHamaDataForChart(int $bulan, int $tahun, int $wilayahId): array {
-        $sql = "
-            SELECT COUNT(*) as total_laporan
-            FROM laporan_hama lh
-            LEFT JOIN master_desa md ON lh.desa_id = md.id
-            WHERE MONTH(lh.tanggal_laporan) = ? 
-              AND YEAR(lh.tanggal_laporan) = ?
-              AND md.kecamatan_id = ?
-              AND lh.status IN ('Submitted', 'Diverifikasi')
-        ";
-        
-        $stmt = Database::getInstance()->getConnection()->prepare($sql);
-        $stmt->execute([$bulan, $tahun, $wilayahId]);
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        return ['total_laporan' => (int) $result['total_laporan']];
-    }
-    
-    private function getKecamatanInfo(int $kecamatanId): array {
-        $sql = "SELECT nama_kecamatan FROM master_kecamatan WHERE id = ?";
-        $stmt = Database::getInstance()->getConnection()->prepare($sql);
-        $stmt->execute([$kecamatanId]);
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        return $result ?: ['nama_kecamatan' => 'Unknown'];
-    }
-    
-    private function getJsonInput(): array {
-        $input = file_get_contents('php://input');
-        $data = json_decode($input, true);
-        
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new Exception('Invalid JSON input');
-        }
-        
         return $data;
     }
-    
-    // validateCsrfToken() inherited from parent Controller class
-    
-    private function logActivity(string $action, string $description, ?int $relatedId = null): void {
-        // Implementation depends on your logging system
-        // This is a placeholder for activity logging
-        error_log("[STORYTELLING] User {$_SESSION['user_id']}: {$action} - {$description}" . ($relatedId ? " (ID: {$relatedId})" : ""));
+
+    private function invalidateStorytellingStatsCache(): void
+    {
+        $cacheFile = ROOT_PATH . '/storage/cache/storytelling_stats.json';
+        if (is_file($cacheFile)) {
+            @unlink($cacheFile);
+        }
+    }
+
+    private function safeErrorMessage(Throwable $error, string $fallback): string
+    {
+        if ($error instanceof InvalidArgumentException || $error instanceof DomainException) {
+            return $error->getMessage();
+        }
+        return $fallback;
+    }
+
+    private function logActivity(string $action, string $description, ?int $relatedId = null): void
+    {
+        error_log(
+            '[STORYTELLING] User ' . ($_SESSION['user_id'] ?? 'unknown')
+            . ": {$action} - {$description}"
+            . ($relatedId !== null ? " (ID: {$relatedId})" : '')
+        );
     }
 }

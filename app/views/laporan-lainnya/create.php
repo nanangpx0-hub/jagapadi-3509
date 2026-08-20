@@ -193,11 +193,11 @@
                     <?php elseif(($_SESSION['role'] ?? '') === 'operator'): ?>
                         <span class="badge badge-primary ml-2">Mode Operator</span>
                     <?php elseif(($_SESSION['role'] ?? '') === 'petugas'): ?>
-                        <span class="badge badge-success ml-2">Mode Petugas</span>
                     <?php endif; ?>
                 </h3>
             </div>
-            <form action="<?= BASE_URL ?>laporan-lainnya/store" method="POST" enctype="multipart/form-data" id="formCreateLaporan">
+            <form action="<?= BASE_URL ?>laporan-lainnya/store" method="POST" enctype="multipart/form-data" id="formCreateLaporan"
+                  data-draft-user="<?= (int) ($_SESSION['user_id'] ?? 0) ?>" data-draft-module="laporan-lainnya">
                 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
                 <!-- Honeypot anti-bot field (hidden from users, bots will fill this) -->
                 <div style="position: absolute; left: -9999px; top: -9999px;" aria-hidden="true">
@@ -968,24 +968,24 @@ document.querySelector('form').addEventListener('submit', function(e) {
                     const accuracyText = document.getElementById('gpsAccuracyText');
                     
                     let confidence = 'low';
-                    let confidenceLabel = 'âœ“ Rendah';
-                    
+                    let confidenceLabel = '<i class="fas fa-signal"></i> Rendah';
+
                     if (accuracy < 10) {
                         confidence = 'high';
-                        confidenceLabel = 'âœ“âœ“âœ“ Tinggi';
+                        confidenceLabel = '<i class="fas fa-signal"></i><i class="fas fa-signal"></i><i class="fas fa-signal"></i> Tinggi';
                     } else if (accuracy < 50) {
                         confidence = 'medium';
-                        confidenceLabel = 'âœ“âœ“ Sedang';
+                        confidenceLabel = '<i class="fas fa-signal"></i><i class="fas fa-signal"></i> Sedang';
                     }
                     
                     if (confidenceIndicator) {
                         confidenceIndicator.className = 'gps-confidence ml-2 ' + confidence;
-                        confidenceIndicator.textContent = confidenceLabel;
+                        confidenceIndicator.innerHTML = confidenceLabel;
                         confidenceIndicator.style.display = 'inline-flex';
                     }
                     
                     if (accuracyText) {
-                        accuracyText.textContent = `(Â±${accuracy.toFixed(0)}m)`;
+                        accuracyText.textContent = `(±${accuracy.toFixed(0)}m)`;
                     }
                     
                     btnGetCurrentLocation.disabled = false;
@@ -995,7 +995,7 @@ document.querySelector('form').addEventListener('submit', function(e) {
                     const statusDiv = document.getElementById('currentLocationStatus');
                     if (statusDiv) {
                         const confidenceColor = confidence === 'high' ? 'success' : (confidence === 'medium' ? 'warning' : 'danger');
-                        statusDiv.innerHTML = `<div class="alert alert-success"><i class="fas fa-check-circle"></i> Lokasi ditemukan: ${lat}, ${lng} <span class="badge badge-${confidenceColor} ml-2">Akurasi: Â±${accuracy.toFixed(0)}m</span></div>`;
+                        statusDiv.innerHTML = `<div class="alert alert-success"><i class="fas fa-check-circle"></i> Lokasi ditemukan: ${lat}, ${lng} <span class="badge badge-${confidenceColor} ml-2">Akurasi: ±${accuracy.toFixed(0)}m</span></div>`;
                     }
                 },
                 function(error) {
@@ -2057,6 +2057,6 @@ scheduleDefaultKabupatenJemberEnforcement();
 </script>
 
 <!-- Phase 3: Draft Auto-Save and Offline Mode -->
-<script src="<?= BASE_URL ?>public/js/draft-autosave.js"></script>
+<script src="<?= BASE_URL ?>public/js/draft-autosave.js?v=2.0.0"></script>
 <script src="<?= BASE_URL ?>public/js/offline-laporan.js"></script>
 

@@ -120,11 +120,8 @@ class WeatherService {
      * @return array
      */
     public function getForKecamatan(int $kecamatanId): array {
-        // Sumber kebenaran kecamatan adalah master_kecamatan.
-        // master_kecamatan tidak menyimpan koordinat, jadi langsung gunakan
-        // default forecast (Open-Meteo mendukung lookup berbasis id wilayah).
         $stmt = $this->db->prepare("
-            SELECT id, nama_kecamatan
+            SELECT id, nama_kecamatan, latitude, longitude
             FROM master_kecamatan
             WHERE id = ?
         ");
@@ -132,7 +129,16 @@ class WeatherService {
         $kec = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($kec) {
-            return $this->getForecast(null, null, 7);
+            if (!empty($kec['latitude']) && !empty($kec['longitude'])) {
+                return $this->getForecast(
+                    (float) $kec['latitude'],
+                    (float) $kec['longitude'],
+                    7
+                );
+            }
+            // Fallback: gunakan koordinat default Jember dan log warning
+            error_log("WeatherService: Missing coordinates for kecamatan ID " . $kecamatanId);
+            return $this->getForecast(-8.1706, 113.7003, 7);
         }
 
         return $this->getDefaultForecast(7);

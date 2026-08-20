@@ -1,6 +1,15 @@
 <?php
 require_once ROOT_PATH . '/app/views/layouts/header.php';
 
+if (!empty($_SESSION['flash_error'])): ?>
+    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+        <i class="fas fa-exclamation-triangle"></i>
+        <?= htmlspecialchars($_SESSION['flash_error'], ENT_QUOTES, 'UTF-8') ?>
+        <button type="button" class="close" data-dismiss="alert">&times;</button>
+    </div>
+<?php unset($_SESSION['flash_error']); endif; ?>
+
+<?php
 $formatNumber = static function ($value, int $decimals = 0): string {
     return number_format((float) ($value ?? 0), $decimals, ',', '.');
 };
@@ -102,7 +111,7 @@ $statusClasses = [
                     <button type="submit" class="btn btn-success mr-2">
                         <i class="fas fa-filter"></i> Terapkan
                     </button>
-                    <a href="<?= BASE_URL ?>dashboardPadi?tahun=<?= (int) $selectedYear ?>" class="btn btn-outline-secondary">
+                    <a href="<?= BASE_URL ?>dashboard-padi?tahun=<?= (int) $selectedYear ?>" class="btn btn-outline-secondary">
                         <i class="fas fa-undo"></i> Reset Kecamatan
                     </a>
                 </div>
@@ -246,7 +255,7 @@ $statusClasses = [
                             <div class="d-flex justify-content-between align-items-center border-bottom py-2">
                                 <span>
                                     <span class="badge badge-<?= $badgeClass ?>">
-                                        <?= htmlspecialchars($statusLabels[$statusKey] ?? ucfirst($statusKey)) ?>
+                                        <?= htmlspecialchars($statusLabels[$statusKey] ?? ucfirst(htmlspecialchars($statusKey, ENT_QUOTES, 'UTF-8'))) ?>
                                     </span>
                                 </span>
                                 <strong><?= $formatNumber($status['total'] ?? 0, 0) ?> data</strong>

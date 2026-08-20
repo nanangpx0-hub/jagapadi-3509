@@ -13,6 +13,7 @@ class CurahHujanController extends Controller {
     
     public function __construct() {
         require_once ROOT_PATH . '/app/models/CurahHujan.php';
+        require_once ROOT_PATH . '/app/core/CacheManager.php';
         $this->model = new CurahHujan();
         
         // Ensure tables exist
@@ -33,11 +34,20 @@ class CurahHujanController extends Controller {
      * Check admin access
      */
     protected function checkAdmin() {
-        if ($_SESSION['role'] !== 'admin') {
+        if (($_SESSION['role'] ?? '') !== 'admin') {
             $_SESSION['error'] = 'Anda tidak memiliki akses ke halaman ini';
             header('Location: ' . BASE_URL . '/dashboard');
             exit;
         }
+    }
+
+    private function getSourceFilter(?string $source): array {
+        return match ($source) {
+            'bmkg' => ['sumber_data_like' => '%BMKG%'],
+            'simulation' => ['sumber_data_like' => '%Simulasi%'],
+            'all' => [],
+            default => ['sumber_data_like' => '%NASA%'],
+        };
     }
     
     /**
@@ -54,14 +64,17 @@ class CurahHujanController extends Controller {
             'currentMonth' => date('m')
         ];
         
-        // Get statistics for current year
-        $data['statistics'] = $this->model->getStatistics(['year' => date('Y')]);
+        $defaultFilters = ['year' => date('Y'), 'sumber_data_like' => '%NASA%'];
+
+        // NASA is the default analytical source; simulations remain opt-in.
+        $data['statistics'] = $this->model->getStatistics($defaultFilters);
         
         // Get monthly data for chart
-        $data['monthlyData'] = $this->model->getMonthlyAverage(date('Y'));
+        $data['monthlyData'] = $this->model->getMonthlyAverage(date('Y'), ['sumber_data_like' => '%NASA%']);
         
         // Get recent data for table
         $data['recentData'] = $this->model->getAll([
+            'sumber_data_like' => '%NASA%',
             'limit' => 10,
             'offset' => 0
         ]);
@@ -127,12 +140,13 @@ class CurahHujanController extends Controller {
                 'month' => $_GET['month'] ?? null,
                 'start_date' => $_GET['start_date'] ?? null,
                 'end_date' => $_GET['end_date'] ?? null,
+                'lokasi' => $_GET['lokasi'] ?? null,
                 'limit' => $_GET['limit'] ?? 50,
                 'offset' => $_GET['offset'] ?? 0
             ];
             
             // Data source filtering
-            $dataSource = $_GET['data_source'] ?? 'all';
+            $dataSource = $_GET['data_source'] ?? 'nasa';
             if ($dataSource === 'nasa' || $dataSource === 'nasa_power') {
                 $filters['sumber_data_like'] = '%NASA%';
             } elseif ($dataSource === 'bmkg') {
@@ -147,17 +161,6 @@ class CurahHujanController extends Controller {
             
             $data = $this->model->getAll($filters);
             $total = $this->model->countAll($filters);
-
-            // Local compatibility fallback: when the environment is seeded with
-            // placeholder source labels, keep the dashboard usable instead of
-            // rendering an empty result set for the BMKG-only preset.
-            if ($dataSource === 'bmkg' && $total === 0) {
-                $fallbackFilters = $filters;
-                unset($fallbackFilters['sumber_data_like']);
-                $data = $this->model->getAll($fallbackFilters);
-                $total = $this->model->countAll($fallbackFilters);
-                $dataSource = 'bmkg_fallback_all';
-            }
 
             $statistics = $this->model->getStatistics($filters);
             
@@ -191,13 +194,33 @@ class CurahHujanController extends Controller {
     public function getChartData() {
         $this->checkAuth();
         header('Content-Type: application/json');
+
+        $cacheKey = 'stats_curah_hujan_chart_' . md5($_SERVER['QUERY_STRING'] ?? '');
+        $cache = CacheManager::getInstance();
+        if ($cache->isAvailable()) {
+            $cached = $cache->get($cacheKey);
+            if ($cached !== null) {
+                echo $cached;
+                exit;
+            }
+            ob_start();
+        }
         
         try {
             $type = $_GET['type'] ?? 'monthly';
             $year = $_GET['year'] ?? date('Y');
+            $chartFilters = [];
+            $dataSource = $_GET['data_source'] ?? 'nasa';
+            if ($dataSource === 'nasa' || $dataSource === 'nasa_power') {
+                $chartFilters['sumber_data_like'] = '%NASA%';
+            } elseif ($dataSource === 'bmkg') {
+                $chartFilters['sumber_data_like'] = '%BMKG%';
+            } elseif ($dataSource === 'simulation') {
+                $chartFilters['sumber_data_like'] = '%Simulasi%';
+            }
             
             if ($type === 'monthly') {
-                $data = $this->model->getMonthlyAverage($year);
+                $data = $this->model->getMonthlyAverage($year, $chartFilters);
                 
                 // Format for Chart.js
                 $labels = [];
@@ -241,7 +264,7 @@ class CurahHujanController extends Controller {
                     ]
                 ]);
             } elseif ($type === 'yearly') {
-                $data = $this->model->getYearlySummary(5);
+                $data = $this->model->getYearlySummary(5, $chartFilters);
                 
                 $labels = [];
                 $avgValues = [];
@@ -278,6 +301,10 @@ class CurahHujanController extends Controller {
                 'error' => $e->getMessage()
             ]);
         }
+        if (isset($cache) && $cache->isAvailable()) {
+            $cache->set($cacheKey, ob_get_contents(), 300);
+            ob_end_flush();
+        }
         exit;
     }
     
@@ -287,12 +314,35 @@ class CurahHujanController extends Controller {
     public function getStatistics() {
         $this->checkAuth();
         header('Content-Type: application/json');
+
+        $cacheKey = 'stats_curah_hujan_stats_' . md5($_SERVER['QUERY_STRING'] ?? '');
+        $cache = CacheManager::getInstance();
+        if ($cache->isAvailable()) {
+            $cached = $cache->get($cacheKey);
+            if ($cached !== null) {
+                echo $cached;
+                exit;
+            }
+            ob_start();
+        }
         
         try {
             $filters = [
                 'year' => $_GET['year'] ?? null,
-                'month' => $_GET['month'] ?? null
+                'month' => $_GET['month'] ?? null,
+                'start_date' => $_GET['start_date'] ?? null,
+                'end_date' => $_GET['end_date'] ?? null,
+                'lokasi' => $_GET['lokasi'] ?? null
             ];
+
+            $dataSource = $_GET['data_source'] ?? 'nasa';
+            if ($dataSource === 'nasa' || $dataSource === 'nasa_power') {
+                $filters['sumber_data_like'] = '%NASA%';
+            } elseif ($dataSource === 'bmkg') {
+                $filters['sumber_data_like'] = '%BMKG%';
+            } elseif ($dataSource === 'simulation') {
+                $filters['sumber_data_like'] = '%Simulasi%';
+            }
             
             $filters = array_filter($filters, function($v) { return $v !== null; });
             
@@ -308,6 +358,10 @@ class CurahHujanController extends Controller {
                 'error' => $e->getMessage()
             ]);
         }
+        if (isset($cache) && $cache->isAvailable()) {
+            $cache->set($cacheKey, ob_get_contents(), 300);
+            ob_end_flush();
+        }
         exit;
     }
     
@@ -317,6 +371,7 @@ class CurahHujanController extends Controller {
     public function runScraper() {
         $this->checkAuth();
         $this->checkAdmin();
+        $this->requireRequestMethod(['POST']);
         
         ob_start();
         header('Content-Type: application/json; charset=utf-8');
@@ -340,6 +395,12 @@ class CurahHujanController extends Controller {
             ];
             
             $result = $scraper->run($options);
+            if ($result['success']) {
+                $cacheInvalidator = CacheManager::getInstance();
+                if ($cacheInvalidator->isAvailable()) {
+                    $cacheInvalidator->clearPrefix('stats_curah_hujan_');
+                }
+            }
             
             $jsonOutput = json_encode([
                 'success' => $result['success'],
@@ -373,29 +434,32 @@ class CurahHujanController extends Controller {
     public function fetch_nasa_curah_hujan() {
         $this->checkAuth();
         $this->checkAdmin();
+        $this->requireRequestMethod(['POST']);
         
         ob_start();
         header('Content-Type: application/json; charset=utf-8');
         
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['csrf_token'])) {
-            if (!Security::validateCsrfToken($_POST['csrf_token'])) {
-                ob_end_clean();
-                echo json_encode(['success' => false, 'error' => 'Token keamanan tidak valid']);
-                exit;
-            }
+        if (!isset($_POST['csrf_token']) || !Security::validateCsrfToken($_POST['csrf_token'])) {
+            ob_end_clean();
+            echo json_encode(['success' => false, 'error' => 'Token keamanan tidak valid']);
+            exit;
         }
         
         try {
             require_once ROOT_PATH . '/app/services/CurahHujanScraper.php';
             $scraper = new CurahHujanScraper();
             
-            $year = $_REQUEST['year'] ?? date('Y');
-            $month = $_REQUEST['month'] ?? date('m');
+            $year = $_POST['year'] ?? date('Y');
+            $month = $_POST['month'] ?? date('m');
             
             $data = $scraper->fetch_nasa_curah_hujan($year, $month);
             
             if (!empty($data)) {
                 $bulkRes = $this->model->bulkInsert($data);
+                $cacheInvalidator = CacheManager::getInstance();
+                if ($cacheInvalidator->isAvailable()) {
+                    $cacheInvalidator->clearPrefix('stats_curah_hujan_');
+                }
                 
                 $this->model->logActivity('fetch_nasa', 'success', "NASA POWER API: Berhasil mengambil data ({$bulkRes['success']} sukses)", [
                     'processed' => count($data),
@@ -455,7 +519,6 @@ class CurahHujanController extends Controller {
     public function store() {
         $this->checkAuth();
         $this->checkAdmin();
-        
         // Verify CSRF token
         if (!isset($_POST['csrf_token']) || !Security::validateCsrfToken($_POST['csrf_token'])) {
             $_SESSION['error'] = 'Token keamanan tidak valid';
@@ -478,6 +541,11 @@ class CurahHujanController extends Controller {
             if (empty($data['tanggal'])) {
                 throw new Exception('Tanggal harus diisi');
             }
+
+            $date = DateTime::createFromFormat('!Y-m-d', (string) $data['tanggal']);
+            if (!$date || $date->format('Y-m-d') !== $data['tanggal'] || $data['tanggal'] > date('Y-m-d')) {
+                throw new Exception('Tanggal tidak valid atau berada di masa depan');
+            }
             
             if (!is_numeric($data['curah_hujan']) || $data['curah_hujan'] < 0 || $data['curah_hujan'] > 500) {
                 throw new Exception('Curah hujan harus antara 0-500 mm');
@@ -486,6 +554,7 @@ class CurahHujanController extends Controller {
             $result = $this->model->insert($data);
             
             if ($result) {
+                $this->invalidateStatsCache(['stats_curah_hujan_']);
                 // Log activity
                 $this->model->logActivity('manual_entry', 'success', 'Data curah hujan ditambahkan', [
                     'processed' => 1,
@@ -574,6 +643,11 @@ class CurahHujanController extends Controller {
             if (empty($tanggal)) {
                 throw new Exception('Tanggal harus diisi');
             }
+
+            $date = DateTime::createFromFormat('!Y-m-d', (string) $tanggal);
+            if (!$date || $date->format('Y-m-d') !== $tanggal || $tanggal > date('Y-m-d')) {
+                throw new Exception('Tanggal tidak valid atau berada di masa depan');
+            }
             
             if (!is_numeric($curahHujan) || $curahHujan < 0 || $curahHujan > 500) {
                 throw new Exception('Curah hujan harus antara 0-500 mm');
@@ -590,13 +664,14 @@ class CurahHujanController extends Controller {
                 'lokasi' => $lokasi,
                 'kode_wilayah' => $_POST['kode_wilayah'] ?? '35.09',
                 'curah_hujan' => floatval($curahHujan),
-                'sumber_data' => $_POST['sumber_data'] ?? 'Manual',
+                'sumber_data' => $existing['sumber_data'] ?? 'Manual',
                 'keterangan' => $keterangan
             ];
             
             $result = $this->model->update($id, $data);
             
             if ($result) {
+                $this->invalidateStatsCache(['stats_curah_hujan_']);
                 // Log activity
                 $this->model->logActivity('update', 'success', "Data curah hujan ID {$id} diperbarui", [
                     'processed' => 1,
@@ -642,6 +717,9 @@ class CurahHujanController extends Controller {
         
         try {
             $result = $this->model->delete($id);
+            if ($result) {
+                $this->invalidateStatsCache(['stats_curah_hujan_']);
+            }
             
             echo json_encode([
                 'success' => $result,
@@ -719,6 +797,10 @@ class CurahHujanController extends Controller {
                 if ($id > 0 && $this->model->delete($id)) {
                     $deleted++;
                 }
+            }
+
+            if ($deleted > 0) {
+                $this->invalidateStatsCache(['stats_curah_hujan_']);
             }
             
             echo json_encode([
@@ -836,13 +918,14 @@ class CurahHujanController extends Controller {
         
         // Data rows
         foreach ($data as $row) {
-            fputcsv($output, [
+            $csvRow = $this->sanitizeCsvRow([
                 $row['tanggal'],
                 $row['lokasi'],
                 $row['curah_hujan'],
                 $row['sumber_data'],
                 $row['keterangan']
             ]);
+            fputcsv($output, $csvRow);
         }
         
         fclose($output);
@@ -861,8 +944,9 @@ class CurahHujanController extends Controller {
         try {
             $startYear = $_GET['start_year'] ?? (date('Y') - 4);
             $endYear = $_GET['end_year'] ?? date('Y');
+            $sourceFilters = $this->getSourceFilter($_GET['data_source'] ?? 'nasa');
             
-            $data = $this->model->getTrendAnalysis($startYear, $endYear);
+            $data = $this->model->getTrendAnalysis($startYear, $endYear, $sourceFilters);
             
             // Organize data by year for Chart.js
             $years = [];
@@ -909,7 +993,8 @@ class CurahHujanController extends Controller {
         
         try {
             $year = $_GET['year'] ?? date('Y');
-            $data = $this->model->getSeasonalPattern($year);
+            $sourceFilters = $this->getSourceFilter($_GET['data_source'] ?? 'nasa');
+            $data = $this->model->getSeasonalPattern($year, $sourceFilters);
             
             $labels = [];
             $values = [];
@@ -953,8 +1038,9 @@ class CurahHujanController extends Controller {
         try {
             $year = $_GET['year'] ?? date('Y');
             $threshold = $_GET['threshold'] ?? 2.0;
+            $sourceFilters = $this->getSourceFilter($_GET['data_source'] ?? 'nasa');
             
-            $data = $this->model->getAnomalies($year, $threshold);
+            $data = $this->model->getAnomalies($year, $threshold, $sourceFilters);
             
             echo json_encode([
                 'success' => true,
@@ -978,7 +1064,8 @@ class CurahHujanController extends Controller {
         
         try {
             $months = $_GET['months'] ?? 3;
-            $data = $this->model->getSimplePrediction($months);
+            $sourceFilters = $this->getSourceFilter($_GET['data_source'] ?? 'nasa');
+            $data = $this->model->getSimplePrediction($months, $sourceFilters);
             
             echo json_encode([
                 'success' => true,
@@ -1002,8 +1089,9 @@ class CurahHujanController extends Controller {
         try {
             $threshold = $_GET['threshold'] ?? 50.0;
             $days = $_GET['days'] ?? 7;
+            $sourceFilters = $this->getSourceFilter($_GET['data_source'] ?? 'nasa');
             
-            $alerts = $this->model->getAlerts($threshold, $days);
+            $alerts = $this->model->getAlerts($threshold, $days, $sourceFilters);
             
             echo json_encode([
                 'success' => true,
@@ -1028,8 +1116,16 @@ class CurahHujanController extends Controller {
         try {
             $year = $_GET['year'] ?? date('Y');
             $month = $_GET['month'] ?? date('n');
-            
-            $data = $this->model->getDailyData($year, $month);
+            $filters = [];
+            $dataSource = $_GET['data_source'] ?? 'nasa';
+            if ($dataSource === 'nasa' || $dataSource === 'nasa_power') {
+                $filters['sumber_data_like'] = '%NASA%';
+            } elseif ($dataSource === 'bmkg') {
+                $filters['sumber_data_like'] = '%BMKG%';
+            } elseif ($dataSource === 'simulation') {
+                $filters['sumber_data_like'] = '%Simulasi%';
+            }
+            $data = $this->model->getDailyData($year, $month, $filters);
             
             // Get days in month
             $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $month, $year);
@@ -1070,20 +1166,34 @@ class CurahHujanController extends Controller {
         try {
             $year = $_GET['year'] ?? date('Y');
             $month = $_GET['month'] ?? null;
+            $sourceFilters = $this->getSourceFilter($_GET['data_source'] ?? 'nasa');
             
-            $rainfallData = $this->model->getRainfallByLocation($year, $month);
+            $rainfallData = $this->model->getRainfallByLocation($year, $month, $sourceFilters);
             
-            // Try to get kecamatan coordinates if available
+            $db = Database::getInstance()->getConnection();
+            $coordStmt = $db->query(
+                "SELECT nama_kecamatan, kode, latitude, longitude
+                 FROM master_kecamatan
+                 WHERE latitude IS NOT NULL AND longitude IS NOT NULL"
+            );
+            $coordinates = [];
+            foreach ($coordStmt->fetchAll(PDO::FETCH_ASSOC) as $coord) {
+                $coordinates[strtolower(trim($coord['nama_kecamatan']))] = $coord;
+            }
+
             $mapData = [];
             foreach ($rainfallData as $row) {
+                $locationName = trim(explode(',', $row['lokasi'])[0]);
+                $coord = $coordinates[strtolower($locationName)] ?? null;
                 $mapData[] = [
                     'lokasi' => $row['lokasi'],
                     'rata_rata' => (float) $row['rata_rata'],
                     'total' => (float) $row['total'],
                     'maksimum' => (float) $row['maksimum'],
                     'jumlah_data' => (int) $row['jumlah_data'],
-                    'latitude' => null,
-                    'longitude' => null
+                    'latitude' => $coord ? (float) $coord['latitude'] : null,
+                    'longitude' => $coord ? (float) $coord['longitude'] : null,
+                    'kode_wilayah' => $coord['kode'] ?? null
                 ];
             }
             

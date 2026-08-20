@@ -127,7 +127,7 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif
 
   <div class="form-card">
     <div class="photo-section">
-      <label style="display:block;font-size:13px;font-weight:500;color:#555;margin-bottom:6px;">Foto</label>
+      <label style="display:block;font-size:13px;font-weight:500;color:#555;margin-bottom:6px;">Foto <span style="color:#c62828;">*</span></label>
       <label class="photo-btn" id="photoBtn">
         <span id="photoIcon">+</span>
         <span id="photoLabel">Ambil Foto / Pilih File</span>
@@ -137,7 +137,8 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif
         <img id="previewImg" src="" alt="Preview">
         <button type="button" class="remove-photo" id="removePhoto">&times;</button>
       </div>
-      <div class="error" id="fotoError" style="font-size:12px;color:#c62828;margin-top:4px;display:none;"></div>
+      <div style="font-size:11px;color:#777;margin-top:4px;">Wajib untuk Kirim Laporan. Draf tetap dapat disimpan tanpa foto.</div>
+      <div class="error" id="fotoError" role="alert" style="font-size:12px;color:#c62828;margin-top:4px;display:<?= !empty($errors['foto']) ? 'block' : 'none' ?>;"><?= \App\Core\Security::e($errors['foto'] ?? '') ?></div>
     </div>
   </div>
 
@@ -259,6 +260,9 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif
       this.value = '';
       return;
     }
+    foto.required = false;
+    foto.setCustomValidity('');
+    fotoError.textContent = '';
     fotoError.style.display = 'none';
 
     // Compress & preview
@@ -302,6 +306,7 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif
     photoBtn.className = 'photo-btn';
     photoIcon.textContent = '+';
     photoLabel.textContent = 'Ambil Foto / Pilih File';
+    foto.setCustomValidity('Foto laporan wajib disertakan sebelum laporan dapat dikirim.');
   });
 
   // Desa cascade
@@ -374,12 +379,29 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif
   // Submit handling
   btnDraft.addEventListener('click', function() {
     formAction.value = 'draft';
+    foto.required = false;
+    foto.setCustomValidity('');
     form.submit();
   });
 
   btnSubmit.addEventListener('click', function(e) {
     formAction.value = 'submit';
     var valid = true;
+
+    foto.required = true;
+    if (!foto.files || foto.files.length === 0) {
+      var photoMessage = 'Foto laporan wajib disertakan sebelum laporan dapat dikirim.';
+      foto.setCustomValidity(photoMessage);
+      fotoError.textContent = photoMessage;
+      fotoError.style.display = 'block';
+      alert(photoMessage);
+      foto.focus();
+      valid = false;
+    } else {
+      foto.setCustomValidity('');
+      fotoError.textContent = '';
+      fotoError.style.display = 'none';
+    }
 
     // Validate required fields
     if (!document.getElementById('tanggal').value) { markError('tanggal', 'Tanggal wajib diisi'); valid = false; }

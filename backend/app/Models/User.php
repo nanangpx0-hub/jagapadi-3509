@@ -41,10 +41,44 @@ class User extends Model
         return $stmt->execute([$newHash, $userId]);
     }
 
+    public static function resetPassword(int $userId, string $newHash): bool
+    {
+        $pdo = self::db();
+        $stmt = $pdo->prepare("UPDATE `users` SET `password` = ?, `must_change_password` = 1, `last_password_change_at` = NOW() WHERE `id` = ?");
+        return $stmt->execute([$newHash, $userId]);
+    }
+
+    public static function getAllByRole(): array
+    {
+        $pdo = self::db();
+        $stmt = $pdo->query("SELECT * FROM `users` ORDER BY `role`, `id`");
+        return $stmt->fetchAll();
+    }
+
     public static function markPasswordChanged(int $userId): bool
     {
         $pdo = self::db();
         $stmt = $pdo->prepare("UPDATE `users` SET `must_change_password` = 0, `last_password_change_at` = NOW() WHERE `id` = ?");
+        return $stmt->execute([$userId]);
+    }
+
+    public static function tokenVersion(int $userId): int
+    {
+        $pdo = self::db();
+        $stmt = $pdo->prepare("SELECT `token_version` FROM `users` WHERE `id` = ? LIMIT 1");
+        $stmt->execute([$userId]);
+        $ver = $stmt->fetchColumn();
+        return $ver !== false ? (int) $ver : 0;
+    }
+
+    /**
+     * Naikkan token_version user. Seluruh JWT lama (klaim `ver` lebih kecil)
+     * langsung tidak berlaku — dipakai saat perubahan password.
+     */
+    public static function bumpTokenVersion(int $userId): bool
+    {
+        $pdo = self::db();
+        $stmt = $pdo->prepare("UPDATE `users` SET `token_version` = `token_version` + 1 WHERE `id` = ?");
         return $stmt->execute([$userId]);
     }
 

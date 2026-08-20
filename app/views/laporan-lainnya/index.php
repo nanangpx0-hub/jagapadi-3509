@@ -8,19 +8,12 @@
                 <div class="card-tools">
                     <?php if(in_array($_SESSION['role'] ?? '', ['admin', 'operator', 'petugas'])): ?>
                     <a href="<?= BASE_URL ?>laporan-lainnya/create" class="btn btn-success btn-sm">
-                        <i class="fas fa-plus"></i> Buat Laporan Baru
+                        <i class="fas fa-plus"></i> Tambah Fenomena Lainnya
                     </a>
                     <?php endif; ?>
                 </div>
             </div>
             <div class="card-body">
-                <?php if($_SESSION['role'] ?? '' === 'petugas'): ?>
-                <div class="alert alert-info mb-3">
-                    <i class="fas fa-info-circle"></i>
-                    <strong>Mode Petugas:</strong> Anda hanya dapat melihat laporan yang Anda buat sendiri.
-                </div>
-                <?php endif; ?>
-
                 <!-- Filter Form -->
                 <form method="GET" action="<?= BASE_URL ?>laporan-lainnya" class="mb-3">
                     <div class="row">
@@ -41,6 +34,7 @@
                                 <option value="submitted" <?= ($status ?? '') === 'submitted' ? 'selected' : '' ?>>Submitted</option>
                                 <option value="verified" <?= ($status ?? '') === 'verified' ? 'selected' : '' ?>>Diverifikasi</option>
                                 <option value="rejected" <?= ($status ?? '') === 'rejected' ? 'selected' : '' ?>>Ditolak</option>
+                                <option value="archived" <?= ($status ?? '') === 'archived' ? 'selected' : '' ?>>Diarsipkan</option>
                             </select>
                         </div>
                         <div class="col-md-2">
@@ -56,6 +50,12 @@
                                     <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i></button>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <div class="custom-control custom-checkbox">
+                            <input type="checkbox" class="custom-control-input" id="includeDraftCheck" name="include_draft" value="true" <?= !empty($includeDraft) ? 'checked' : '' ?>>
+                            <label class="custom-control-label" for="includeDraftCheck">Sertakan laporan Draf</label>
                         </div>
                     </div>
                 </form>
@@ -86,7 +86,7 @@
                             <?php foreach($laporan as $item): ?>
                             <tr>
                                 <td class="text-center"><?= $no++ ?></td>
-                                <td><code><?= htmlspecialchars($item['kode_laporan']) ?></code></td>
+                                <td><code><?= $item['kode_laporan'] ? htmlspecialchars($item['kode_laporan']) : '—' ?></code></td>
                                 <td><?= htmlspecialchars($item['jenis_nama']) ?></td>
                                 <td><?= $item['tanggal_kejadian'] ? htmlspecialchars($item['tanggal_kejadian']) : '—' ?></td>
                                 <td><?= htmlspecialchars($item['nama_desa'] ?? '-') ?></td>
@@ -97,6 +97,7 @@
                                         'submitted' => ['primary', 'Submitted'],
                                         'verified' => ['success', 'Diverifikasi'],
                                         'rejected' => ['danger', 'Ditolak'],
+                                        'archived' => ['dark', 'Diarsipkan'],
                                     ];
                                     $sts = $statusMap[$item['status']] ?? ['secondary', $item['status']];
                                     ?>
@@ -109,7 +110,7 @@
                                         <a href="<?= BASE_URL ?>laporan-lainnya/show/<?= $item['id'] ?>" class="btn btn-info btn-sm" title="Lihat">
                                             <i class="fas fa-eye"></i>
                                         </a>
-                                        <?php if($item['status'] === 'draft'): ?>
+                                        <?php if(in_array($item['status'], ['draft', 'rejected'], true)): ?>
                                         <a href="<?= BASE_URL ?>laporan-lainnya/edit/<?= $item['id'] ?>" class="btn btn-warning btn-sm" title="Edit">
                                             <i class="fas fa-edit"></i>
                                         </a>
@@ -131,15 +132,54 @@
 
                 <!-- Pagination -->
                 <?php if($totalPages > 1): ?>
+                <?php
+                // Pagination dengan ellipsis: selalu tampilkan halaman 1 & terakhir,
+                // serta jendela ±2 halaman di sekitar halaman aktif
+                $windowStart = max(2, $page - 2);
+                $windowEnd = min($totalPages - 1, $page + 2);
+                $showLeftEllipsis = $windowStart > 2;
+                $showRightEllipsis = $windowEnd < $totalPages - 1;
+                $buildPageUrl = function (int $p) use ($status, $jenisId, $desaId, $dateFrom, $dateTo, $search) {
+                    return BASE_URL . 'laporan-lainnya?page=' . $p
+                        . '&status=' . urlencode($status ?? '')
+                        . '&jenis_id=' . urlencode($jenisId ?? '')
+                        . '&desa_id=' . urlencode($desaId ?? '')
+                        . '&date_from=' . urlencode($dateFrom ?? '')
+                        . '&date_to=' . urlencode($dateTo ?? '')
+                        . '&search=' . urlencode($search ?? '');
+                };
+                ?>
                 <nav aria-label="Page navigation">
                     <ul class="pagination justify-content-center">
-                        <?php for($p = 1; $p <= $totalPages; $p++): ?>
-                        <li class="page-item <?= $p == $page ? 'active' : '' ?>">
-                            <a class="page-link" href="<?= BASE_URL ?>laporan-lainnya?page=<?= $p ?>&status=<?= urlencode($status ?? '') ?>&jenis_id=<?= urlencode($jenisId ?? '') ?>&desa_id=<?= urlencode($desaId ?? '') ?>&date_from=<?= urlencode($dateFrom ?? '') ?>&date_to=<?= urlencode($dateTo ?? '') ?>&search=<?= urlencode($search ?? '') ?>">
-                                <?= $p ?>
+                        <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
+                            <a class="page-link" href="<?= $page > 1 ? $buildPageUrl($page - 1) : '#' ?>" aria-label="Previous">
+                                <span aria-hidden="true">&laquo;</span>
                             </a>
                         </li>
+                        <li class="page-item <?= $page == 1 ? 'active' : '' ?>">
+                            <a class="page-link" href="<?= $buildPageUrl(1) ?>">1</a>
+                        </li>
+                        <?php if($showLeftEllipsis): ?>
+                        <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+                        <?php endif; ?>
+                        <?php for($p = $windowStart; $p <= $windowEnd; $p++): ?>
+                        <li class="page-item <?= $p == $page ? 'active' : '' ?>">
+                            <a class="page-link" href="<?= $buildPageUrl($p) ?>"><?= $p ?></a>
+                        </li>
                         <?php endfor; ?>
+                        <?php if($showRightEllipsis): ?>
+                        <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+                        <?php endif; ?>
+                        <?php if($totalPages > 1): ?>
+                        <li class="page-item <?= $page == $totalPages ? 'active' : '' ?>">
+                            <a class="page-link" href="<?= $buildPageUrl($totalPages) ?>"><?= $totalPages ?></a>
+                        </li>
+                        <?php endif; ?>
+                        <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
+                            <a class="page-link" href="<?= $page < $totalPages ? $buildPageUrl($page + 1) : '#' ?>" aria-label="Next">
+                                <span aria-hidden="true">&raquo;</span>
+                            </a>
+                        </li>
                     </ul>
                 </nav>
                 <?php endif; ?>

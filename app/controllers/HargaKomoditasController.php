@@ -13,8 +13,8 @@ class HargaKomoditasController extends Controller {
     
     public function __construct() {
         require_once ROOT_PATH . '/app/models/HargaKomoditas.php';
+        require_once ROOT_PATH . '/app/core/CacheManager.php';
         $this->model = new HargaKomoditas();
-        $this->model->createTablesIfNotExist();
     }
     
     /**
@@ -31,7 +31,7 @@ class HargaKomoditasController extends Controller {
      * Check admin access
      */
     protected function checkAdmin() {
-        if ($_SESSION['role'] !== 'admin') {
+        if (($_SESSION['role'] ?? '') !== 'admin') {
             $_SESSION['error'] = 'Anda tidak memiliki akses ke halaman ini';
             header('Location: ' . BASE_URL . '/dashboard');
             exit;
@@ -54,16 +54,18 @@ class HargaKomoditasController extends Controller {
         ];
         
         // Get overall statistics
-        $data['statistics'] = $this->model->getOverallStats();
+        $defaultFilters = ['metode_data' => 'non_simulasi'];
+        $data['statistics'] = $this->model->getOverallStats($defaultFilters);
         
         // Get latest prices
-        $data['latestPrices'] = $this->model->getLatestPrices();
+        $data['latestPrices'] = $this->model->getLatestPrices($defaultFilters);
         
         // Get unread alerts count
         $data['unreadAlerts'] = $this->model->countUnreadAlerts();
         
         // Get recent data
         $data['recentData'] = $this->model->getAll([
+            'metode_data' => 'non_simulasi',
             'limit' => 10,
             'offset' => 0
         ]);
@@ -91,6 +93,7 @@ class HargaKomoditasController extends Controller {
             'lokasi' => $record['lokasi'],
             'kode_wilayah' => $record['kode_wilayah'] ?? null,
             'sumber_data' => $record['sumber_data'],
+            'metode_data' => $record['metode_data'] ?? 'manual',
             'keterangan' => $record['keterangan'] ?? null,
             'created_at' => $record['created_at'] ?? null
         ];
@@ -104,16 +107,9 @@ class HargaKomoditasController extends Controller {
         header('Content-Type: application/json');
         
         try {
-            $filters = [
-                'start_date' => $_GET['start_date'] ?? null,
-                'end_date' => $_GET['end_date'] ?? null,
-                'jenis_komoditas' => $_GET['jenis_komoditas'] ?? null,
-                'lokasi' => $_GET['lokasi'] ?? null,
-                'limit' => $_GET['limit'] ?? 50,
-                'offset' => $_GET['offset'] ?? 0
-            ];
-            
-            $filters = array_filter($filters, function($v) { return $v !== null && $v !== ''; });
+            $filters = $this->getRequestFilters();
+            $filters['limit'] = max(1, min(500, (int) ($_GET['limit'] ?? 50)));
+            $filters['offset'] = max(0, (int) ($_GET['offset'] ?? 0));
             
             $data = $this->model->getAll($filters);
             $total = $this->model->countAll($filters);
@@ -129,7 +125,7 @@ class HargaKomoditasController extends Controller {
                 'statistics' => $statistics,
                 'overall' => $overallStats
             ]);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             echo json_encode([
                 'success' => false,
                 'error' => $e->getMessage()
@@ -144,16 +140,29 @@ class HargaKomoditasController extends Controller {
     public function getChartData() {
         $this->checkAuth();
         header('Content-Type: application/json');
+
+        $cacheKey = 'stats_harga_komoditas_chart_' . md5($_SERVER['QUERY_STRING'] ?? '');
+        $cache = CacheManager::getInstance();
+        if ($cache->isAvailable()) {
+            $cached = $cache->get($cacheKey);
+            if ($cached !== null) {
+                echo $cached;
+                exit;
+            }
+            ob_start();
+        }
         
         try {
-            $type = $_GET['type'] ?? 'trend';
-            $days = $_GET['days'] ?? 30;
+            $type = (string) ($_GET['type'] ?? 'trend');
+            $days = max(1, min(366, (int) ($_GET['days'] ?? 30)));
+            $filters = $this->getRequestFilters();
             
             if ($type === 'trend') {
                 $endDate = date('Y-m-d');
                 $startDate = date('Y-m-d', strtotime("-{$days} days"));
                 
-                $data = $this->model->getTrendAnalysis($startDate, $endDate);
+                unset($filters['start_date'], $filters['end_date']);
+                $data = $this->model->getTrendAnalysis($startDate, $endDate, $filters);
                 
                 // Organize by commodity
                 $commodities = [];
@@ -188,7 +197,10 @@ class HargaKomoditasController extends Controller {
                         'label' => HargaKomoditas::getKomoditasLabel($kom),
                         'data' => $values,
                         'borderColor' => $colors[$kom] ?? 'rgb(153, 102, 255)',
-                        'backgroundColor' => str_replace('rgb', 'rgba', $colors[$kom] ?? 'rgb(153, 102, 255)') . ', 0.5)',
+                        'backgroundColor' => rtrim(
+                            str_replace('rgb(', 'rgba(', $colors[$kom] ?? 'rgb(153, 102, 255)'),
+                            ')'
+                        ) . ', 0.5)',
                         'tension' => 0.3,
                         'fill' => false
                     ];
@@ -201,7 +213,7 @@ class HargaKomoditasController extends Controller {
                 ]);
                 
             } elseif ($type === 'comparison') {
-                $data = $this->model->getPriceComparison(6);
+                $data = $this->model->getPriceComparison(6, $filters);
                 
                 $periods = [];
                 $gabahPrices = [];
@@ -249,11 +261,15 @@ class HargaKomoditasController extends Controller {
             } else {
                 echo json_encode(['success' => false, 'error' => 'Invalid chart type']);
             }
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             echo json_encode([
                 'success' => false,
                 'error' => $e->getMessage()
             ]);
+        }
+        if (isset($cache) && $cache->isAvailable()) {
+            $cache->set($cacheKey, ob_get_contents(), 300);
+            ob_end_flush();
         }
         exit;
     }
@@ -264,14 +280,20 @@ class HargaKomoditasController extends Controller {
     public function getStatistics() {
         $this->checkAuth();
         header('Content-Type: application/json');
+
+        $cacheKey = 'stats_harga_komoditas_stats_' . md5($_SERVER['QUERY_STRING'] ?? '');
+        $cache = CacheManager::getInstance();
+        if ($cache->isAvailable()) {
+            $cached = $cache->get($cacheKey);
+            if ($cached !== null) {
+                echo $cached;
+                exit;
+            }
+            ob_start();
+        }
         
         try {
-            $filters = [
-                'start_date' => $_GET['start_date'] ?? null,
-                'end_date' => $_GET['end_date'] ?? null
-            ];
-            
-            $filters = array_filter($filters, function($v) { return $v !== null && $v !== ''; });
+            $filters = $this->getRequestFilters();
             
             $statistics = $this->model->getStatistics($filters);
             $overallStats = $this->model->getOverallStats($filters);
@@ -281,11 +303,15 @@ class HargaKomoditasController extends Controller {
                 'statistics' => $statistics,
                 'overall' => $overallStats
             ]);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             echo json_encode([
                 'success' => false,
                 'error' => $e->getMessage()
             ]);
+        }
+        if (isset($cache) && $cache->isAvailable()) {
+            $cache->set($cacheKey, ob_get_contents(), 300);
+            ob_end_flush();
         }
         exit;
     }
@@ -339,7 +365,19 @@ class HargaKomoditasController extends Controller {
      */
     public function markAlertRead($id = null) {
         $this->checkAuth();
+        $this->checkAdmin();
         header('Content-Type: application/json');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Method not allowed']);
+            exit;
+        }
+        if (!Security::validateCsrfToken($_POST['csrf_token'] ?? '')) {
+            http_response_code(419);
+            echo json_encode(['success' => false, 'error' => 'Token keamanan tidak valid']);
+            exit;
+        }
         
         try {
             if ($id) {
@@ -352,7 +390,7 @@ class HargaKomoditasController extends Controller {
                 'success' => true,
                 'message' => 'Alert ditandai sudah dibaca'
             ]);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             echo json_encode([
                 'success' => false,
                 'error' => $e->getMessage()
@@ -370,10 +408,13 @@ class HargaKomoditasController extends Controller {
         
         try {
             $komoditas = $_GET['komoditas'] ?? null;
+            if ($komoditas !== null && !array_key_exists($komoditas, HargaKomoditas::getKomoditasTypes())) {
+                throw new InvalidArgumentException('Jenis komoditas tidak valid');
+            }
             
-            $priceData = $this->model->getPriceByLocation($komoditas);
+            $filters = $this->getRequestFilters();
+            $priceData = $this->model->getPriceByLocation($komoditas, $filters);
             
-            // Add coordinates (randomized sekitar pusat Jember; master_kecamatan tidak menyimpan koordinat)
             $mapData = [];
             foreach ($priceData as $row) {
                 $mapData[] = [
@@ -384,8 +425,8 @@ class HargaKomoditasController extends Controller {
                     'terendah' => (float)$row['terendah'],
                     'rata_rata_formatted' => HargaKomoditas::formatHarga($row['rata_rata']),
                     'jumlah_data' => (int)$row['jumlah_data'],
-                    'latitude' => -8.1706 + (rand(-50, 50) / 1000), // Slight variation
-                    'longitude' => 113.7003 + (rand(-50, 50) / 1000)
+                    'latitude' => (float) $row['latitude'],
+                    'longitude' => (float) $row['longitude']
                 ];
             }
             
@@ -393,7 +434,7 @@ class HargaKomoditasController extends Controller {
                 'success' => true,
                 'data' => $mapData
             ]);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             echo json_encode([
                 'success' => false,
                 'error' => $e->getMessage()
@@ -409,9 +450,18 @@ class HargaKomoditasController extends Controller {
         $this->checkAuth();
         $this->checkAdmin();
         
-        header('Content-Type: application/json');
+        ob_start();
+        header('Content-Type: application/json; charset=utf-8');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            ob_end_clean();
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Method not allowed']);
+            exit;
+        }
         
         if (!isset($_POST['csrf_token']) || !Security::validateCsrfToken($_POST['csrf_token'])) {
+            ob_end_clean();
             echo json_encode(['success' => false, 'error' => 'Token keamanan tidak valid']);
             exit;
         }
@@ -423,20 +473,38 @@ class HargaKomoditasController extends Controller {
             $options = [
                 'year' => $_POST['year'] ?? date('Y'),
                 'month' => $_POST['month'] ?? date('m'),
-                'force_simulation' => true
+                'source' => $_POST['source'] ?? $_POST['data_source'] ?? 'siskaperbapo',
+                'force_simulation' => isset($_POST['force_simulation'])
             ];
             
             $result = $scraper->run($options);
+
+            if ($result['records_inserted'] > 0 || $result['records_updated'] > 0) {
+                $this->invalidateStatsCache(['stats_harga_komoditas_']);
+            }
             
-            echo json_encode([
+            $jsonOutput = json_encode([
                 'success' => $result['success'],
                 'message' => $result['message'],
                 'source' => $result['source'],
+                'no_data' => $result['no_data'],
                 'records_success' => $result['records_success'],
+                'records_inserted' => $result['records_inserted'],
+                'records_updated' => $result['records_updated'],
+                'records_skipped' => $result['records_skipped'],
                 'records_failed' => $result['records_failed'],
+                'errors' => $result['errors'],
                 'execution_time' => $result['execution_time']
             ]);
-        } catch (Exception $e) {
+
+            if (ob_get_length()) {
+                ob_end_clean();
+            }
+            echo $jsonOutput;
+        } catch (Throwable $e) {
+            if (ob_get_length()) {
+                ob_end_clean();
+            }
             echo json_encode([
                 'success' => false,
                 'error' => $e->getMessage()
@@ -464,6 +532,7 @@ class HargaKomoditasController extends Controller {
             exit;
         }
         
+        $tempFile = null;
         try {
             if (!isset($_FILES['excel_file']) || $_FILES['excel_file']['error'] !== UPLOAD_ERR_OK) {
                 $errorMessages = [
@@ -480,11 +549,7 @@ class HargaKomoditasController extends Controller {
             }
             
             $file = $_FILES['excel_file'];
-            $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-            
-            if (!in_array($extension, ['xlsx', 'xls', 'csv'])) {
-                throw new Exception('Format file tidak didukung. Gunakan xlsx, xls, atau csv');
-            }
+            $extension = $this->validateImportUpload($file);
             
             $uploadDir = ROOT_PATH . '/storage/uploads/temp/';
             if (!is_dir($uploadDir)) {
@@ -501,11 +566,9 @@ class HargaKomoditasController extends Controller {
             $importService = new ExcelImportService();
             $result = $importService->import($tempFile, 'harga_komoditas');
             
-            if (file_exists($tempFile)) {
-                unlink($tempFile);
-            }
-            
             if ($result['success']) {
+                $this->invalidateStatsCache(['stats_harga_komoditas_']);
+                $this->model->rebuildAlerts();
                 $this->model->logActivity('import_excel', 'success', 'Import data harga komoditas dari Excel', [
                     'processed' => $result['totalProcessed'],
                     'success' => $result['successCount'],
@@ -515,11 +578,15 @@ class HargaKomoditasController extends Controller {
             
             echo json_encode($result);
             
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             echo json_encode([
                 'success' => false,
                 'error' => $e->getMessage()
             ]);
+        } finally {
+            if (is_string($tempFile) && is_file($tempFile)) {
+                unlink($tempFile);
+            }
         }
         exit;
     }
@@ -537,18 +604,20 @@ class HargaKomoditasController extends Controller {
             echo json_encode(['success' => false, 'error' => 'Method not allowed']);
             exit;
         }
+
+        if (!Security::validateCsrfToken($_POST['csrf_token'] ?? '')) {
+            echo json_encode(['success' => false, 'error' => 'Token keamanan tidak valid']);
+            exit;
+        }
         
+        $tempFile = null;
         try {
             if (!isset($_FILES['excel_file']) || $_FILES['excel_file']['error'] !== UPLOAD_ERR_OK) {
                 throw new Exception('Tidak ada file yang diupload');
             }
             
             $file = $_FILES['excel_file'];
-            $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-            
-            if (!in_array($extension, ['xlsx', 'xls', 'csv'])) {
-                throw new Exception('Format file tidak didukung');
-            }
+            $extension = $this->validateImportUpload($file);
             
             $uploadDir = ROOT_PATH . '/storage/uploads/temp/';
             if (!is_dir($uploadDir)) {
@@ -565,15 +634,17 @@ class HargaKomoditasController extends Controller {
             $importService = new ExcelImportService();
             $preview = $importService->generatePreview($tempFile, 10);
             
-            $_SESSION['import_temp_file'] = $tempFile;
-            
             echo json_encode($preview);
             
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             echo json_encode([
                 'success' => false,
                 'error' => $e->getMessage()
             ]);
+        } finally {
+            if (is_string($tempFile) && is_file($tempFile)) {
+                unlink($tempFile);
+            }
         }
         exit;
     }
@@ -603,6 +674,11 @@ class HargaKomoditasController extends Controller {
     public function store() {
         $this->checkAuth();
         $this->checkAdmin();
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            exit('Method not allowed');
+        }
         
         if (!isset($_POST['csrf_token']) || !Security::validateCsrfToken($_POST['csrf_token'])) {
             $_SESSION['error'] = 'Token keamanan tidak valid';
@@ -618,24 +694,15 @@ class HargaKomoditasController extends Controller {
                 'lokasi' => $_POST['lokasi'] ?? 'Jember',
                 'kode_wilayah' => $_POST['kode_wilayah'] ?? '35.09',
                 'sumber_data' => 'Manual',
+                'metode_data' => 'manual',
                 'keterangan' => $_POST['keterangan'] ?? null
             ];
-            
-            if (empty($data['tanggal'])) {
-                throw new Exception('Tanggal harus diisi');
-            }
-            
-            if (empty($data['jenis_komoditas'])) {
-                throw new Exception('Jenis komoditas harus dipilih');
-            }
-            
-            if (!is_numeric($data['harga']) || $data['harga'] <= 0) {
-                throw new Exception('Harga harus lebih dari 0');
-            }
+            $this->validatePriceInput($data);
             
             $result = $this->model->insert($data);
             
             if ($result) {
+                $this->invalidateStatsCache(['stats_harga_komoditas_']);
                 $this->model->logActivity('manual_entry', 'success', 'Data harga ditambahkan', [
                     'komoditas' => $data['jenis_komoditas'],
                     'harga' => $data['harga']
@@ -645,7 +712,7 @@ class HargaKomoditasController extends Controller {
             } else {
                 throw new Exception('Gagal menyimpan data');
             }
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             $_SESSION['error'] = $e->getMessage();
         }
         
@@ -694,6 +761,12 @@ class HargaKomoditasController extends Controller {
         $this->checkAuth();
         $this->checkAdmin();
         header('Content-Type: application/json');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Method not allowed']);
+            exit;
+        }
         
         if (!$id) {
             echo json_encode(['success' => false, 'error' => 'ID tidak valid']);
@@ -706,23 +779,27 @@ class HargaKomoditasController extends Controller {
         }
         
         try {
+            $existing = $this->model->getById((int) $id);
+            if (!$existing) {
+                throw new RuntimeException('Data tidak ditemukan');
+            }
             $data = [
                 'tanggal' => $_POST['tanggal'] ?? null,
                 'jenis_komoditas' => $_POST['jenis_komoditas'] ?? null,
                 'harga' => $_POST['harga'] ?? 0,
                 'lokasi' => $_POST['lokasi'] ?? 'Jember',
                 'kode_wilayah' => $_POST['kode_wilayah'] ?? '35.09',
-                'sumber_data' => $_POST['sumber_data'] ?? 'Manual',
+                'satuan' => $existing['satuan'] ?? 'Rp/kg',
+                'sumber_data' => $existing['sumber_data'],
+                'metode_data' => $existing['metode_data'] ?? 'manual',
                 'keterangan' => $_POST['keterangan'] ?? null
             ];
-            
-            if (empty($data['tanggal']) || empty($data['jenis_komoditas']) || $data['harga'] <= 0) {
-                throw new Exception('Data tidak lengkap atau tidak valid');
-            }
+            $this->validatePriceInput($data);
             
             $result = $this->model->update($id, $data);
             
             if ($result) {
+                $this->invalidateStatsCache(['stats_harga_komoditas_']);
                 echo json_encode([
                     'success' => true,
                     'message' => 'Data berhasil diperbarui'
@@ -730,7 +807,7 @@ class HargaKomoditasController extends Controller {
             } else {
                 throw new Exception('Gagal memperbarui data');
             }
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             echo json_encode([
                 'success' => false,
                 'error' => $e->getMessage()
@@ -746,6 +823,12 @@ class HargaKomoditasController extends Controller {
         $this->checkAuth();
         $this->checkAdmin();
         header('Content-Type: application/json');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Method not allowed']);
+            exit;
+        }
         
         if (!$id) {
             echo json_encode(['success' => false, 'error' => 'ID tidak valid']);
@@ -759,12 +842,15 @@ class HargaKomoditasController extends Controller {
         
         try {
             $result = $this->model->delete($id);
+            if ($result) {
+                $this->invalidateStatsCache(['stats_harga_komoditas_']);
+            }
             
             echo json_encode([
                 'success' => $result,
                 'message' => $result ? 'Data berhasil dihapus' : 'Gagal menghapus data'
             ]);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             echo json_encode([
                 'success' => false,
                 'error' => $e->getMessage()
@@ -777,6 +863,7 @@ class HargaKomoditasController extends Controller {
      * Delete multiple records
      */
     public function deleteMultiple() {
+        $this->checkAuth();
         $this->checkAdmin();
         header('Content-Type: application/json');
         
@@ -796,12 +883,9 @@ class HargaKomoditasController extends Controller {
                 throw new Exception('Tidak ada data yang dipilih');
             }
             
-            $deleted = 0;
-            foreach ($ids as $id) {
-                $id = intval($id);
-                if ($id > 0 && $this->model->delete($id)) {
-                    $deleted++;
-                }
+            $deleted = $this->model->deleteMultiple($ids);
+            if ($deleted > 0) {
+                $this->invalidateStatsCache(['stats_harga_komoditas_']);
             }
             
             echo json_encode([
@@ -810,7 +894,7 @@ class HargaKomoditasController extends Controller {
                 'message' => "Berhasil menghapus {$deleted} data"
             ]);
             
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             echo json_encode(['success' => false, 'error' => $e->getMessage()]);
         }
     }
@@ -821,13 +905,7 @@ class HargaKomoditasController extends Controller {
     public function export() {
         $this->checkAuth();
         
-        $filters = [
-            'start_date' => $_GET['start_date'] ?? null,
-            'end_date' => $_GET['end_date'] ?? null,
-            'jenis_komoditas' => $_GET['jenis_komoditas'] ?? null
-        ];
-        
-        $filters = array_filter($filters, function($v) { return $v !== null && $v !== ''; });
+        $filters = $this->getRequestFilters();
         
         $data = $this->model->getAll($filters);
         
@@ -844,21 +922,113 @@ class HargaKomoditasController extends Controller {
         fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
         
         // Header row
-        fputcsv($output, ['Tanggal', 'Komoditas', 'Harga (Rp/kg)', 'Lokasi', 'Sumber Data', 'Keterangan']);
+        fputcsv($output, ['Tanggal', 'Komoditas', 'Harga (Rp/kg)', 'Lokasi', 'Sumber Data', 'Metode Data', 'Keterangan']);
         
         // Data rows
         foreach ($data as $row) {
-            fputcsv($output, [
+            $csvRow = $this->sanitizeCsvRow([
                 $row['tanggal'],
                 HargaKomoditas::getKomoditasLabel($row['jenis_komoditas']),
                 $row['harga'],
                 $row['lokasi'],
                 $row['sumber_data'],
+                $row['metode_data'] ?? 'manual',
                 $row['keterangan']
             ]);
+            fputcsv($output, $csvRow);
         }
         
         fclose($output);
         exit;
     }
+
+    /**
+     * Semua endpoint tabel/statistik/ekspor memakai penyusun filter yang sama.
+     * Default non-simulasi mencegah data sintetis mendominasi analisis tanpa
+     * menghilangkan akses pengguna ke data simulasi melalui filter eksplisit.
+     */
+    private function getRequestFilters(): array {
+        $filters = [
+            'start_date' => $_GET['start_date'] ?? null,
+            'end_date' => $_GET['end_date'] ?? null,
+            'jenis_komoditas' => $_GET['jenis_komoditas'] ?? null,
+            'lokasi' => $_GET['lokasi'] ?? null,
+            'sumber_data' => $_GET['sumber_data'] ?? null,
+            'metode_data' => $_GET['metode_data'] ?? 'non_simulasi'
+        ];
+        $filters = array_filter($filters, static fn($value) => $value !== null && $value !== '');
+
+        foreach (['start_date', 'end_date'] as $field) {
+            if (!isset($filters[$field])) {
+                continue;
+            }
+            $date = DateTimeImmutable::createFromFormat('!Y-m-d', (string) $filters[$field]);
+            if ($date === false || $date->format('Y-m-d') !== $filters[$field]) {
+                throw new InvalidArgumentException('Format tanggal filter tidak valid');
+            }
+        }
+        if (isset($filters['start_date'], $filters['end_date'])
+            && $filters['start_date'] > $filters['end_date']) {
+            throw new InvalidArgumentException('Tanggal mulai tidak boleh melewati tanggal akhir');
+        }
+
+        $commodity = (string) ($filters['jenis_komoditas'] ?? '');
+        $allowedCommodities = array_merge(['', 'gabah', 'beras'], array_keys(HargaKomoditas::getKomoditasTypes()));
+        if (!in_array($commodity, $allowedCommodities, true)) {
+            throw new InvalidArgumentException('Jenis komoditas tidak valid');
+        }
+        $allowedMethods = ['non_simulasi', 'semua', 'aktual', 'estimasi', 'simulasi', 'manual'];
+        if (!in_array($filters['metode_data'] ?? 'non_simulasi', $allowedMethods, true)) {
+            throw new InvalidArgumentException('Metode data tidak valid');
+        }
+        if (isset($filters['lokasi']) && mb_strlen((string) $filters['lokasi']) > 100) {
+            throw new InvalidArgumentException('Filter lokasi terlalu panjang');
+        }
+        if (isset($filters['sumber_data']) && mb_strlen((string) $filters['sumber_data']) > 100) {
+            throw new InvalidArgumentException('Filter sumber terlalu panjang');
+        }
+        return $filters;
+    }
+
+    private function validatePriceInput(array &$data): void {
+        $date = DateTimeImmutable::createFromFormat('!Y-m-d', (string) ($data['tanggal'] ?? ''));
+        if ($date === false || $date->format('Y-m-d') !== (string) ($data['tanggal'] ?? '')) {
+            throw new InvalidArgumentException('Tanggal tidak valid');
+        }
+        if (!array_key_exists((string) ($data['jenis_komoditas'] ?? ''), HargaKomoditas::getKomoditasTypes())) {
+            throw new InvalidArgumentException('Jenis komoditas tidak valid');
+        }
+        if (!is_numeric($data['harga'] ?? null)) {
+            throw new InvalidArgumentException('Harga harus berupa angka');
+        }
+        $data['harga'] = (float) $data['harga'];
+        if ($data['harga'] <= 0 || $data['harga'] > 100000) {
+            throw new InvalidArgumentException('Harga harus antara Rp1 dan Rp100.000 per kg');
+        }
+        $data['lokasi'] = trim((string) ($data['lokasi'] ?? 'Jember'));
+        if ($data['lokasi'] === '' || mb_strlen($data['lokasi']) > 100) {
+            throw new InvalidArgumentException('Lokasi tidak valid');
+        }
+        $data['keterangan'] = trim((string) ($data['keterangan'] ?? '')) ?: null;
+    }
+
+    private function validateImportUpload(array $file): string {
+        if ((int) ($file['size'] ?? 0) <= 0 || (int) $file['size'] > 10 * 1024 * 1024) {
+            throw new InvalidArgumentException('Ukuran file harus antara 1 byte dan 10 MB');
+        }
+        $extension = strtolower(pathinfo((string) ($file['name'] ?? ''), PATHINFO_EXTENSION));
+        if (!in_array($extension, ['xlsx', 'csv'], true)) {
+            throw new InvalidArgumentException('Format file tidak didukung. Gunakan xlsx atau csv');
+        }
+        $finfo = new finfo(FILEINFO_MIME_TYPE);
+        $mime = $finfo->file((string) $file['tmp_name']);
+        $allowedMimes = $extension === 'xlsx'
+            ? ['application/zip', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/octet-stream']
+            : ['text/plain', 'text/csv', 'application/csv', 'application/vnd.ms-excel'];
+        if (!in_array($mime, $allowedMimes, true)) {
+            throw new InvalidArgumentException('Isi file tidak sesuai dengan ekstensi');
+        }
+        return $extension;
+    }
+
 }

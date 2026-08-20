@@ -15,6 +15,20 @@ class AuthController extends Controller {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Validate CSRF token
             $token = $_POST['csrf_token'] ?? '';
+
+            // Pre-check: validate token exists in session before comparing.
+            // If session token is missing, the session was likely lost
+            // (e.g., server-side garbage collection, browser tab inactivity,
+            // or session cookie not persisted across requests).
+            // This prevents false-positive CSRF violations on session loss.
+            if (!isset($_SESSION['csrf_token'])) {
+                Security::logSecurityEvent('SESSION_LOST', 'Session absent during login POST - user needs to reload login page', null);
+                // Regenerate session ID to obtain a clean session
+                session_regenerate_id(true);
+                $_SESSION['error'] = 'Sesi Anda telah berakhir. Silakan muat ulang halaman dan coba lagi.';
+                $this->redirect('auth/login');
+            }
+
             if (!Security::validateCsrfToken($token)) {
                 Security::logSecurityEvent('CSRF_VIOLATION', 'Invalid CSRF token on login', null);
                 $_SESSION['error'] = 'Token keamanan tidak valid. Silakan coba lagi.';
@@ -171,6 +185,11 @@ class AuthController extends Controller {
             }
         }
 
+        // Cleanup any pending temporary upload files before destroying session
+        if (isset($_SESSION['import_temp_file']) && file_exists($_SESSION['import_temp_file'])) {
+            @unlink($_SESSION['import_temp_file']);
+        }
+        
         Security::destroySession();
         $this->redirect('auth/login');
     }

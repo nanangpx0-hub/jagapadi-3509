@@ -39,7 +39,7 @@ class ExportController extends Controller {
         
         // Data
         foreach ($laporan as $row) {
-            fputcsv($output, [
+            $csvRow = $this->sanitizeCsvRow([
                 $row['id'] ?? '',
                 $row['tanggal'] ?? '',
                 $row['kode_opt'] ?? '',
@@ -55,6 +55,7 @@ class ExportController extends Controller {
                 $row['pelapor_nama'] ?? '',
                 $row['catatan'] ?? ''
             ]);
+            fputcsv($output, $csvRow);
         }
         
         fclose($output);

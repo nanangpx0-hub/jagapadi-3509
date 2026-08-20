@@ -25,11 +25,22 @@ class AuthController extends Controller
 
     public function login(): void
     {
+        $expiredReason = $_GET['reason'] ?? '';
+        if ($expiredReason === 'expired' && empty($_SESSION['error'])) {
+            $_SESSION['error'] = 'Sesi Anda berakhir karena tidak aktif. Silakan login kembali.';
+        }
+
         $username = Request::input('username', '');
         $password = Request::input('password', '');
 
         if ($username === '' || $password === '') {
             $_SESSION['flash_error'] = 'Username dan password harus diisi.';
+            header('Location: /login');
+            return;
+        }
+
+        if (Security::checkBruteForce('login_' . $username, 5, 900)) {
+            $_SESSION['error'] = 'Terlalu banyak percobaan login. Coba lagi dalam 15 menit.';
             header('Location: /login');
             return;
         }
@@ -61,6 +72,8 @@ class AuthController extends Controller
         $_SESSION['login_at'] = time();
 
         ActivityLog::log((int) $user['id'], 'login_success', 'users', (int) $user['id'], 'Login web berhasil');
+
+        Security::clearBruteForce('login_' . $username);
 
         if ($_SESSION['must_change_password']) {
             $_SESSION['flash_warning'] = 'Anda harus mengganti password sebelum melanjutkan.';

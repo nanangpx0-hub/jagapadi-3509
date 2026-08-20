@@ -13,6 +13,7 @@ class KecepatanAnginController extends Controller {
     
     public function __construct() {
         require_once ROOT_PATH . '/app/models/KecepatanAngin.php';
+        require_once ROOT_PATH . '/app/core/CacheManager.php';
         $this->model = new KecepatanAngin();
         
         // Ensure tables exist
@@ -33,11 +34,20 @@ class KecepatanAnginController extends Controller {
      * Check admin access
      */
     protected function checkAdmin() {
-        if ($_SESSION['role'] !== 'admin') {
+        if (($_SESSION['role'] ?? '') !== 'admin') {
             $_SESSION['error'] = 'Anda tidak memiliki akses ke halaman ini';
             header('Location: ' . BASE_URL . '/dashboard');
             exit;
         }
+    }
+
+    private function getSourceFilter(?string $source): array {
+        return match ($source) {
+            'openmeteo' => ['sumber_data_like' => '%Open-Meteo%'],
+            'simulation' => ['sumber_data_like' => '%Simulasi%'],
+            'all' => [],
+            default => ['sumber_data_like' => '%NASA%'],
+        };
     }
     
     /**
@@ -45,26 +55,40 @@ class KecepatanAnginController extends Controller {
      */
     public function index() {
         $this->checkAuth();
-        
+
+        $selectedYear = filter_var($_GET['year'] ?? date('Y'), FILTER_VALIDATE_INT);
+        $selectedYear = $selectedYear && $selectedYear >= 2000 && $selectedYear <= (int) date('Y')
+            ? $selectedYear
+            : (int) date('Y');
+        $selectedMonth = filter_var($_GET['month'] ?? null, FILTER_VALIDATE_INT);
+        $selectedMonth = $selectedMonth && $selectedMonth >= 1 && $selectedMonth <= 12
+            ? $selectedMonth
+            : null;
+        $selectedSource = in_array($_GET['data_source'] ?? 'nasa', ['nasa', 'openmeteo', 'simulation', 'all'], true)
+            ? ($_GET['data_source'] ?? 'nasa')
+            : 'nasa';
+        $filters = array_merge(['year' => $selectedYear], $this->getSourceFilter($selectedSource));
+        if ($selectedMonth !== null) {
+            $filters['month'] = $selectedMonth;
+        }
+
         $data = [
             'title' => 'Kecepatan Angin - JAGAPADI',
             'page_title' => 'Data Kecepatan Angin Kabupaten Jember',
             'availableYears' => $this->model->getAvailableYears(),
-            'currentYear' => date('Y'),
-            'currentMonth' => date('m')
+            'currentYear' => $selectedYear,
+            'currentMonth' => $selectedMonth,
+            'currentSource' => $selectedSource
         ];
         
-        // Get statistics for current year
-        $data['statistics'] = $this->model->getStatistics(['year' => date('Y')]);
+        $data['statistics'] = $this->model->getStatistics($filters);
         
-        // Get monthly data for chart
-        $data['monthlyData'] = $this->model->getMonthlyAverage(date('Y'));
+        $data['monthlyData'] = $this->model->getMonthlyAverage($selectedYear, $this->getSourceFilter($selectedSource));
         
-        // Get recent data for table
-        $data['recentData'] = $this->model->getAll([
+        $data['recentData'] = $this->model->getAll(array_merge($filters, [
             'limit' => 10,
             'offset' => 0
-        ]);
+        ]));
         
         // Get logs for admin
         if ($_SESSION['role'] === 'admin') {
@@ -129,9 +153,11 @@ class KecepatanAnginController extends Controller {
                 'offset' => $_GET['offset'] ?? 0
             ];
             
-            $dataSource = $_GET['data_source'] ?? '';
+            $dataSource = $_GET['data_source'] ?? 'nasa';
             if ($dataSource === 'openmeteo') {
                 $filters['sumber_data_like'] = '%Open-Meteo%';
+            } elseif ($dataSource === 'nasa' || $dataSource === 'nasa_power') {
+                $filters['sumber_data_like'] = '%NASA%';
             } elseif ($dataSource === 'simulation') {
                 $filters['sumber_data_like'] = '%Simulasi%';
             }
@@ -170,13 +196,25 @@ class KecepatanAnginController extends Controller {
     public function getChartData() {
         $this->checkAuth();
         header('Content-Type: application/json');
+
+        $cacheKey = 'stats_kecepatan_angin_chart_' . md5($_SERVER['QUERY_STRING'] ?? '');
+        $cache = CacheManager::getInstance();
+        if ($cache->isAvailable()) {
+            $cached = $cache->get($cacheKey);
+            if ($cached !== null) {
+                echo $cached;
+                exit;
+            }
+            ob_start();
+        }
         
         try {
             $type = $_GET['type'] ?? 'monthly';
             $year = $_GET['year'] ?? date('Y');
+            $sourceFilters = $this->getSourceFilter($_GET['data_source'] ?? 'nasa');
             
             if ($type === 'monthly') {
-                $data = $this->model->getMonthlyAverage($year);
+                $data = $this->model->getMonthlyAverage($year, $sourceFilters);
                 
                 $labels = [];
                 $avgValues = [];
@@ -217,7 +255,7 @@ class KecepatanAnginController extends Controller {
                     ]
                 ]);
             } elseif ($type === 'yearly') {
-                $data = $this->model->getYearlySummary(5);
+                $data = $this->model->getYearlySummary(5, $sourceFilters);
                 
                 $labels = [];
                 $avgValues = [];
@@ -254,6 +292,10 @@ class KecepatanAnginController extends Controller {
                 'error' => $e->getMessage()
             ]);
         }
+        if (isset($cache) && $cache->isAvailable()) {
+            $cache->set($cacheKey, ob_get_contents(), 300);
+            ob_end_flush();
+        }
         exit;
     }
     
@@ -263,12 +305,34 @@ class KecepatanAnginController extends Controller {
     public function getStatistics() {
         $this->checkAuth();
         header('Content-Type: application/json');
+
+        $cacheKey = 'stats_kecepatan_angin_stats_' . md5($_SERVER['QUERY_STRING'] ?? '');
+        $cache = CacheManager::getInstance();
+        if ($cache->isAvailable()) {
+            $cached = $cache->get($cacheKey);
+            if ($cached !== null) {
+                echo $cached;
+                exit;
+            }
+            ob_start();
+        }
         
         try {
             $filters = [
                 'year' => $_GET['year'] ?? null,
-                'month' => $_GET['month'] ?? null
+                'month' => $_GET['month'] ?? null,
+                'start_date' => $_GET['start_date'] ?? null,
+                'end_date' => $_GET['end_date'] ?? null
             ];
+
+            $dataSource = $_GET['data_source'] ?? 'nasa';
+            if ($dataSource === 'nasa' || $dataSource === 'nasa_power') {
+                $filters['sumber_data_like'] = '%NASA%';
+            } elseif ($dataSource === 'openmeteo') {
+                $filters['sumber_data_like'] = '%Open-Meteo%';
+            } elseif ($dataSource === 'simulation') {
+                $filters['sumber_data_like'] = '%Simulasi%';
+            }
             
             $filters = array_filter($filters, function($v) { return $v !== null; });
             
@@ -284,6 +348,10 @@ class KecepatanAnginController extends Controller {
                 'error' => $e->getMessage()
             ]);
         }
+        if (isset($cache) && $cache->isAvailable()) {
+            $cache->set($cacheKey, ob_get_contents(), 300);
+            ob_end_flush();
+        }
         exit;
     }
     
@@ -293,10 +361,14 @@ class KecepatanAnginController extends Controller {
     public function runScraper() {
         $this->checkAuth();
         $this->checkAdmin();
+        $this->requireRequestMethod(['POST']);
         
-        header('Content-Type: application/json');
+        ob_start();
+        header('Content-Type: application/json; charset=utf-8');
         
+        // Verify CSRF token
         if (!isset($_POST['csrf_token']) || !Security::validateCsrfToken($_POST['csrf_token'])) {
+            ob_end_clean();
             echo json_encode(['success' => false, 'error' => 'Token keamanan tidak valid']);
             exit;
         }
@@ -308,12 +380,16 @@ class KecepatanAnginController extends Controller {
             $options = [
                 'year' => $_POST['year'] ?? date('Y'),
                 'month' => $_POST['month'] ?? date('m'),
+                'source' => $_POST['source'] ?? $_POST['data_source'] ?? 'nasa',
                 'force_simulation' => isset($_POST['force_simulation'])
             ];
             
             $result = $scraper->run($options);
+            if ($result['success']) {
+                $this->invalidateStatsCache(['stats_kecepatan_angin_']);
+            }
             
-            echo json_encode([
+            $jsonOutput = json_encode([
                 'success' => $result['success'],
                 'message' => $result['message'],
                 'source' => $result['source'],
@@ -321,7 +397,91 @@ class KecepatanAnginController extends Controller {
                 'records_failed' => $result['records_failed'],
                 'execution_time' => $result['execution_time']
             ]);
+
+            if (ob_get_length()) {
+                ob_end_clean();
+            }
+            echo $jsonOutput;
         } catch (Exception $e) {
+            if (ob_get_length()) {
+                ob_end_clean();
+            }
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+        exit;
+    }
+
+    /**
+     * Endpoint terdedikasi NASA POWER API untuk kecepatan angin
+     */
+    public function fetch_nasa_kecepatan_angin() {
+        $this->checkAuth();
+        $this->checkAdmin();
+        $this->requireRequestMethod(['POST']);
+        
+        ob_start();
+        header('Content-Type: application/json; charset=utf-8');
+        
+        if (!isset($_POST['csrf_token']) || !Security::validateCsrfToken($_POST['csrf_token'])) {
+            ob_end_clean();
+            echo json_encode(['success' => false, 'error' => 'Token keamanan tidak valid']);
+            exit;
+        }
+        
+        try {
+            require_once ROOT_PATH . '/app/services/KecepatanAnginScraper.php';
+            $scraper = new KecepatanAnginScraper();
+            
+            $year = $_POST['year'] ?? date('Y');
+            $month = $_POST['month'] ?? date('m');
+            
+            $data = $scraper->fetch_nasa_kecepatan_angin($year, $month);
+            
+            if (!empty($data)) {
+                $successCount = 0;
+                $failedCount = 0;
+                foreach ($data as $rec) {
+                    try {
+                        $this->model->insertUpsert($rec);
+                        $successCount++;
+                    } catch (Exception $ex) {
+                        $failedCount++;
+                    }
+                }
+                $this->invalidateStatsCache(['stats_kecepatan_angin_']);
+                
+                $this->model->logActivity('fetch_nasa_wind', 'success', "NASA POWER API: Berhasil mengambil {$successCount} data kecepatan angin", [
+                    'processed' => count($data),
+                    'success' => $successCount,
+                    'failed' => $failedCount
+                ]);
+                
+                $jsonOutput = json_encode([
+                    'success' => true,
+                    'message' => "Berhasil mengambil {$successCount} data kecepatan angin dari NASA POWER API",
+                    'source' => 'NASA POWER (WS10M/WS2M)',
+                    'records_success' => $successCount,
+                    'records_failed' => $failedCount,
+                    'execution_time' => 1.5
+                ]);
+            } else {
+                $jsonOutput = json_encode([
+                    'success' => false,
+                    'error' => 'Tidak ada data valid yang dikembalikan oleh NASA POWER API'
+                ]);
+            }
+
+            if (ob_get_length()) {
+                ob_end_clean();
+            }
+            echo $jsonOutput;
+        } catch (Exception $e) {
+            if (ob_get_length()) {
+                ob_end_clean();
+            }
             echo json_encode([
                 'success' => false,
                 'error' => $e->getMessage()
@@ -336,7 +496,6 @@ class KecepatanAnginController extends Controller {
     public function store() {
         $this->checkAuth();
         $this->checkAdmin();
-        
         if (!isset($_POST['csrf_token']) || !Security::validateCsrfToken($_POST['csrf_token'])) {
             $_SESSION['error'] = 'Token keamanan tidak valid';
             header('Location: ' . BASE_URL . '/kecepatanAngin');
@@ -360,14 +519,30 @@ class KecepatanAnginController extends Controller {
             if (empty($data['tanggal'])) {
                 throw new Exception('Tanggal harus diisi');
             }
+
+            $date = DateTime::createFromFormat('!Y-m-d', (string) $data['tanggal']);
+            if (!$date || $date->format('Y-m-d') !== $data['tanggal'] || $data['tanggal'] > date('Y-m-d')) {
+                throw new Exception('Tanggal tidak valid atau berada di masa depan');
+            }
             
             if (!is_numeric($data['kecepatan_angin']) || $data['kecepatan_angin'] < 0 || $data['kecepatan_angin'] > 200) {
                 throw new Exception('Kecepatan angin harus antara 0-200 km/h');
+            }
+
+            if ($data['kecepatan_max'] !== null && $data['kecepatan_max'] !== ''
+                && (!is_numeric($data['kecepatan_max']) || $data['kecepatan_max'] < $data['kecepatan_angin'] || $data['kecepatan_max'] > 250)) {
+                throw new Exception('Kecepatan maksimum harus lebih besar atau sama dengan rata-rata dan maksimal 250 km/h');
+            }
+
+            if ($data['arah_angin'] !== null && $data['arah_angin'] !== ''
+                && (!is_numeric($data['arah_angin']) || $data['arah_angin'] < 0 || $data['arah_angin'] >= 360)) {
+                throw new Exception('Arah angin harus berada pada rentang 0-359 derajat');
             }
             
             $result = $this->model->insert($data);
             
             if ($result) {
+                $this->invalidateStatsCache(['stats_kecepatan_angin_']);
                 $this->model->logActivity('manual_entry', 'success', 'Data kecepatan angin ditambahkan', [
                     'processed' => 1,
                     'success' => 1,
@@ -446,6 +621,11 @@ class KecepatanAnginController extends Controller {
             if (empty($tanggal)) {
                 throw new Exception('Tanggal harus diisi');
             }
+
+            $date = DateTime::createFromFormat('!Y-m-d', (string) $tanggal);
+            if (!$date || $date->format('Y-m-d') !== $tanggal || $tanggal > date('Y-m-d')) {
+                throw new Exception('Tanggal tidak valid atau berada di masa depan');
+            }
             
             if (!is_numeric($kecepatanAngin) || $kecepatanAngin < 0 || $kecepatanAngin > 200) {
                 throw new Exception('Kecepatan angin harus antara 0-200 km/h');
@@ -464,13 +644,14 @@ class KecepatanAnginController extends Controller {
                 'kecepatan_max' => $_POST['kecepatan_max'] ?? null,
                 'arah_angin' => $_POST['arah_angin'] ?? null,
                 'arah_angin_desc' => $_POST['arah_angin_desc'] ?? null,
-                'sumber_data' => $_POST['sumber_data'] ?? 'Manual',
+                'sumber_data' => $existing['sumber_data'] ?? 'Manual',
                 'keterangan' => $_POST['keterangan'] ?? null
             ];
             
             $result = $this->model->update($id, $data);
             
             if ($result) {
+                $this->invalidateStatsCache(['stats_kecepatan_angin_']);
                 $this->model->logActivity('update', 'success', "Data kecepatan angin ID {$id} diperbarui", [
                     'processed' => 1,
                     'success' => 1,
@@ -499,7 +680,6 @@ class KecepatanAnginController extends Controller {
     public function delete($id = null) {
         $this->checkAuth();
         $this->checkAdmin();
-        
         header('Content-Type: application/json');
         
         if (!$id) {
@@ -514,6 +694,9 @@ class KecepatanAnginController extends Controller {
         
         try {
             $result = $this->model->delete($id);
+            if ($result) {
+                $this->invalidateStatsCache(['stats_kecepatan_angin_']);
+            }
             
             echo json_encode([
                 'success' => $result,
@@ -532,6 +715,7 @@ class KecepatanAnginController extends Controller {
      * Delete multiple data records (Admin only)
      */
     public function deleteMultiple() {
+        $this->checkAuth();
         $this->checkAdmin();
         header('Content-Type: application/json');
         
@@ -557,6 +741,9 @@ class KecepatanAnginController extends Controller {
                 if ($id > 0 && $this->model->delete($id)) {
                     $deleted++;
                 }
+            }
+            if ($deleted > 0) {
+                $this->invalidateStatsCache(['stats_kecepatan_angin_']);
             }
             
             echo json_encode([
@@ -710,8 +897,9 @@ class KecepatanAnginController extends Controller {
         try {
             $startYear = $_GET['start_year'] ?? (date('Y') - 4);
             $endYear = $_GET['end_year'] ?? date('Y');
+            $sourceFilters = $this->getSourceFilter($_GET['data_source'] ?? 'nasa');
             
-            $data = $this->model->getTrendAnalysis($startYear, $endYear);
+            $data = $this->model->getTrendAnalysis($startYear, $endYear, $sourceFilters);
             
             $years = [];
             foreach ($data as $row) {
@@ -757,7 +945,8 @@ class KecepatanAnginController extends Controller {
         
         try {
             $year = $_GET['year'] ?? date('Y');
-            $data = $this->model->getSeasonalPattern($year);
+            $sourceFilters = $this->getSourceFilter($_GET['data_source'] ?? 'nasa');
+            $data = $this->model->getSeasonalPattern($year, $sourceFilters);
             
             $labels = [];
             $values = [];
@@ -800,8 +989,9 @@ class KecepatanAnginController extends Controller {
         try {
             $year = $_GET['year'] ?? date('Y');
             $threshold = $_GET['threshold'] ?? 2.0;
+            $sourceFilters = $this->getSourceFilter($_GET['data_source'] ?? 'nasa');
             
-            $data = $this->model->getAnomalies($year, $threshold);
+            $data = $this->model->getAnomalies($year, $threshold, $sourceFilters);
             
             echo json_encode([
                 'success' => true,
@@ -825,7 +1015,8 @@ class KecepatanAnginController extends Controller {
         
         try {
             $months = $_GET['months'] ?? 3;
-            $data = $this->model->getSimplePrediction($months);
+            $sourceFilters = $this->getSourceFilter($_GET['data_source'] ?? 'nasa');
+            $data = $this->model->getSimplePrediction($months, $sourceFilters);
             
             echo json_encode([
                 'success' => true,
@@ -849,8 +1040,9 @@ class KecepatanAnginController extends Controller {
         try {
             $threshold = $_GET['threshold'] ?? 30.0;
             $days = $_GET['days'] ?? 7;
+            $sourceFilters = $this->getSourceFilter($_GET['data_source'] ?? 'nasa');
             
-            $alerts = $this->model->getAlerts($threshold, $days);
+            $alerts = $this->model->getAlerts($threshold, $days, $sourceFilters);
             
             echo json_encode([
                 'success' => true,
@@ -875,8 +1067,16 @@ class KecepatanAnginController extends Controller {
         try {
             $year = $_GET['year'] ?? date('Y');
             $month = $_GET['month'] ?? date('n');
-            
-            $data = $this->model->getDailyData($year, $month);
+            $filters = [];
+            $dataSource = $_GET['data_source'] ?? 'nasa';
+            if ($dataSource === 'nasa' || $dataSource === 'nasa_power') {
+                $filters['sumber_data_like'] = '%NASA%';
+            } elseif ($dataSource === 'openmeteo') {
+                $filters['sumber_data_like'] = '%Open-Meteo%';
+            } elseif ($dataSource === 'simulation') {
+                $filters['sumber_data_like'] = '%Simulasi%';
+            }
+            $data = $this->model->getDailyData($year, $month, $filters);
             
             $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $month, $year);
             $labels = range(1, $daysInMonth);
@@ -916,8 +1116,9 @@ class KecepatanAnginController extends Controller {
         try {
             $year = $_GET['year'] ?? date('Y');
             $month = $_GET['month'] ?? null;
+            $sourceFilters = $this->getSourceFilter($_GET['data_source'] ?? 'nasa');
             
-            $windData = $this->model->getWindByLocation($year, $month);
+            $windData = $this->model->getWindByLocation($year, $month, $sourceFilters);
             
             // Load kecamatan coordinates lookup (nama_kecamatan without ", Jember" => [lat, lon, kode])
             $db = Database::getInstance()->getConnection();
@@ -989,7 +1190,10 @@ class KecepatanAnginController extends Controller {
             
             if ($speed === null) {
                 // Get latest data from database
-                $filters = ['limit' => 1, 'order' => 'tanggal DESC'];
+                $filters = array_merge(
+                    ['limit' => 1, 'order' => 'tanggal DESC'],
+                    $this->getSourceFilter($_GET['data_source'] ?? 'nasa')
+                );
                 $latestData = $this->model->getAll($filters);
                 if (!empty($latestData)) {
                     $speed = $latestData[0]['kecepatan_angin'];
@@ -1033,6 +1237,7 @@ class KecepatanAnginController extends Controller {
             if ($month) {
                 $filters['month'] = $month;
             }
+            $filters = array_merge($filters, $this->getSourceFilter($_GET['data_source'] ?? 'nasa'));
             
             $data = $this->model->getAll($filters);
             $windRose = $analytics->getWindRoseData($data);
@@ -1065,7 +1270,10 @@ class KecepatanAnginController extends Controller {
             
             if ($speed === null || $direction === null) {
                 // Get latest data
-                $filters = ['limit' => 1, 'order' => 'tanggal DESC'];
+                $filters = array_merge(
+                    ['limit' => 1, 'order' => 'tanggal DESC'],
+                    $this->getSourceFilter($_GET['data_source'] ?? 'nasa')
+                );
                 $latestData = $this->model->getAll($filters);
                 if (!empty($latestData)) {
                     $speed = $speed ?? $latestData[0]['kecepatan_angin'];
@@ -1309,7 +1517,7 @@ class KecepatanAnginController extends Controller {
         
         // Data rows
         foreach ($data as $row) {
-            fputcsv($output, [
+            $csvRow = $this->sanitizeCsvRow([
                 $row['tanggal'],
                 $row['lokasi'],
                 $row['kecepatan_angin'],
@@ -1318,6 +1526,7 @@ class KecepatanAnginController extends Controller {
                 $row['sumber_data'],
                 $row['keterangan']
             ]);
+            fputcsv($output, $csvRow);
         }
         
         fclose($output);

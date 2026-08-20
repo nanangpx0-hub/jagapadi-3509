@@ -2,11 +2,15 @@
 class DashboardController extends Controller {
     private $laporanModel;
     private $optModel;
+    private $irigasiModel;
+    private $lainnyaModel;
     private CacheManager $cache;
     
     public function __construct() {
         $this->laporanModel = $this->model('LaporanHama');
         $this->optModel = $this->model('MasterOpt');
+        $this->irigasiModel = $this->model('LaporanIrigasi');
+        $this->lainnyaModel = $this->model('LaporanLainnya');
         $this->cache = CacheManager::getInstance();
     }
     
@@ -79,16 +83,55 @@ class DashboardController extends Controller {
             fn() => $this->laporanModel->getRecentForDashboard($filterUserId, 5),
             30
         );
+
+        $isPetugas = ($_SESSION['role'] ?? '') === 'petugas' && $filterUserId !== null;
+        $petugasDashboard = [];
+        if ($isPetugas) {
+            $hamaStats = $this->laporanModel->getDashboardStats($filterUserId, true);
+            $petugasDashboard = [
+                'hama_summary' => [
+                    'Draf' => $hamaStats['draf'] ?? 0,
+                    'Submitted' => $hamaStats['pending_verifikasi'] ?? 0,
+                    'Diverifikasi' => $hamaStats['terverifikasi'] ?? 0,
+                    'Ditolak' => $hamaStats['ditolak'] ?? 0,
+                ],
+                'irigasi_summary' => $this->irigasiModel->getStatusSummary($filterUserId),
+                'lainnya_summary' => $this->lainnyaModel->getStatusSummary($filterUserId),
+                'recent_hama' => $this->laporanModel->getRecentForDashboard($filterUserId, 3),
+                'recent_irigasi' => $this->irigasiModel->getRecentForDashboard($filterUserId, 3),
+                'recent_lainnya' => $this->lainnyaModel->getRecentForDashboard($filterUserId, 3),
+                'lainnya_chart' => $this->lainnyaModel->getChartSummary($filterUserId, $year, false),
+            ];
+        }
         
         $data = [
             'title' => 'Dashboard',
             'stats' => $stats,
             'topPests' => $topPests,
             'monthlyStats' => $monthlyStats,
-            'recentReports' => $recentReports
+            'recentReports' => $recentReports,
+            'isPetugasDashboard' => $isPetugas,
+            'petugasDashboard' => $petugasDashboard,
         ];
         
         $this->view('dashboard/index', $data);
+    }
+
+    public function chartsLainnya(): void {
+        $this->checkRole(['petugas']);
+        $userId = (int) ($_SESSION['user_id'] ?? 0);
+        $year = (int) ($_GET['tahun'] ?? date('Y'));
+        $currentYear = (int) date('Y');
+        if ($year < 2000 || $year > $currentYear + 1) {
+            $year = $currentYear;
+        }
+        $includeDraft = filter_var($_GET['include_draft'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['success' => true, 'data' => $this->lainnyaModel->getChartSummary(
+            $userId,
+            $year,
+            $includeDraft
+        )], JSON_UNESCAPED_UNICODE);
     }
     
     public function map() {
@@ -167,7 +210,11 @@ class DashboardController extends Controller {
         try {
             $filterUserId = $this->getFilterUserId();
             $type = $_GET['type'] ?? 'monthly';
-            $year = $_GET['year'] ?? date('Y');
+            $year = (int) ($_GET['year'] ?? date('Y'));
+            $currentYear = (int) date('Y');
+            if ($year < 2000 || $year > $currentYear + 1) {
+                $year = $currentYear;
+            }
             
             $response = [
                 'success' => true,

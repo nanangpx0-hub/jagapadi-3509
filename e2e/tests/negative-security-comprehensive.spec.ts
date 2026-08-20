@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
+import { BASE } from '../base-url';
 
-const BASE = 'http://localhost/jagapadi-3509';
 const ADMIN_USER = 'admin';
 const ADMIN_PASS = 'Jember3509';
 const PETUGAS_USER = 'petugas01';
@@ -9,12 +9,15 @@ const OPERATOR_USER = 'operator01';
 const OPERATOR_PASS = 'Jember3509';
 const STATISTISI_USER = 'statistisi01';
 const STATISTISI_PASS = 'Jember3509';
+const VIEWER_USER = 'viewer01';
+const VIEWER_PASS = 'Jember3509';
 
 const ROLES = [
   { name: 'admin', user: ADMIN_USER, pass: ADMIN_PASS },
   { name: 'petugas', user: PETUGAS_USER, pass: PETUGAS_PASS },
   { name: 'operator', user: OPERATOR_USER, pass: OPERATOR_PASS },
   { name: 'statistisi', user: STATISTISI_USER, pass: STATISTISI_PASS },
+  { name: 'viewer', user: VIEWER_USER, pass: VIEWER_PASS },
 ];
 
 async function loginAs(page, username: string, password: string) {
@@ -60,13 +63,13 @@ test.describe('Cross-Role Boundary Enforcement', () => {
     expect([401, 403, 302, 404]).toContain(resp.status());
   });
 
-  test('operator cannot access petugas laporan create', async ({ page }) => {
-    await loginAs(page, OPERATOR_USER, OPERATOR_PASS);
+  test('viewer cannot create laporan hama via API', async ({ page }) => {
+    await loginAs(page, VIEWER_USER, VIEWER_PASS);
     const resp = await page.request.post(`${BASE}/api/v1/laporan-hama`, {
       data: { wilayah_id: 1, opt_id: 1 },
       maxRedirects: 0,
     });
-    expect([401, 403, 302, 405]).toContain(resp.status());
+    expect([401, 403, 302, 404, 405]).toContain(resp.status());
   });
 
   test('statistisi cannot verify laporan', async ({ page }) => {

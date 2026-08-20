@@ -93,12 +93,29 @@ sc.txt
 fcm_files.txt
 audit_files.txt
 tmp_split.txt
+cj_admin.txt
+cookies.txt
+temp.txt
+*.html
+tmp_*.php
+database/migrations/check_table_columns_tmp.php
 backend/cookies_*.txt
 backend/headers*.txt
 backend/*.html
 
-# --- Local SQL dumps ---
+# --- Local SQL dumps & backups ---
 database/jagapadi_local*.sql
+docs/backup_*.sql
+*.sql.bak
+*.bak
+
+# --- Uploaded assets ---
+backend/public/assets/uploads/*
+!backend/public/assets/uploads/.gitkeep
+public/uploads/*/*.*
+public/uploads/*/*/*.*
+!public/uploads/**/.htaccess
+!public/uploads/**/.gitkeep
 
 # --- Local config not tracked by design ---
 config/config.php
@@ -120,9 +137,6 @@ storage/uploads/
 # --- Vendor & cache at repo root ---
 /vendor/
 /storage/cache/
-
-# --- Uploaded assets ---
-backend/public/assets/uploads/
 
 # --- Test output artifacts ---
 test-results/
@@ -146,6 +160,7 @@ e2e/*.png
 !.github/**
 !docs/
 !docs/**
+docs/backup_*.sql
 !dok/
 !dok/**
 !scripts/

@@ -1,5 +1,11 @@
 <?php include ROOT_PATH . '/app/views/layouts/header.php'; ?>
 
+<?php if (($_SESSION['role'] ?? '') === 'petugas'): ?>
+    <?php require ROOT_PATH . '/app/views/feedback/petugas_history.php'; ?>
+    <?php require_once ROOT_PATH . '/app/views/layouts/footer.php'; ?>
+    <?php return; ?>
+<?php endif; ?>
+
 <style>
 /* Feedback Index Styles */
 .feedback-card {
@@ -176,11 +182,6 @@
                     <a href="<?= BASE_URL ?>feedback/create" class="btn btn-primary btn-sm">
                         <i class="fas fa-plus"></i> Buat Masukan Baru
                     </a>
-                    <?php if ($_SESSION['role'] === 'admin'): ?>
-                    <a href="<?= BASE_URL ?>feedback/report" class="btn btn-info btn-sm ml-2">
-                        <i class="fas fa-chart-bar"></i> Laporan
-                    </a>
-                    <?php endif; ?>
                 </div>
             </div>
             

@@ -5,12 +5,57 @@ declare(strict_types=1);
 namespace App\Controllers\Api;
 
 use App\Core\BaseApiController;
+use App\Core\Database;
 use App\Core\Logger;
 use App\Models\ActivityLog;
 use App\Services\DashboardService;
 
 class DashboardController extends BaseApiController
 {
+    public function chartsLainnya(): void
+    {
+        try {
+            $currentUser = $GLOBALS['auth_user'];
+            if (($currentUser['role'] ?? '') !== 'petugas') {
+                $this->error('Forbidden', 'Endpoint ini khusus Petugas.', [], 403);
+                return;
+            }
+
+            $tahun = DashboardService::validateTahun((int) ($_GET['tahun'] ?? date('Y')));
+            $includeDraft = isset($_GET['include_draft'])
+                ? filter_var($_GET['include_draft'], FILTER_VALIDATE_BOOLEAN)
+                : false;
+            $statusSql = $includeDraft ? '' : " AND ll.status <> 'draft'";
+            $pdo = Database::connect();
+            $params = [':user_id' => (int) $currentUser['id'], ':tahun' => $tahun];
+
+            $trend = $pdo->prepare(
+                "SELECT MONTH(ll.tanggal_kejadian) AS bulan, COUNT(*) AS total
+                 FROM laporan_lainnya ll
+                 WHERE ll.user_id = :user_id AND YEAR(ll.tanggal_kejadian) = :tahun{$statusSql}
+                 GROUP BY MONTH(ll.tanggal_kejadian) ORDER BY bulan"
+            );
+            $trend->execute($params);
+            $types = $pdo->prepare(
+                "SELECT COALESCE(mjl.nama, 'Tanpa Jenis') AS label, COUNT(*) AS total
+                 FROM laporan_lainnya ll
+                 LEFT JOIN master_jenis_laporan mjl ON ll.jenis_id = mjl.id
+                 WHERE ll.user_id = :user_id AND YEAR(ll.tanggal_kejadian) = :tahun{$statusSql}
+                 GROUP BY ll.jenis_id, mjl.nama ORDER BY total DESC"
+            );
+            $types->execute($params);
+
+            $this->success([
+                'trend' => $trend->fetchAll(),
+                'by_type' => $types->fetchAll(),
+                'tahun' => $tahun,
+                'include_draft' => $includeDraft,
+            ], 'Chart laporan lainnya');
+        } catch (\DomainException $e) {
+            $this->error('ValidationError', $e->getMessage(), [], 422);
+        }
+    }
+
     public function stats(): void
     {
         try {

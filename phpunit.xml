@@ -11,6 +11,26 @@
             <file>tests/Unit/LoggerTest.php</file>
             <file>tests/Unit/LaporanHamaStatusTest.php</file>
             <file>tests/Unit/LaporanLainnyaTest.php</file>
+            <file>tests/Unit/DataStoryServiceTest.php</file>
+            <file>tests/Unit/StorytellingAnalysisServiceTest.php</file>
+            <file>tests/Unit/BpsDataLogicTest.php</file>
+            <file>tests/Unit/HargaKomoditasScraperLogicTest.php</file>
+            <file>tests/Unit/EnvironmentalAnalysisLogicTest.php</file>
+            <file>tests/Unit/SidebarStateTest.php</file>
+      <file>tests/Unit/DraftAutosaveIsolationTest.php</file>
+      <file>tests/Unit/DashboardWeatherAlertsTest.php</file>
+        </testsuite>
+        <testsuite name="Integration">
+            <file>tests/Integration/DataStoryServiceDatabaseTest.php</file>
+            <file>tests/Integration/BpsDataSourceDatabaseTest.php</file>
+            <file>tests/Integration/BpsMonthlyHarvestPaginationDatabaseTest.php</file>
+            <file>tests/Integration/HargaKomoditasDatabaseTest.php</file>
+            <file>tests/Integration/EnvironmentalAnalysisDatabaseTest.php</file>
+            <file>tests/Integration/DashboardReportIntegrityDatabaseTest.php</file>
+            <file>tests/Integration/LaporanHamaArchiveDatabaseTest.php</file>
+            <file>tests/Integration/LaporanHamaFilterDatabaseTest.php</file>
+<file>tests/Integration/PetugasNavigationAndSummaryTest.php</file>
+            <file>tests/Integration/FeedbackSecurityDatabaseTest.php</file>
         </testsuite>
     </testsuites>
     <php>

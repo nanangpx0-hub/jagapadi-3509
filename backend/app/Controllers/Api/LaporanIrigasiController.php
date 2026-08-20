@@ -25,6 +25,7 @@ class LaporanIrigasiController extends BaseApiController
     public function store(): void
     {
         $currentUser = $GLOBALS['auth_user'];
+
         $input = Request::all();
         $action = $input['action'] ?? 'draft';
         $ip = Request::ip();
@@ -200,7 +201,7 @@ class LaporanIrigasiController extends BaseApiController
             return;
         }
 
-        $uploadRoot = dirname(__DIR__, 2) . '/public';
+        $uploadRoot = dirname(__DIR__, 3) . '/public';
         $destDir = $uploadRoot . '/assets/uploads/laporan-irigasi';
 
         try {
@@ -253,7 +254,7 @@ class LaporanIrigasiController extends BaseApiController
             return;
         }
 
-        $uploadRoot = dirname(__DIR__, 2) . '/public';
+        $uploadRoot = dirname(__DIR__, 3) . '/public';
         SecureImageUploader::deleteOldPhoto($uploadRoot, $oldUrl);
 
         LaporanIrigasi::update($id, ['foto_url' => null]);

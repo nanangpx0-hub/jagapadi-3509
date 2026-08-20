@@ -86,16 +86,8 @@ class BMKGApiClient {
         try {
             $url = self::API_BASE_URL . '/prakiraan-cuaca?adm4=' . urlencode($adm4Code);
             
-            $context = stream_context_create([
-                'http' => [
-                    'method' => 'GET',
-                    'timeout' => self::TIMEOUT,
-                    'header' => "User-Agent: JAGAPADI/1.0\r\n" .
-                               "Accept: application/json\r\n"
-                ]
-            ]);
-            
-            $response = @file_get_contents($url, false, $context);
+            // Gunakan cURL (bukan file_get_contents) agar tidak bergantung pada allow_url_fopen
+            $response = $this->httpRequest($url, self::TIMEOUT);
             
             if ($response === false) {
                 error_log("BMKGApiClient: Failed to fetch data from BMKG API for {$adm4Code}");
@@ -134,21 +126,47 @@ class BMKGApiClient {
             $testCode = '35.09.01.1001';
             $url = self::API_BASE_URL . '/prakiraan-cuaca?adm4=' . $testCode;
             
-            $context = stream_context_create([
-                'http' => [
-                    'method' => 'GET',
-                    'timeout' => 5,
-                    'header' => "User-Agent: JAGAPADI/1.0\r\n"
-                ]
-            ]);
-            
-            $response = @file_get_contents($url, false, $context);
-            
-            return $response !== false;
+            return $this->httpRequest($url, 5) !== false;
             
         } catch (Exception $e) {
             return false;
         }
+    }
+
+    /**
+     * HTTP Request menggunakan cURL (aman dari allow_url_fopen=Off)
+     * 
+     * @param string $url URL target
+     * @param int $timeout Timeout detik
+     * @return string|false Response body atau false saat gagal
+     */
+    private function httpRequest($url, $timeout = self::TIMEOUT) {
+        // SSL verification diaktifkan secara default; bisa dimatikan via .env untuk dev
+        $sslVerify = getenv('CURL_SSL_VERIFY') !== 'false';
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => $timeout,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_HTTPHEADER => [
+                'User-Agent: JAGAPADI/1.0',
+                'Accept: application/json'
+            ],
+            CURLOPT_SSL_VERIFYPEER => $sslVerify,
+            CURLOPT_SSL_VERIFYHOST => $sslVerify ? 2 : 0,
+        ]);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($response === false || $httpCode !== 200) {
+            error_log("BMKGApiClient: HTTP Error {$httpCode}, cURL: {$error}");
+            return false;
+        }
+
+        return $response;
     }
     
     /**
@@ -171,8 +189,18 @@ class BMKGApiClient {
         if (!file_exists($this->rateLimiterFile)) {
             return true;
         }
-        
-        $data = json_decode(file_get_contents($this->rateLimiterFile), true);
+
+        // Baca file dengan flock (shared lock) untuk mencegah race condition
+        $data = null;
+        $fp = fopen($this->rateLimiterFile, 'r');
+        if ($fp) {
+            if (flock($fp, LOCK_SH)) {
+                $content = stream_get_contents($fp);
+                flock($fp, LOCK_UN);
+            }
+            fclose($fp);
+            $data = json_decode($content ?? '', true);
+        }
         
         if (!$data) {
             return true;
@@ -193,12 +221,21 @@ class BMKGApiClient {
      * Record a request for rate limiting
      */
     private function recordRequest() {
+        // Baca data existing dengan flock (shared lock)
         $data = ['requests' => []];
         
         if (file_exists($this->rateLimiterFile)) {
-            $existing = json_decode(file_get_contents($this->rateLimiterFile), true);
-            if ($existing) {
-                $data = $existing;
+            $fp = fopen($this->rateLimiterFile, 'r');
+            if ($fp) {
+                if (flock($fp, LOCK_SH)) {
+                    $content = stream_get_contents($fp);
+                    flock($fp, LOCK_UN);
+                }
+                fclose($fp);
+                $existing = json_decode($content ?? '', true);
+                if ($existing && isset($existing['requests'])) {
+                    $data = $existing;
+                }
             }
         }
         
@@ -214,7 +251,8 @@ class BMKGApiClient {
         // Reset array keys
         $data['requests'] = array_values($data['requests']);
         
-        file_put_contents($this->rateLimiterFile, json_encode($data));
+        // Tulis dengan LOCK_EX untuk mencegah penulisan konkuren
+        file_put_contents($this->rateLimiterFile, json_encode($data), LOCK_EX);
     }
     
     /**
@@ -251,7 +289,7 @@ class BMKGApiClient {
      */
     private function saveToCache($adm4Code, $data) {
         $cacheFile = $this->getCacheFilename($adm4Code);
-        file_put_contents($cacheFile, json_encode($data));
+        file_put_contents($cacheFile, json_encode($data), LOCK_EX);
     }
     
     /**

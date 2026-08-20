@@ -193,11 +193,11 @@
                     <?php elseif(($_SESSION['role'] ?? '') === 'operator'): ?>
                         <span class="badge badge-primary ml-2">Mode Operator</span>
                     <?php elseif(($_SESSION['role'] ?? '') === 'petugas'): ?>
-                        <span class="badge badge-success ml-2">Mode Petugas</span>
                     <?php endif; ?>
                 </h3>
             </div>
-            <form action="<?= BASE_URL ?>laporan/create" method="POST" enctype="multipart/form-data" id="formCreateLaporan">
+            <form action="<?= BASE_URL ?>laporan/create" method="POST" enctype="multipart/form-data" id="formCreateLaporan"
+                  data-draft-user="<?= (int) ($_SESSION['user_id'] ?? 0) ?>" data-draft-module="laporan-hama">
                 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
                 <!-- Honeypot anti-bot field (hidden from users, bots will fill this) -->
                 <div style="position: absolute; left: -9999px; top: -9999px;" aria-hidden="true">
@@ -459,10 +459,10 @@
                     </div>
                     
                     <div class="form-group">
-                        <label>Upload Foto</label>
+                        <label for="fotoInput">Upload Foto <span class="text-danger">*</span></label>
                         <div class="input-group">
                             <div class="custom-file">
-                                <input type="file" name="foto" class="custom-file-input" id="fotoInput" accept="image/jpeg,image/png,image/jpg,image/webp">
+                                <input type="file" name="foto" class="custom-file-input" id="fotoInput" accept="image/jpeg,image/png,image/webp" required aria-describedby="fotoError">
                                 <label class="custom-file-label" for="fotoInput">Pilih foto...</label>
                             </div>
                         </div>
@@ -470,6 +470,7 @@
                             <i class="fas fa-info-circle"></i> Format: JPG, PNG, WEBP. 
                             <strong>File > 2MB akan dikompresi otomatis</strong>
                         </small>
+                        <div class="invalid-feedback d-block" id="fotoError" role="alert"></div>
                         <div id="fotoPreview" class="mt-2" style="display: none;">
                             <img id="previewImg" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" style="max-width: 300px; max-height: 300px;" class="img-thumbnail">
                             <button type="button" class="btn btn-sm btn-danger mt-2" onclick="clearFotoPreview()">
@@ -499,11 +500,30 @@
 </div>
 
 <script>
+const FOTO_REQUIRED_MESSAGE = 'Foto laporan wajib disertakan sebelum laporan dapat disimpan.';
+const fotoInput = document.getElementById('fotoInput');
+const fotoError = document.getElementById('fotoError');
+
+function showFotoRequiredError(showAlert = true) {
+    fotoInput.classList.add('is-invalid');
+    fotoInput.setCustomValidity(FOTO_REQUIRED_MESSAGE);
+    fotoError.textContent = FOTO_REQUIRED_MESSAGE;
+    fotoInput.focus();
+    fotoInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (showAlert) {
+        alert(FOTO_REQUIRED_MESSAGE);
+    }
+}
+
 // File input label update with compression info
-document.getElementById('fotoInput').addEventListener('change', function(e) {
+fotoInput.addEventListener('change', function(e) {
     const fileName = e.target.files[0]?.name || 'Pilih foto...';
     const label = document.querySelector('.custom-file-label');
     label.textContent = fileName;
+
+    this.setCustomValidity('');
+    this.classList.remove('is-invalid');
+    fotoError.textContent = '';
     
     const file = e.target.files[0];
     if (file) {
@@ -536,8 +556,16 @@ document.getElementById('fotoInput').addEventListener('change', function(e) {
     }
 });
 
+fotoInput.addEventListener('invalid', function(e) {
+    e.preventDefault();
+    showFotoRequiredError(true);
+});
+
 function clearFotoPreview() {
-    document.getElementById('fotoInput').value = '';
+    fotoInput.value = '';
+    fotoInput.setCustomValidity(FOTO_REQUIRED_MESSAGE);
+    fotoInput.classList.add('is-invalid');
+    fotoError.textContent = FOTO_REQUIRED_MESSAGE;
     document.querySelector('.custom-file-label').textContent = 'Pilih foto...';
     document.getElementById('fotoPreview').style.display = 'none';
 }
@@ -671,7 +699,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Form validation and submission
-document.querySelector('form').addEventListener('submit', function(e) {
+document.getElementById('formCreateLaporan').addEventListener('submit', function(e) {
     // Note: File size validation removed - server will handle compression automatically
     
     // Validate required fields
@@ -693,6 +721,12 @@ document.querySelector('form').addEventListener('submit', function(e) {
             input.focus();
             return false;
         }
+    }
+
+    if (!fotoInput.files || fotoInput.files.length === 0) {
+        e.preventDefault();
+        showFotoRequiredError(true);
+        return false;
     }
     
     // Validate luas serangan vs populasi before submit
@@ -2146,6 +2180,6 @@ scheduleDefaultKabupatenJemberEnforcement();
 </script>
 
 <!-- Phase 3: Draft Auto-Save and Offline Mode -->
-<script src="<?= BASE_URL ?>public/js/draft-autosave.js"></script>
+<script src="<?= BASE_URL ?>public/js/draft-autosave.js?v=2.0.0"></script>
 <script src="<?= BASE_URL ?>public/js/offline-laporan.js"></script>
 

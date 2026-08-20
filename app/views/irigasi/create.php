@@ -5,7 +5,7 @@
     <?php if (isset($_SESSION['success'])): ?>
         <div class="alert alert-success alert-dismissible fade show" role="alert">
             <i class="fas fa-check-circle mr-2"></i>
-            <strong>Berhasil!</strong> <?= $_SESSION['success'] ?>
+            <strong>Berhasil!</strong> <?= htmlspecialchars((string) $_SESSION['success']) ?>
             <button type="button" class="close" data-dismiss="alert" aria-label="Close">
                 <span aria-hidden="true">&times;</span>
             </button>
@@ -16,7 +16,7 @@
     <?php if (isset($_SESSION['info'])): ?>
         <div class="alert alert-info alert-dismissible fade show" role="alert">
             <i class="fas fa-info-circle mr-2"></i>
-            <strong>Informasi:</strong> <?= $_SESSION['info'] ?>
+            <strong>Informasi:</strong> <?= htmlspecialchars((string) $_SESSION['info']) ?>
             <button type="button" class="close" data-dismiss="alert" aria-label="Close">
                 <span aria-hidden="true">&times;</span>
             </button>
@@ -76,6 +76,7 @@
 
     <form action="<?= BASE_URL ?>irigasi/create" method="POST" enctype="multipart/form-data" id="formIrigasi" class="needs-validation" novalidate>
         <?= Security::getCsrfField() ?>
+        <input type="text" name="website_hp" style="display:none" tabindex="-1" autocomplete="off">
 
         <div class="row">
             <!-- Left Column: Form Fields -->
@@ -92,7 +93,7 @@
                             <div class="col-md-6">
                                 <div class="form-group">
                                     <label for="tanggal">Tanggal Laporan <span class="text-danger">*</span></label>
-                                    <input type="date" class="form-control" id="tanggal" name="tanggal" value="<?= $data['tanggal'] ?? date('Y-m-d') ?>" required>
+                                    <input type="date" class="form-control" id="tanggal" name="tanggal" value="<?= htmlspecialchars((string) ($data['tanggal'] ?? date('Y-m-d'))) ?>" required>
                                     <div class="invalid-feedback">Silakan pilih tanggal laporan.</div>
                                 </div>
                             </div>
@@ -157,7 +158,7 @@
                             <div class="col-md-6">
                                 <div class="form-group">
                                     <label for="nama_saluran">Nama Saluran Irigasi <span class="text-danger">*</span></label>
-                                    <input type="text" class="form-control" id="nama_saluran" name="nama_saluran" value="<?= $data['nama_saluran'] ?? '' ?>" placeholder="Contoh: Saluran Primer Bondoyudo" required minlength="3">
+                                    <input type="text" class="form-control" id="nama_saluran" name="nama_saluran" value="<?= htmlspecialchars((string) ($data['nama_saluran'] ?? '')) ?>" placeholder="Contoh: Saluran Primer Bondoyudo" required minlength="3">
                                     <div class="invalid-feedback">Nama saluran minimal 3 karakter.</div>
                                 </div>
                             </div>
@@ -196,15 +197,15 @@
                                     <label>Kondisi Saluran <span class="text-danger">*</span></label>
                                     <div class="d-flex flex-wrap mt-2">
                                         <div class="custom-control custom-radio mr-4">
-                                            <input class="custom-control-input" type="radio" id="kondisi_baik" name="kondisi_fisik" value="Baik" <?= (!isset($data['kondisi_fisik']) || $data['kondisi_fisik'] == 'Baik') ? 'checked' : '' ?> required>
+                                            <input class="custom-control-input" type="radio" id="kondisi_baik" name="kondisi_fisik" value="Baik" <?= (!isset($data['kondisi_fisik']) || in_array($data['kondisi_fisik'], ['Baik', 'Bagus'], true)) ? 'checked' : '' ?> required>
                                             <label for="kondisi_baik" class="custom-control-label font-weight-normal text-success">Baik</label>
                                         </div>
                                         <div class="custom-control custom-radio mr-4">
-                                            <input class="custom-control-input" type="radio" id="kondisi_ringan" name="kondisi_fisik" value="Rusak Ringan" <?= (isset($data['kondisi_fisik']) && $data['kondisi_fisik'] == 'Rusak Ringan') ? 'selected' : '' ?>>
+                                            <input class="custom-control-input" type="radio" id="kondisi_ringan" name="kondisi_fisik" value="Rusak Ringan" <?= (isset($data['kondisi_fisik']) && in_array($data['kondisi_fisik'], ['Rusak Ringan', 'Tidak Bagus'], true)) ? 'checked' : '' ?>>
                                             <label for="kondisi_ringan" class="custom-control-label font-weight-normal text-warning">Rusak Ringan</label>
                                         </div>
                                         <div class="custom-control custom-radio">
-                                            <input class="custom-control-input" type="radio" id="kondisi_berat" name="kondisi_fisik" value="Rusak Berat" <?= (isset($data['kondisi_fisik']) && $data['kondisi_fisik'] == 'Rusak Berat') ? 'selected' : '' ?>>
+                                            <input class="custom-control-input" type="radio" id="kondisi_berat" name="kondisi_fisik" value="Rusak Berat" <?= (isset($data['kondisi_fisik']) && in_array($data['kondisi_fisik'], ['Rusak Berat', 'Rusak'], true)) ? 'checked' : '' ?>>
                                             <label for="kondisi_berat" class="custom-control-label font-weight-normal text-danger">Rusak Berat</label>
                                         </div>
                                     </div>
@@ -213,7 +214,7 @@
                             <div class="col-md-6">
                                 <div class="form-group">
                                     <label for="luas_layanan">Luas Layanan (Ha) <span class="text-danger">*</span></label>
-                                    <input type="number" step="0.01" class="form-control" id="luas_layanan" name="luas_layanan" value="<?= $data['luas_layanan'] ?? '' ?>" placeholder="0.00" required>
+                                    <input type="number" step="0.01" class="form-control" id="luas_layanan" name="luas_layanan" value="<?= htmlspecialchars((string) ($data['luas_layanan'] ?? '')) ?>" placeholder="0.00" required>
                                     <div class="invalid-feedback">Masukkan luas layanan dalam hektar.</div>
                                 </div>
                             </div>
@@ -251,7 +252,7 @@
                             <div class="col-md-6">
                                 <div class="form-group">
                                     <label for="aksi_dilakukan">Aksi yang Dilakukan</label>
-                                    <textarea class="form-control" id="aksi_dilakukan" name="aksi_dilakukan" rows="2" placeholder="Jelaskan tindakan yang telah diambil..."><?= $data['aksi_dilakukan'] ?? '' ?></textarea>
+                                    <textarea class="form-control" id="aksi_dilakukan" name="aksi_dilakukan" rows="2" placeholder="Jelaskan tindakan yang telah diambil..."><?= htmlspecialchars((string) ($data['aksi_dilakukan'] ?? '')) ?></textarea>
                                 </div>
                             </div>
                         </div>
@@ -316,13 +317,13 @@
                                 <div class="col-md-6">
                                     <div class="form-group">
                                         <label for="latitudeInput">Latitude</label>
-                                        <input type="text" class="form-control" id="latitudeInput" name="latitude" value="<?= $data['latitude'] ?? '' ?>" placeholder="Contoh: -8.123456">
+                                        <input type="text" class="form-control" id="latitudeInput" name="latitude" value="<?= htmlspecialchars((string) ($data['latitude'] ?? '')) ?>" placeholder="Contoh: -8.123456">
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="form-group">
                                         <label for="longitudeInput">Longitude</label>
-                                        <input type="text" class="form-control" id="longitudeInput" name="longitude" value="<?= $data['longitude'] ?? '' ?>" placeholder="Contoh: 113.123456">
+                                        <input type="text" class="form-control" id="longitudeInput" name="longitude" value="<?= htmlspecialchars((string) ($data['longitude'] ?? '')) ?>" placeholder="Contoh: 113.123456">
                                     </div>
                                 </div>
                             </div>
@@ -360,12 +361,12 @@
                         <div class="form-group">
                             <label for="foto">Pilih Foto Irigasi <span class="text-danger">*</span></label>
                             <div class="custom-file">
-                                <input type="file" class="custom-file-input" id="foto" name="foto" accept="image/jpeg,image/jpg,image/png,image/gif" required>
+                                <input type="file" class="custom-file-input" id="foto" name="foto" accept="image/jpeg,image/png,image/webp" required>
                                 <label class="custom-file-label" for="foto">Pilih file...</label>
                             </div>
                             <div class="invalid-feedback d-block mt-1" id="fotoError"></div>
                             <small class="form-text text-muted">
-                                <i class="fas fa-info-circle"></i> Format: JPG, PNG, GIF. Ukuran maks: 2MB.<br>
+                                <i class="fas fa-info-circle"></i> Format: JPG, PNG, WEBP. Ukuran maks setelah kompresi: 2MB.<br>
                                 <i class="fas fa-compress-alt text-success"></i> <strong>Kompresi Otomatis:</strong> Foto yang melebihi 2MB akan dikompresi secara otomatis dengan kualitas 80% sambil mempertahankan rasio aspek.
                             </small>
                         </div>
@@ -387,7 +388,7 @@
                     </div>
                     <div class="card-body">
                         <div class="form-group">
-                            <textarea class="form-control" id="catatan" name="catatan" rows="5" placeholder="Berikan catatan tambahan jika diperlukan..."><?= $data['catatan'] ?? '' ?></textarea>
+                            <textarea class="form-control" id="catatan" name="catatan" rows="5" placeholder="Berikan catatan tambahan jika diperlukan..."><?= htmlspecialchars((string) ($data['catatan'] ?? '')) ?></textarea>
                         </div>
                     </div>
                 </div>
@@ -409,7 +410,7 @@
 </div>
 
 <!-- LEAFLET JS -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="<?= BASE_URL ?>public/vendor/js/leaflet.js"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -521,7 +522,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Validate type first
             const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif'];
             if (!validTypes.includes(file.type)) {
-                errorDiv.textContent = 'Format file tidak valid. Gunakan JPG, PNG, atau GIF.';
+                errorDiv.textContent = 'Format file tidak valid. Gunakan JPG, PNG, atau WEBP.';
                 this.value = '';
                 photoPreview.style.display = 'none';
                 photoLabel.textContent = 'Pilih file...';

@@ -67,9 +67,37 @@ class LaporanHamaController extends Controller
         ];
 
         $input = Request::all();
+        unset($input['foto_url']);
         $action = $input['action'] ?? 'draft';
         $ip = Request::ip();
         $userAgent = Request::userAgent();
+
+        $uploadRoot = dirname(__DIR__, 3) . '/public';
+        $uploadedPhotoUrl = null;
+        $file = $_FILES['foto'] ?? null;
+        $hasPhoto = is_array($file) && (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
+
+        if ($action === 'submit' && !$hasPhoto) {
+            $this->renderCreateForm($input, [
+                'foto' => 'Foto laporan wajib disertakan sebelum laporan dapat dikirim.',
+            ]);
+            return;
+        }
+
+        if ($hasPhoto) {
+            try {
+                $upload = SecureImageUploader::validateAndStore($file, [
+                    'max_bytes' => 10485760,
+                    'destination_dir' => $uploadRoot . '/assets/uploads/laporan-hama',
+                    'relative_base' => 'assets/uploads/laporan-hama',
+                ]);
+                $input['foto_url'] = $upload['foto_url'];
+                $uploadedPhotoUrl = $upload['foto_url'];
+            } catch (\DomainException | \RuntimeException $e) {
+                $this->renderCreateForm($input, ['foto' => $e->getMessage()]);
+                return;
+            }
+        }
 
         if ($action === 'submit') {
             $result = LaporanHamaService::createAndSubmit((int) $currentUser['id'], $input, $ip, $userAgent);
@@ -78,25 +106,34 @@ class LaporanHamaController extends Controller
         }
 
         if (!$result['success']) {
+            if ($uploadedPhotoUrl !== null) {
+                SecureImageUploader::deleteOldPhoto($uploadRoot, $uploadedPhotoUrl);
+            }
             $errors = $result['errors'] ?? [];
-            $kabupaten = MasterKabupaten::all('nama_kabupaten', 'ASC');
-            $optList = MasterOpt::allActive();
-            $jember = MasterKabupaten::findByKode('3509');
-            $this->view('laporan-hama/create', [
-                'pageTitle' => 'Buat Laporan Hama',
-                'kabupaten' => $kabupaten,
-                'optList' => $optList,
-                'data' => [],
-                'errors' => $errors,
-                'oldInput' => $input,
-                'jemberId' => $jember ? (int) $jember['id'] : 0,
-            ]);
+            $this->renderCreateForm($input, $errors);
             return;
         }
 
         $msg = $action === 'submit' ? 'Laporan hama berhasil dikirim.' : 'Draf laporan hama berhasil disimpan.';
         $_SESSION['flash_success'] = $msg;
         $this->redirect('/laporan-hama');
+    }
+
+    private function renderCreateForm(array $oldInput, array $errors): void
+    {
+        $kabupaten = MasterKabupaten::all('nama_kabupaten', 'ASC');
+        $optList = MasterOpt::allActive();
+        $jember = MasterKabupaten::findByKode('3509');
+
+        $this->view('laporan-hama/create', [
+            'pageTitle' => 'Buat Laporan Hama',
+            'kabupaten' => $kabupaten,
+            'optList' => $optList,
+            'data' => [],
+            'errors' => $errors,
+            'oldInput' => $oldInput,
+            'jemberId' => $jember ? (int) $jember['id'] : 0,
+        ]);
     }
 
     public function show(array $params): void

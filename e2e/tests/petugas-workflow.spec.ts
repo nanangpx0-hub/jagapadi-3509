@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+import { BASE } from '../base-url';
 
 /**
  * E2E Test Suite — Role: Petugas (Field Officer)
@@ -17,8 +18,6 @@ import { test, expect, Page } from '@playwright/test';
  * Remote-browser support:
  *  Set REMOTE_WS_ENDPOINT=ws://<host>:<port>/... env var to run on a remote browser.
  */
-
-const BASE = 'http://localhost/jagapadi-3509';
 
 /** Wait until the AJAX table has finished loading data rows. */
 async function waitForTableLoad(page: Page) {
@@ -51,8 +50,8 @@ test.describe('Petugas — Laporan Hama Workflow', () => {
   });
 
   test('petugas dapat membuka halaman daftar laporan', async ({ page }) => {
-    await page.goto(`${BASE}/laporan`);
-    await expect(page).toHaveURL(/\/laporan/);
+    await page.goto(`${BASE}/laporan-hama`);
+    await expect(page).toHaveURL(/\/laporan-hama/);
     await expect(page.locator('h3')).toContainText(/Daftar Laporan/i);
     await expect(page.locator('#laporanTable')).toBeVisible();
   });
@@ -60,7 +59,7 @@ test.describe('Petugas — Laporan Hama Workflow', () => {
   test('tabel laporan menampilkan data: id, foto, tanggal, OPT, lokasi, keparahan, status, pelapor', async ({
     page,
   }) => {
-    await page.goto(`${BASE}/laporan`);
+    await page.goto(`${BASE}/laporan-hama`);
     await waitForTableLoad(page);
 
     const firstRow = page.locator('#tableBody tr').first();
@@ -96,7 +95,7 @@ test.describe('Petugas — Laporan Hama Workflow', () => {
   });
 
   test('kolom foto menampilkan placeholder ketika tidak ada gambar', async ({ page }) => {
-    await page.goto(`${BASE}/laporan`);
+    await page.goto(`${BASE}/laporan-hama`);
     await waitForTableLoad(page);
 
     // The database has 0 reports with foto_url, so all rows show a placeholder
@@ -107,7 +106,7 @@ test.describe('Petugas — Laporan Hama Workflow', () => {
   });
 
   test('petugas dapat memfilter laporan berdasarkan status', async ({ page }) => {
-    await page.goto(`${BASE}/laporan`);
+    await page.goto(`${BASE}/laporan-hama`);
     await waitForTableLoad(page);
 
     const beforeCount = await page.locator('#tableBody tr').count();
@@ -133,7 +132,7 @@ test.describe('Petugas — Laporan Hama Workflow', () => {
   });
 
   test('petugas dapat mencari laporan', async ({ page }) => {
-    await page.goto(`${BASE}/laporan`);
+    await page.goto(`${BASE}/laporan-hama`);
     await waitForTableLoad(page);
 
     const searchInput = page.locator('#tableSearch');
@@ -145,7 +144,7 @@ test.describe('Petugas — Laporan Hama Workflow', () => {
   });
 
   test('petugas dapat mengganti jumlah baris per halaman', async ({ page }) => {
-    await page.goto(`${BASE}/laporan`);
+    await page.goto(`${BASE}/laporan-hama`);
     await waitForTableLoad(page);
 
     const perPageSelect = page.locator('#perPageSelect');
@@ -159,25 +158,25 @@ test.describe('Petugas — Laporan Hama Workflow', () => {
   });
 
   test('petugas dapat melihat detail laporan', async ({ page }) => {
-    await page.goto(`${BASE}/laporan`);
+    await page.goto(`${BASE}/laporan-hama`);
     await waitForTableLoad(page);
 
-    const firstIdLink = page.locator('#tableBody tr a[href*="laporan/detail"]').first();
+    const firstIdLink = page.locator('#tableBody tr a[href*="laporan-hama/"]').first();
     if (await firstIdLink.count() > 0) {
       const href = await firstIdLink.getAttribute('href');
-      const reportId = href?.match(/detail\/(\d+)/)?.[1];
+      const reportId = href?.match(/laporan-hama\/(\d+)/)?.[1];
       expect(reportId).toBeTruthy();
 
       await firstIdLink.click();
       await page.waitForLoadState('networkidle', { timeout: 15000 });
-      await expect(page).toHaveURL(new RegExp(`detail/${reportId}`));
+      await expect(page).toHaveURL(new RegExp(`laporan-hama/${reportId}`));
       await expect(page.locator('.card-title, h3').filter({ hasText: /Detail Laporan/i })).toBeVisible();
     }
   });
 
   test('petugas dapat membuat laporan baru sebagai draft', async ({ page }) => {
-    await page.goto(`${BASE}/laporan/create`);
-    await expect(page).toHaveURL(/\/laporan\/create/);
+    await page.goto(`${BASE}/laporan-hama/create`);
+    await expect(page).toHaveURL(/\/laporan-hama\/create/);
     await expect(page.locator('#formCreateLaporan')).toBeVisible();
 
     const dateInput = page.locator('input[name="tanggal"]');
@@ -204,8 +203,8 @@ test.describe('Petugas — Laporan Hama Workflow', () => {
     const submitBtn = page.getByRole('button', { name: /Simpan Draf/i });
     if (await submitBtn.count() > 0) {
       await submitBtn.click();
-      await page.waitForURL(/\/laporan\/(detail\/|$)/, { timeout: 15000 });
-      await expect(page).toHaveURL(/\/laporan/);
+      await page.waitForURL(/\/laporan-hama\/(detail\/|$)/, { timeout: 15000 });
+      await expect(page).toHaveURL(/\/laporan-hama/);
     }
   });
 
@@ -221,7 +220,7 @@ test.describe('Petugas — Laporan Hama Workflow', () => {
   });
 
   test('petugas tidak dapat melihat tombol arsip pada tabel laporan', async ({ page }) => {
-    await page.goto(`${BASE}/laporan`);
+    await page.goto(`${BASE}/laporan-hama`);
     await waitForTableLoad(page);
 
     // Archive (arsip) button should not be present for petugas
@@ -230,7 +229,7 @@ test.describe('Petugas — Laporan Hama Workflow', () => {
   });
 
   test('petugas dapat menggunakan fitur pagination', async ({ page }) => {
-    await page.goto(`${BASE}/laporan`);
+    await page.goto(`${BASE}/laporan-hama`);
     await waitForTableLoad(page);
 
     const pagination = page.locator('#paginationNav');
@@ -251,11 +250,11 @@ test.describe('Petugas — Laporan Hama Workflow', () => {
   });
 
   test('tombol "Buat Laporan Baru" mengarah ke halaman create', async ({ page }) => {
-    await page.goto(`${BASE}/laporan`);
+    await page.goto(`${BASE}/laporan-hama`);
     const createBtn = page.locator('#btnCreateLaporan');
     if (await createBtn.count() > 0) {
       await createBtn.click();
-      await page.waitForURL(/\/laporan\/create/);
+      await page.waitForURL(/\/laporan-hama\/create/);
     }
   });
 });

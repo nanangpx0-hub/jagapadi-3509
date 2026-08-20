@@ -289,7 +289,7 @@
             <div class="vote-count-large"><?= $feedback['vote_count'] ?></div>
             <p class="mb-3">Dukungan</p>
             
-            <?php if (!$isOwner): ?>
+            <?php if ($_SESSION['role'] === 'petugas' && !$isOwner): ?>
             <button type="button" 
                     class="btn btn-lg <?= $hasVoted ? 'btn-light' : 'btn-outline-light' ?>" 
                     id="voteBtn"

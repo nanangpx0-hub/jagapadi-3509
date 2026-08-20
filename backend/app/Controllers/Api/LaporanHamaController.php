@@ -25,15 +25,44 @@ class LaporanHamaController extends BaseApiController
     public function store(): void
     {
         $currentUser = $GLOBALS['auth_user'];
+
         $input = Request::all();
+        unset($input['foto_url']);
         $action = $input['action'] ?? 'draft';
         $ip = Request::ip();
         $userAgent = Request::userAgent();
+
+        $uploadRoot = dirname(__DIR__, 3) . '/public';
+        $uploadedPhotoUrl = null;
+        $file = $_FILES['foto'] ?? null;
+        $hasPhoto = is_array($file) && (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
+
+        if ($hasPhoto) {
+            try {
+                $upload = SecureImageUploader::validateAndStore($file, [
+                    'max_bytes' => 10485760,
+                    'destination_dir' => $uploadRoot . '/assets/uploads/laporan-hama',
+                    'relative_base' => 'assets/uploads/laporan-hama',
+                ]);
+                $input['foto_url'] = $upload['foto_url'];
+                $uploadedPhotoUrl = $upload['foto_url'];
+            } catch (\DomainException $e) {
+                $this->error('ValidationError', $e->getMessage(), ['foto' => $e->getMessage()], 422);
+                return;
+            } catch (\RuntimeException $e) {
+                $this->error('ServerError', $e->getMessage(), [], 500);
+                return;
+            }
+        }
 
         if ($action === 'submit') {
             $result = LaporanHamaService::createAndSubmit((int) $currentUser['id'], $input, $ip, $userAgent);
         } else {
             $result = LaporanHamaService::createDraft((int) $currentUser['id'], $input, $ip, $userAgent);
+        }
+
+        if (!$result['success'] && $uploadedPhotoUrl !== null) {
+            SecureImageUploader::deleteOldPhoto($uploadRoot, $uploadedPhotoUrl);
         }
 
         $this->json($result, $result['code']);
@@ -151,6 +180,11 @@ class LaporanHamaController extends BaseApiController
         }
 
         $id = (int) ($params['id'] ?? 0);
+        if ($id <= 0) {
+            $this->error('ValidationError', 'ID laporan tidak valid.', [], 400);
+            return;
+        }
+
         $input = Request::all();
         $ip = Request::ip();
         $userAgent = Request::userAgent();
@@ -200,7 +234,7 @@ class LaporanHamaController extends BaseApiController
             return;
         }
 
-        $uploadRoot = dirname(__DIR__, 2) . '/public';
+        $uploadRoot = dirname(__DIR__, 3) . '/public';
         $destDir = $uploadRoot . '/assets/uploads/laporan-hama';
 
         try {
@@ -253,7 +287,7 @@ class LaporanHamaController extends BaseApiController
             return;
         }
 
-        $uploadRoot = dirname(__DIR__, 2) . '/public';
+        $uploadRoot = dirname(__DIR__, 3) . '/public';
         SecureImageUploader::deleteOldPhoto($uploadRoot, $oldUrl);
 
         LaporanHama::update($id, ['foto_url' => null]);

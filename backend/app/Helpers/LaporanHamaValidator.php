@@ -137,6 +137,10 @@ class LaporanHamaValidator
             }
         }
 
+        if (!isset($input['foto_url']) || !is_string($input['foto_url']) || trim($input['foto_url']) === '') {
+            $errors['foto'] = 'Foto laporan wajib disertakan sebelum laporan dapat dikirim.';
+        }
+
         if (empty($errors)) {
             if (!self::isValidDate($input['tanggal'])) {
                 $errors['tanggal'] = 'Format tanggal tidak valid.';

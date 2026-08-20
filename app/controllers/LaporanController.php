@@ -14,14 +14,55 @@ class LaporanController extends Controller {
         $status = $_GET['status'] ?? null;
         $user = $this->getCurrentUser();
 
-        // Role-based filtering: petugas can only see their own reports
         if ($user['role'] === 'petugas') {
-            if ($status) {
-                $laporan = $this->laporanModel->getByStatusAndUser($status, $user['id']);
-            } else {
-                $laporan = $this->laporanModel->getAllWithDetailsByUser($user['id']);
+            $page = max(1, (int) ($_GET['page'] ?? 1));
+            $perPage = min(100, max(10, (int) ($_GET['per_page'] ?? 20)));
+            $filters = [
+                'status' => trim((string) ($status ?? '')),
+                'search' => trim((string) ($_GET['search'] ?? '')),
+                'master_opt_id' => (int) ($_GET['master_opt_id'] ?? 0),
+                'kecamatan_id' => (int) ($_GET['kecamatan_id'] ?? 0),
+                'date_from' => trim((string) ($_GET['date_from'] ?? '')),
+                'date_to' => trim((string) ($_GET['date_to'] ?? '')),
+            ];
+            foreach (['date_from', 'date_to'] as $dateKey) {
+                if ($filters[$dateKey] !== '') {
+                    $date = DateTime::createFromFormat('Y-m-d', $filters[$dateKey]);
+                    if (!$date || $date->format('Y-m-d') !== $filters[$dateKey]) {
+                        $filters[$dateKey] = '';
+                    }
+                }
             }
-        } else {
+            if ($filters['date_from'] !== '' && $filters['date_to'] !== '' && $filters['date_from'] > $filters['date_to']) {
+                $filters['date_from'] = '';
+                $filters['date_to'] = '';
+            }
+            try {
+                $result = $this->laporanModel->fetchPaginated($filters, $page, $perPage, (int) $user['id']);
+            } catch (InvalidArgumentException $e) {
+                $filters['status'] = '';
+                $result = $this->laporanModel->fetchPaginated($filters, $page, $perPage, (int) $user['id']);
+            }
+
+            $this->view('laporan/index', [
+                'title' => 'Laporan Hama',
+                'laporan' => $result['rows'],
+                'total' => $result['total'],
+                'page' => $result['page'],
+                'perPage' => $result['perPage'],
+                'totalPages' => $result['totalPages'],
+                'status' => $filters['status'],
+                'search' => $filters['search'],
+                'dateFrom' => $filters['date_from'],
+                'dateTo' => $filters['date_to'],
+                'currentUser' => $user,
+                'petugasReportType' => 'hama',
+            ]);
+            return;
+        }
+
+        // Role-based filtering: petugas can only see their own reports
+        if ($user['role'] !== 'petugas') {
             // Admin and operator can see all reports
             if ($status) {
                 $laporan = $this->laporanModel->getByStatus($status);
@@ -476,6 +517,14 @@ class LaporanController extends Controller {
         if ($laporan['user_id'] != $user['id'] && !in_array($user['role'], ['admin', 'operator'])) {
             $_SESSION['error'] = 'Anda tidak memiliki akses untuk mengedit laporan ini';
             $this->redirect('laporan');
+            return;
+        }
+
+        // Petugas hanya dapat mengedit laporan dengan status Draf atau Ditolak
+        if ($user['role'] === 'petugas' && !in_array(strtolower($laporan['status'] ?? ''), ['draf', 'ditolak', 'draft', 'rejected'], true)) {
+            $_SESSION['error'] = 'Petugas hanya dapat mengedit laporan dengan status Draf atau Ditolak.';
+            $this->redirect('laporan');
+            return;
         }
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {

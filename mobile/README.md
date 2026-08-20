@@ -122,3 +122,15 @@ flutter test
 
 - **Admin**: Antrian verifikasi di home, tombol verifikasi/tolak/arsip di detail, melihat semua laporan.
 - **Petugas**: Hanya laporan sendiri, tombol edit/submit/resubmit, tidak ada aksi admin.
+
+## Perbaikan Terbaru (dokumentasi lengkap di `../docs/mobile/`)
+
+- Offline-first & sinkronisasi dengan idempotensi (`Idempotency-Key`),
+  status draf terminal, reuse draf lokal.
+- Keamanan: lockout login offline, versi verifier, validasi foto magic
+  bytes, alur izin GPS yang jelas.
+- Validasi konsisten 6 modul laporan + matriks role/permission terpusat.
+- Dashboard error state (offline/stale/retry), reset saat logout.
+- Baca: `IMPLEMENTATION_REPORT.md`, `OFFLINE_SYNC_DESIGN.md`,
+  `SECURITY.md`, `ROLE_PERMISSION_MATRIX.md`, `API_COMPATIBILITY.md`,
+  `TESTING.md`.

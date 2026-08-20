@@ -257,6 +257,8 @@ Master wilayah berjenjang: Kabupaten → Kecamatan → Desa.
 - **Petugas** hanya melihat dan mengelola laporan sendiri.
 - **Admin** dapat melihat semua laporan.
 - Nomor laporan hanya dibuat saat Submit, atomic via `nomor_laporan_counter`.
+- Foto bersifat opsional selama status masih Draf, tetapi wajib tersedia sebelum laporan dapat dikirim atau dikirim ulang.
+- Alur API yang direkomendasikan: buat Draf, upload foto melalui endpoint `/foto`, lalu panggil endpoint `/submit`.
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
@@ -267,10 +269,10 @@ Master wilayah berjenjang: Kabupaten → Kecamatan → Desa.
 | DELETE | `/api/v1/laporan-hama/{id}` | JWT | Delete Draf (owner only) |
 | POST | `/api/v1/laporan-hama/{id}/submit` | JWT | Submit Draf → Submitted |
 
-**Request POST /api/v1/laporan-hama:**
+**Request POST /api/v1/laporan-hama (buat Draf):**
 ```json
 {
-  "action": "submit",
+  "action": "draft",
   "tanggal": "2026-07-16",
   "master_opt_id": 1,
   "kabupaten_id": 1,
@@ -322,7 +324,8 @@ Master wilayah berjenjang: Kabupaten → Kecamatan → Desa.
   "message": "Data laporan tidak valid",
   "errors": {
     "tanggal": "Tanggal wajib diisi",
-    "luas_serangan": "Luas serangan harus antara 0 dan 9999.99"
+    "luas_serangan": "Luas serangan harus antara 0 dan 9999.99",
+    "foto": "Foto laporan wajib disertakan sebelum laporan dapat dikirim."
   }
 }
 ```
@@ -1268,7 +1271,103 @@ Semua value FCM data adalah **string**.
 
 ---
 
+## Storytelling Internal Web API (Implemented — Algorithm 2.0.0)
+
+Endpoint ini berada pada router internal `/api`, memakai session cookie web,
+role `admin`/`statistisi`, dan CSRF untuk request mutasi. Endpoint ini bukan bagian
+dari kontrak JWT mobile `/api/v1`.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/storytelling/analyses` | Daftar analisis; filter `tahun`, `wilayah_id`, `status`, serta pagination |
+| GET | `/api/storytelling/analyses/{id}` | Detail analisis dan snapshot sumber |
+| POST | `/api/storytelling/generate` | Membuat indikasi hubungan dari `bulan`, `tahun`, `wilayah_id` |
+| POST | `/api/storytelling/save` | Rekalkulasi server-side lalu create/update draft |
+| POST | `/api/storytelling/publish/{id}` | Publikasi analisis yang memiliki narasi final |
+| GET | `/api/storytelling/chart-data` | Tiga seri set-based untuk 1-24 bulan |
+| GET | `/api/storytelling/stats` | Statistik draft/published/archived per tahun |
+
+Input minimum generate:
+
+```json
+{
+  "bulan": 8,
+  "tahun": 2026,
+  "wilayah_id": 1
+}
+```
+
+Save hanya menerima periode, narasi final, dan override faktor. Nilai produksi,
+hujan, OPT, serta seluruh skor dari client diabaikan dan dihitung ulang di server.
+Jika produksi bulanan terverifikasi atau indikator minimum tidak tersedia, generate
+mengembalikan HTTP `422` dengan `errors.error_code=InsufficientData` dan rincian
+kualitas data. Output adalah indikasi hubungan berbasis aturan, bukan bukti kausalitas.
+
+---
+
 ## Webhook / Callback (Future)
+
+## Feedback Internal API (Implemented)
+
+Endpoint berikut menggunakan session web dan hanya dapat diakses role `admin`.
+Role `petugas` menerima HTTP 403 dan pengguna tanpa session menerima HTTP 401.
+Respons selalu JSON `{success, message, data, timestamp}`; filter tidak valid
+mengembalikan HTTP 422.
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/feedback/summary` | Session Admin | Total status/jenis dan rekap per petugas |
+| GET | `/api/feedback` | Session Admin | Daftar aduan paginated (`page`, `per_page`) |
+
+Filter yang didukung (validasi server-side):
+
+| Param | Nilai valid |
+|-------|-------------|
+| `year` | 2020 – (tahun berjalan + 1) |
+| `month` | 0 (semua) – 12 |
+| `jenis` | `bug`, `fitur_baru`, `peningkatan` |
+| `status` | `diterima`, `dalam_proses`, `selesai`, `ditolak` |
+| `search` | Teks bebas (hanya endpoint daftar), dicari di judul & deskripsi |
+
+Pagination endpoint daftar: `page` (default 1) dan `per_page` (1–100, default
+20). Response dihasilkan langsung dari database tanpa cache, sehingga
+mencerminkan data terbaru pada request berikutnya.
+
+Contoh `GET /api/feedback/summary?year=2026&month=8`:
+
+```json
+{
+  "success": true,
+  "message": "Rekap masukan berhasil diambil",
+  "data": {
+    "totals": { "total": 5, "pending": 3, "in_progress": 1, "completed": 1, "rejected": 0, "bugs": 2, "features": 2, "improvements": 1 },
+    "by_petugas": [ { "user_id": 2, "nama_lengkap": "Petugas Lapangan 01", "username": "petugas01", "total": 5, "pending": 3, "in_progress": 1, "completed": 1, "rejected": 0 } ],
+    "generated_at": "2026-08-20T04:50:00+07:00"
+  },
+  "timestamp": "2026-08-20 04:50:00"
+}
+```
+
+### Web Feedback (server-rendered)
+
+| Method | Endpoint | Akses | Description |
+|--------|----------|-------|-------------|
+| GET | `/feedback` | Petugas | Daftar masukan MILIK SENDIRI (ownership di-enforce di query) |
+| GET/POST | `/feedback/create` | Petugas | Form + submit masukan (CSRF wajib) |
+| GET | `/feedback/detail/{id}` | Petugas (milik sendiri) / Admin | Detail + riwayat status |
+| POST | `/feedback/vote/{id}` | Petugas | Toggle vote; vote milik sendiri = 400, milik petugas lain = 403 (IDOR) |
+| GET | `/feedback/admin-summary` | Admin | Panel rekap: total, per status, rekap per petugas, daftar aduan (filter year/month/jenis/status/search + pagination) |
+| GET | `/feedback/report` | Admin | Laporan bulanan & statistik |
+| POST | `/feedback/updateStatus/{id}` | Admin | Ubah status + catatan (dicatat ke `feedback_status_history`, transaksi) |
+| POST | `/feedback/delete/{id}` | Admin | Hapus masukan + lampiran |
+
+Validasi input (server-side): `jenis_feedback` whitelist; judul 5–255 karakter
+dan deskripsi 20–5000 karakter dengan `mb_strlen` (multibyte-safe); prioritas
+whitelist; catatan admin disimpan mentah (hanya trim) dan di-escape saat output
+(mencegah double-escape/XSS); error upload dieksplisitkan (ukuran, parsial,
+MIME via magic bytes `finfo`, ekstensi dari MIME aktual, nama file acak,
+`is_uploaded_file`, direktori dilindungi `.htaccess`). Semua aksi mutasi web
+wajib CSRF token.
 
 - Webhook verifikasi ke sistem eksternal
 

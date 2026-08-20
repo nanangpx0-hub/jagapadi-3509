@@ -3,10 +3,41 @@
 define('ROOT_PATH', __DIR__);
 
 // Define BASE_URL
+//
+// Base URL dihitung dari relasi filesystem antara ROOT_PATH dan DOCUMENT_ROOT,
+// BUKAN dari `dirname($_SERVER['SCRIPT_NAME'])` secara mentah. Pendekatan lama
+// menyertakan path absolut mesin (mis. C:/laragon/www/jagapadi-3509) ke dalam
+// URL ketika aplikasi pertama kali diakses lewat link/path absolut, sehingga
+// seluruh link navigasi yang dibangun dari BASE_URL mengarah ke URL yang salah
+// (contoh: http://localhost/C:/laragon/www/jagapadi-3509/).
 $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
 $host = $_SERVER['HTTP_HOST'];
-$script = dirname($_SERVER['SCRIPT_NAME']);
-$baseUrl = $protocol . '://' . $host . ($script !== '/' ? $script : '') . '/';
+
+$basePath = '';
+$docRoot = isset($_SERVER['DOCUMENT_ROOT'])
+    ? rtrim(str_replace('\\', '/', $_SERVER['DOCUMENT_ROOT']), '/')
+    : '';
+$rootAsUrl = str_replace('\\', '/', ROOT_PATH);
+
+// 1) Selisih DOCUMENT_ROOT terhadap ROOT_PATH -> segmen path web yang benar
+//    (contoh: docroot C:/laragon/www + ROOT C:/laragon/www/jagapadi-3509
+//    menghasilkan base path "/jagapadi-3509").
+if ($docRoot !== '' && str_starts_with($rootAsUrl, $docRoot)) {
+    $basePath = trim(substr($rootAsUrl, strlen($docRoot)), '/');
+} elseif ($docRoot !== '' && $rootAsUrl === $docRoot) {
+    // Aplikasi di-root docroot: base URL adalah "/".
+    $basePath = '';
+} else {
+    // 2) Fallback aman: ambil nama folder aplikasi (basename ROOT_PATH) dan
+    //    bersihkan sisa-sisa path absolut bila DOCUMENT_ROOT tidak tersedia.
+    $basePath = trim(basename(ROOT_PATH), '/');
+    if (preg_match('~^[A-Za-z]:$~', $basePath) === 1) {
+        $basePath = '';
+    }
+}
+
+$baseUrl = $protocol . '://' . $host . '/' . ltrim($basePath, '/');
+$baseUrl = rtrim($baseUrl, '/') . '/';
 define('BASE_URL', $baseUrl);
 
 // Define UPLOAD_PATH
@@ -172,6 +203,31 @@ $controllerName = str_replace(' ', '', ucwords(str_replace(['-', '_'], ' ', $con
 $method = $parts[1] ?? 'index';
 $params = array_slice($parts, 2);
 
+// Explicit route map (config/web_routes.php) — dipakai jika tersedia,
+// dengan fallback konvensi default di bawah untuk backward compatibility.
+$explicitRoutes = [];
+$webRoutesFile = ROOT_PATH . '/config/web_routes.php';
+if (file_exists($webRoutesFile)) {
+    $explicitRoutes = require $webRoutesFile;
+}
+$routePath = ltrim(rtrim($request, '/'), '/');
+// Pencocokan case-insensitive terhadap route map. .htaccess me-lowercase URL
+// berhuruf besar, sehingga route campuran seperti "dashboardPadi" akan datang
+// sebagai "dashboardpadi"; lookup ini memastikan keduanya tetap ter-resolve
+// tanpa 404.
+$matchedRoute = null;
+foreach ($explicitRoutes as $mapKey => $handler) {
+    if (strcasecmp((string)$mapKey, $routePath) === 0) {
+        $matchedRoute = $handler;
+        break;
+    }
+}
+if ($matchedRoute !== null) {
+    $routeHandler = explode('@', $matchedRoute);
+    $controllerName = $routeHandler[0] . 'Controller';
+    $method = $routeHandler[1];
+}
+
 // Check if controller exists
 $controllerFile = ROOT_PATH . '/app/controllers/' . $controllerName . '.php';
 if (!file_exists($controllerFile)) {
@@ -200,13 +256,18 @@ $stateChangingMethods = [
     'togglestatus',
     'updatestatus',
     'verify',
+    'reject',
+    'archive',
     'bulkdelete',
     'uploadpreview',
     'processimport',
     'uploadphoto',
     'deletephoto',
     'runscraper',
+    'runscraperbackground',
     'importexcel',
+    'importksa',
+    'syncksatoannual',
     'deletebyyear',
     'deletemultiple',
     'deletelog',

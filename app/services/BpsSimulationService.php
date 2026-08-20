@@ -98,17 +98,26 @@ class BpsSimulationService {
         
         $scenarioFactor = self::SCENARIO_FACTORS[$skenario] ?? self::SCENARIO_FACTORS['baseline'];
         
-        // Apply year variation (±5% based on year difference from 2024)
-        $yearDiff = $tahun - 2024;
-        $yearFactor = 1 + ($yearDiff * rand(-30, 30) / 1000);
+        // Apply a bounded annual trend (0.5% per year, maximum ±15%).
+        $yearAdjustment = max(-0.15, min(0.15, ((int) $tahun - 2024) * 0.005));
+        $yearFactor = 1 + $yearAdjustment;
         
-        // Apply random variation (±3%)
-        $randomFactor = 1 + (rand(-30, 30) / 1000);
+        // Deterministic variation (±3%) keeps reruns reproducible.
+        $seed = (int) sprintf('%u', crc32("{$tahun}|{$kabupaten}|{$skenario}"));
+        $randomAdjustment = (($seed % 61) - 30) / 1000;
+        $randomFactor = 1 + $randomAdjustment;
         
         // Calculate adjusted values
         $luasPanen = round($baseData['luas'] * $yearFactor * $randomFactor * $scenarioFactor['luas']);
         $produksiGabah = round($baseData['produksi'] * $yearFactor * $randomFactor * $scenarioFactor['produksi']);
-        $produktivitas = round($baseData['produktivitas'] * (1 + (rand(-20, 20) / 1000)), 2);
+        
+        // Calculate produktivitas from actual luas and produksi to ensure consistency
+        // produktivitas = (produksi_gabah / luas_panen) * 10 = ku/ha
+        if ($luasPanen > 0) {
+            $produktivitas = round(($produksiGabah / $luasPanen) * 10, 2);
+        } else {
+            $produktivitas = 0;
+        }
         
         return [
             'tahun' => $tahun,

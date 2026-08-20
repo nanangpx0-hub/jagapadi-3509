@@ -110,6 +110,21 @@ class CurahHujanScraper {
         $targetMonth = (int)($options['month'] ?? date('m'));
         $targetYear = (int)($options['year'] ?? date('Y'));
         $forceSimulation = $options['force_simulation'] ?? false;
+
+        if ($targetMonth < 1 || $targetMonth > 12 || $targetYear < 2000) {
+            return [
+                'success' => false,
+                'source' => null,
+                'records_processed' => 0,
+                'records_success' => 0,
+                'records_failed' => 0,
+                'message' => 'Periode curah hujan tidak valid',
+                'execution_time' => round(microtime(true) - $startTime, 4),
+                'target_month' => $targetMonth,
+                'target_year' => $targetYear,
+                'no_data' => true,
+            ];
+        }
         
         $this->log("Target: {$targetYear}-" . str_pad($targetMonth, 2, '0', STR_PAD_LEFT));
         
@@ -170,7 +185,7 @@ class CurahHujanScraper {
             $targetDate = DateTime::createFromFormat('Y-m-d', "{$targetYear}-{$targetMonth}-01");
             $isHistoricalRequest = $targetDate < $currentDate && $targetDate->format('Y-m') !== $currentDate->format('Y-m');
             
-            $requestedSource = $options['source'] ?? null;
+            $requestedSource = strtolower(trim((string) ($options['source'] ?? 'nasa')));
 
             if ($forceSimulation) {
                 $this->log("Force simulation mode enabled");
@@ -180,7 +195,7 @@ class CurahHujanScraper {
                 $data = null;
                 
                 // === Priority 1: NASA POWER API (daily precipitation PRECTOTCORR) ===
-                if ($requestedSource === 'nasa' || $requestedSource === 'nasa_power' || $this->sources['nasa_power']['enabled']) {
+                if ($requestedSource === 'nasa' || $requestedSource === 'nasa_power') {
                     $this->log("[Priority 1] Attempting NASA POWER API (PRECTOTCORR daily)");
                     try {
                         $nasaResult = $this->fetch_nasa_curah_hujan($targetYear, $targetMonth);
@@ -197,15 +212,20 @@ class CurahHujanScraper {
                 }
 
                 // === Priority 2: Open-Meteo (actual mm precipitation) ===
-                if (empty($data) && $this->sources['openmeteo']['enabled']) {
+                if (empty($data) && $requestedSource === 'openmeteo' && $this->sources['openmeteo']['enabled']) {
                     $this->log("[Priority 2] Attempting Open-Meteo API (actual precipitation data)");
                     try {
                         if ($this->openMeteoService->isAvailable()) {
-                            $targetDateStr = date('Y-m-d', strtotime("{$targetYear}-{$targetMonth}-01"));
-                            $openMeteoResult = $this->openMeteoService->fetchAllKecamatan($targetDateStr);
+                            $startDate = sprintf('%04d-%02d-01', $targetYear, $targetMonth);
+                            $endDate = date('Y-m-t', strtotime($startDate));
+                            if ($endDate > date('Y-m-d')) {
+                                $endDate = date('Y-m-d');
+                            }
+                            $openMeteoData = $this->openMeteoService
+                                ->fetchAllKecamatanRange($startDate, $endDate);
                             
-                            if (!empty($openMeteoResult['data'])) {
-                                $data = $openMeteoResult['data'];
+                            if (!empty($openMeteoData)) {
+                                $data = $openMeteoData;
                                 $result['source'] = 'Open-Meteo';
                                 $this->log("✓ Open-Meteo: fetched " . count($data) . " records");
                             } else {
@@ -220,15 +240,18 @@ class CurahHujanScraper {
                 }
                 
                 // === Priority 3: BMKG API (weather categories) ===
-                if (empty($data) && $this->sources['bmkg_api']['enabled']) {
+                if (empty($data) && in_array($requestedSource, ['bmkg', 'bmkg_api'], true) && $this->sources['bmkg_api']['enabled']) {
                     $this->log("[Priority 3] Attempting BMKG API (weather categories)");
                     try {
                         if ($this->bmkgService->isAvailable()) {
-                            $bmkgResult = $this->bmkgService->fetchAndSave(date('Y-m-d', strtotime("{$targetYear}-{$targetMonth}-01")));
+                            $bmkgResult = [
+                                'success' => true,
+                                'fetch_results' => ['data' => $this->fetchFromBMKG($targetYear, $targetMonth)],
+                            ];
                             
                             if ($bmkgResult['success'] && isset($bmkgResult['fetch_results']['data'])) {
                                 $data = $bmkgResult['fetch_results']['data'];
-                                $result['source'] = 'BMKG Forecast API';
+                                $result['source'] = 'Estimasi Kategori Cuaca BMKG';
                                 $this->log("✓ BMKG: fetched " . count($data) . " records");
                             } else {
                                 $this->log("BMKG Service failed: " . ($bmkgResult['message'] ?? 'Unknown error'));
@@ -242,15 +265,16 @@ class CurahHujanScraper {
                 }
                 
                 // === Priority 99: Simulation (fallback) ===
-                if (empty($data) && $this->sources['simulation']['enabled']) {
-                    $this->log("[Fallback] Using simulation data (all API sources failed)");
+                if (empty($data) && $requestedSource === 'simulation' && $this->sources['simulation']['enabled']) {
+                    $this->log("Using explicitly requested simulation data");
                     $data = $this->generateSimulationData($targetYear, $targetMonth);
-                    $result['source'] = 'Simulasi (API Fallback)';
+                    $result['source'] = 'Simulasi';
                 }
             }
             
             if (empty($data)) {
-                throw new Exception("No data available from any source for {$targetYear}-{$targetMonth}");
+                $sourceLabel = $result['source'] ?: $requestedSource;
+                throw new Exception("Sumber {$sourceLabel} tidak mengembalikan data untuk {$targetYear}-{$targetMonth}; tidak ada fallback otomatis ke simulasi");
             }
             
             $result['records_processed'] = count($data);
@@ -263,9 +287,10 @@ class CurahHujanScraper {
             $result['records_failed'] = $insertResult['failed'];
             $result['success'] = $insertResult['success'] > 0;
             $result['message'] = sprintf(
-                "Berhasil memproses %d dari %d record",
+                "Berhasil memproses %d dari %d record dari %s",
                 $insertResult['success'],
-                count($data)
+                count($data),
+                $result['source']
             );
             
         } catch (Exception $e) {
@@ -284,7 +309,8 @@ class CurahHujanScraper {
                 'processed' => $result['records_processed'],
                 'success' => $result['records_success'],
                 'failed' => $result['records_failed'],
-                'execution_time' => $result['execution_time']
+                'execution_time' => $result['execution_time'],
+                'source' => $result['source']
             ]
         );
         
@@ -414,7 +440,7 @@ class CurahHujanScraper {
         $this->log("Parsing BMKG data for {$lokasi}, target: {$targetYear}-" . str_pad($targetMonth, 2, '0', STR_PAD_LEFT));
         
         // Format analysis date for keterangan
-        $releaseDateText = 'Data resmi';
+        $releaseDateText = 'Estimasi kategori cuaca BMKG; bukan pengukuran curah hujan';
         if ($analysisDate) {
             try {
                 $dateObj = new DateTime($analysisDate);
@@ -425,9 +451,9 @@ class CurahHujanScraper {
                 ];
                 $day = $dateObj->format('j');
                 $monthNum = (int) $dateObj->format('n');
-                $releaseDateText = "Data rilis BMKG tanggal {$day} {$bulan[$monthNum]}";
+                $releaseDateText = "Estimasi kategori cuaca dari prakiraan BMKG tanggal {$day} {$bulan[$monthNum]}; bukan pengukuran curah hujan";
             } catch (Exception $e) {
-                $releaseDateText = 'Data resmi';
+                $releaseDateText = 'Estimasi kategori cuaca BMKG; bukan pengukuran curah hujan';
             }
         }
         
@@ -473,7 +499,7 @@ class CurahHujanScraper {
                             'kode_wilayah' => $this->kodeWilayahJember,
                             'curah_hujan' => $rainfall,
                             'satuan' => 'mm',
-                            'sumber_data' => 'Data dari BMKG',
+                            'sumber_data' => 'Estimasi Kategori Cuaca BMKG',
                             'keterangan' => $keterangan
                         ];
                     } else {
@@ -538,6 +564,9 @@ class CurahHujanScraper {
         
         $data = [];
         $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $month, $year);
+        if ((int) $year === (int) date('Y') && (int) $month === (int) date('n')) {
+            $daysInMonth = min($daysInMonth, (int) date('j'));
+        }
         
         // Rainfall patterns for Jember (tropical monsoon climate)
         // Higher in Nov-Apr (wet season), lower in May-Oct (dry season)
@@ -547,15 +576,15 @@ class CurahHujanScraper {
         for ($day = 1; $day <= $daysInMonth; $day++) {
             $date = sprintf('%04d-%02d-%02d', $year, $month, $day);
             
-            // Generate realistic rainfall
+            $seed = (int) sprintf('%u', crc32($date . '|curah-hujan'));
+
+            // Generate deterministic synthetic rainfall for repeatable tests.
             if ($isWetSeason) {
-                // Wet season: 60% chance of rain, higher amounts
-                $hasRain = (mt_rand(1, 100) <= 60);
-                $rainfall = $hasRain ? round(mt_rand(5, 80) + (mt_rand(0, 99) / 100), 2) : 0;
+                $hasRain = (($seed % 100) < 60);
+                $rainfall = $hasRain ? round(5 + (intdiv($seed, 100) % 7600) / 100, 2) : 0;
             } else {
-                // Dry season: 15% chance of rain, lower amounts
-                $hasRain = (mt_rand(1, 100) <= 15);
-                $rainfall = $hasRain ? round(mt_rand(1, 20) + (mt_rand(0, 99) / 100), 2) : 0;
+                $hasRain = (($seed % 100) < 15);
+                $rainfall = $hasRain ? round(1 + (intdiv($seed, 100) % 1900) / 100, 2) : 0;
             }
             
             $data[] = [
@@ -565,7 +594,7 @@ class CurahHujanScraper {
                 'curah_hujan' => $rainfall,
                 'satuan' => 'mm',
                 'sumber_data' => 'Simulasi',
-                'keterangan' => 'Data simulasi untuk demo'
+                'keterangan' => 'Data simulasi internal; bukan observasi atau rilis instansi.'
             ];
         }
         
@@ -588,7 +617,8 @@ class CurahHujanScraper {
             }
             
             // Validate date format
-            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $record['tanggal'])) {
+            $date = DateTime::createFromFormat('!Y-m-d', (string) $record['tanggal']);
+            if (!$date || $date->format('Y-m-d') !== $record['tanggal'] || $record['tanggal'] > date('Y-m-d')) {
                 continue;
             }
             
@@ -613,6 +643,9 @@ class CurahHujanScraper {
      * @return string|false
      */
     private function httpRequest($url, $options = []) {
+        // SSL verification diaktifkan secara default; bisa dimatikan via .env untuk dev
+        $sslVerify = getenv('CURL_SSL_VERIFY') !== 'false';
+
         $ch = curl_init();
         
         curl_setopt_array($ch, [
@@ -620,7 +653,8 @@ class CurahHujanScraper {
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_TIMEOUT => 30,
-            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYPEER => $sslVerify,
+            CURLOPT_SSL_VERIFYHOST => $sslVerify ? 2 : 0,
             CURLOPT_HTTPHEADER => [
                 'Accept: application/json',
                 'User-Agent: JAGAPADI/1.0'
@@ -654,14 +688,22 @@ class CurahHujanScraper {
     private function log($message) {
         $timestamp = date('Y-m-d H:i:s');
         $logMessage = "[{$timestamp}] {$message}\n";
-        
+
+        if (str_contains((string) $this->logFile, '://')) {
+            file_put_contents($this->logFile, $logMessage, FILE_APPEND);
+            return;
+        }
+
         // Ensure log directory exists
         $logDir = dirname($this->logFile);
-        if (!is_dir($logDir)) {
-            mkdir($logDir, 0755, true);
+        if (!is_dir($logDir) && (!mkdir($logDir, 0755, true) && !is_dir($logDir))) {
+            error_log("Curah hujan scraper log directory unavailable: {$logDir}");
+            return;
         }
-        
-        file_put_contents($this->logFile, $logMessage, FILE_APPEND | LOCK_EX);
+
+        if (file_put_contents($this->logFile, $logMessage, FILE_APPEND | LOCK_EX) === false) {
+            error_log("Curah hujan scraper log file unavailable: {$this->logFile}");
+        }
     }
     
     /**
@@ -737,6 +779,14 @@ class CurahHujanScraper {
      */
     public function fetch_nasa_curah_hujan($year = null, $month = null) {
         $year = $year ? (int)$year : (int)date('Y');
+        $month = $month !== null ? (int) $month : null;
+
+        if (($month !== null && ($month < 1 || $month > 12)) || $year < 2000 || $year > (int) date('Y')) {
+            throw new InvalidArgumentException('Periode NASA POWER tidak valid');
+        }
+        if ($month !== null && $year === (int) date('Y') && $month > (int) date('n')) {
+            throw new InvalidArgumentException('Data curah hujan bulan masa depan belum tersedia');
+        }
         
         if ($month) {
             $monthPad = str_pad($month, 2, '0', STR_PAD_LEFT);
@@ -746,6 +796,11 @@ class CurahHujanScraper {
         } else {
             $startDate = "{$year}0101";
             $endDate = "{$year}1231";
+        }
+
+        $today = date('Ymd');
+        if ($endDate > $today) {
+            $endDate = $today;
         }
 
         $this->log("Fetching from NASA POWER API for {$startDate} - {$endDate}...");
@@ -845,6 +900,9 @@ class CurahHujanScraper {
                 'format'     => 'JSON'
             ]);
 
+            // SSL verification diaktifkan secara default; bisa dimatikan via .env untuk dev
+            $sslVerify = getenv('CURL_SSL_VERIFY') !== 'false';
+
             $ch = curl_init();
             curl_setopt_array($ch, [
                 CURLOPT_URL            => $apiUrl,
@@ -853,7 +911,8 @@ class CurahHujanScraper {
                 CURLOPT_TIMEOUT        => 45,
                 CURLOPT_CONNECTTIMEOUT => 10,
                 CURLOPT_USERAGENT      => 'JAGAPADI-System/1.0 (PHP-cURL-Multi)',
-                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_SSL_VERIFYPEER => $sslVerify,
+                CURLOPT_SSL_VERIFYHOST => $sslVerify ? 2 : 0,
             ]);
 
             curl_multi_add_handle($mh, $ch);

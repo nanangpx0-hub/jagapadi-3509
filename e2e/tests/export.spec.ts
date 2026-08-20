@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'fs';
+import { BASE } from '../base-url';
 
-const BASE = 'http://localhost/jagapadi-3509';
 const ADMIN_USER = 'admin';
 const ADMIN_PASS = 'Jember3509';
 

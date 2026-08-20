@@ -171,7 +171,10 @@
                             </a>
                             <?php endif; ?>
 
-                            <?php if(in_array($_SESSION['role'] ?? '', ['admin', 'operator']) && $row['status'] !== 'Diarsipkan'): ?>
+                            <?php if(
+                                in_array($_SESSION['role'] ?? '', ['admin', 'operator'], true)
+                                && in_array($row['status'] ?? '', ['Submitted', 'Diverifikasi'], true)
+                            ): ?>
                             <form action="<?= BASE_URL ?>laporan/archive/<?= $row['id'] ?>" method="POST" class="d-inline">
                                 <?= Security::getCsrfField() ?>
                                 <button type="submit"

@@ -1,3 +1,22 @@
+<?php
+$sidebarRoute = SidebarState::routeFromRequest(
+    (string) ($_SERVER['REQUEST_URI'] ?? ''),
+    BASE_URL
+);
+$dashboardMenuActive = SidebarState::matches($sidebarRoute, 'dashboard', false);
+$mapMenuActive = SidebarState::matches($sidebarRoute, 'dashboard/map');
+$chartsMenuActive = SidebarState::matches($sidebarRoute, 'dashboard/charts');
+$laporanHamaMenuActive = SidebarState::matches($sidebarRoute, 'laporan');
+$irigasiMenuActive = SidebarState::matches($sidebarRoute, 'irigasi') && strpos($_SERVER['REQUEST_URI'] ?? '', '/irigasiScraper') === false;
+$laporanLainnyaMenuActive = SidebarState::matches($sidebarRoute, 'laporan-lainnya') && !SidebarState::matches($sidebarRoute, 'laporan-lainnya/report');
+$reportMenuActive = SidebarState::matches($sidebarRoute, 'laporan-lainnya/report');
+$optMenuActive = SidebarState::matches($sidebarRoute, 'opt');
+$userMenuActive = SidebarState::matches($sidebarRoute, 'user');
+$wilayahMenuActive = SidebarState::matches($sidebarRoute, 'adminWilayah');
+$kabupatenMenuActive = SidebarState::matches($sidebarRoute, 'adminWilayah/kabupaten');
+$kecamatanMenuActive = SidebarState::matches($sidebarRoute, 'adminWilayah/kecamatan');
+$desaMenuActive = SidebarState::matches($sidebarRoute, 'adminWilayah/desa');
+?>
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -6,25 +25,26 @@
     <title><?= $title ?? 'Dashboard' ?> - JAGAPADI</title>
 
     <!-- AdminLTE CSS -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/css/adminlte.min.css">
+    <link rel="stylesheet" href="<?= BASE_URL ?>public/vendor/css/adminlte.min.css">
     <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="<?= BASE_URL ?>public/vendor/css/fontawesome-all.min.css">
     <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+    <link rel="stylesheet" href="<?= BASE_URL ?>public/vendor/css/leaflet.css" />
+    <link rel="stylesheet" href="<?= BASE_URL ?>public/vendor/css/MarkerCluster.css" />
+    <link rel="stylesheet" href="<?= BASE_URL ?>public/vendor/css/MarkerCluster.Default.css" />
     <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    <script src="<?= BASE_URL ?>public/vendor/js/leaflet.js"></script>
+    <script src="<?= BASE_URL ?>public/vendor/js/leaflet.markercluster.js"></script>
     <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="<?= BASE_URL ?>public/vendor/js/chart.umd.min.js"></script>
     <!-- jQuery (dimuat di head agar tersedia untuk skrip inline pada body view) -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="<?= BASE_URL ?>public/vendor/js/jquery-3.6.0.min.js"></script>
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="<?= BASE_URL ?>public/css/loading.css">
     <link rel="stylesheet" href="<?= BASE_URL ?>public/css/responsive.css">
     <link rel="stylesheet" href="<?= BASE_URL ?>public/css/filter-status.css">
+    <link rel="stylesheet" href="<?= BASE_URL ?>public/css/sidebar-state.css">
     
     <!-- PWA Manifest -->
     <link rel="manifest" href="<?= BASE_URL ?>public/manifest.json">
@@ -45,9 +65,6 @@
         }
         .main-header .navbar-nav .nav-link {
             color: white !important;
-        }
-        .sidebar-dark-success .nav-sidebar>.nav-item>.nav-link.active {
-            background-color: #28a745 !important;
         }
         #map { height: 500px; width: 100%; }
         
@@ -226,6 +243,13 @@
 
         <!-- Right navbar links -->
         <ul class="navbar-nav ml-auto">
+            <?php if (($_SESSION['role'] ?? '') === 'petugas'): ?>
+            <li class="nav-item d-none d-sm-inline-block mr-2">
+                <a href="<?= BASE_URL ?>laporan-lainnya/report" class="btn btn-outline-light btn-sm text-white font-weight-bold">
+                    <i class="fas fa-chart-line mr-1"></i> Report
+                </a>
+            </li>
+            <?php endif; ?>
             <li class="nav-item">
                 <form action="<?= BASE_URL ?>auth/logout" method="POST" class="d-inline">
                     <?= Security::getCsrfField() ?>
@@ -262,56 +286,99 @@
             <nav class="mt-2">
                 <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu">
                     <li class="nav-item">
-                        <a href="<?= BASE_URL ?>dashboard" class="nav-link">
+                        <a href="<?= BASE_URL ?>dashboard"
+                           class="nav-link <?= $dashboardMenuActive ? 'active' : '' ?>"
+                           data-sidebar-menu="dashboard"
+                           <?= $dashboardMenuActive ? 'aria-current="page"' : '' ?>>
                             <i class="nav-icon fas fa-tachometer-alt"></i>
                             <p>Dashboard</p>
                         </a>
                     </li>
+                    <?php if (!in_array($_SESSION['role'] ?? '', ['petugas'])): ?>
                     <li class="nav-item">
-                        <a href="<?= BASE_URL ?>dashboardPadi" class="nav-link <?= (strpos($_SERVER['REQUEST_URI'], '/dashboardPadi') !== false) ? 'active' : '' ?>">
+                        <a href="<?= BASE_URL ?>dashboard-padi" class="nav-link <?= (stripos($_SERVER['REQUEST_URI'], '/dashboard-padi') !== false) ? 'active' : '' ?>">
                             <i class="nav-icon fas fa-seedling"></i>
                             <p>Dashboard Padi</p>
                         </a>
                     </li>
+                    <?php endif; ?>
                     <li class="nav-item">
-                        <a href="<?= BASE_URL ?>dashboard/map" class="nav-link">
+                        <a href="<?= BASE_URL ?>dashboard/map"
+                           class="nav-link <?= $mapMenuActive ? 'active' : '' ?>"
+                           data-sidebar-menu="dashboard-map"
+                           <?= $mapMenuActive ? 'aria-current="page"' : '' ?>>
                             <i class="nav-icon fas fa-map-marked-alt"></i>
                             <p>Peta Sebaran</p>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="<?= BASE_URL ?>dashboard/charts" class="nav-link">
+                        <a href="<?= BASE_URL ?>dashboard/charts"
+                           class="nav-link <?= $chartsMenuActive ? 'active' : '' ?>"
+                           data-sidebar-menu="dashboard-charts"
+                           <?= $chartsMenuActive ? 'aria-current="page"' : '' ?>>
                             <i class="nav-icon fas fa-chart-bar"></i>
                             <p>Grafik & Statistik</p>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="<?= BASE_URL ?>laporan" class="nav-link">
+                        <a href="<?= BASE_URL ?>laporan"
+                           class="nav-link <?= $laporanHamaMenuActive ? 'active' : '' ?>"
+                           data-sidebar-menu="laporan-hama"
+                           <?= $laporanHamaMenuActive ? 'aria-current="page"' : '' ?>>
                             <i class="nav-icon fas fa-file-alt"></i>
                             <p>Laporan Hama</p>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="<?= BASE_URL ?>laporan-lainnya" class="nav-link">
+                        <a href="<?= BASE_URL ?>irigasi"
+                           class="nav-link <?= $irigasiMenuActive ? 'active' : '' ?>"
+                           data-sidebar-menu="laporan-irigasi"
+                           <?= $irigasiMenuActive ? 'aria-current="page"' : '' ?>>
+                            <i class="nav-icon fas fa-water"></i>
+                            <p>Laporan Irigasi</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="<?= BASE_URL ?>laporan-lainnya"
+                           class="nav-link <?= $laporanLainnyaMenuActive ? 'active' : '' ?>"
+                           data-sidebar-menu="laporan-lainnya"
+                           <?= $laporanLainnyaMenuActive ? 'aria-current="page"' : '' ?>>
                             <i class="nav-icon fas fa-clipboard-list"></i>
                             <p>Laporan Lainnya</p>
                         </a>
                     </li>
+                    <?php if (($_SESSION['role'] ?? '') === 'petugas'): ?>
                     <li class="nav-item">
-                        <a href="<?= BASE_URL ?>irigasi" class="nav-link <?= (strpos($_SERVER['REQUEST_URI'], '/irigasi') !== false && strpos($_SERVER['REQUEST_URI'], '/irigasiScraper') === false) ? 'active' : '' ?>">
-                            <i class="nav-icon fas fa-water"></i>
-                            <p>Sebaran Irigasi</p>
+                        <a href="<?= BASE_URL ?>laporan-lainnya/report"
+                           class="nav-link <?= $reportMenuActive ? 'active' : '' ?>"
+                           data-sidebar-menu="laporan-report"
+                           <?= $reportMenuActive ? 'aria-current="page"' : '' ?>>
+                            <i class="nav-icon fas fa-chart-pie text-warning"></i>
+                            <p>Report</p>
                         </a>
                     </li>
+                    <?php endif; ?>
+                    <?php if (($_SESSION['role'] ?? '') === 'petugas'): ?>
                     <li class="nav-item">
                         <a href="<?= BASE_URL ?>feedback" class="nav-link <?= (strpos($_SERVER['REQUEST_URI'], '/feedback') !== false) ? 'active' : '' ?>">
                             <i class="nav-icon fas fa-comments"></i>
                             <p>Masukan & Saran</p>
                         </a>
                     </li>
+                    <?php elseif (($_SESSION['role'] ?? '') === 'admin'): ?>
+                    <li class="nav-item">
+                        <a href="<?= BASE_URL ?>feedback/admin-summary" class="nav-link <?= (strpos($_SERVER['REQUEST_URI'], '/feedback') !== false) ? 'active' : '' ?>">
+                            <i class="nav-icon fas fa-comments"></i>
+                            <p>Rekap Masukan</p>
+                        </a>
+                    </li>
+                    <?php endif; ?>
                     <?php if(in_array($_SESSION['role'] ?? '', ['admin', 'operator'])): ?>
                     <li class="nav-item">
-                        <a href="<?= BASE_URL ?>opt" class="nav-link">
+                        <a href="<?= BASE_URL ?>opt"
+                           class="nav-link <?= $optMenuActive ? 'active' : '' ?>"
+                           data-sidebar-menu="master-opt"
+                           <?= $optMenuActive ? 'aria-current="page"' : '' ?>>
                             <i class="nav-icon fas fa-bug"></i>
                             <p>Master Data OPT</p>
                         </a>
@@ -361,29 +428,39 @@
                             <p>Monitoring Irigasi</p>
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a href="#" class="nav-link">
+                    <li class="nav-item <?= $wilayahMenuActive ? 'menu-open' : '' ?>"
+                        data-sidebar-parent="wilayah">
+                        <a href="#"
+                           class="nav-link <?= $wilayahMenuActive ? 'active sidebar-parent-active' : '' ?>"
+                           aria-expanded="<?= $wilayahMenuActive ? 'true' : 'false' ?>"
+                           aria-controls="wilayahSubmenu">
                             <i class="nav-icon fas fa-map"></i>
                             <p>
                                 Master Wilayah
                                 <i class="right fas fa-angle-left"></i>
                             </p>
                         </a>
-                        <ul class="nav nav-treeview">
+                        <ul class="nav nav-treeview" id="wilayahSubmenu">
                             <li class="nav-item">
-                                <a href="<?= BASE_URL ?>adminWilayah/kabupaten" class="nav-link">
+                                <a href="<?= BASE_URL ?>adminWilayah/kabupaten"
+                                   class="nav-link <?= $kabupatenMenuActive ? 'active' : '' ?>"
+                                   <?= $kabupatenMenuActive ? 'aria-current="page"' : '' ?>>
                                     <i class="far fa-circle nav-icon"></i>
                                     <p>Kabupaten</p>
                                 </a>
                             </li>
                             <li class="nav-item">
-                                <a href="<?= BASE_URL ?>adminWilayah/kecamatan" class="nav-link">
+                                <a href="<?= BASE_URL ?>adminWilayah/kecamatan"
+                                   class="nav-link <?= $kecamatanMenuActive ? 'active' : '' ?>"
+                                   <?= $kecamatanMenuActive ? 'aria-current="page"' : '' ?>>
                                     <i class="far fa-circle nav-icon"></i>
                                     <p>Kecamatan</p>
                                 </a>
                             </li>
                             <li class="nav-item">
-                                <a href="<?= BASE_URL ?>adminWilayah/desa" class="nav-link">
+                                <a href="<?= BASE_URL ?>adminWilayah/desa"
+                                   class="nav-link <?= $desaMenuActive ? 'active' : '' ?>"
+                                   <?= $desaMenuActive ? 'aria-current="page"' : '' ?>>
                                     <i class="far fa-circle nav-icon"></i>
                                     <p>Desa</p>
                                 </a>
@@ -391,7 +468,10 @@
                         </ul>
                     </li>
                     <li class="nav-item">
-                        <a href="<?= BASE_URL ?>user" class="nav-link">
+                        <a href="<?= BASE_URL ?>user"
+                           class="nav-link <?= $userMenuActive ? 'active' : '' ?>"
+                           data-sidebar-menu="manajemen-user"
+                           <?= $userMenuActive ? 'aria-current="page"' : '' ?>>
                             <i class="nav-icon fas fa-users-cog"></i>
                             <p>Manajemen User</p>
                         </a>

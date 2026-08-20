@@ -30,17 +30,32 @@ return array (
     array (
     ),
   ),
-  'external_api' =>
-  array (
-    'api_key' => NULL,
-    'api_key_hash' => NULL,
-    'api_key_backup' => NULL,
-    'api_key_backup_hash' => NULL,
-    'token_ttl' => 3600,
-    'allowed_ips' =>
-    array (
-    ),
-  ),
+   'external_api' =>
+   array (
+     'api_key' => NULL,
+     'api_key_hash' => NULL,
+     'api_key_backup' => NULL,
+     'api_key_backup_hash' => NULL,
+     'token_ttl' => 3600,
+     'allowed_ips' =>
+     array (
+     ),
+   ),
+   'bps_api' =>
+   array (
+     'api_key' => getenv('BPS_API_KEY') ?: NULL,
+     'base_url' => getenv('BPS_API_BASE_URL') ?: 'https://webapi.bps.go.id/v1',
+     'timeout' => (int)(getenv('BPS_API_TIMEOUT') ?: 30),
+     'default_prov_code' => '35',
+     'rate_limit' =>
+     array (
+       'requests' => 100,
+       'window' => 60,
+     ),
+     'allowed_ips' =>
+     array (
+     ),
+   ),
   'rate_limits' =>
   array (
     'scraper' =>

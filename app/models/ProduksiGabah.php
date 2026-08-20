@@ -7,10 +7,8 @@
  * @author JAGAPADI System
  */
 
-class ProduksiGabah {
-    
-    private $db;
-    private $table = 'produksi_gabah';
+class ProduksiGabah extends Model {
+    protected $table = 'produksi_gabah';
     
     // Validation ranges
     const PRODUKTIVITAS_MIN = 1.0;  // ton/ha minimum wajar
@@ -19,7 +17,7 @@ class ProduksiGabah {
     const KADAR_AIR_MAX = 30.0;     // %
     
     public function __construct() {
-        $this->db = Database::getInstance()->getConnection();
+        parent::__construct();
     }
     
     /**

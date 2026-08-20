@@ -9,13 +9,15 @@
 (function () {
     'use strict';
 
-    const STORAGE_KEY = 'jagapadi_laporan_draft';
+    const STORAGE_KEY_PREFIX = 'jagapadi_laporan_draft';
+    const LEGACY_STORAGE_KEY = 'jagapadi_laporan_draft';
     const SAVE_INTERVAL = 30000; // 30 seconds
     const MAX_DRAFT_AGE = 24 * 60 * 60 * 1000; // 24 hours
 
     class DraftAutoSave {
         constructor(formId) {
             this.form = document.getElementById(formId);
+            this.storageKey = this.buildStorageKey();
             this.saveTimer = null;
             this.lastSaveTime = null;
 
@@ -24,7 +26,19 @@
             }
         }
 
+        buildStorageKey() {
+            const userId = String(this.form.dataset.draftUser || '').trim();
+            const moduleName = String(this.form.dataset.draftModule || '').trim();
+            if (!/^\d+$/.test(userId) || !/^[a-z0-9_-]+$/i.test(moduleName)) {
+                throw new Error('Identitas autosave draf tidak valid');
+            }
+            return `${STORAGE_KEY_PREFIX}:${userId}:${moduleName}`;
+        }
+
         init() {
+            // Key lama tidak terisolasi per pengguna/modul dan tidak aman untuk dipulihkan.
+            localStorage.removeItem(LEGACY_STORAGE_KEY);
+
             // Check for existing draft on page load
             this.checkExistingDraft();
 
@@ -49,7 +63,7 @@
          */
         checkExistingDraft() {
             try {
-                const draftJson = localStorage.getItem(STORAGE_KEY);
+                const draftJson = localStorage.getItem(this.storageKey);
                 if (!draftJson) return;
 
                 const draft = JSON.parse(draftJson);
@@ -93,17 +107,28 @@
                     }
                 });
 
-                // Only save if there's meaningful data
-                if (Object.keys(fields).length > 2) { // More than just date and status
+                const ignoredDefaults = new Set([
+                    'tanggal', 'tanggal_kejadian', 'status',
+                    'kabupaten_id', 'kecamatan_id', 'desa_id',
+                    'latitude', 'longitude', 'nama_pelapor'
+                ]);
+                const hasMeaningfulData = Object.entries(fields).some(([key, value]) =>
+                    !ignoredDefaults.has(key) && String(value).trim() !== ''
+                );
+
+                // Jangan membuat draf hanya dari nilai default form.
+                if (hasMeaningfulData) {
                     const draft = {
                         fields: fields,
                         timestamp: Date.now(),
                         url: window.location.href
                     };
 
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+                    localStorage.setItem(this.storageKey, JSON.stringify(draft));
                     this.lastSaveTime = new Date();
                     this.showSaveIndicator();
+                } else {
+                    this.clearDraft();
                 }
             } catch (e) {
                 console.error('[DraftAutoSave] Error saving draft:', e);
@@ -134,7 +159,7 @@
          */
         clearDraft() {
             try {
-                localStorage.removeItem(STORAGE_KEY);
+                localStorage.removeItem(this.storageKey);
                 console.log('[DraftAutoSave] Draft cleared');
             } catch (e) {
                 console.error('[DraftAutoSave] Error clearing draft:', e);

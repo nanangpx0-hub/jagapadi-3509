@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
+import { BASE } from '../base-url';
 
-const BASE = 'http://localhost/jagapadi-3509';
 const STAT_USER = 'statistisi01';
 const STAT_PASS = 'Jember3509';
 const ADMIN_USER = 'admin';

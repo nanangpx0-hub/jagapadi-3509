@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Network Security Configuration — JAGAPADI Android (PRODUCTION)
+  ===============================================================
+  Berlaku untuk semua build type KECUALI jika di-override oleh
+  src/debug/res/xml/network_security_config.xml (debug build).
+
+  Kebijakan produksi:
+  - HTTPS wajib untuk semua host
+  - Tidak ada cleartext HTTP ke host manapun
+  - Hanya percaya CA sistem (bukan user-installed CA)
+  - Tidak ada IP development yang hardcoded
+-->
+<network-security-config>
+
+  <!-- PRODUCTION: HTTPS wajib, hanya system CA yang dipercaya -->
+  <base-config cleartextTrafficPermitted="false">
+    <trust-anchors>
+      <certificates src="system"/>
+    </trust-anchors>
+  </base-config>
+
+</network-security-config>

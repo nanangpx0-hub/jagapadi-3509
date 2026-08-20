@@ -98,7 +98,7 @@
         </div>
     </div>
     <?php 
-    $jenisColors = ['Hama' => 'danger', 'Penyakit' => 'warning', 'Gulma' => 'info'];
+    $jenisColors = ['hama' => 'danger', 'penyakit' => 'warning', 'gulma' => 'info'];
     foreach ($stats['by_jenis'] ?? [] as $stat): 
         $color = $jenisColors[$stat['jenis']] ?? 'secondary';
     ?>
@@ -107,10 +107,10 @@
             <div class="card-body d-flex justify-content-between align-items-center">
                 <div>
                     <div class="count"><?= $stat['total'] ?></div>
-                    <div><?= htmlspecialchars($stat['jenis']) ?></div>
+                    <div><?= htmlspecialchars(ucfirst($stat['jenis'])) ?></div>
                 </div>
                 <div class="icon">
-                    <i class="fas fa-<?= $stat['jenis'] == 'Hama' ? 'spider' : ($stat['jenis'] == 'Penyakit' ? 'virus' : 'seedling') ?>"></i>
+                    <i class="fas fa-<?= $stat['jenis'] === 'hama' ? 'spider' : ($stat['jenis'] === 'penyakit' ? 'virus' : 'seedling') ?>"></i>
                 </div>
             </div>
         </div>
@@ -157,7 +157,7 @@
                             <select name="jenis" class="form-control">
                                 <option value="">Semua Jenis</option>
                                 <?php foreach ($filter_options['jenis'] ?? [] as $jenis): ?>
-                                <option value="<?= $jenis ?>" <?= ($filters['jenis'] ?? '') == $jenis ? 'selected' : '' ?>><?= $jenis ?></option>
+                                <option value="<?= htmlspecialchars($jenis) ?>" <?= ($filters['jenis'] ?? '') === $jenis ? 'selected' : '' ?>><?= htmlspecialchars(ucfirst($jenis)) ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -251,10 +251,10 @@
                                     </td>
                                     <td>
                                         <span class="badge badge-<?= 
-                                            $opt['jenis'] == 'Hama' ? 'danger' : 
-                                            ($opt['jenis'] == 'Penyakit' ? 'warning' : 'info') 
+                                            $opt['jenis'] === 'hama' ? 'danger' : 
+                                            ($opt['jenis'] === 'penyakit' ? 'warning' : 'info') 
                                         ?>">
-                                            <?= $opt['jenis'] ?>
+                                            <?= htmlspecialchars(ucfirst($opt['jenis'])) ?>
                                         </span>
                                     </td>
                                     <td>

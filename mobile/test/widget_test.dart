@@ -5,11 +5,14 @@ import 'package:jagapadi_mobile/core/theme.dart';
 import 'package:jagapadi_mobile/core/router.dart';
 import 'package:jagapadi_mobile/features/auth/providers/auth_provider.dart';
 
+import 'package:jagapadi_mobile/core/connectivity_service.dart';
+
 Widget createTestApp() {
   final appRouter = AppRouter();
 
   return MultiProvider(
     providers: [
+      ChangeNotifierProvider(create: (_) => ConnectivityService()),
       ChangeNotifierProvider(create: (_) => AuthProvider(appRouter)),
     ],
     child: MaterialApp.router(
@@ -28,6 +31,6 @@ void main() {
 
     expect(find.text('Masuk'), findsOneWidget);
     expect(find.byType(TextFormField), findsNWidgets(2));
-    expect(find.byType(ElevatedButton), findsOneWidget);
+    expect(find.byType(FilledButton), findsOneWidget);
   });
 }

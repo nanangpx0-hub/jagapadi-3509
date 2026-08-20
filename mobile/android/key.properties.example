@@ -1,0 +1,4 @@
+storeFile=keystore.jks
+storePassword=GANTI_DENGAN_PASSWORD_KEYSTORE
+keyAlias=jagapadi
+keyPassword=GANTI_DENGAN_PASSWORD_KEY

@@ -20,6 +20,7 @@ class LaporanIrigasi {
   final String? verifiedBy;
   final String? verifiedAt;
   final String? catatanVerifikasi;
+  final String? createdAt;
 
   LaporanIrigasi({
     required this.id,
@@ -43,6 +44,7 @@ class LaporanIrigasi {
     this.verifiedBy,
     this.verifiedAt,
     this.catatanVerifikasi,
+    this.createdAt,
   });
 
   factory LaporanIrigasi.fromJson(Map<String, dynamic> j) {
@@ -60,8 +62,12 @@ class LaporanIrigasi {
       namaDesa: data['nama_desa'] as String?,
       namaSaluran: data['nama_saluran'] as String?,
       daerahIrigasi: data['daerah_irigasi'] as String?,
-      latitude: data['latitude'] != null ? double.tryParse(data['latitude'].toString()) : null,
-      longitude: data['longitude'] != null ? double.tryParse(data['longitude'].toString()) : null,
+      latitude: data['latitude'] != null
+          ? double.tryParse(data['latitude'].toString())
+          : null,
+      longitude: data['longitude'] != null
+          ? double.tryParse(data['longitude'].toString())
+          : null,
       kondisiFisik: data['kondisi_fisik'] as String?,
       debitAir: data['debit_air'] as String?,
       fotoUrl: data['foto_url'] as String?,
@@ -69,6 +75,7 @@ class LaporanIrigasi {
       verifiedBy: data['verified_by']?.toString(),
       verifiedAt: data['verified_at'] as String?,
       catatanVerifikasi: data['catatan_verifikasi'] as String?,
+      createdAt: data['created_at'] as String?,
     );
   }
 
@@ -78,12 +85,18 @@ class LaporanIrigasi {
 
   String get statusLabel {
     switch (status) {
-      case 'Draf': return 'Draf';
-      case 'Submitted': return 'Dikirim';
-      case 'Diverifikasi': return 'Diverifikasi';
-      case 'Ditolak': return 'Ditolak';
-      case 'Diarsipkan': return 'Diarsipkan';
-      default: return status;
+      case 'Draf':
+        return 'Draf';
+      case 'Submitted':
+        return 'Dikirim';
+      case 'Diverifikasi':
+        return 'Diverifikasi';
+      case 'Ditolak':
+        return 'Ditolak';
+      case 'Diarsipkan':
+        return 'Diarsipkan';
+      default:
+        return status;
     }
   }
 }

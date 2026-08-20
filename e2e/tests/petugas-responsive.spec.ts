@@ -1,6 +1,5 @@
 import { test, expect } from '@playwright/test';
-
-const BASE = 'http://localhost/jagapadi-3509';
+import { BASE } from '../base-url';
 
 test.describe('Petugas — Responsive UI Test', () => {
   test.use({ storageState: 'auth/petugas.json' });

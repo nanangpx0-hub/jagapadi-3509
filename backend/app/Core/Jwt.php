@@ -41,6 +41,11 @@ class Jwt
 
     public static function decode(string $token): ?array
     {
+        // Validasi konfigurasi secret lebih dulu (perilaku historis: jika
+        // JWT_SECRET tidak valid, aplikasi harus langsung gagal, bukan lenyap
+        // ditelan setiap token yang tidak terstruktur).
+        $secret = self::getSecret();
+
         $parts = explode('.', $token);
         if (count($parts) !== 3) {
             return null;
@@ -48,8 +53,14 @@ class Jwt
 
         [$headerB64, $payloadB64, $signatureB64] = $parts;
 
+        // Header wajib HS256 — mencegah algoritma downgrade (mis. none/RS256).
+        $header = json_decode(self::base64UrlDecode($headerB64), true);
+        if (!is_array($header) || ($header['alg'] ?? '') !== 'HS256') {
+            return null;
+        }
+
         $signature = self::base64UrlDecode($signatureB64);
-        $expectedSignature = hash_hmac('sha256', "$headerB64.$payloadB64", self::getSecret(), true);
+        $expectedSignature = hash_hmac('sha256', "$headerB64.$payloadB64", $secret, true);
 
         if (!hash_equals($expectedSignature, $signature)) {
             return null;
@@ -60,7 +71,24 @@ class Jwt
             return null;
         }
 
-        if (isset($payload['exp']) && $payload['exp'] < time()) {
+        // `sub` wajib ada & numerik positif (target user).
+        $sub = $payload['sub'] ?? null;
+        if (!is_numeric($sub) || (int) $sub <= 0) {
+            return null;
+        }
+
+        // `exp` wajib ada dan belum lewat.
+        if (!isset($payload['exp']) || !is_numeric($payload['exp']) || (int) $payload['exp'] < time()) {
+            return null;
+        }
+
+        // `iat` tidak boleh dari masa depan (toleransi 60 detik untuk clock skew).
+        if (isset($payload['iat']) && is_numeric($payload['iat']) && (int) $payload['iat'] > time() + 60) {
+            return null;
+        }
+
+        // `jti` wajib non-kosong (dasar blacklist/revokasi & deteksi replay).
+        if (!isset($payload['jti']) || !is_string($payload['jti']) || trim($payload['jti']) === '') {
             return null;
         }
 
@@ -74,7 +102,10 @@ class Jwt
             return null;
         }
 
-        unset($payload['iat'], $payload['exp']);
+        // Token hasil refresh WAJIB membawa `jti` BARU. Toko lama di-revoke di
+        // controller saat refresh, sehingga jika `jti` dipertahankan, token baru
+        // akan langsung ditolak oleh blacklist.
+        unset($payload['iat'], $payload['exp'], $payload['jti']);
         return self::encode($payload);
     }
 

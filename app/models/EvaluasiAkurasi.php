@@ -12,7 +12,7 @@ class EvaluasiAkurasi {
     private $db;
     private $table = 'evaluasi_akurasi_panen';
     private $logTable = 'evaluasi_akurasi_logs';
-    private $sourceTable = 'data_pertanian_bps';
+    private $sourceTable = 'data_ksa_bulanan';
     
     // Status akurasi thresholds
     const BIAS_SANGAT_AKURAT = 5;    // < 5%
@@ -102,11 +102,15 @@ class EvaluasiAkurasi {
                      snapshot_date, created_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, CURDATE(), CURRENT_TIMESTAMP)";
             
+            $wilayahId = !empty($data['wilayah_id'])
+                ? (int) $data['wilayah_id']
+                : (int) (sprintf('%u', crc32(strtolower(trim((string) $data['nama_wilayah'])))) % 2147483647);
+
             $stmt = $this->db->prepare($sql);
             $result = $stmt->execute([
                 $data['periode_bulan'],
                 $data['periode_tahun'],
-                $data['wilayah_id'] ?? null,
+                $wilayahId,
                 $data['nama_wilayah'],
                 $data['luas_estimasi_daerah'] ?? 0,
                 $data['luas_rilis_bps'] ?? null,
@@ -117,7 +121,7 @@ class EvaluasiAkurasi {
                 $id = $this->db->lastInsertId();
                 
                 // Calculate deviation if both values present
-                if (!empty($data['luas_rilis_bps'])) {
+                if (array_key_exists('luas_rilis_bps', $data) && $data['luas_rilis_bps'] !== null) {
                     $this->hitungDeviasi($id);
                 }
                 
@@ -236,7 +240,7 @@ class EvaluasiAkurasi {
 
     /**
      * Snapshot Estimasi
-     * Mengambil data sum luas_panen dari data_pertanian_bps dan menyimpan sebagai estimasi daerah
+     * Mengambil luas panen bulanan KSA BPS untuk periode yang sama.
      * 
      * @param int $bulan Bulan (1-12)
      * @param int $tahun Tahun
@@ -246,27 +250,34 @@ class EvaluasiAkurasi {
         // Date restriction removed per user request: "Snapshot process can be performed at any time"
         // if ($tahun == $currentYear && $bulan == $currentMonth && $today > 10) { ... }
         
+        $ownsTransaction = !$this->db->inTransaction();
         try {
-            $this->db->beginTransaction();
+            if ($ownsTransaction) {
+                $this->db->beginTransaction();
+            }
             
-            // Get data from source table grouped by kabupaten
+            // Use the monthly KSA source. Annual aggregates must never be copied
+            // into an arbitrary month because that multiplies the estimate.
             $sql = "SELECT 
+                        kode_wilayah,
                         kabupaten_kota as nama_wilayah,
-                        COALESCE(SUM(luas_panen), 0) as total_luas_panen
+                        luas_panen as total_luas_panen,
+                        status_data
                     FROM {$this->sourceTable}
-                    WHERE tahun = ?
-                    GROUP BY kabupaten_kota
+                    WHERE tahun = ? AND bulan = ? AND luas_panen IS NOT NULL
                     ORDER BY kabupaten_kota";
             
             $stmt = $this->db->prepare($sql);
-            $stmt->execute([$tahun]);
+            $stmt->execute([$tahun, $bulan]);
             $sourceData = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
             if (empty($sourceData)) {
-                $this->db->rollBack();
+                if ($ownsTransaction && $this->db->inTransaction()) {
+                    $this->db->rollBack();
+                }
                 return [
                     'success' => false,
-                    'message' => "Tidak ada data sumber untuk tahun {$tahun}"
+                    'message' => "Tidak ada data KSA bulanan untuk periode {$bulan}/{$tahun}"
                 ];
             }
             
@@ -274,8 +285,12 @@ class EvaluasiAkurasi {
             $updatedCount = 0;
             $skippedCount = 0;
             
-            foreach ($sourceData as $index => $data) {
-                $wilayahId = $index + 1; // Use index as wilayah_id
+            foreach ($sourceData as $data) {
+                $digits = preg_replace('/\D+/', '', (string) $data['kode_wilayah']);
+                $wilayahId = (int) $digits;
+                if ($wilayahId <= 0) {
+                    $wilayahId = (int) (sprintf('%u', crc32((string) $data['kode_wilayah'])) % 2147483647);
+                }
                 
                 // Check if record already exists and is locked
                 $existing = $this->getByPeriodeWilayah($bulan, $tahun, $wilayahId);
@@ -328,7 +343,9 @@ class EvaluasiAkurasi {
             }
             */
             
-            $this->db->commit();
+            if ($ownsTransaction) {
+                $this->db->commit();
+            }
             
             // Log activity
             $this->logActivity('snapshot', 'success', 
@@ -347,7 +364,9 @@ class EvaluasiAkurasi {
             ];
             
         } catch (Exception $e) {
-            $this->db->rollBack();
+            if ($ownsTransaction && $this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
             $this->logActivity('snapshot', 'failed', $e->getMessage());
             return [
                 'success' => false,
@@ -433,8 +452,10 @@ class EvaluasiAkurasi {
             $persentaseBias = round((($estimasi - $rilis) / $rilis) * 100, 2);
         }
         
-        // Determine status
-        $statusAkurasi = $this->determineStatus(abs($persentaseBias ?? 0));
+        // A zero denominator has no defined percentage accuracy classification.
+        $statusAkurasi = $persentaseBias === null
+            ? null
+            : $this->determineStatus(abs($persentaseBias));
         
         // Update record
         $sql = "UPDATE {$this->table} SET 
@@ -473,8 +494,10 @@ class EvaluasiAkurasi {
     public function getChartData($tahun) {
         $sql = "SELECT 
                     periode_bulan,
-                    SUM(luas_estimasi_daerah) as total_estimasi,
-                    SUM(luas_rilis_bps) as total_rilis
+                    SUM(CASE WHEN luas_rilis_bps IS NOT NULL THEN luas_estimasi_daerah END) as total_estimasi,
+                    SUM(luas_rilis_bps) as total_rilis,
+                    COUNT(luas_rilis_bps) as jumlah_sudah_rilis,
+                    COUNT(*) as jumlah_total
                 FROM {$this->table}
                 WHERE periode_tahun = ?
                 GROUP BY periode_bulan
@@ -493,8 +516,10 @@ class EvaluasiAkurasi {
                     $chartData[] = [
                         'bulan' => $i,
                         'nama_bulan' => self::NAMA_BULAN[$i],
-                        'estimasi' => (float) $row['total_estimasi'],
-                        'rilis' => $row['total_rilis'] !== null ? (float) $row['total_rilis'] : null
+                        'estimasi' => $row['total_estimasi'] !== null ? (float) $row['total_estimasi'] : null,
+                        'rilis' => $row['total_rilis'] !== null ? (float) $row['total_rilis'] : null,
+                        'jumlah_sudah_rilis' => (int) $row['jumlah_sudah_rilis'],
+                        'jumlah_total' => (int) $row['jumlah_total']
                     ];
                     $found = true;
                     break;
@@ -505,7 +530,9 @@ class EvaluasiAkurasi {
                     'bulan' => $i,
                     'nama_bulan' => self::NAMA_BULAN[$i],
                     'estimasi' => null,
-                    'rilis' => null
+                    'rilis' => null,
+                    'jumlah_sudah_rilis' => 0,
+                    'jumlah_total' => 0
                 ];
             }
         }

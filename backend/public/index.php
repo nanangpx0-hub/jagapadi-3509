@@ -14,6 +14,12 @@ use App\Core\Request;
 use App\Core\Router;
 use App\Core\Security;
 
+// Daftar autoload helper
+$viewHelperPath = BASE_PATH . '/app/helpers/ViewHelper.php';
+if (file_exists($viewHelperPath)) {
+    require_once $viewHelperPath;
+}
+
 ErrorHandler::register();
 
 $envPath = BASE_PATH . '/.env';
@@ -36,9 +42,59 @@ if (!is_dir($cacheDir)) {
 }
 CacheManager::init($cacheDir, 300);
 
+// Trace/request ID: dipakai untuk korelasi antar log & header respons.
+$incomingRequestId = $_SERVER['HTTP_X_REQUEST_ID'] ?? '';
+$requestId = (is_string($incomingRequestId) && preg_match('/^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/', $incomingRequestId))
+    ? $incomingRequestId
+    : bin2hex(random_bytes(8));
+$_SERVER['JAGAPADI_REQUEST_ID'] = $requestId;
+header('X-Request-ID: ' . $requestId);
+$GLOBALS['request_started_at'] = microtime(true);
+
+// Akses log terstruktur (tanpa token/password) untuk observability.
+register_shutdown_function(static function (): void {
+    $user = $GLOBALS['auth_user'] ?? null;
+    $status = http_response_code();
+    $durationMs = round((microtime(true) - ($GLOBALS['request_started_at'] ?? microtime(true))) * 1000, 1);
+    Logger::info('request', [
+        'method' => $_SERVER['REQUEST_METHOD'] ?? 'GET',
+        'path' => parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH),
+        'status' => $status,
+        'duration_ms' => $durationMs,
+        'user_id' => $user['id'] ?? ($_SESSION['user_id'] ?? null),
+        'role' => $user['role'] ?? ($_SESSION['role'] ?? 'guest'),
+    ]);
+});
+
 header('X-Content-Type-Options: nosniff');
-header('X-Frame-Options: DENY');
-header('Referrer-Policy: strict-origin-when-cross-origin');
+    header('X-Frame-Options: SAMEORIGIN');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
+    header('X-XSS-Protection: 1; mode=block');
+    header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
+    if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
+        header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+    }
+    // CSP — asset diheader.php dimuat dari local paths (BASE_URL), jadi izinkan 'self'
+    header("Content-Security-Policy: default-src 'self'; " .
+        "script-src 'self' 'unsafe-inline'; " .
+        "style-src 'self' 'unsafe-inline'; " .
+        "img-src 'self' data: https://*.tile.openstreetmap.org; " .
+        "font-src 'self'; " .
+        "connect-src 'self';");
+
+// Session inactivity expiry
+$sessionLifetime = max(900, (int)(getenv('SESSION_LIFETIME') ?: 28800));
+if (isset($_SESSION['user_id'])) {
+    if (isset($_SESSION['_last_activity']) &&
+        (time() - (int)$_SESSION['_last_activity']) > $sessionLifetime) {
+        Security::destroySession();
+        $loginUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/' . ltrim(BASE_PATH, '/');
+        $loginUrl = rtrim($loginUrl, '/') . '/auth/login?reason=expired';
+        header('Location: ' . $loginUrl);
+        exit;
+    }
+    $_SESSION['_last_activity'] = time();
+}
 
 // CORS — restricted origins; read from env in production
 $allowedOrigins = [];
@@ -60,16 +116,6 @@ if (Request::method() === 'OPTIONS') {
     http_response_code(204);
     exit;
 }
-
-$csp = "default-src 'self'; "
-    . "img-src 'self' data: blob: https://*.tile.openstreetmap.org; "
-    . "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
-    . "style-src 'self' 'unsafe-inline'; "
-    . "connect-src 'self' http://localhost:8080; "
-    . "font-src 'self' data:; "
-    . "object-src 'none'; "
-    . "frame-ancestors 'none';";
-header("Content-Security-Policy: $csp");
 
 Security::initSession();
 

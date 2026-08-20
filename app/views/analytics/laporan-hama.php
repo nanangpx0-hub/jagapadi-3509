@@ -226,7 +226,7 @@ $jsonData = json_encode($data, JSON_UNESCAPED_UNICODE);
     </div>
 </section>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="<?= BASE_URL ?>public/vendor/js/chart.umd.min.js"></script>
 <script>
 const analyticsData = <?= $jsonData ?>;
 

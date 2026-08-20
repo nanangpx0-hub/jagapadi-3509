@@ -46,11 +46,11 @@ class BpsScraper {
         
         $tahun = $options['tahun'] ?? date('Y');
         $kabupaten = $options['kabupaten'] ?? null;
-        $source = $options['source'] ?? 'simulasi'; // simulasi, resmi_webapi
+        $source = $options['source'] ?? 'simulasi';
         $skenario = $options['skenario'] ?? 'baseline';
         $forceRefresh = $options['force_refresh'] ?? false;
         
-        $this->log("Starting BPS scraper for year {$tahun}. Source: {$source}");
+        $this->log("Starting BPS scraper for year {$tahun}. Source: {$source}, Kabupaten: " . ($kabupaten ?? 'all'));
         
         $records = [];
         $sourceTypeUsed = $source;
@@ -59,39 +59,23 @@ class BpsScraper {
         try {
             // 1. Fetch/Generate Data
             if ($source === 'resmi_webapi') {
-                try {
-                    if ($kabupaten) {
-                        $records = $this->apiClient->fetchAgriculturalData($tahun, $this->getKodeWilayah($kabupaten));
-                    } else {
-                        // Fetch province data (all regencies)
-                        $records = $this->apiClient->fetchAgriculturalData($tahun);
-                    }
-                } catch (Exception $e) {
-                    $this->log("WebAPI Failed: " . $e->getMessage(), 'ERROR');
-                    
-                    // Fallback logic could be here if requested, 
-                    // for now we re-throw if explicit API was requested but failed
-                    // unless a fallback policy is defined.
-                     // The prompt requirement: "WebAPI; jika gagal, fallback ke simulasi" (for auto jobs)
-                     // Here we assume manual run requests specific source.
-                     // But let's implement auto-fallback if source was 'auto' or explicit fallback requested.
-                     
-                     if (isset($options['fallback']) && $options['fallback']) {
-                         $this->log("Falling back to simulation...");
-                         $records = $kabupaten 
-                             ? [$this->simulationService->generateData($tahun, $kabupaten, $skenario)]
-                             : $this->simulationService->generateAllKabupaten($tahun, $skenario);
-                         $sourceTypeUsed = 'simulasi';
-                         $message = "WebAPI gagal, menggunakan data simulasi. Error: " . $e->getMessage();
-                     } else {
-                         throw $e;
-                     }
+                if ($kabupaten) {
+                    $records = $this->apiClient->fetchAgriculturalData($tahun, $this->getKodeWilayah($kabupaten));
+                } else {
+                    $records = $this->apiClient->fetchAgriculturalData($tahun);
                 }
-            } else {
-                // Simulation Mode
-                $records = $kabupaten 
+            }
+
+            if ($source === 'simulasi') {
+                $records = $kabupaten
                     ? [$this->simulationService->generateData($tahun, $kabupaten, $skenario)]
                     : $this->simulationService->generateAllKabupaten($tahun, $skenario);
+            }
+
+            if (empty($records)) {
+                throw new RuntimeException(
+                    'Sumber yang dipilih tidak mengembalikan data. Tidak ada fallback otomatis ke simulasi.'
+                );
             }
             
             // 2. Process Data (Validate & Reference)
@@ -123,14 +107,17 @@ class BpsScraper {
             
             return $result;
             
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             $this->log("Scraper Error: " . $e->getMessage(), 'ERROR');
             return [
                 'success' => false,
                 'message' => "Error: " . $e->getMessage(),
+                'error' => $e->getMessage(),
+                'source' => $sourceTypeUsed,
                 'records_success' => 0,
                 'records_failed' => 0,
                 'records_skipped' => 0,
+                'errors' => [$e->getMessage()],
                 'execution_time' => round(microtime(true) - $startTime, 2)
             ];
         }

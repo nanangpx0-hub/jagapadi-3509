@@ -275,4 +275,40 @@ class Security {
 
         $_SESSION[$key] = $payload;
     }
+
+    /**
+     * Sanitize CSV cell value to prevent CSV injection attacks
+     * Prevents cells starting with =, +, -, @, \t, \r from being interpreted as formulas
+     * 
+     * @param mixed $value The value to sanitize
+     * @return string Safe CSV cell value
+     */
+    public static function sanitizeCell($value): string {
+        if ($value === null) {
+            return '';
+        }
+        
+        $stringValue = (string)$value;
+        
+        // Check if the value starts with dangerous characters
+        $firstChar = mb_substr($stringValue, 0, 1);
+        $dangerousChars = ['=', '+', '-', '@', "\t", "\r"];
+        
+        if (in_array($firstChar, $dangerousChars, true)) {
+            // Prepend a single quote to prevent formula interpretation
+            return "'" . $stringValue;
+        }
+        
+        return $stringValue;
+    }
+
+    /**
+     * Sanitize entire CSV row for CSV injection prevention
+     * 
+     * @param array $row Array of cell values
+     * @return array Sanitized row
+     */
+    public static function sanitizeCsvRow(array $row): array {
+        return array_map([self::class, 'sanitizeCell'], $row);
+    }
 }

@@ -14,12 +14,12 @@ class DashboardPadi extends Model {
                 UNION
                 SELECT DISTINCT CAST(tahun AS UNSIGNED) AS tahun
                 FROM data_pertanian_bps
-                WHERE kabupaten_kota LIKE ?
+                WHERE kabupaten_kota = ?
                 ORDER BY tahun DESC
             ";
 
             $stmt = $this->db->prepare($sql);
-            $stmt->execute(['%' . self::JEMBER_NAME . '%']);
+            $stmt->execute([self::JEMBER_NAME]);
             $years = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
 
             if (!empty($years)) {
@@ -62,7 +62,13 @@ class DashboardPadi extends Model {
         return $row ?: null;
     }
 
-    public function getSummary(int $year, ?int $kecamatanId = null): array {
+    public function getSummary(int $year, ?int $kecamatanId = null, ?int $userId = null): array {
+        // Petugas: selalu gunakan produksi_gabah dengan filter userId
+        if ($userId !== null) {
+            return $this->getProductionSummary($year, $kecamatanId, $userId);
+        }
+
+        // Admin/operator: logika existing tetap
         if ($kecamatanId !== null) {
             return $this->getProductionSummary($year, $kecamatanId);
         }
@@ -76,7 +82,13 @@ class DashboardPadi extends Model {
         return $this->getProductionSummary($year, null);
     }
 
-    public function getTrend(int $endYear, ?int $kecamatanId = null): array {
+    public function getTrend(int $endYear, ?int $kecamatanId = null, ?int $userId = null): array {
+        // Petugas: selalu gunakan produksi_gabah dengan filter userId
+        if ($userId !== null) {
+            return $this->getProductionTrend($endYear, $kecamatanId, $userId);
+        }
+
+        // Admin: logika existing tetap
         if ($kecamatanId !== null) {
             return $this->getProductionTrend($endYear, $kecamatanId);
         }
@@ -89,8 +101,10 @@ class DashboardPadi extends Model {
         return $this->getProductionTrend($endYear, null);
     }
 
-    public function getKecamatanBreakdown(int $year): array {
+    public function getKecamatanBreakdown(int $year, ?int $userId = null): array {
         try {
+            [$whereSql, $params] = $this->buildProductionWhere($year, null, $userId);
+
             $sql = "
                 SELECT
                     pg.kecamatan_id,
@@ -107,14 +121,13 @@ class DashboardPadi extends Model {
                     SUM(CASE WHEN pg.status = 'rejected' THEN 1 ELSE 0 END) AS rejected_count
                 FROM produksi_gabah pg
                 LEFT JOIN master_kecamatan mk ON pg.kecamatan_id = mk.id
-                WHERE pg.tahun = ?
-                  AND COALESCE(pg.status, 'pending') <> 'draft'
+                {$whereSql}
                 GROUP BY pg.kecamatan_id, mk.nama_kecamatan
                 ORDER BY produksi DESC, luas_panen DESC, nama_kecamatan ASC
             ";
 
             $stmt = $this->db->prepare($sql);
-            $stmt->execute([$year]);
+            $stmt->execute($params);
 
             return $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (PDOException $e) {
@@ -123,9 +136,9 @@ class DashboardPadi extends Model {
         }
     }
 
-    public function getStatusBreakdown(int $year, ?int $kecamatanId = null): array {
+    public function getStatusBreakdown(int $year, ?int $kecamatanId = null, ?int $userId = null): array {
         try {
-            [$whereSql, $params] = $this->buildProductionWhere($year, $kecamatanId);
+            [$whereSql, $params] = $this->buildProductionWhere($year, $kecamatanId, $userId);
 
             $sql = "
                 SELECT status, total
@@ -148,9 +161,9 @@ class DashboardPadi extends Model {
         }
     }
 
-    private function getProductionSummary(int $year, ?int $kecamatanId): array {
+    private function getProductionSummary(int $year, ?int $kecamatanId = null, ?int $userId = null): array {
         try {
-            [$whereSql, $params] = $this->buildProductionWhere($year, $kecamatanId);
+            [$whereSql, $params] = $this->buildProductionWhere($year, $kecamatanId, $userId);
 
             $sql = "
                 SELECT
@@ -214,8 +227,19 @@ class DashboardPadi extends Model {
             $sql = "
                 SELECT *
                 FROM data_pertanian_bps
-                WHERE tahun = ? AND kabupaten_kota LIKE ?
-                ORDER BY CASE WHEN kabupaten_kota = ? THEN 0 ELSE 1 END
+                WHERE tahun = ?
+                  AND kabupaten_kota LIKE ?
+                  AND COALESCE(tipe_skenario, 'baseline') = 'baseline'
+                ORDER BY CASE sumber_data_type
+                             WHEN 'ksa' THEN 1
+                             WHEN 'resmi_webapi' THEN 2
+                             WHEN 'manual' THEN 3
+                             ELSE 4
+                         END,
+                         COALESCE(is_validated, 0) DESC,
+                         CASE WHEN kabupaten_kota = ? THEN 0 ELSE 1 END,
+                         updated_at DESC,
+                         id DESC
                 LIMIT 1
             ";
 
@@ -249,15 +273,21 @@ class DashboardPadi extends Model {
         ];
     }
 
-    private function getProductionTrend(int $endYear, ?int $kecamatanId): array {
+    private function getProductionTrend(int $endYear, ?int $kecamatanId = null, ?int $userId = null): array {
         try {
             $startYear = $endYear - 4;
             $params = [$startYear, $endYear];
             $kecamatanSql = '';
+            $paramsUser = [];
 
             if ($kecamatanId !== null) {
                 $kecamatanSql = ' AND pg.kecamatan_id = ?';
                 $params[] = $kecamatanId;
+            }
+
+            if ($userId !== null) {
+                $kecamatanSql .= ' AND pg.user_id = ?';
+                $paramsUser = [$userId];
             }
 
             $sql = "
@@ -280,7 +310,7 @@ class DashboardPadi extends Model {
             ";
 
             $stmt = $this->db->prepare($sql);
-            $stmt->execute($params);
+            $stmt->execute(array_merge($params, $paramsUser));
 
             return $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (PDOException $e) {
@@ -295,16 +325,33 @@ class DashboardPadi extends Model {
 
             $sql = "
                 SELECT
-                    CAST(tahun AS UNSIGNED) AS tahun,
-                    COALESCE(luas_panen, 0) AS luas_panen,
-                    COALESCE(produksi_gabah, 0) AS produksi,
-                    COALESCE(produktivitas, 0) AS produktivitas,
+                    CAST(preferred.tahun AS UNSIGNED) AS tahun,
+                    COALESCE(preferred.luas_panen, 0) AS luas_panen,
+                    COALESCE(preferred.produksi_gabah, 0) AS produksi,
+                    COALESCE(preferred.produktivitas, 0) AS produktivitas,
                     1 AS jumlah_data,
                     'Data BPS Kabupaten Jember' AS source_label
-                FROM data_pertanian_bps
-                WHERE tahun BETWEEN ? AND ?
-                  AND kabupaten_kota LIKE ?
-                ORDER BY tahun ASC
+                FROM (
+                    SELECT bps.*,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY bps.tahun
+                               ORDER BY CASE bps.sumber_data_type
+                                            WHEN 'ksa' THEN 1
+                                            WHEN 'resmi_webapi' THEN 2
+                                            WHEN 'manual' THEN 3
+                                            ELSE 4
+                                        END,
+                                        COALESCE(bps.is_validated, 0) DESC,
+                                        bps.updated_at DESC,
+                                        bps.id DESC
+                           ) AS source_rank
+                    FROM data_pertanian_bps bps
+                    WHERE bps.tahun BETWEEN ? AND ?
+                      AND bps.kabupaten_kota LIKE ?
+                      AND COALESCE(bps.tipe_skenario, 'baseline') = 'baseline'
+                ) preferred
+                WHERE preferred.source_rank = 1
+                ORDER BY preferred.tahun ASC
             ";
 
             $stmt = $this->db->prepare($sql);
@@ -317,7 +364,7 @@ class DashboardPadi extends Model {
         }
     }
 
-    private function buildProductionWhere(int $year, ?int $kecamatanId): array {
+    private function buildProductionWhere(int $year, ?int $kecamatanId = null, ?int $userId = null): array {
         $where = [
             'pg.tahun = ?',
             "COALESCE(pg.status, 'pending') <> 'draft'",
@@ -327,6 +374,11 @@ class DashboardPadi extends Model {
         if ($kecamatanId !== null) {
             $where[] = 'pg.kecamatan_id = ?';
             $params[] = $kecamatanId;
+        }
+
+        if ($userId !== null) {
+            $where[] = 'pg.user_id = ?';
+            $params[] = $userId;
         }
 
         return ['WHERE ' . implode(' AND ', $where), $params];

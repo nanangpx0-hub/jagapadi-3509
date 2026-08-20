@@ -1,0 +1,639 @@
+openapi: 3.1.0
+info:
+  title: JAGAPADI API — Kontrak Role Petugas
+  version: 1.0.0
+  description: >-
+    Kontrak machine-readable operasi backend v1 yang digunakan Petugas. Semua
+    resource laporan otomatis scoped ke subjek JWT. user_id, role, nomor laporan,
+    verifier, dan status administratif dari client diabaikan atau ditolak.
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Backend v1 lokal
+  - url: https://example.invalid/api/v1
+    description: Ganti dengan origin deployment
+tags:
+  - name: Auth
+  - name: Master
+  - name: Laporan
+  - name: Dashboard
+  - name: Notification
+  - name: Device
+security:
+  - bearerAuth: []
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      security: []
+      summary: Login Petugas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LoginRequest'}
+      responses:
+        '200': {$ref: '#/components/responses/LoginSuccess'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Memperbarui token
+      responses:
+        '200': {$ref: '#/components/responses/LoginSuccess'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout dan revoke token
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+  /auth/change-password:
+    post:
+      tags: [Auth]
+      summary: Mengganti password dan menaikkan token version
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, new_password, new_password_confirmation]
+              properties:
+                current_password: {type: string, format: password}
+                new_password: {type: string, format: password, minLength: 8}
+                new_password_confirmation: {type: string, format: password}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /me:
+    get:
+      tags: [Auth]
+      summary: Profil Petugas terautentikasi
+      responses:
+        '200':
+          description: Profil tanpa password/hash/token
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UserEnvelope'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+  /wilayah/kabupaten:
+    get:
+      tags: [Master]
+      summary: Daftar kabupaten
+      responses:
+        '200': {$ref: '#/components/responses/ListSuccess'}
+  /wilayah/kabupaten/{id}:
+    get:
+      tags: [Master]
+      summary: Detail kabupaten
+      parameters: [{$ref: '#/components/parameters/ReportId'}]
+      responses:
+        '200': {$ref: '#/components/responses/ObjectSuccess'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /wilayah/kecamatan:
+    get:
+      tags: [Master]
+      summary: Kecamatan berdasarkan kabupaten
+      parameters:
+        - in: query
+          name: kabupaten_id
+          required: true
+          schema: {type: integer, minimum: 1}
+      responses:
+        '200': {$ref: '#/components/responses/ListSuccess'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /wilayah/desa:
+    get:
+      tags: [Master]
+      summary: Desa berdasarkan kecamatan
+      parameters:
+        - in: query
+          name: kecamatan_id
+          required: true
+          schema: {type: integer, minimum: 1}
+      responses:
+        '200': {$ref: '#/components/responses/ListSuccess'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /wilayah/kecamatan/{id}:
+    get:
+      tags: [Master]
+      summary: Detail kecamatan
+      parameters: [{$ref: '#/components/parameters/ReportId'}]
+      responses:
+        '200': {$ref: '#/components/responses/ObjectSuccess'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /wilayah/desa/{id}:
+    get:
+      tags: [Master]
+      summary: Detail desa
+      parameters: [{$ref: '#/components/parameters/ReportId'}]
+      responses:
+        '200': {$ref: '#/components/responses/ObjectSuccess'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /opt:
+    get:
+      tags: [Master]
+      summary: Daftar OPT yang dapat dipilih
+      parameters:
+        - in: query
+          name: aktif
+          schema: {type: boolean, default: true}
+      responses:
+        '200': {$ref: '#/components/responses/ListSuccess'}
+  /laporan-hama:
+    get: {$ref: '#/components/pathItems/ReportCollectionGet'}
+    post:
+      $ref: '#/components/pathItems/ReportCollectionPost'
+  /laporan-hama/{id}:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    get: {$ref: '#/components/pathItems/ReportGet'}
+    put: {$ref: '#/components/pathItems/ReportPut'}
+    delete: {$ref: '#/components/pathItems/ReportDelete'}
+  /laporan-hama/{id}/submit:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post: {$ref: '#/components/pathItems/ReportSubmit'}
+  /laporan-hama/{id}/resubmit:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post: {$ref: '#/components/pathItems/ReportResubmit'}
+  /laporan-hama/{id}/foto:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post: {$ref: '#/components/pathItems/PhotoUpload'}
+  /laporan-hama/{id}/foto/delete:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post: {$ref: '#/components/pathItems/PhotoDelete'}
+  /laporan-irigasi:
+    get: {$ref: '#/components/pathItems/ReportCollectionGet'}
+    post: {$ref: '#/components/pathItems/ReportCollectionPost'}
+  /laporan-irigasi/{id}:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    get: {$ref: '#/components/pathItems/ReportGet'}
+    put: {$ref: '#/components/pathItems/ReportPut'}
+    delete: {$ref: '#/components/pathItems/ReportDelete'}
+  /laporan-irigasi/{id}/submit:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post: {$ref: '#/components/pathItems/ReportSubmit'}
+  /laporan-irigasi/{id}/resubmit:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post: {$ref: '#/components/pathItems/ReportResubmit'}
+  /laporan-irigasi/{id}/foto:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post: {$ref: '#/components/pathItems/PhotoUpload'}
+  /laporan-irigasi/{id}/foto/delete:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post: {$ref: '#/components/pathItems/PhotoDelete'}
+  /laporan-pupuk:
+    get: {$ref: '#/components/pathItems/ReportCollectionGet'}
+    post: {$ref: '#/components/pathItems/ReportCollectionPost'}
+  /laporan-pupuk/{id}:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    get: {$ref: '#/components/pathItems/ReportGet'}
+    put: {$ref: '#/components/pathItems/ReportPut'}
+    delete: {$ref: '#/components/pathItems/ReportDelete'}
+  /laporan-pupuk/{id}/submit:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post: {$ref: '#/components/pathItems/ReportSubmit'}
+  /laporan-pupuk/{id}/resubmit:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post: {$ref: '#/components/pathItems/ReportResubmit'}
+  /laporan-pupuk/{id}/foto:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post: {$ref: '#/components/pathItems/PhotoUpload'}
+  /laporan-pupuk/{id}/foto/delete:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post: {$ref: '#/components/pathItems/PhotoDelete'}
+  /laporan-panen:
+    get: {$ref: '#/components/pathItems/ReportCollectionGet'}
+    post: {$ref: '#/components/pathItems/ReportCollectionPost'}
+  /laporan-panen/{id}:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    get: {$ref: '#/components/pathItems/ReportGet'}
+    put: {$ref: '#/components/pathItems/ReportPut'}
+    delete: {$ref: '#/components/pathItems/ReportDelete'}
+  /laporan-panen/{id}/submit:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post: {$ref: '#/components/pathItems/ReportSubmit'}
+  /laporan-panen/{id}/resubmit:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post: {$ref: '#/components/pathItems/ReportResubmit'}
+  /laporan-panen/{id}/foto:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post: {$ref: '#/components/pathItems/PhotoUpload'}
+  /laporan-panen/{id}/foto/delete:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post: {$ref: '#/components/pathItems/PhotoDelete'}
+  /laporan-cuaca:
+    get: {$ref: '#/components/pathItems/ReportCollectionGet'}
+    post: {$ref: '#/components/pathItems/ReportCollectionPost'}
+  /laporan-cuaca/{id}:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    get: {$ref: '#/components/pathItems/ReportGet'}
+    put: {$ref: '#/components/pathItems/ReportPut'}
+    delete: {$ref: '#/components/pathItems/ReportDelete'}
+  /laporan-cuaca/{id}/submit:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post: {$ref: '#/components/pathItems/ReportSubmit'}
+  /laporan-cuaca/{id}/resubmit:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post: {$ref: '#/components/pathItems/ReportResubmit'}
+  /laporan-cuaca/{id}/foto:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post: {$ref: '#/components/pathItems/PhotoUpload'}
+  /laporan-cuaca/{id}/foto/delete:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post: {$ref: '#/components/pathItems/PhotoDelete'}
+  /laporan-alat-sarana:
+    get: {$ref: '#/components/pathItems/ReportCollectionGet'}
+    post: {$ref: '#/components/pathItems/ReportCollectionPost'}
+  /laporan-alat-sarana/{id}:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    get: {$ref: '#/components/pathItems/ReportGet'}
+    put: {$ref: '#/components/pathItems/ReportPut'}
+    delete: {$ref: '#/components/pathItems/ReportDelete'}
+  /laporan-alat-sarana/{id}/submit:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post: {$ref: '#/components/pathItems/ReportSubmit'}
+  /laporan-alat-sarana/{id}/resubmit:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post: {$ref: '#/components/pathItems/ReportResubmit'}
+  /laporan-alat-sarana/{id}/foto:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post: {$ref: '#/components/pathItems/PhotoUpload'}
+  /laporan-alat-sarana/{id}/foto/delete:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post: {$ref: '#/components/pathItems/PhotoDelete'}
+  /dashboard/stats:
+    get:
+      tags: [Dashboard]
+      summary: Statistik scoped Petugas
+      parameters:
+        - in: query
+          name: include_draft
+          schema: {type: boolean, default: false}
+        - in: query
+          name: tahun
+          schema: {type: integer, minimum: 2020}
+      responses:
+        '200': {$ref: '#/components/responses/ObjectSuccess'}
+  /dashboard/map/hama:
+    get:
+      tags: [Dashboard]
+      summary: GeoJSON laporan hama milik Petugas
+      responses:
+        '200': {$ref: '#/components/responses/ObjectSuccess'}
+  /dashboard/charts/hama:
+    get:
+      tags: [Dashboard]
+      summary: Agregasi grafik hama scoped Petugas
+      responses:
+        '200': {$ref: '#/components/responses/ObjectSuccess'}
+  /dashboard/charts/irigasi:
+    get:
+      tags: [Dashboard]
+      summary: Agregasi grafik irigasi scoped Petugas
+      responses:
+        '200': {$ref: '#/components/responses/ObjectSuccess'}
+  /dashboard/charts/lainnya:
+    get:
+      tags: [Dashboard]
+      summary: Tren dan komposisi Laporan Lainnya milik Petugas
+      parameters:
+        - in: query
+          name: tahun
+          schema: {type: integer, minimum: 2000}
+        - in: query
+          name: include_draft
+          schema: {type: boolean, default: false}
+      responses:
+        '200': {$ref: '#/components/responses/ObjectSuccess'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /dashboard/map/irigasi:
+    get:
+      tags: [Dashboard]
+      summary: GeoJSON laporan irigasi milik Petugas
+      responses:
+        '200': {$ref: '#/components/responses/ObjectSuccess'}
+  /notifications:
+    get:
+      tags: [Notification]
+      summary: Notifikasi milik Petugas
+      responses:
+        '200': {$ref: '#/components/responses/ListSuccess'}
+  /notifications/{id}/read:
+    post:
+      tags: [Notification]
+      summary: Tandai notifikasi milik sendiri dibaca
+      parameters: [{$ref: '#/components/parameters/ReportId'}]
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /notifications/unread-count:
+    get:
+      tags: [Notification]
+      summary: Jumlah notifikasi belum dibaca milik Petugas
+      responses:
+        '200': {$ref: '#/components/responses/ObjectSuccess'}
+  /notifications/read-all:
+    post:
+      tags: [Notification]
+      summary: Tandai semua notifikasi milik Petugas dibaca
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+  /notifications/{id}:
+    delete:
+      tags: [Notification]
+      summary: Hapus notifikasi milik Petugas
+      parameters: [{$ref: '#/components/parameters/ReportId'}]
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /device-tokens:
+    post:
+      tags: [Device]
+      summary: Register/upsert FCM token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: {type: string, maxLength: 512}
+                platform: {type: string, enum: [android, ios, web], default: android}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+    delete:
+      tags: [Device]
+      summary: Hapus token perangkat milik sendiri
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+  /device-tokens/all:
+    delete:
+      tags: [Device]
+      summary: Hapus semua token perangkat milik Petugas
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+  /export/hama:
+    get:
+      tags: [Laporan]
+      summary: Ekspor laporan hama sesuai scope Petugas
+      responses:
+        '200': {description: Berkas ekspor}
+  /export/irigasi:
+    get:
+      tags: [Laporan]
+      summary: Ekspor laporan irigasi sesuai scope Petugas
+      responses:
+        '200': {description: Berkas ekspor}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    ReportId:
+      in: path
+      name: id
+      required: true
+      schema: {type: integer, minimum: 1}
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: false
+      description: Opsional di server; sangat dianjurkan untuk retry mutasi/offline sync.
+      schema: {type: string, minLength: 8, maxLength: 128}
+  schemas:
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username: {type: string, minLength: 1, maxLength: 50}
+        password: {type: string, format: password, minLength: 1}
+    User:
+      type: object
+      required: [id, username, role]
+      properties:
+        id: {type: integer}
+        username: {type: string}
+        nama_lengkap: {type: string}
+        role: {type: string, const: petugas}
+        must_change_password: {type: boolean}
+    UserEnvelope:
+      type: object
+      properties:
+        success: {type: boolean, const: true}
+        data: {$ref: '#/components/schemas/User'}
+    ReportInput:
+      type: object
+      description: >-
+        Superset input laporan. Field domain divalidasi oleh validator jenis.
+        user_id, nomor_laporan, verified_by, verified_at tidak diterima dari client.
+      properties:
+        status: {type: string, enum: [Draf, Submitted], default: Draf}
+        tanggal: {type: [string, 'null'], format: date}
+        kabupaten_id: {type: [integer, 'null'], minimum: 1}
+        kecamatan_id: {type: [integer, 'null'], minimum: 1}
+        desa_id: {type: [integer, 'null'], minimum: 1}
+        lokasi: {type: [string, 'null'], maxLength: 255}
+        alamat_lengkap: {type: [string, 'null'], maxLength: 300}
+        latitude: {type: [number, 'null'], minimum: -90, maximum: 90}
+        longitude: {type: [number, 'null'], minimum: -180, maximum: 180}
+        catatan: {type: [string, 'null']}
+        master_opt_id: {type: [integer, 'null']}
+        tingkat_keparahan: {type: [string, 'null'], enum: [Ringan, Sedang, Berat, null]}
+        luas_serangan: {type: [number, 'null'], minimum: 0}
+        populasi: {type: [number, 'null'], minimum: 0}
+        nama_saluran: {type: [string, 'null'], maxLength: 200}
+        daerah_irigasi: {type: [string, 'null'], maxLength: 200}
+        kondisi_fisik: {type: [string, 'null'], enum: [Bagus, Sedang, Tidak Bagus, Rusak, null]}
+        debit_air: {type: [number, 'null'], minimum: 0}
+        jenis_pupuk: {type: [string, 'null']}
+        dosis: {type: [number, 'null'], minimum: 0}
+        satuan_dosis: {type: [string, 'null']}
+        metode_aplikasi: {type: [string, 'null']}
+        komoditas: {type: [string, 'null']}
+        luas_panen: {type: [number, 'null'], minimum: 0}
+        volume_panen: {type: [number, 'null'], minimum: 0}
+        satuan: {type: [string, 'null']}
+        harga_per_unit: {type: [number, 'null'], minimum: 0}
+        kondisi_cuaca: {type: [string, 'null']}
+        suhu: {type: [number, 'null']}
+        kelembaban: {type: [number, 'null'], minimum: 0, maximum: 100}
+        curah_hujan: {type: [number, 'null'], minimum: 0}
+        kecepatan_angin: {type: [number, 'null'], minimum: 0}
+        arah_angin: {type: [string, 'null']}
+        jenis_sarana: {type: [string, 'null']}
+        nama_alat: {type: [string, 'null']}
+        jumlah: {type: [integer, 'null'], minimum: 0}
+        kondisi: {type: [string, 'null']}
+        debit_air: {type: [string, 'null'], enum: [Cukup, Kurang, Kering, null]}
+    Error:
+      type: object
+      required: [success, error, message]
+      properties:
+        success: {type: boolean, const: false}
+        error: {type: string}
+        message: {type: string}
+        errors: {type: object, additionalProperties: true}
+  pathItems:
+    ReportCollectionGet:
+      tags: [Laporan]
+      summary: Daftar laporan milik Petugas
+      parameters:
+        - {in: query, name: page, schema: {type: integer, minimum: 1, default: 1}}
+        - {in: query, name: per_page, schema: {type: integer, minimum: 1, maximum: 100, default: 15}}
+        - {in: query, name: status, schema: {type: string, enum: [Draf, Submitted, Diverifikasi, Ditolak, Diarsipkan]}}
+        - {in: query, name: include_draft, schema: {type: boolean, default: false}}
+      responses:
+        '200': {$ref: '#/components/responses/ListSuccess'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+    ReportCollectionPost:
+      tags: [Laporan]
+      summary: Membuat draf/laporan Petugas secara idempotent
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReportInput'}
+      responses:
+        '201': {$ref: '#/components/responses/ObjectSuccess'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+    ReportGet:
+      tags: [Laporan]
+      summary: Detail laporan milik Petugas
+      responses:
+        '200': {$ref: '#/components/responses/ObjectSuccess'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    ReportPut:
+      tags: [Laporan]
+      summary: Edit Draf/Ditolak milik Petugas
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReportInput'}
+      responses:
+        '200': {$ref: '#/components/responses/ObjectSuccess'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+    ReportDelete:
+      tags: [Laporan]
+      summary: Hapus Draf milik Petugas
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+    ReportSubmit:
+      tags: [Laporan]
+      summary: Submit Draf milik Petugas
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      responses:
+        '200': {$ref: '#/components/responses/ObjectSuccess'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+    ReportResubmit:
+      tags: [Laporan]
+      summary: Resubmit laporan Ditolak milik Petugas
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      responses:
+        '200': {$ref: '#/components/responses/ObjectSuccess'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+    PhotoUpload:
+      tags: [Laporan]
+      summary: Upload foto Draf/Ditolak milik Petugas
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [foto]
+              properties:
+                foto: {type: string, format: binary}
+      responses:
+        '200': {$ref: '#/components/responses/ObjectSuccess'}
+        '413': {description: File terlalu besar}
+        '415': {description: MIME tidak didukung}
+        '422': {$ref: '#/components/responses/ValidationError'}
+    PhotoDelete:
+      tags: [Laporan]
+      summary: Hapus foto Draf/Ditolak milik Petugas
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  responses:
+    Success:
+      description: Operasi berhasil
+      content:
+        application/json:
+          schema:
+            type: object
+            properties: {success: {type: boolean, const: true}, message: {type: string}}
+    ObjectSuccess:
+      description: Object berhasil diambil/disimpan
+      content:
+        application/json:
+          schema:
+            type: object
+            properties: {success: {type: boolean, const: true}, data: {type: object}}
+    ListSuccess:
+      description: List scoped Petugas
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success: {type: boolean, const: true}
+              data: {type: array, items: {type: object}}
+              meta: {type: object}
+    LoginSuccess:
+      description: Login/token berhasil
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success: {type: boolean, const: true}
+              data:
+                type: object
+                properties:
+                  access_token: {type: string}
+                  token_type: {type: string, const: Bearer}
+                  expires_in: {type: integer}
+                  user: {$ref: '#/components/schemas/User'}
+    Unauthenticated:
+      description: Token tidak ada/tidak valid/expired/revoked
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    Forbidden:
+      description: Role/ownership/password-change policy menolak
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    NotFound:
+      description: Resource tidak ditemukan atau disembunyikan karena ownership
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    Conflict:
+      description: Konflik status atau idempotency key
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    ValidationError:
+      description: Input gagal validasi
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    RateLimited:
+      description: Rate limit terlampaui
+      headers:
+        Retry-After: {schema: {type: integer}}
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}

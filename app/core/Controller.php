@@ -15,6 +15,7 @@ class Controller {
     }
 
     protected function view($view, $data = []) {
+        $data = is_array($data) ? $data : [];
         extract($data);
         require_once ROOT_PATH . '/app/views/' . $view . '.php';
     }
@@ -133,5 +134,41 @@ class Controller {
             $clean[$key] = is_string($value) ? trim($value) : $value;
         }
         return $clean;
+    }
+
+    /**
+     * Sanitize CSV row against formula injection (CSV Injection / Formula Injection).
+     *
+     * Cells starting with =, +, -, @, TAB atau CR diberi awalan apostrof
+     * agar tidak dieksekusi sebagai formula oleh Excel/LibreOffice.
+     *
+     * @param array $row Baris data mentah
+     * @return array Baris data yang sudah disanitasi
+     */
+    protected function sanitizeCsvRow(array $row): array {
+        return array_map(function ($val) {
+            if (is_string($val) && strlen($val) > 0
+                && in_array($val[0], ['=', '+', '-', '@', "\t", "\r"], true)) {
+                return "'" . $val;
+            }
+            return $val;
+        }, $row);
+    }
+
+    /**
+     * Invalidate cached AJAX stats/chart responses setelah operasi tulis.
+     *
+     * @param array $prefixes Prefix cache key yang harus dihapus
+     */
+    protected function invalidateStatsCache(array $prefixes): void {
+        if (!class_exists('CacheManager')) {
+            return;
+        }
+        $cache = CacheManager::getInstance();
+        if ($cache->isAvailable()) {
+            foreach ($prefixes as $prefix) {
+                $cache->clearPrefix($prefix);
+            }
+        }
     }
 }

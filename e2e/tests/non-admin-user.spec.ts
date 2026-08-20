@@ -1,6 +1,5 @@
 import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
-
-const BASE = 'http://localhost/jagapadi-3509';
+import { BASE } from '../base-url';
 
 const PETUGAS_USER = 'petugas01';
 const PETUGAS_PASS = 'Jember3509';
@@ -310,13 +309,11 @@ test.describe('Petugas — Laporan Hama CRUD', () => {
     await expect(bulkDelete).toHaveCount(0);
   });
 
-  test('petugas laporan list shows petugas mode info', async ({ page }) => {
+  test('petugas laporan list does not show redundant petugas mode info', async ({ page }) => {
     await page.goto(`${BASE}/laporan-hama`);
     await page.waitForLoadState('networkidle');
     const modeInfo = page.locator('.alert-info:has-text("Mode Petugas")');
-    if (await modeInfo.count() > 0) {
-      await expect(modeInfo.first()).toBeVisible();
-    }
+    await expect(modeInfo).toHaveCount(0);
   });
 
   test('petugas can open laporan hama create page', async ({ page }) => {
@@ -541,13 +538,11 @@ test.describe('Petugas — Laporan Irigasi CRUD', () => {
     await expect(bulkDelete).toHaveCount(0);
   });
 
-  test('petugas laporan irigasi list shows petugas mode info', async ({ page }) => {
+  test('petugas laporan irigasi list does not show redundant petugas mode info', async ({ page }) => {
     await page.goto(`${BASE}/laporan-irigasi`);
     await page.waitForLoadState('networkidle');
     const modeInfo = page.locator('.alert-info:has-text("Mode Petugas")');
-    if (await modeInfo.count() > 0) {
-      await expect(modeInfo.first()).toBeVisible();
-    }
+    await expect(modeInfo).toHaveCount(0);
   });
 
   test('CSRF token present on laporan irigasi create form', async ({ page }) => {

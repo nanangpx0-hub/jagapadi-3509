@@ -7,10 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.1] - 2026-08-09
+
+### Fixed
+- **OpenMeteoService.php** — `loadLocations()` kini mengambil kolom `latitude` dan `longitude` dari `master_kecamatan` (sebelumnya hanya `id, nama_kecamatan, kode` sehingga seluruh 31 kecamatan jatuh ke koordinat default Jember). Query juga difilter `WHERE latitude IS NOT NULL AND longitude IS NOT NULL`.
+- **WeatherService.php** — `getForKecamatan()` kini mengambil `latitude`/`longitude` dari `master_kecamatan`; memanggil `getForecast()` dengan koordinat sebenarnya, dan menambahkan fallback ke koordinat default Jember + `error_log` warning bila koordinat hilang.
+- **CurahHujanScraper.php** — Aktifkan SSL certificate verification (default) pada `httpRequest()` dan `fetch_nasa_curah_hujan()`: `CURLOPT_SSL_VERIFYPEER => true, CURLOPT_SSL_VERIFYHOST => 2` dengan fallback via env `CURL_SSL_VERIFY=false` untuk development.
+- **HargaKomoditasScraper.php** — Aktifkan SSL certificate verification pada `fetchSiskaperbapoData()` (sebelumnya `VERIFYPEER => false, VERIFYHOST => false`).
+- **KecepatanAnginScraper.php** — Aktifkan SSL certificate verification pada `fetch_nasa_kecepatan_angin()` (sebelumnya `VERIFYPEER => false`).
+- **footer.php** — Hapus duplikasi pemuatan Chart.js v3.9.1; hanya Chart.js v4.4.0 di header.php yang dipertahankan.
+- **irigasi_scraper/index.php** — Konversi sintaks Chart.js v3 ke v4: `xAxes/yAxes` → `x/y`, `gridLines` → `grid`, `legend`/`tooltips` → `plugins.legend`/`plugins.tooltip`, `titleFontSize` → `titleFont.size`.
+
+### Changed
+- `.env.local` — Tambah komentar dokumentasi cara mendapatkan BPS API Key (https://webapi.bps.go.id).
+
+### Notes
+- **BpsApiClient.php**, **BpsDataService.php**, **BpsSimulationService.php**, dan standardisasi GKG→Beras (0.577) sudah diperbaiki pada rilis sebelumnya; tercatat di bagian [Unreleased] di bawah.
+
+---
+
 ## [Unreleased]
 
 ### Added
-- Production Readiness (Go-Live — Tahap 15)
+- BPS Scraper — Live Test (V2) Fix Release
+  - `scripts/standardize_bps_data.php` — Database standardization script (fixes GKG→Beras conversion ratio 0.5744 → 0.577 for 266 manual records)
+  - `data/ksa/export_documentation.md` — Documentation for export process
+
+### Fixed
+- **BpsApiClient.php** — Initialized `$this->logFile` in constructor (was NULL, causing silent logging failures)
+- **BpsDataService.php** — Fixed multi-year summary update: `updateYearlySummary()` now loops through all unique years instead of only `$records[0]['tahun']`
+- **BpsSimulationService.php** — Fixed false-positive productivity anomalies: `produktivitas` now calculated from actual `produksi_gabah / luas_panen` ratio instead of independent random factor
+- **Database** — Standardized 266 manual records: `produksi_beras = ROUND(produksi_gabah * 0.577, 2)` where deviation > 1 ton
+- BPS Scraper — Comprehensive security and performance improvements
+  - `.env.local` / `.env` — Added `BPS_API_KEY`, `BPS_API_BASE_URL`, `BPS_API_TIMEOUT` env variables
+  - `config/config.php` — Define `BPS_API_KEY`, `BPS_API_BASE_URL`, `BPS_API_TIMEOUT` constants from env
+  - `app/services/BpsApiClient.php` — Read API base URL from `BPS_API_BASE_URL` constant; configurable timeout via `BPS_API_TIMEOUT`
+  - `app/controllers/BpsScraperController.php` — CSV formula injection sanitization in `export()` via `sanitizeCsvValue()` helper
+  - `app/controllers/BpsScraperController.php` — Orphan temp file cleanup in `previewImport()` and `importExcel()` (session-based)
+  - `app/controllers/AuthController.php` — Temp file cleanup on logout
+  - `app/controllers/BpsScraperController.php` — Access control: `getRecord()` now requires admin (was auth-only)
+  - `app/controllers/BpsScraperController.php` — Server-side caching via `CacheManager` for `getStatistics()` (5min TTL) and `getChartData()` (10min TTL)
+  - `app/controllers/BpsScraperController.php` — Cache invalidation (`clearCache()`) on all write operations (runScraper, store, update, delete, deleteByYear, importExcel, importKsa, syncKsaToAnnual)
+  - `app/controllers/BpsScraperController.php` — `_getDefaultYear()` helper: uses most recent year with data instead of `date('Y')`
+  - `app/controllers/BpsScraperController.php` — `sanitizeNullStats()` helper: converts NULL statistics to 0 for consistent frontend handling
+  - `app/controllers/BpsScraperController.php` — Year fallback in `getData()`: if requested year has no data, falls back to most recent available year
+  - `app/controllers/BpsScraperController.php` — Detailed per-record error tracking in `runScraper()` response (`errors` array)
+  - `app/controllers/BpsScraperController.php` — Database activity logging for scraper execution
+  - `app/controllers/BpsScraperController.php` — Fixed `auto` source handling in `BpsScraper::run()` (previously fell through to simulation)
+  - `app/views/bps_scraper/index.php` — Dropdown year: years without data marked `disabled` with "(belum ada data)" label
+  - `app/views/bps_scraper/index.php` — Empty state handling for statistics and charts
+  - `app/views/bps_scraper/index.php` — Enhanced scraping progress UI with progress bar, ETA, cancel button, source-aware messages
+  - `app/views/bps_scraper/index.php` — `showToast()` now supports 'warning' type with longer display
+  - `app/models/DataPertanianBps.php` — DRY refactor: extracted `buildFilterClause()` shared by `getAll()` and `countAll()`
+  - `app/models/DataPertanianBps.php` — Static `$tablesChecked` flag to prevent redundant table existence checks per request
+  - `app/services/BpsDataService.php` — Required field validation before processing (`tahun`, `kabupaten_kota`, `luas_panen`)
+  - `app/services/BpsDataService.php` — Detailed progress logging (start, complete with counts)
+  - `app/services/BpsApiClient.php` — File-based logging to `logs/bps_api_client.log`
+  - `scripts/export_bps_data.php` — BPS data export script with validation
+  - `data/ksa/export_documentation.md` — Documentation for export process
+  - `database/migrations/2026-08-08_create_bps_scraping_queue.sql` — Queue & logs table migration (bps_scraping_queue: id, tahun, kabupaten, source, skenario, status, progress, result JSON, error, created_at, started_at, completed_at)
+  - `scripts/bps_scraper_worker.php` — CLI background worker (poll mode + --once mode for cron); claims/purges jobs, invalidates cache, logs activity
+  - `app/controllers/BpsScraperController.php` — `runScraper()` now supports `background=true` to queue jobs instead of synchronous execution
+  - `app/controllers/BpsScraperController.php` — New `runScraperBackground()` endpoint for explicit background queueing
+  - `app/controllers/BpsScraperController.php` — New `getScraperStatus($jobId)` endpoint for polling background job progress
+  - `app/controllers/ApiBpsController.php` — New REST API controller with endpoints: `/api/v1/bps/{data,statistics,trend,provinsi,kabupaten-list,status}` + `POST /api/v1/bps/scrape`
+  - `app/controllers/ApiBpsController.php` — Auth via existing `external_auth` middleware (X-API-Key), rate-limited at 100 req/min
+  - `app/services/BpsApiClient.php` — `fetchAgriculturalData()` and `fetchVariable()` now accept `$provCode` parameter (defaults to '35'); added `getProvinsiList()` and `getKabupatenForProvinsi()` static methods
+  - `config/api_config.php` — Added `bps_api` section with `api_key`, `api_key_hash`, `allowed_ips`, rate limit (100/min), brute force protection
+  - `scripts/bps_auto_scrape.php` — CLI auto-scrape script with anomaly detection, cron-ready
+  - Cron job recommendation: `0 2 1 * * php scripts/bps_auto_scrape.php --tahun=$(date +%Y) --source=auto`
+  - `app/core/Router.php` — Added 7 new `/api/v1/bps/*` routes (data, statistics, trend, provinsi, kabupaten-list, scrape, status)
+  - `app/views/bps_scraper/index.php` — Background scraping with polling (auto source → background mode, 5s polling via `getScraperStatus()`)
+  - `index.php` — Added `runScraperBackground` to state-changing methods (CSRF protection)
   - `docs/DEPLOY.md` — Full deployment guide (Ubuntu + Nginx + PHP-FPM + MySQL)
   - `docs/SMOKE_TEST.md` — Post-deploy smoke test procedure (curl + browser)
   - `docs/GO_LIVE_CHECKLIST.md` — Pre-flight checklist with sign-off

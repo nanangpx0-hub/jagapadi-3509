@@ -53,7 +53,17 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                     <div>
                         <h6 class="alert-heading font-weight-bold mb-1">Status Data Curah Hujan</h6>
                         <ul class="mb-0 pl-3 small">
-                            <li><strong>Sumber Data:</strong> <?= strpos($data['lastScrape']['message'], 'BMKG') !== false ? 'BMKG (Prakiraan Cuaca)' : 'Simulasi Data (JAGAPADI Internal)' ?> - <a href="https://api.bmkg.go.id/publik/prakiraan-cuaca" target="_blank" class="text-info font-weight-bold"><u>Lihat Sumber Asli</u></a></li>
+                            <?php
+                            $lastMessage = $data['lastScrape']['message'] ?? '';
+                            $lastSource = 'Tidak diketahui';
+                            foreach (['NASA POWER', 'Estimasi Kategori Cuaca BMKG', 'Open-Meteo', 'Simulasi'] as $candidate) {
+                                if (stripos($lastMessage, $candidate) !== false) {
+                                    $lastSource = $candidate;
+                                    break;
+                                }
+                            }
+                            ?>
+                            <li><strong>Sumber Data:</strong> <?= htmlspecialchars($lastSource) ?></li>
                             <li><strong>Terakhir Diperbarui:</strong> <?= date('d F Y, H:i', strtotime($data['lastScrape']['created_at'])) ?> WIB</li>
                             <li><strong>Metode Scraping:</strong> <?= ucfirst($data['lastScrape']['action']) ?> (<?= ucfirst($data['lastScrape']['status']) ?>)</li>
                         </ul>
@@ -66,9 +76,9 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
             <div class="alert alert-success border-0 shadow-sm mb-4 d-flex justify-content-between align-items-center" id="demoModeAlert">
                 <div>
                     <i class="fas fa-presentation"></i>
-                    <strong>Mode Presentasi</strong>
+                        <strong>Mode Data Utama</strong>
                     <p class="mb-0 small">
-                        Saat aktif, hanya data terverifikasi BMKG yang ditampilkan (data simulasi disembunyikan)
+                        Saat aktif, hanya data observasi/reanalisis NASA POWER yang ditampilkan; simulasi disembunyikan.
                     </p>
                 </div>
                 <div class="custom-control custom-switch" style="font-size: 1.2rem;">
@@ -86,7 +96,7 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                         <option value="">Semua Tahun</option>
                         <?php 
                         // Create array of years from 2020 to 2026
-                        $fixedYears = range(2020, 2026);
+                        $fixedYears = range(2020, (int) date('Y'));
                         // Merge with available years from database (if any)
                         $allYears = array_unique(array_merge($fixedYears, $data['availableYears'] ?? []));
                         // Sort in descending order (newest first)
@@ -117,9 +127,9 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                 <div class="col-md-2">
                     <label class="form-label" for="filterDataSource">Sumber Data</label>
                     <select class="form-control" id="filterDataSource" name="data_source">
-                        <option value="all" selected>Semua Sumber</option>
-                        <option value="nasa">NASA POWER API</option>
-                        <option value="bmkg">BMKG Verified</option>
+                        <option value="all">Semua Sumber</option>
+                        <option value="nasa" selected>NASA POWER API</option>
+                        <option value="bmkg">Estimasi Kategori Cuaca BMKG</option>
                         <option value="simulation">Simulasi</option>
                     </select>
                 </div>
@@ -761,9 +771,6 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
 </div>
 <?php endif; ?>
 
-<!-- Chart.js -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
-
 <script>
 // Robust DOMContentLoaded wrapper - handles both loading and already-loaded states
 (function() {
@@ -899,8 +906,9 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
         const years = document.getElementById('trendYearRange')?.value || 5;
         const endYear = new Date().getFullYear();
         const startYear = endYear - years + 1;
+        const dataSource = encodeURIComponent(document.getElementById('filterDataSource')?.value || 'nasa');
         
-        fetch(`<?= BASE_URL ?>curahHujan/getTrendData?start_year=${startYear}&end_year=${endYear}`)
+        fetch(`<?= BASE_URL ?>curahHujan/getTrendData?start_year=${startYear}&end_year=${endYear}&data_source=${dataSource}`)
             .then(r => r.json())
             .then(data => {
                 if (!data.success) throw new Error(data.error || 'Failed to load trend data');
@@ -936,8 +944,9 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
     function loadSeasonalChart() {
         const canvas = document.getElementById('seasonalChart');
         if (!canvas) return;
-        
-        fetch(`<?= BASE_URL ?>curahHujan/getSeasonalData?year=${new Date().getFullYear()}`)
+        const dataSource = encodeURIComponent(document.getElementById('filterDataSource')?.value || 'nasa');
+
+        fetch(`<?= BASE_URL ?>curahHujan/getSeasonalData?year=${new Date().getFullYear()}&data_source=${dataSource}`)
             .then(r => r.json())
             .then(data => {
                 if (!data.success) throw new Error(data.error || 'Failed to load seasonal data');
@@ -975,8 +984,9 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
         const statsContainer = document.getElementById('anomalyStats');
         const tableBody = document.querySelector('#anomalyTable tbody');
         if (!statsContainer || !tableBody) return;
-        
-        fetch(`<?= BASE_URL ?>curahHujan/getAnomalyData?year=${new Date().getFullYear()}`)
+        const dataSource = encodeURIComponent(document.getElementById('filterDataSource')?.value || 'nasa');
+
+        fetch(`<?= BASE_URL ?>curahHujan/getAnomalyData?year=${new Date().getFullYear()}&data_source=${dataSource}`)
             .then(r => r.json())
             .then(data => {
                 if (!data.success) throw new Error(data.error || 'Failed to load anomaly data');
@@ -994,8 +1004,8 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                 } else {
                     tableBody.innerHTML = data.anomalies.slice(0, 10).map(a => `
                         <tr>
-                            <td>${a.tanggal}</td>
-                            <td>${a.lokasi}</td>
+                            <td>${escapeHtml(a.tanggal)}</td>
+                            <td>${escapeHtml(a.lokasi)}</td>
                             <td><strong>${parseFloat(a.curah_hujan).toFixed(2)} mm</strong></td>
                             <td><span class="badge badge-${a.tipe_anomali === 'Tinggi' ? 'danger' : 'info'}">${a.tipe_anomali}</span></td>
                         </tr>
@@ -1013,8 +1023,9 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
         const canvas = document.getElementById('predictionChart');
         const infoContainer = document.getElementById('predictionInfo');
         if (!canvas) return;
-        
-        fetch(`<?= BASE_URL ?>curahHujan/getPredictionData?months=3`)
+        const dataSource = encodeURIComponent(document.getElementById('filterDataSource')?.value || 'nasa');
+
+        fetch(`<?= BASE_URL ?>curahHujan/getPredictionData?months=3&data_source=${dataSource}`)
             .then(r => r.json())
             .then(data => {
                 if (!data.success) throw new Error(data.error || 'Failed to load prediction data');
@@ -1255,13 +1266,13 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
             const isDemo = this.checked;
             
             if (isDemo) {
-                // Demo mode active: lock to BMKG data only
-                filterDataSource.value = 'bmkg';
+                // Primary-data mode: lock to the measured/reanalysis source.
+                filterDataSource.value = 'nasa';
                 filterDataSource.disabled = true;
                 demoModeLabel.textContent = 'Aktif';
                 demoModeLabel.className = 'badge badge-success';
                 demoModeAlert.className = 'alert alert-success border-0 shadow-sm mb-4 d-flex justify-content-between align-items-center';
-                showToast('Mode Presentasi Aktif - Hanya data BMKG yang ditampilkan', 'success');
+                showToast('Mode Data Utama Aktif - Hanya NASA POWER yang ditampilkan', 'success');
             } else {
                 // Demo mode off: allow all sources
                 filterDataSource.disabled = false;

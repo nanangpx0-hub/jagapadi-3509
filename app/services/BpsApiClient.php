@@ -13,7 +13,7 @@
 class BpsApiClient {
     
     // BPS WebAPI base URL
-    private const API_BASE_URL = 'https://webapi.bps.go.id/v1';
+    private const API_BASE_URL = BPS_API_BASE_URL;
     
     // East Java province code
     private const PROV_CODE = '35';
@@ -23,18 +23,19 @@ class BpsApiClient {
     private const VAR_LUAS_PANEN = '87'; // Luas Panen Padi
     private const VAR_PRODUKSI_PADI = '88'; // Produksi Padi
     private const VAR_PRODUKTIVITAS = '89'; // Produktivitas Padi
-
+    
     // Rate limiting: delay between API requests (seconds)
     private const RATE_LIMIT_DELAY = 1.5;
     // Max retry attempts with exponential backoff
     private const MAX_RETRIES = 3;
-
+    
     private $apiKey;
-    private $timeout = 30;
+    private $timeout;
     private $debug = false;
     private $lastError = null;
     private $lastResponse = null;
     private $lastRequestTime = 0;
+    private $logFile;
     
     /**
      * Constructor
@@ -43,6 +44,8 @@ class BpsApiClient {
      */
     public function __construct($apiKey = null) {
         $this->apiKey = $apiKey ?: (defined('BPS_API_KEY') ? BPS_API_KEY : '');
+        $this->timeout = defined('BPS_API_TIMEOUT') ? (int)BPS_API_TIMEOUT : 30;
+        $this->logFile = ROOT_PATH . '/logs/bps_api.log';
     }
     
     /**
@@ -110,10 +113,11 @@ class BpsApiClient {
      * 
      * @param int $tahun Year to fetch
      * @param string|null $kabupaten Optional specific kabupaten code
+     * @param string $provCode Province code (default: East Java '35')
      * @return array Fetched data records
      * @throws Exception if API call fails
      */
-    public function fetchAgriculturalData($tahun, $kabupaten = null) {
+    public function fetchAgriculturalData($tahun, $kabupaten = null, $provCode = self::PROV_CODE) {
         if (!$this->isConfigured()) {
             throw new Exception('BPS API key not configured. Register at webapi.bps.go.id');
         }
@@ -122,10 +126,10 @@ class BpsApiClient {
         
         try {
             // Fetch luas panen
-            $luasData = $this->fetchVariable(self::VAR_LUAS_PANEN, $tahun, $kabupaten);
+            $luasData = $this->fetchVariable(self::VAR_LUAS_PANEN, $tahun, $kabupaten, $provCode);
             
             // Fetch produksi
-            $produksiData = $this->fetchVariable(self::VAR_PRODUKSI_PADI, $tahun, $kabupaten);
+            $produksiData = $this->fetchVariable(self::VAR_PRODUKSI_PADI, $tahun, $kabupaten, $provCode);
             
             // Merge and map data
             $results = $this->mergeAndMapData($luasData, $produksiData, $tahun);
@@ -151,22 +155,23 @@ class BpsApiClient {
      * @param string $variableId BPS variable ID
      * @param int $tahun Year
      * @param string|null $kabCode Optional kabupaten code
+     * @param string $provCode Province code (default: East Java '35')
      * @return array
      */
-    private function fetchVariable($variableId, $tahun, $kabCode = null) {
+    private function fetchVariable($variableId, $tahun, $kabCode = null, $provCode = self::PROV_CODE) {
         // Build API URL
         // Format: /list/model/data/domain/{domain}/var/{var}/th/{year}
-        $domain = $kabCode ?: self::PROV_CODE;
+        $domain = $kabCode ?: $provCode;
         $url = sprintf(
             '%s/list/model/data/domain/%s/var/%s/th/%s/key/%s',
             self::API_BASE_URL,
-            $domain,
-            $variableId,
-            $tahun,
-            $this->apiKey
+            rawurlencode((string) $domain),
+            rawurlencode((string) $variableId),
+            rawurlencode((string) $tahun),
+            rawurlencode((string) $this->apiKey)
         );
         
-        $this->log("Fetching: {$url}");
+        $this->log("Fetching BPS variable {$variableId}, domain {$domain}, period {$tahun}");
         
         $response = $this->makeRequest($url);
         
@@ -348,8 +353,104 @@ class BpsApiClient {
      * @param string $level
      */
     private function log($message, $level = 'INFO') {
-        if ($this->debug) {
-            echo sprintf("[%s] [%s] BpsApiClient: %s\n", date('Y-m-d H:i:s'), $level, $message);
+        $logEntry = sprintf("[%s] [%s] BpsApiClient: %s\n", date('Y-m-d H:i:s'), $level, $message);
+        
+        $logDir = dirname($this->logFile);
+        if (!is_dir($logDir)) {
+            @mkdir($logDir, 0755, true);
         }
+        @file_put_contents($this->logFile, $logEntry, FILE_APPEND);
+        
+        if ($this->debug) {
+            echo $logEntry;
+        }
+    }
+    
+    /**
+     * Get list of supported provinces for dropdown UI
+     * 
+     * @return array Array of [kode => nama] pairs
+     */
+    public static function getProvinsiList() {
+        $listFile = ROOT_PATH . '/config/provinces.json';
+        if (file_exists($listFile)) {
+            $data = json_decode(file_get_contents($listFile), true);
+            if (is_array($data)) return $data;
+        }
+        
+        // Fallback: built-in list for development
+        return [
+            '35' => 'Jawa Timur',
+            '01' => 'DKI Jakarta',
+            '31' => 'DI Yogyakarta',
+            '32' => 'Jawa Barat',
+            '33' => 'Jawa Tengah',
+            '36' => 'Banten',
+            '15' => 'Jambi',
+            '17' => 'Bengkulu',
+            '18' => 'Lampung',
+            '19' => 'Bangka Belitung',
+            '21' => 'Kepulauan Riau',
+            '23' => 'Kalimantan Barat',
+            '25' => 'Sumatera Barat',
+            '26' => 'Sulawesi Selatan',
+            '28' => 'NTT'
+        ];
+    }
+    
+    /**
+     * Get kabupaten list for a specific province
+     * 
+     * @param string $provCode Province code
+     * @return array Array of [kode_kabupaten => nama_kabupaten] pairs
+     */
+    public static function getKabupatenForProvinsi($provCode = '35') {
+        // Try API first if configured
+        $apiKey = defined('BPS_API_KEY') ? BPS_API_KEY : '';
+        if (!empty($apiKey)) {
+            try {
+                $url = sprintf(
+                    '%s/domain/info/%s/key/%s',
+                    self::API_BASE_URL,
+                    $provCode,
+                    $apiKey
+                );
+                $ch = curl_init();
+                curl_setopt_array($ch, [
+                    CURLOPT_URL => $url,
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_TIMEOUT => 10,
+                    CURLOPT_SSL_VERIFYPEER => true,
+                    CURLOPT_HTTPHEADER => ['Accept: application/json']
+                ]);
+                $response = curl_exec($ch);
+                curl_close($ch);
+                
+                $data = json_decode($response, true);
+                if (isset($data['data']) && is_array($data['data'])) {
+                    $result = [];
+                    foreach ($data['data'] as $row) {
+                        $result[$row['kode_bps']] = $row['nama_kabupaten'];
+                    }
+                    if (!empty($result)) return $result;
+                }
+            } catch (Exception $e) {
+                // Fall through to local lookup
+            }
+        }
+        
+        // Fallback: local lookup from database
+        $db = Database::getInstance()->getConnection();
+        $stmt = $db->prepare(
+            "SELECT kode_kabupaten, nama_kabupaten FROM master_kabupaten_by_province WHERE kode_provinsi = ? ORDER BY nama_kabupaten"
+        );
+        $stmt->execute([$provCode]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        $result = [];
+        foreach ($rows as $row) {
+            $result[$row['kode_kabupaten']] = $row['nama_kabupaten'];
+        }
+        return $result;
     }
 }

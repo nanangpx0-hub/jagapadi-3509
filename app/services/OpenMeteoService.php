@@ -205,6 +205,39 @@ class OpenMeteoService {
         
         return $results;
     }
+
+    /** Fetch daily precipitation for every monitored kecamatan in a range. */
+    public function fetchAllKecamatanRange(string $startDate, string $endDate): array {
+        $records = [];
+
+        foreach ($this->locations as $location) {
+            $lat = (float) ($location['latitude'] ?? -8.1706);
+            $lon = (float) ($location['longitude'] ?? 113.7003);
+            $dailyRows = $this->getDailyPrecipitation($lat, $lon, $startDate, $endDate);
+
+            foreach ($dailyRows as $day) {
+                $records[] = [
+                    'tanggal' => $day['date'],
+                    'lokasi' => ($location['nama_kecamatan'] ?? 'Jember') . ', Jember',
+                    'kode_wilayah' => $location['kode'] ?? '35.09',
+                    'curah_hujan' => $day['precipitation_mm'],
+                    'satuan' => 'mm',
+                    'sumber_data' => 'Open-Meteo',
+                    'keterangan' => sprintf(
+                        'Data curah hujan harian Open-Meteo. Koordinat: %s, %s. Kondisi: %s',
+                        $lat,
+                        $lon,
+                        $day['weather_desc'] ?? 'N/A'
+                    ),
+                    'kecamatan_id' => $location['id'],
+                ];
+            }
+
+            usleep(self::REQUEST_DELAY);
+        }
+
+        return $records;
+    }
     
     /**
      * Get daily precipitation for a date range
@@ -350,8 +383,10 @@ class OpenMeteoService {
         try {
             $db = Database::getInstance()->getConnection();
             $stmt = $db->prepare(
-                "SELECT id, nama_kecamatan, kode 
+                "SELECT id, nama_kecamatan, kode, latitude, longitude 
                  FROM master_kecamatan 
+                 WHERE latitude IS NOT NULL 
+                   AND longitude IS NOT NULL 
                  ORDER BY nama_kecamatan"
             );
             $stmt->execute();

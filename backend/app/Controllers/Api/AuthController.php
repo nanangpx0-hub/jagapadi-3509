@@ -47,6 +47,8 @@ class AuthController extends BaseApiController
             'sub' => (int) $user['id'],
             'role' => $user['role'],
             'username' => $user['username'],
+            'must_change_password' => (bool) ($user['must_change_password'] ?? false),
+            'ver' => (int) ($user['token_version'] ?? 0),
             'exp' => time() + $jwtExpiry,
         ]);
 
@@ -157,7 +159,18 @@ class AuthController extends BaseApiController
         $hash = User::hashPassword($newPassword);
         User::updatePassword((int) $user['id'], $hash);
 
-        ActivityLog::log((int) $user['id'], 'password_changed', 'users', (int) $user['id'], 'Password diubah via API');
+        // Kebijakan: perubahan password mencabut seluruh token aktif user.
+        // `token_version` dinaikkan sehingga semua JWT lama (klaim `ver`) ditolak
+        // middleware; token saat ini juga di-blacklist via `jti`.
+        User::bumpTokenVersion((int) $user['id']);
+
+        $payload = $GLOBALS['auth_payload'] ?? null;
+        if (isset($payload['jti']) && isset($payload['exp'])) {
+            JwtBlacklist::revoke((string) $payload['jti'], (int) $payload['exp'], (int) $user['id']);
+        }
+        JwtBlacklist::purgeExpired();
+
+        ActivityLog::log((int) $user['id'], 'password_changed', 'users', (int) $user['id'], 'Password diubah via API (seluruh token dicabut)');
 
         $this->success([], 'Password berhasil diubah');
     }
