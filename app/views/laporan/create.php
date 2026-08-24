@@ -1,4 +1,4 @@
-﻿<?php include ROOT_PATH . '/app/views/layouts/header.php'; ?>
+<?php include ROOT_PATH . '/app/views/layouts/header.php'; ?>
 
 <style>
 /* Validation styles for luas serangan vs populasi */
@@ -200,8 +200,8 @@
 <div class="row laporan-create-page">
     <div class="col-md-10 offset-md-1">
         <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title mb-0">
                     <i class="fas fa-plus"></i> Buat Laporan Hama/Penyakit Baru
                     <?php if(($_SESSION['role'] ?? '') === 'admin'): ?>
                         <span class="badge badge-danger ml-2">Mode Admin</span>
@@ -210,6 +210,11 @@
                     <?php elseif(($_SESSION['role'] ?? '') === 'petugas'): ?>
                     <?php endif; ?>
                 </h3>
+                <div class="card-tools">
+                    <a href="<?= BASE_URL ?>laporan" class="btn btn-outline-secondary btn-sm" title="Kembali ke Daftar Laporan">
+                        <i class="fas fa-arrow-left"></i> Kembali ke Daftar Laporan
+                    </a>
+                </div>
             </div>
             <form action="<?= BASE_URL ?>laporan/create" method="POST" enctype="multipart/form-data" id="formCreateLaporan"
                   data-draft-user="<?= (int) ($_SESSION['user_id'] ?? 0) ?>" data-draft-module="laporan-hama">
