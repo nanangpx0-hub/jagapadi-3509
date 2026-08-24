@@ -57,12 +57,27 @@ class BpsScraper {
         $message = "";
         
         try {
-            // 1. Fetch/Generate Data
+            // 1. Fetch/Generate Data (dengan fallback otomatis ke simulasi jika resmi_webapi gagal)
+            $fallbackUsed = false;
+            $originalSource = $source;
             if ($source === 'resmi_webapi') {
-                if ($kabupaten) {
-                    $records = $this->apiClient->fetchAgriculturalData($tahun, $this->getKodeWilayah($kabupaten));
-                } else {
-                    $records = $this->apiClient->fetchAgriculturalData($tahun);
+                try {
+                    if ($kabupaten) {
+                        $records = $this->apiClient->fetchAgriculturalData($tahun, $this->getKodeWilayah($kabupaten));
+                    } else {
+                        $records = $this->apiClient->fetchAgriculturalData($tahun);
+                    }
+                } catch (Throwable $e) {
+                    $this->log("WebAPI gagal untuk tahun {$tahun}: " . $e->getMessage() . " — fallback ke simulasi", 'WARNING');
+                    $records = [];
+                }
+                if (empty($records)) {
+                    $this->log("WebAPI mengembalikan data kosong untuk tahun {$tahun} — fallback otomatis ke simulasi", 'WARNING');
+                    $records = $kabupaten
+                        ? [$this->simulationService->generateData($tahun, $kabupaten, $skenario)]
+                        : $this->simulationService->generateAllKabupaten($tahun, $skenario);
+                    $sourceTypeUsed = 'simulasi (fallback)';
+                    $fallbackUsed = true;
                 }
             }
 
@@ -76,6 +91,10 @@ class BpsScraper {
                 throw new RuntimeException(
                     'Sumber yang dipilih tidak mengembalikan data. Tidak ada fallback otomatis ke simulasi.'
                 );
+            }
+            // Catat jika fallback digunakan
+            if ($fallbackUsed) {
+                $message = "Data diambil via simulasi (fallback otomatis karena WebAPI gagal/403) untuk tahun {$tahun}";
             }
             
             // 2. Process Data (Validate & Reference)

@@ -520,7 +520,7 @@
             <div>
                 <label class="small mb-1" for="monthlyPerPage">Baris</label>
                 <select class="form-control form-control-sm" id="monthlyPerPage">
-                    <option value="10">10</option><option value="25">25</option><option value="50">50</option>
+                    <option value="10">10</option><option value="25">25</option><option value="38" selected>38 (Lengkap)</option><option value="50">50</option><option value="100">100</option>
                 </select>
             </div>
             <button type="button" class="btn btn-sm btn-primary" id="btnLoadMonthly">
@@ -894,7 +894,7 @@
     let currentPage = 1;
     let perPage = 10;
     let monthlyPage = 1;
-    let monthlyPerPage = 10;
+    let monthlyPerPage = 38;
     let monthlyTotalPages = 1;
     let monthlyHarvestChart = null;
     let trendChart = null;
@@ -1917,9 +1917,9 @@
             .then(response => response.json())
             .then(response => {
                 if (!response.success) throw new Error(response.error || 'Gagal memuat grafik bulanan');
+                const perKab = response.datasets_per_kabupaten || [];
                 const values = response.values || [];
-                const validValues = values.filter(value => value !== null && Number.isFinite(Number(value))).map(Number);
-                if (validValues.length === 0) {
+                if (perKab.length === 0) {
                     if (monthlyHarvestChart) {
                         monthlyHarvestChart.destroy();
                         monthlyHarvestChart = null;
@@ -1931,37 +1931,28 @@
                 }
 
                 if (!document.getElementById('monthlyHarvestChart')) {
-                    container.innerHTML = '<canvas id="monthlyHarvestChart" role="img" aria-label="Grafik garis luas panen bulanan"></canvas>';
+                    container.innerHTML = '<canvas id="monthlyHarvestChart" role="img" aria-label="Grafik garis luas panen bulanan per kabupaten"></canvas>';
                 }
                 if (monthlyHarvestChart) monthlyHarvestChart.destroy();
                 monthlyHarvestChart = new Chart(document.getElementById('monthlyHarvestChart'), {
                     type: 'line',
                     data: {
                         labels: response.labels,
-                        datasets: [{
-                            label: `Luas Panen ${response.meta.scope} (Ha)`,
-                            data: values,
-                            borderColor: '#1cc88a',
-                            backgroundColor: 'rgba(28, 200, 138, 0.12)',
-                            pointBackgroundColor: '#1cc88a',
-                            pointRadius: 4,
-                            pointHoverRadius: 6,
-                            borderWidth: 3,
-                            tension: 0.25,
-                            fill: true,
-                            spanGaps: false,
-                        }],
+                        datasets: perKab,
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        interaction: { mode: 'index', intersect: false },
+                        interaction: { mode: 'nearest', intersect: false },
                         plugins: {
-                            legend: { display: true, position: 'bottom' },
+                            legend: {
+                                display: true,
+                                position: 'right',
+                                labels: { boxWidth: 12, font: { size: 10 } },
+                            },
                             tooltip: {
                                 callbacks: {
-                                    label: context => `Luas panen: ${formatNumber(context.parsed.y)} Ha`,
-                                    afterLabel: context => `Cakupan: ${response.coverage[context.dataIndex] || 0} wilayah`,
+                                    label: context => `${context.dataset.label}: ${formatNumber(context.parsed.y)} Ha`,
                                 },
                             },
                         },
@@ -1976,10 +1967,15 @@
                     },
                 });
 
-                const maxValue = Math.max(...validValues);
-                const maxIndex = values.findIndex(value => Number(value) === maxValue);
-                subtitle.textContent = `${response.meta.scope} · Tahun ${response.meta.tahun} · seluruh bulan tersedia`;
-                summary.textContent = `Nilai tertinggi terdapat pada ${response.labels[maxIndex]} sebesar ${formatNumber(maxValue)} Ha.`;
+                // Cari kabupaten dengan luas panen tertinggi (agregat tahunan)
+                const totals = perKab.map(ds => ({
+                    label: ds.label,
+                    total: ds.data.reduce((s, v) => s + (Number(v) || 0), 0),
+                })).sort((a, b) => b.total - a.total);
+                subtitle.textContent = `Per Kabupaten/Kota · ${response.meta.scope} · Tahun ${response.meta.tahun} · ${perKab.length} wilayah`;
+                summary.textContent = totals.length
+                    ? `Tertinggi: ${totals[0].label} (${formatNumber(totals[0].total)} Ha/tahun). Klik legenda untuk menyorot satu kabupaten.`
+                    : '';
             })
             .catch(error => {
                 if (monthlyHarvestChart) {

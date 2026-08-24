@@ -438,41 +438,35 @@ class KecepatanAnginController extends Controller {
             $year = $_POST['year'] ?? date('Y');
             $month = $_POST['month'] ?? date('m');
             
-            $data = $scraper->fetch_nasa_kecepatan_angin($year, $month);
-            
-            if (!empty($data)) {
-                $successCount = 0;
-                $failedCount = 0;
-                foreach ($data as $rec) {
-                    try {
-                        $this->model->insertUpsert($rec);
-                        $successCount++;
-                    } catch (Exception $ex) {
-                        $failedCount++;
-                    }
-                }
+            $result = $scraper->run([
+                'year' => $year,
+                'month' => $month,
+                'source' => 'nasa',
+                'allow_fallback' => true,
+            ]);
+
+            if ($result['success']) {
                 $this->invalidateStatsCache(['stats_kecepatan_angin_']);
-                
-                $this->model->logActivity('fetch_nasa_wind', 'success', "NASA POWER API: Berhasil mengambil {$successCount} data kecepatan angin", [
-                    'processed' => count($data),
-                    'success' => $successCount,
-                    'failed' => $failedCount
-                ]);
-                
-                $jsonOutput = json_encode([
-                    'success' => true,
-                    'message' => "Berhasil mengambil {$successCount} data kecepatan angin dari NASA POWER API",
-                    'source' => 'NASA POWER (WS10M/WS2M)',
-                    'records_success' => $successCount,
-                    'records_failed' => $failedCount,
-                    'execution_time' => 1.5
-                ]);
-            } else {
-                $jsonOutput = json_encode([
-                    'success' => false,
-                    'error' => 'Tidak ada data valid yang dikembalikan oleh NASA POWER API'
-                ]);
             }
+
+            $json = [
+                'success' => $result['success'],
+                'message' => $result['message'],
+                'source' => $result['source'],
+                'records_success' => $result['records_success'],
+                'records_failed' => $result['records_failed'],
+                'execution_time' => $result['execution_time'],
+                'fallback_used' => $result['fallback_used'] ?? false,
+                'fallback_reason' => $result['fallback_reason'] ?? '',
+            ];
+
+            if (!$result['success']) {
+                $json['error'] = $result['message'];
+                unset($json['message']);
+            }
+
+            $jsonOutput = json_encode($json);
+
 
             if (ob_get_length()) {
                 ob_end_clean();

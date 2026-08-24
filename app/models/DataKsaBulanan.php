@@ -272,6 +272,34 @@ class DataKsaBulanan extends Model {
     }
 
     /**
+     * Time series luas panen bulanan per kabupaten/kota (multi-series untuk grafik).
+     * Satu dataset per wilayah, 12 bulan per tahun.
+     */
+    public function getMonthlyHarvestChartPerKabupaten(int $tahun, int $limit = 38): array {
+        $sql = "SELECT
+                    kabupaten_kota,
+                    bulan,
+                    luas_panen
+                FROM `{$this->table}`
+                WHERE tahun = ? AND luas_panen IS NOT NULL";
+        $params = [$tahun];
+
+        $sql .= " ORDER BY kabupaten_kota ASC, bulan ASC LIMIT " . max(1, (int) $limit * 12);
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $series = [];
+        foreach ($rows as $row) {
+            $name = (string) $row['kabupaten_kota'];
+            $series[$name][(int) $row['bulan']] = $row['luas_panen'] !== null
+                ? (float) $row['luas_panen']
+                : null;
+        }
+        return $series;
+    }
+
+    /**
      * Statistik ringkas per tahun: jumlah kabupaten, total luas, total produksi,
      * dan rincian status_data.
      */

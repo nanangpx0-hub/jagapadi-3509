@@ -48,6 +48,7 @@
             <file>tests/Integration/UsulanOptWorkflowDatabaseTest.php</file>
             <file>tests/Integration/UsulanOptBulkDeleteDatabaseTest.php</file>
             <file>tests/Integration/OtherReportImportDatabaseTest.php</file>
+            <file>tests/Integration/KecepatanAnginFallbackDatabaseTest.php</file>
         </testsuite>
     </testsuites>
     <php>

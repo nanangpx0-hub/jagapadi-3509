@@ -649,8 +649,8 @@ class BpsScraperController extends Controller {
             $tahun = filter_input(INPUT_GET, 'tahun', FILTER_VALIDATE_INT);
             $bulan = filter_input(INPUT_GET, 'bulan', FILTER_VALIDATE_INT);
             $page = max(1, (int) ($_GET['page'] ?? 1));
-            $perPage = (int) ($_GET['per_page'] ?? 10);
-            $allowedPerPage = [10, 25, 50];
+            $perPage = (int) ($_GET['per_page'] ?? 38);
+            $allowedPerPage = [10, 25, 38, 50, 100];
 
             if ($tahun !== false && $tahun !== null) {
                 $maxYear = (int) date('Y') + 1;
@@ -760,11 +760,36 @@ class BpsScraperController extends Controller {
                 }
             }
 
+            // Multi-series: satu dataset per kabupaten/kota (bukan gabungan)
+            $seriesPerKab = $model->getMonthlyHarvestChartPerKabupaten((int) $tahun, 38);
+            $datasetsPerKab = [];
+            $palette = ['#1cc88a','#4e73df','#36b9cc','#f6c23e','#e74a3b','#858796','#5a5c69','#fd7e14','#20c9a6','#6610f2','#e83e8c','#ffc107','#17a2b8','#6f42c1','#28a745','#dc3545','#007bff','#6c757d'];
+            $idx = 0;
+            foreach ($seriesPerKab as $kabName => $monthValues) {
+                $data12 = [];
+                for ($m = 1; $m <= 12; $m++) {
+                    $data12[] = isset($monthValues[$m]) ? (float) $monthValues[$m] : null;
+                }
+                $datasetsPerKab[] = [
+                    'label' => $kabName,
+                    'data' => $data12,
+                    'borderColor' => $palette[$idx % count($palette)],
+                    'backgroundColor' => 'transparent',
+                    'borderWidth' => 2,
+                    'tension' => 0.25,
+                    'pointRadius' => 2,
+                    'pointHoverRadius' => 4,
+                    'spanGaps' => true,
+                ];
+                $idx++;
+            }
+
             echo json_encode([
                 'success' => true,
                 'labels' => array_values($monthNames),
                 'values' => array_values($values),
                 'coverage' => array_values($coverage),
+                'datasets_per_kabupaten' => $datasetsPerKab,
                 'meta' => [
                     'tahun' => (int) $tahun,
                     'scope' => $kabupaten !== '' ? $kabupaten : 'Jawa Timur',

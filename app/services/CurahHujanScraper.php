@@ -211,70 +211,81 @@ class CurahHujanScraper {
                     }
                 }
 
-                // === Priority 2: Open-Meteo (actual mm precipitation) ===
-                if (empty($data) && $requestedSource === 'openmeteo' && $this->sources['openmeteo']['enabled']) {
+                // === Priority 2: Open-Meteo (hanya jika diminta eksplisit) ===
+                $isOpenMeteoRequested = $requestedSource === 'openmeteo';
+                if (empty($data) && $isOpenMeteoRequested && $this->sources['openmeteo']['enabled']) {
                     $this->log("[Priority 2] Attempting Open-Meteo API (actual precipitation data)");
-                    try {
-                        if ($this->openMeteoService->isAvailable()) {
-                            $startDate = sprintf('%04d-%02d-01', $targetYear, $targetMonth);
-                            $endDate = date('Y-m-t', strtotime($startDate));
-                            if ($endDate > date('Y-m-d')) {
-                                $endDate = date('Y-m-d');
-                            }
-                            $openMeteoData = $this->openMeteoService
-                                ->fetchAllKecamatanRange($startDate, $endDate);
-                            
-                            if (!empty($openMeteoData)) {
-                                $data = $openMeteoData;
-                                $result['source'] = 'Open-Meteo';
-                                $this->log("✓ Open-Meteo: fetched " . count($data) . " records");
+                        try {
+                            if ($this->openMeteoService->isAvailable()) {
+                                $startDate = sprintf('%04d-%02d-01', $targetYear, $targetMonth);
+                                $endDate = date('Y-m-t', strtotime($startDate));
+                                if ($endDate > date('Y-m-d')) {
+                                    $endDate = date('Y-m-d');
+                                }
+                                $openMeteoData = $this->openMeteoService
+                                    ->fetchAllKecamatanRange($startDate, $endDate);
+                                
+                                if (!empty($openMeteoData)) {
+                                    $data = $openMeteoData;
+                                    $result['source'] = 'Open-Meteo';
+                                    $this->log("✓ Open-Meteo: fetched " . count($data) . " records");
+                                } else {
+                                    $this->log("Open-Meteo returned empty data, trying next source");
+                                }
                             } else {
-                                $this->log("Open-Meteo returned empty data, trying next source");
+                                $this->log("Open-Meteo API health check failed, trying next source");
                             }
-                        } else {
-                            $this->log("Open-Meteo API health check failed, trying next source");
+                        } catch (Exception $e) {
+                            $this->log("Open-Meteo ERROR: " . $e->getMessage());
                         }
-                    } catch (Exception $e) {
-                        $this->log("Open-Meteo ERROR: " . $e->getMessage());
-                    }
                 }
                 
-                // === Priority 3: BMKG API (weather categories) ===
-                if (empty($data) && in_array($requestedSource, ['bmkg', 'bmkg_api'], true) && $this->sources['bmkg_api']['enabled']) {
+                // === Priority 3: BMKG API (hanya jika diminta eksplisit) ===
+                $isBmkgRequested = in_array($requestedSource, ['bmkg', 'bmkg_api'], true);
+                if (empty($data) && $isBmkgRequested && $this->sources['bmkg_api']['enabled']) {
                     $this->log("[Priority 3] Attempting BMKG API (weather categories)");
-                    try {
-                        if ($this->bmkgService->isAvailable()) {
-                            $bmkgResult = [
-                                'success' => true,
-                                'fetch_results' => ['data' => $this->fetchFromBMKG($targetYear, $targetMonth)],
-                            ];
-                            
-                            if ($bmkgResult['success'] && isset($bmkgResult['fetch_results']['data'])) {
-                                $data = $bmkgResult['fetch_results']['data'];
-                                $result['source'] = 'Estimasi Kategori Cuaca BMKG';
-                                $this->log("✓ BMKG: fetched " . count($data) . " records");
+                        try {
+                            if ($this->bmkgService->isAvailable()) {
+                                $bmkgResult = [
+                                    'success' => true,
+                                    'fetch_results' => ['data' => $this->fetchFromBMKG($targetYear, $targetMonth)],
+                                ];
+                                
+                                if ($bmkgResult['success'] && isset($bmkgResult['fetch_results']['data'])) {
+                                    $data = $bmkgResult['fetch_results']['data'];
+                                    if (!empty($data)) {
+                                        $result['source'] = 'Estimasi Kategori Cuaca BMKG';
+                                        $this->log("✓ BMKG: fetched " . count($data) . " records");
+                                    } else {
+                                        $this->log("BMKG returned empty data, trying next source");
+                                    }
+                                } else {
+                                    $this->log("BMKG Service failed: " . ($bmkgResult['message'] ?? 'Unknown error'));
+                                }
                             } else {
-                                $this->log("BMKG Service failed: " . ($bmkgResult['message'] ?? 'Unknown error'));
+                                $this->log("BMKG API health check failed, trying next source");
                             }
-                        } else {
-                            $this->log("BMKG API health check failed, trying next source");
+                        } catch (Exception $e) {
+                            $this->log("BMKG ERROR: " . $e->getMessage());
                         }
-                    } catch (Exception $e) {
-                        $this->log("BMKG ERROR: " . $e->getMessage());
-                    }
                 }
                 
-                // === Priority 99: Simulation (fallback) ===
-                if (empty($data) && $requestedSource === 'simulation' && $this->sources['simulation']['enabled']) {
-                    $this->log("Using explicitly requested simulation data");
+                // === Priority 99: Simulation (fallback otomatis - FIX hosting) ===
+                if (empty($data) && $this->sources['simulation']['enabled']) {
+                    if ($requestedSource === 'simulation') {
+                        $this->log("Using explicitly requested simulation data");
+                    } else {
+                        $this->log("[Fallback] Semua sumber API gagal/kosong untuk {$targetYear}-{$targetMonth} — beralih otomatis ke Simulasi");
+                    }
                     $data = $this->generateSimulationData($targetYear, $targetMonth);
-                    $result['source'] = 'Simulasi';
+                    $result['source'] = ($requestedSource === 'simulation') ? 'Simulasi' : 'Simulasi (fallback)';
                 }
             }
             
             if (empty($data)) {
                 $sourceLabel = $result['source'] ?: $requestedSource;
-                throw new Exception("Sumber {$sourceLabel} tidak mengembalikan data untuk {$targetYear}-{$targetMonth}; tidak ada fallback otomatis ke simulasi");
+                // Jika simulasi disabled dan semua API gagal, baru throw tanpa fallback
+                throw new Exception("Sumber {$sourceLabel} tidak mengembalikan data untuk {$targetYear}-{$targetMonth} dan simulasi dinonaktifkan");
             }
             
             $result['records_processed'] = count($data);

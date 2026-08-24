@@ -224,11 +224,20 @@ class BpsApiClient {
             curl_close($ch);
 
             if ($error) {
-                $lastError = "cURL Error: {$error}";
+                $lastError = "cURL Error: {$error} (URL: " . substr($url, 0, 120) . ")";
                 $this->log($lastError, 'WARNING');
-            } elseif ($httpCode === 429 || $httpCode >= 500) {
+            } elseif ($httpCode === 403 || $httpCode === 429 || $httpCode >= 500) {
+                // 403 di hosting sering karena API key belum dikonfigurasi, IP diblokir, atau rate-limit
+                $detail = '';
+                if ($httpCode === 403) {
+                    $hasKey = !empty($this->apiKey) ? 'API key terkonfigurasi' : 'API key KOSONG - daftar di webapi.bps.go.id';
+                    $detail = " | {$hasKey} | Cek BPS_API_KEY di .env dan whitelist IP hosting";
+                }
+                $lastError = "BPS API returned HTTP {$httpCode} (Server Response Error){$detail}";
+                $this->log($lastError . " | URL: " . substr($url, 0, 150), 'WARNING');
+            } else if ($httpCode !== 200) {
                 $lastError = "BPS API returned HTTP {$httpCode}";
-                $this->log($lastError, 'WARNING');
+                $this->log($lastError . " | URL: " . substr($url, 0, 150), 'WARNING');
             } else {
                 $data = json_decode($response, true);
                 $this->lastResponse = $data;
@@ -238,10 +247,10 @@ class BpsApiClient {
                     $this->log($lastError, 'WARNING');
                 } elseif (isset($data['status']) && $data['status'] !== 'OK') {
                     $message = $data['message'] ?? 'Unknown API error';
-                    $lastError = "BPS API Error: {$message}";
+                    $lastError = "BPS API Error: {$message} (HTTP 200 but status != OK)";
                     $this->log($lastError, 'WARNING');
                 } else {
-                    $this->log("Successful request to BPS API");
+                    $this->log("Successful request to BPS API (HTTP 200)");
                     return $data;
                 }
             }
