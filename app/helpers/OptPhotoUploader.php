@@ -57,7 +57,7 @@ class OptPhotoUploader {
      * @param string|null $oldPhotoPath Old photo path to delete (for update)
      * @return array Result array with 'success', 'path', 'message', etc.
      */
-    public function upload($file, $optId = null, $oldPhotoPath = null) {
+    public function upload($file, $optId = null, $oldPhotoPath = null, ?string $label = null) {
         $this->errors = [];
         
         try {
@@ -97,7 +97,7 @@ class OptPhotoUploader {
             $year = date('Y');
             $month = date('m');
             $targetDir = ROOT_PATH . '/' . $this->uploadDir . $year . '/' . $month . '/';
-            
+
             if (!is_dir($targetDir)) {
                 if (!mkdir($targetDir, 0755, true)) {
                     $this->logError('Failed to create upload directory: ' . $targetDir);
@@ -107,13 +107,13 @@ class OptPhotoUploader {
                         'code' => 'DIRECTORY_ERROR'
                     ];
                 }
-                
-                // Create .htaccess to block direct access
-                $this->createHtaccess($targetDir);
             }
+
+            // Lindungi modul upload OPT: blokir eksekusi skrip, gambar tetap dapat disajikan.
+            $this->createHtaccess(ROOT_PATH . '/' . $this->uploadDir);
             
-            // 5. Generate unique filename
-            $filename = $this->generateUniqueFilename($extension, $optId);
+            // 5. Generate unique filename (mengikuti nama opsi/OPT bila tersedia)
+            $filename = $this->generateUniqueFilename($extension, $optId, $label);
             $targetPath = $targetDir . $filename;
             $relativePath = $this->uploadDir . $year . '/' . $month . '/' . $filename;
             
@@ -455,15 +455,27 @@ class OptPhotoUploader {
     
     /**
      * Generate unique filename
+     * Nama file mengikuti nama opsi/OPT (slug aman) + timestamp + hash acak.
      */
-    private function generateUniqueFilename($extension, $optId = null) {
+    private function generateUniqueFilename($extension, $optId = null, ?string $label = null) {
         $timestamp = time();
         $hash = bin2hex(random_bytes(8));
+
+        // Slug dari nama opsi/OPT: huruf/angka/dash, maks 40 karakter
+        $slug = '';
+        if ($label !== null && trim($label) !== '') {
+            $slug = strtolower(trim((string) $label));
+            $slug = preg_replace('/[^a-z0-9]+/', '-', $slug);
+            $slug = trim($slug, '-');
+            $slug = substr($slug, 0, 40);
+        }
+
         $prefix = $optId ? 'opt' . $optId . '_' : 'opt_';
-        
+        $prefix .= ($slug !== '' ? $slug . '_' : '');
+
         // Sanitize: remove special characters, keep only alphanumeric, dash, underscore
         $sanitized = preg_replace('/[^a-zA-Z0-9_-]/', '', $prefix . $timestamp . '_' . $hash);
-        
+
         return $sanitized . '.' . strtolower($extension);
     }
     
@@ -602,15 +614,19 @@ class OptPhotoUploader {
     }
     
     /**
-     * Create .htaccess to block direct access
+     * Create .htaccess to prevent script execution while keeping images servable.
+     * Pola sama dengan direktori upload modul lain (feedback/irigasi/laporan/usulan-opt).
+     * JANGAN memakai "Deny from all" — itu memblokir tampilan gambar (HTTP 403).
      */
     private function createHtaccess($dir) {
         $htaccessPath = $dir . '.htaccess';
         if (!file_exists($htaccessPath)) {
-            $content = "# Block direct access to uploaded files\n";
-            $content .= "Order deny,allow\n";
-            $content .= "Deny from all\n";
-            file_put_contents($htaccessPath, $content);
+            $content = "Options -ExecCGI -Indexes\n";
+            $content .= "AddHandler cgi-script .php .php3 .php4 .php5 .phtml .pl .py .jsp .asp .sh .cgi\n";
+            $content .= "<FilesMatch \"\\.(php|php3|php4|php5|phtml|pl|py|jsp|asp|sh|cgi)\$\">\n";
+            $content .= "    Require all denied\n";
+            $content .= "</FilesMatch>\n";
+            @file_put_contents($htaccessPath, $content);
         }
     }
     

@@ -19,8 +19,8 @@ $old = $data['old'];
                 <div class="col-sm-6">
                     <ol class="breadcrumb float-sm-right">
                         <li class="breadcrumb-item"><a href="<?= BASE_URL ?>">Home</a></li>
-                        <li class="breadcrumb-item"><a href="<?= BASE_URL ?>admin/wilayah">Wilayah</a></li>
-                        <li class="breadcrumb-item"><a href="<?= BASE_URL ?>admin/wilayah/kabupaten">Kabupaten</a></li>
+                        <li class="breadcrumb-item"><a href="<?= BASE_URL ?>adminWilayah">Wilayah</a></li>
+                        <li class="breadcrumb-item"><a href="<?= BASE_URL ?>adminWilayah/kabupaten">Kabupaten</a></li>
                         <li class="breadcrumb-item active">Edit</li>
                     </ol>
                 </div>
@@ -47,7 +47,7 @@ $old = $data['old'];
                             <h3 class="card-title"><i class="fas fa-edit mr-2"></i> Form Edit Kabupaten</h3>
                         </div>
 
-                        <form method="POST" action="<?= BASE_URL ?>admin/wilayah/kabupaten/edit/<?= $kab['id'] ?>" id="formKabupaten">
+                        <form method="POST" action="<?= BASE_URL ?>adminWilayah/kabupaten/edit/<?= $kab['id'] ?>" id="formKabupaten">
                             <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
                             
                             <div class="card-body">
@@ -110,7 +110,7 @@ $old = $data['old'];
                             <div class="card-footer">
                                 <div class="row">
                                     <div class="col-md-6">
-                                        <a href="<?= BASE_URL ?>admin/wilayah/kabupaten" class="btn btn-secondary">
+                                        <a href="<?= BASE_URL ?>adminWilayah/kabupaten" class="btn btn-secondary">
                                             <i class="fas fa-arrow-left"></i> Kembali
                                         </a>
                                     </div>

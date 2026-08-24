@@ -15,7 +15,8 @@ const StorytellingDashboard = (function() {
     let config = {
         baseUrl: '',
         csrfToken: '',
-        currentUser: null
+        currentUser: null,
+        dataAvailable: true
     };
     
     // State management
@@ -90,6 +91,10 @@ const StorytellingDashboard = (function() {
         loadRecentAnalyses();
         
         console.log('[StorytellingDashboard] Initialized');
+        if (!config.dataAvailable) {
+            elements.btnAnalyze.disabled = true;
+            if (elements.btnRunMethod) elements.btnRunMethod.disabled = true;
+        }
     }
 
     /**
@@ -237,6 +242,10 @@ const StorytellingDashboard = (function() {
     }
 
     async function handleRunMethod() {
+        if (!config.dataAvailable) {
+            showAlert('Data produksi bulanan terverifikasi belum tersedia.', 'warning');
+            return;
+        }
         const wilayahId = elements.filterKecamatan.value;
         if (!wilayahId) {
             showAlert('Pilih kecamatan terlebih dahulu', 'warning');

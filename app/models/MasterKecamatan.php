@@ -327,11 +327,23 @@ class MasterKecamatan extends Model {
 
     /**
      * Check if name exists in kabupaten
+     *
+     * @param int|string $kabupatenId
+     * @param string $namaKecamatan
+     * @param int|null $excludeId Current record ID agar rename tanpa perubahan
+     *                            tidak dianggap duplikat.
      */
-    public function checkNameExists($kabupatenId, $namaKecamatan) {
+    public function checkNameExists($kabupatenId, $namaKecamatan, ?int $excludeId = null) {
         $sql = "SELECT COUNT(*) FROM {$this->table} WHERE kabupaten_id = ? AND nama_kecamatan = ?";
+        $params = [$kabupatenId, $namaKecamatan];
+
+        if ($excludeId !== null && $excludeId > 0) {
+            $sql .= " AND id != ?";
+            $params[] = $excludeId;
+        }
+
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$kabupatenId, $namaKecamatan]);
+        $stmt->execute($params);
         return $stmt->fetchColumn() > 0;
     }
 
@@ -343,6 +355,33 @@ class MasterKecamatan extends Model {
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$kodeKecamatan]);
         return $stmt->fetchColumn() > 0;
+    }
+
+    /**
+     * Policy edit authoritative: hanya nama_kecamatan yang boleh diubah
+     * melalui edit biasa. Kode BPS dan kabupaten_id immutable.
+     *
+     * Nama dinormalisasi dan dibatasi panjang sesuai schema VARCHAR(100).
+     * Update kondisional by-id; caller wajib menuliskan audit old/new.
+     */
+    public function updateNameOnly(int $id, string $namaKecamatan, int $actorId): bool {
+        // Normalisasi: rapikan whitespace, potong ke batas schema.
+        $nama = mb_substr(preg_replace('/\s+/u', ' ', trim($namaKecamatan)) ?? '', 0, 100);
+        if ($nama === '') {
+            return false;
+        }
+
+        try {
+            $stmt = $this->db->prepare(
+                "UPDATE {$this->table} SET nama_kecamatan = ?, updated_at = NOW()
+                 WHERE id = ? AND nama_kecamatan <> ?"
+            );
+            $stmt->execute([$nama, $id, $nama]);
+            return true;
+        } catch (Exception $e) {
+            error_log('MasterKecamatan::updateNameOnly failed');
+            return false;
+        }
     }
     
     /**

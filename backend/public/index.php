@@ -96,20 +96,29 @@ if (isset($_SESSION['user_id'])) {
     $_SESSION['_last_activity'] = time();
 }
 
-// CORS — restricted origins; read from env in production
+// CORS — restricted origins with LAN/private IP support
 $allowedOrigins = [];
 $corsFromEnv = Env::get('CORS_ALLOWED_ORIGINS', '');
 if ($corsFromEnv !== '') {
     $allowedOrigins = array_map('trim', explode(',', $corsFromEnv));
 }
 if (empty($allowedOrigins)) {
-    $allowedOrigins = ['http://localhost:8080', 'http://localhost:3000', 'http://10.0.2.2:8080'];
+    $allowedOrigins = ['http://localhost', 'http://localhost:8080', 'http://localhost:3000', 'http://10.0.2.2:8080'];
 }
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-if ($origin !== '' && in_array($origin, $allowedOrigins, true)) {
+$isLanOrigin = false;
+if ($origin !== '') {
+    $parsedHost = parse_url($origin, PHP_URL_HOST);
+    if ($parsedHost) {
+        $isLanOrigin = filter_var($parsedHost, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+    }
+}
+
+if ($origin !== '' && (in_array($origin, $allowedOrigins, true) || $isLanOrigin)) {
     header("Access-Control-Allow-Origin: $origin");
-    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-CSRF-TOKEN, X-Requested-With');
+    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-CSRF-TOKEN, X-Requested-With, X-Idempotency-Key');
+    header('Access-Control-Allow-Credentials: true');
     header('Access-Control-Max-Age: 86400');
 }
 if (Request::method() === 'OPTIONS') {
@@ -132,6 +141,15 @@ $uri = $_SERVER['REQUEST_URI'] ?? '/';
 $pos = strpos($uri, '?');
 if ($pos !== false) {
     $uri = substr($uri, 0, $pos);
+}
+
+// Normalisasi base path jika diakses melalui subfolder di web server (e.g. /jagapadi-3509/backend/public)
+$scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? ''));
+if ($scriptDir !== '/' && $scriptDir !== '.' && $scriptDir !== '' && str_starts_with($uri, $scriptDir)) {
+    $uri = substr($uri, strlen($scriptDir));
+    if (!str_starts_with($uri, '/')) {
+        $uri = '/' . $uri;
+    }
 }
 
 $router->dispatch($method, $uri);

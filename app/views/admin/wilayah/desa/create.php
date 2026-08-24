@@ -13,7 +13,7 @@ if (!isset($_SESSION['csrf_token'])) $_SESSION['csrf_token'] = bin2hex(random_by
                 <div class="col-sm-6">
                     <ol class="breadcrumb float-sm-right">
                         <li class="breadcrumb-item"><a href="<?= BASE_URL ?>">Home</a></li>
-                        <li class="breadcrumb-item"><a href="<?= BASE_URL ?>admin/wilayah">Wilayah</a></li>
+                        <li class="breadcrumb-item"><a href="<?= BASE_URL ?>adminWilayah">Wilayah</a></li>
                         <li class="breadcrumb-item"><a href="<?= BASE_URL ?>adminWilayah/desa">Desa</a></li>
                         <li class="breadcrumb-item active">Tambah</li>
                     </ol>
@@ -67,24 +67,12 @@ if (!isset($_SESSION['csrf_token'])) $_SESSION['csrf_token'] = bin2hex(random_by
                                            placeholder="Contoh: Kaliwates" value="<?= htmlspecialchars($data['old']['nama_desa'] ?? '') ?>" required>
                                 </div>
 
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <div class="form-group">
-                                            <label for="kode_desa">Kode Desa <span class="text-danger">*</span></label>
-                                            <input type="text" class="form-control" id="kode_desa" name="kode_desa"
-                                                   placeholder="Contoh: 3509192001" value="<?= htmlspecialchars($data['old']['kode_desa'] ?? '') ?>"
-                                                   pattern="[0-9]{10}" maxlength="10" required>
-                                            <small class="form-text text-muted">Kode desa 10 digit</small>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="form-group">
-                                            <label for="kode_pos">Kode Pos</label>
-                                            <input type="text" class="form-control" id="kode_pos" name="kode_pos"
-                                                   placeholder="Contoh: 68131" value="<?= htmlspecialchars($data['old']['kode_pos'] ?? '') ?>"
-                                                   pattern="[0-9]{5}" maxlength="5">
-                                        </div>
-                                    </div>
+                                <div class="form-group">
+                                    <label for="kode_desa">Kode Desa <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="kode_desa" name="kode_desa"
+                                           placeholder="Contoh: 3509192001" value="<?= htmlspecialchars($data['old']['kode_desa'] ?? '') ?>"
+                                           pattern="[0-9]{10}" maxlength="10" required>
+                                    <small class="form-text text-muted">Kode desa 10 digit sesuai standar BPS</small>
                                 </div>
 
                                 <div class="alert alert-info">
@@ -164,10 +152,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.getElementById('kode_desa').addEventListener('input', function() {
         this.value = this.value.replace(/\D/g, '').substring(0, 10);
-    });
-    
-    document.getElementById('kode_pos').addEventListener('input', function() {
-        this.value = this.value.replace(/\D/g, '').substring(0, 5);
     });
     
     document.getElementById('formDesa').addEventListener('submit', function() {

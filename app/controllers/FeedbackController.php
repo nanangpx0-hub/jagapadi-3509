@@ -477,21 +477,31 @@ class FeedbackController extends Controller
             $prioritas = 'medium';
         }
 
-        // Upload lampiran opsional — error upload dieksplisitkan, tidak diabaikan diam-diam
-        $attachmentUrl = null;
-        $attachmentError = $_FILES['attachment']['error'] ?? UPLOAD_ERR_NO_FILE;
-        if (!empty($_FILES['attachment']['name']) && $attachmentError !== UPLOAD_ERR_NO_FILE) {
-            $errors[] = $this->uploadErrorMessage($attachmentError);
-        } elseif (
-            !empty($_FILES['attachment']['name'])
-            && $attachmentError === UPLOAD_ERR_OK
-        ) {
+        if (!empty($errors)) {
+            $_SESSION['error']     = implode('<br>', $errors);
+            $_SESSION['form_data'] = $_POST;
+            $this->redirect('feedback/create');
+            return;
+        }
+
+        // Upload lampiran opsional — error upload dieksplisitkan, tidak diabaikan diam-diam.
+        // UPLOAD_ERR_OK (0) harus masuk jalur upload; hanya kode lain (selain NO_FILE)
+        // yang diteruskan ke uploadErrorMessage().
+        $attachmentUrl  = null;
+        $uploadedPath   = null;
+        $attachmentError = (int) ($_FILES['attachment']['error'] ?? UPLOAD_ERR_NO_FILE);
+        $hasAttachment   = !empty($_FILES['attachment']['name']);
+
+        if ($hasAttachment && $attachmentError === UPLOAD_ERR_OK) {
             $uploadResult = $this->handleFileUpload($_FILES['attachment']);
             if ($uploadResult['success']) {
                 $attachmentUrl = $uploadResult['path'];
+                $uploadedPath  = $uploadResult['path'];
             } else {
                 $errors[] = $uploadResult['error'];
             }
+        } elseif ($hasAttachment && $attachmentError !== UPLOAD_ERR_NO_FILE) {
+            $errors[] = $this->uploadErrorMessage($attachmentError);
         }
 
         if (!empty($errors)) {
@@ -515,6 +525,9 @@ class FeedbackController extends Controller
             $_SESSION['success'] = 'Masukan berhasil dikirim! Terima kasih atas saran Anda.';
             $this->redirect('feedback');
         } else {
+            if ($uploadedPath !== null) {
+                $this->deleteAttachmentFile($uploadedPath);
+            }
             $_SESSION['error'] = 'Gagal menyimpan masukan. Silakan coba lagi.';
             $this->redirect('feedback/create');
         }
@@ -525,32 +538,47 @@ class FeedbackController extends Controller
      */
     private function handleFileUpload(array $file): array
     {
-        $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
-        $maxSize      = 5 * 1024 * 1024; // 5 MB
-
         if (!is_uploaded_file($file['tmp_name'])) {
             return ['success' => false, 'error' => 'File lampiran tidak valid.'];
         }
 
-        if ((int) $file['size'] === 0) {
+        return $this->storeUploadedFile((string) $file['tmp_name'], (int) $file['size']);
+    }
+
+    /**
+     * Inti penyimpanan lampiran: validasi ukuran, magic-byte MIME, allowlist,
+     * ekstensi dari MIME, direktori bertanggal dengan .htaccess, nama acak.
+     * Dipisah dari is_uploaded_file agar dapat diuji tanpa HTTP multipart.
+     */
+    private function storeUploadedFile(string $tmpPath, int $size): array
+    {
+        $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+        $maxSize      = 5 * 1024 * 1024; // 5 MB
+
+        if ($size === 0 || !is_file($tmpPath)) {
             return ['success' => false, 'error' => 'File lampiran kosong (0 byte).'];
         }
 
+        if ($size > $maxSize) {
+            return ['success' => false, 'error' => 'Ukuran file maksimal 5 MB.'];
+        }
+
         $finfo    = finfo_open(FILEINFO_MIME_TYPE);
-        $mimeType = finfo_file($finfo, $file['tmp_name']);
+        $mimeType = finfo_file($finfo, $tmpPath);
         finfo_close($finfo);
 
         if (!in_array($mimeType, $allowedTypes, true)) {
             return ['success' => false, 'error' => 'Tipe file tidak diizinkan (JPG, PNG, GIF, WEBP, PDF).'];
         }
 
-        if ($file['size'] > $maxSize) {
-            return ['success' => false, 'error' => 'Ukuran file maksimal 5 MB.'];
-        }
-
         $uploadDir = ROOT_PATH . '/public/uploads/feedback/' . date('Y/m');
-        if (!is_dir($uploadDir)) {
-            mkdir($uploadDir, 0755, true);
+        if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
+            error_log('Feedback upload: gagal membuat direktori upload (feedback/' . date('Y/m') . ')');
+            return ['success' => false, 'error' => 'Penyimpanan lampiran sedang tidak tersedia. Silakan coba lagi nanti.'];
+        }
+        if (!is_writable($uploadDir)) {
+            error_log('Feedback upload: direktori upload tidak writable (feedback/' . date('Y/m') . ')');
+            return ['success' => false, 'error' => 'Penyimpanan lampiran sedang tidak tersedia. Silakan coba lagi nanti.'];
         }
 
         $extensions = [
@@ -561,14 +589,45 @@ class FeedbackController extends Controller
             'application/pdf' => 'pdf',
         ];
         $ext      = $extensions[$mimeType];
-        $filename = 'fb_' . (int) $_SESSION['user_id'] . '_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+        $filename = 'fb_' . (int) ($_SESSION['user_id'] ?? 0) . '_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
         $fullPath = $uploadDir . '/' . $filename;
 
-        if (move_uploaded_file($file['tmp_name'], $fullPath)) {
+        if (move_uploaded_file($tmpPath, $fullPath) || @rename($tmpPath, $fullPath)) {
+            @chmod($fullPath, 0644);
+
             return ['success' => true, 'path' => 'public/uploads/feedback/' . date('Y/m') . '/' . $filename];
         }
 
+        error_log('Feedback upload: gagal memindahkan lampiran ke direktori tujuan');
         return ['success' => false, 'error' => 'Gagal menyimpan file.'];
+    }
+
+    /**
+     * Hapus file lampiran yang sudah dipindahkan bila data feedback gagal
+     * tersimpan, agar tidak meninggalkan file orphan. Hanya menerima path di
+     * dalam direktori upload feedback.
+     */
+    private function deleteAttachmentFile(?string $relativePath): void
+    {
+        if ($relativePath === null || $relativePath === '') {
+            return;
+        }
+
+        $normalized = str_replace('\\', '/', $relativePath);
+        if (strpos($normalized, 'public/uploads/feedback/') !== 0) {
+            return;
+        }
+
+        $fullPath = ROOT_PATH . '/' . $normalized;
+        $real     = realpath($fullPath);
+        $realDir  = realpath(ROOT_PATH . '/public/uploads/feedback');
+        if ($real === false || $realDir === false || strpos($real, $realDir) !== 0) {
+            return;
+        }
+
+        if (is_file($real)) {
+            @unlink($real);
+        }
     }
 
     /**
@@ -581,12 +640,16 @@ class FeedbackController extends Controller
 
     /**
      * Pesan error upload berdasarkan kode UPLOAD_ERR_*.
+     * UPLOAD_ERR_OK tidak pernah masuk jalur error (ditangani jalur upload),
+     * namun mappingnya tetap eksplisit demi kelengkapan.
      */
     private function uploadErrorMessage(int $code): string
     {
         return match ($code) {
+            UPLOAD_ERR_OK => 'Tidak ada galat pada unggahan berkas lampiran.',
             UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => 'Ukuran file lampiran melebihi batas maksimum.',
             UPLOAD_ERR_PARTIAL => 'Upload file lampiran tidak lengkap, silakan coba lagi.',
+            UPLOAD_ERR_NO_FILE => 'Tidak ada file lampiran yang diunggah.',
             UPLOAD_ERR_NO_TMP_DIR => 'Direktori upload tidak tersedia di server.',
             UPLOAD_ERR_CANT_WRITE => 'Gagal menulis file lampiran di server.',
             UPLOAD_ERR_EXTENSION => 'Upload file lampiran diblokir oleh ekstensi server.',

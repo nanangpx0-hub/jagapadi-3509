@@ -11,11 +11,14 @@ $irigasiMenuActive = SidebarState::matches($sidebarRoute, 'irigasi') && strpos($
 $laporanLainnyaMenuActive = SidebarState::matches($sidebarRoute, 'laporan-lainnya') && !SidebarState::matches($sidebarRoute, 'laporan-lainnya/report');
 $reportMenuActive = SidebarState::matches($sidebarRoute, 'laporan-lainnya/report');
 $optMenuActive = SidebarState::matches($sidebarRoute, 'opt');
+$usulanMenuActive = SidebarState::matches($sidebarRoute, 'usulan-opt');
+$usulanMenuActive = $usulanMenuActive || SidebarState::matches($sidebarRoute, 'optsaya');
 $userMenuActive = SidebarState::matches($sidebarRoute, 'user');
 $wilayahMenuActive = SidebarState::matches($sidebarRoute, 'adminWilayah');
 $kabupatenMenuActive = SidebarState::matches($sidebarRoute, 'adminWilayah/kabupaten');
 $kecamatanMenuActive = SidebarState::matches($sidebarRoute, 'adminWilayah/kecamatan');
 $desaMenuActive = SidebarState::matches($sidebarRoute, 'adminWilayah/desa');
+$recycleBinMenuActive = SidebarState::matches($sidebarRoute, 'recycle-bin');
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -373,14 +376,31 @@ $desaMenuActive = SidebarState::matches($sidebarRoute, 'adminWilayah/desa');
                         </a>
                     </li>
                     <?php endif; ?>
-                    <?php if(in_array($_SESSION['role'] ?? '', ['admin', 'operator'])): ?>
+                    <?php if(in_array($_SESSION['role'] ?? '', ['admin', 'operator', 'petugas'], true)): ?>
                     <li class="nav-item">
                         <a href="<?= BASE_URL ?>opt"
                            class="nav-link <?= $optMenuActive ? 'active' : '' ?>"
                            data-sidebar-menu="master-opt"
                            <?= $optMenuActive ? 'aria-current="page"' : '' ?>>
                             <i class="nav-icon fas fa-bug"></i>
-                            <p>Master Data OPT</p>
+                            <p>
+                                Master Data OPT
+                                <?php if (($_SESSION['role'] ?? '') === 'petugas'): ?>
+                                <span class="right badge badge-secondary">Baca</span>
+                                <?php endif; ?>
+                            </p>
+                        </a>
+                    </li>
+                    <?php endif; ?>
+                    <?php $usulanOptMenuLabel = SidebarState::usulanOptMenuLabel($_SESSION['role'] ?? null); ?>
+                    <?php if($usulanOptMenuLabel !== null): ?>
+                    <li class="nav-item">
+                        <a href="<?= BASE_URL ?>usulan-opt"
+                           class="nav-link <?= $usulanMenuActive ? 'active' : '' ?>"
+                           data-sidebar-menu="usulan-opt"
+                           <?= $usulanMenuActive ? 'aria-current="page"' : '' ?>>
+                            <i class="nav-icon fas fa-clipboard-check"></i>
+                            <p><?= htmlspecialchars($usulanOptMenuLabel) ?></p>
                         </a>
                     </li>
                     <?php endif; ?>
@@ -476,6 +496,15 @@ $desaMenuActive = SidebarState::matches($sidebarRoute, 'adminWilayah/desa');
                             <p>Manajemen User</p>
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a href="<?= BASE_URL ?>recycle-bin"
+                           class="nav-link <?= $recycleBinMenuActive ? 'active' : '' ?>"
+                           data-sidebar-menu="recycle-bin"
+                           <?= $recycleBinMenuActive ? 'aria-current="page"' : '' ?>>
+                            <i class="nav-icon fas fa-recycle"></i>
+                            <p>Recycle Bin</p>
+                        </a>
+                    </li>
                     <?php endif; ?>
                     <?php if(in_array($_SESSION['role'] ?? '', ['admin', 'operator'])): ?>
                     <li class="nav-header">EXPORT</li>
@@ -526,24 +555,32 @@ $desaMenuActive = SidebarState::matches($sidebarRoute, 'adminWilayah/desa');
         <section class="content">
             <div class="container-fluid">
                 
+                <?php
+                if (!function_exists('jagapadi_render_flash')) {
+                    function jagapadi_render_flash($message) {
+                        $safe = htmlspecialchars((string) $message, ENT_QUOTES, 'UTF-8');
+                        echo str_replace(['&lt;br&gt;', '&lt;br /&gt;', '&lt;br/&gt;'], '<br>', $safe);
+                    }
+                }
+                ?>
                 <?php if(isset($_SESSION['success'])): ?>
                 <div class="alert alert-success alert-dismissible fade show">
                     <button type="button" class="close" data-dismiss="alert">&times;</button>
-                    <?= $_SESSION['success']; unset($_SESSION['success']); ?>
+                    <?php jagapadi_render_flash($_SESSION['success']); unset($_SESSION['success']); ?>
                 </div>
                 <?php endif; ?>
                 
                 <?php if(isset($_SESSION['error'])): ?>
                 <div class="alert alert-danger alert-dismissible fade show">
                     <button type="button" class="close" data-dismiss="alert">&times;</button>
-                    <?= $_SESSION['error']; unset($_SESSION['error']); ?>
+                    <?php jagapadi_render_flash($_SESSION['error']); unset($_SESSION['error']); ?>
                 </div>
                 <?php endif; ?>
                 
                 <?php if(isset($_SESSION['info'])): ?>
                 <div class="alert alert-info alert-dismissible fade show">
                     <button type="button" class="close" data-dismiss="alert">&times;</button>
-                    <i class="fas fa-info-circle"></i> <?= $_SESSION['info']; unset($_SESSION['info']); ?>
+                    <i class="fas fa-info-circle"></i> <?php jagapadi_render_flash($_SESSION['info']); unset($_SESSION['info']); ?>
                 </div>
                 <?php endif; ?>
 

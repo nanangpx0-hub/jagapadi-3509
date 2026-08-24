@@ -32,10 +32,12 @@ class LaporanLainnyaController extends Controller {
         $search = $_GET['search'] ?? '';
         $includeDraftRaw = $_GET['include_draft'] ?? null;
 
-        // Default: petugas selalu melihat draft miliknya; admin/operator default exclude draft (AGENTS.md)
+        // Halaman ini adalah daftar kerja/pengelolaan, bukan agregat resmi.
+        // Karena itu draf ditampilkan secara default agar data yang baru disimpan
+        // langsung terlihat. Pengguna tetap dapat mengecualikannya lewat filter.
         $includeDraft = $includeDraftRaw !== null
             ? in_array(strtolower((string)$includeDraftRaw), ['1', 'true', 'yes'], true)
-            : ($_SESSION['role'] ?? '') === 'petugas';
+            : true;
 
         // ============ Validasi Filter Tanggal (Perbaikan 3d) ============
         if ($dateFrom !== '') {
@@ -136,6 +138,10 @@ class LaporanLainnyaController extends Controller {
             'jenisList' => $jenisList,
             'currentUser' => $currentUser,
             'users' => $users,
+            'tanggalHariIni' => (new DateTimeImmutable(
+                'now',
+                new DateTimeZone('Asia/Jakarta')
+            ))->format('Y-m-d'),
         ]);
     }
 
@@ -207,12 +213,13 @@ class LaporanLainnyaController extends Controller {
         if (empty($tanggalKejadian)) {
             $validationErrors[] = 'Tanggal kejadian wajib diisi';
         } else {
-            $date = DateTime::createFromFormat('Y-m-d', $tanggalKejadian);
+            $localTimezone = new DateTimeZone('Asia/Jakarta');
+            $date = DateTime::createFromFormat('!Y-m-d', $tanggalKejadian, $localTimezone);
             if (!$date || $date->format('Y-m-d') !== $tanggalKejadian) {
                 $validationErrors[] = 'Format tanggal tidak valid';
-            } elseif ($date > new DateTime()) {
+            } elseif ($date > new DateTime('today', $localTimezone)) {
                 $validationErrors[] = 'Tanggal kejadian tidak boleh di masa depan';
-            } elseif ($date < new DateTime('-10 years')) {
+            } elseif ($date < new DateTime('-10 years', $localTimezone)) {
                 $validationErrors[] = 'Tanggal kejadian tidak boleh lebih dari 10 tahun yang lalu';
             }
         }
@@ -487,6 +494,10 @@ class LaporanLainnyaController extends Controller {
     private function clearDashboardCache(): void {
         try {
             CacheManager::getInstance()->clearPrefix('dashboard:');
+            CacheManager::getInstance()->clearPrefix('dash_summary_');
+            if (class_exists('DashboardDataAggregator')) {
+                (new DashboardDataAggregator())->clearCache('lainnya');
+            }
         } catch (Throwable $e) {
             error_log('Failed to clear dashboard cache: ' . $e->getMessage());
         }
@@ -608,12 +619,13 @@ class LaporanLainnyaController extends Controller {
         if (empty($tanggalKejadian)) {
             $validationErrors[] = 'Tanggal kejadian wajib diisi';
         } else {
-            $date = DateTime::createFromFormat('Y-m-d', $tanggalKejadian);
+            $localTimezone = new DateTimeZone('Asia/Jakarta');
+            $date = DateTime::createFromFormat('!Y-m-d', $tanggalKejadian, $localTimezone);
             if (!$date || $date->format('Y-m-d') !== $tanggalKejadian) {
                 $validationErrors[] = 'Format tanggal tidak valid';
-            } elseif ($date > new DateTime()) {
+            } elseif ($date > new DateTime('today', $localTimezone)) {
                 $validationErrors[] = 'Tanggal kejadian tidak boleh di masa depan';
-            } elseif ($date < new DateTime('-10 years')) {
+            } elseif ($date < new DateTime('-10 years', $localTimezone)) {
                 $validationErrors[] = 'Tanggal kejadian tidak boleh lebih dari 10 tahun yang lalu';
             }
         }
@@ -1038,17 +1050,119 @@ class LaporanLainnyaController extends Controller {
             return;
         }
 
-        $success = $this->laporanModel->delete($id);
+        $success = $this->laporanModel->softDelete($id, (int) $_SESSION['user_id']);
 
         if ($success) {
-            $this->logActivity('Delete', 'laporan_lainnya', $id, 'Laporan lainnya dihapus');
+            $this->logActivity('SoftDelete', 'laporan_lainnya', $id, 'Laporan lainnya dipindahkan ke recycle bin');
             $this->clearDashboardCache();
-            $_SESSION['success'] = 'Laporan berhasil dihapus';
+            $_SESSION['success'] = 'Laporan dipindahkan ke recycle bin';
         } else {
             $_SESSION['error'] = 'Gagal menghapus laporan';
         }
 
         $this->redirect('laporan-lainnya');
+    }
+
+    public function bulkDelete(): void {
+        $this->checkAuth();
+        $this->checkRole(['admin']);
+        $this->requireStateChangingRequest(['POST']);
+
+        if (!empty($_POST['delete_all'])) {
+            $this->deleteAll();
+            return;
+        }
+
+        $ids = $_POST['ids'] ?? [];
+        if (!is_array($ids) || $ids === []) {
+            if ($this->expectsJson()) {
+                $this->json(['success' => false, 'message' => 'Tidak ada laporan yang dipilih'], 400);
+                return;
+            }
+            $_SESSION['info'] = 'Tidak ada laporan yang dipilih';
+            $this->redirect('laporan-lainnya');
+            return;
+        }
+
+        $db = Database::getInstance()->getConnection();
+        try {
+            $db->beginTransaction();
+            $count = $this->laporanModel->softDeleteMany($ids, (int) $_SESSION['user_id']);
+            if ($count > 0) {
+                $this->logActivity('BulkSoftDelete', 'laporan_lainnya', null, "{$count} laporan dipindahkan ke recycle bin");
+            }
+            $db->commit();
+            $this->clearDashboardCache();
+
+            if ($this->expectsJson()) {
+                $this->json([
+                    'success' => true,
+                    'message' => "{$count} laporan lainnya dipindahkan ke recycle bin",
+                    'count' => $count
+                ]);
+                return;
+            }
+
+            $_SESSION[$count > 0 ? 'success' : 'info'] = $count > 0
+                ? "{$count} laporan lainnya dipindahkan ke recycle bin"
+                : 'Tidak ada laporan yang dipilih';
+            $this->redirect('laporan-lainnya');
+        } catch (Throwable $e) {
+            if (isset($db) && $db->inTransaction()) {
+                $db->rollBack();
+            }
+            error_log('LaporanLainnyaController::bulkDelete failed: ' . $e->getMessage());
+
+            if ($this->expectsJson()) {
+                $this->json(['success' => false, 'message' => 'Laporan gagal dipindahkan ke recycle bin.'], 500);
+                return;
+            }
+
+            $_SESSION['error'] = 'Laporan gagal dipindahkan ke recycle bin.';
+            $this->redirect('laporan-lainnya');
+        }
+    }
+
+    public function deleteAll(): void {
+        $this->checkAuth();
+        $this->checkRole(['admin']);
+        $this->requireStateChangingRequest(['POST']);
+
+        $db = Database::getInstance()->getConnection();
+        try {
+            $db->beginTransaction();
+            $count = $this->laporanModel->softDeleteAll((int) $_SESSION['user_id']);
+            if ($count > 0) {
+                $this->logActivity('DeleteAll', 'laporan_lainnya', null, "Semua laporan ({$count} data) dipindahkan ke recycle bin");
+            }
+            $db->commit();
+            $this->clearDashboardCache();
+
+            if ($this->expectsJson()) {
+                $this->json([
+                    'success' => true,
+                    'message' => "Semua data ({$count} laporan) berhasil dipindahkan ke recycle bin",
+                    'count' => $count
+                ]);
+                return;
+            }
+
+            $_SESSION['success'] = "Semua data ({$count} laporan) berhasil dipindahkan ke recycle bin";
+            $this->redirect('laporan-lainnya');
+        } catch (Throwable $e) {
+            if (isset($db) && $db->inTransaction()) {
+                $db->rollBack();
+            }
+            error_log('LaporanLainnyaController::deleteAll failed: ' . $e->getMessage());
+
+            if ($this->expectsJson()) {
+                $this->json(['success' => false, 'message' => 'Gagal memindahkan semua data ke recycle bin.'], 500);
+                return;
+            }
+
+            $_SESSION['error'] = 'Gagal memindahkan semua data ke recycle bin.';
+            $this->redirect('laporan-lainnya');
+        }
     }
 
     /**

@@ -8,6 +8,13 @@
 class LaporanIrigasi extends Model {
     protected $table = 'laporan_irigasi';
 
+    public function find($id) {
+        $stmt = $this->db->prepare('SELECT * FROM laporan_irigasi WHERE id = ? AND deleted_at IS NULL LIMIT 1');
+        $stmt->execute([(int) $id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row === false ? null : $row;
+    }
+
     /**
      * Get all reports with details (User, Wilayah)
      * Menggunakan JOIN untuk menghindari N+1 Query Problem
@@ -34,7 +41,8 @@ class LaporanIrigasi extends Model {
            ->leftJoin('master_kabupaten kab', 'li.kabupaten_id = kab.id')
            ->leftJoin('master_kecamatan kec', 'li.kecamatan_id = kec.id')
            ->leftJoin('master_desa des', 'li.desa_id = des.id')
-           ->leftJoin('users v', 'li.verified_by = v.id');
+           ->leftJoin('users v', 'li.verified_by = v.id')
+           ->whereRaw('li.deleted_at IS NULL');
 
         if ($userId !== null) {
             $qb->where('li.user_id', $userId);
@@ -52,10 +60,10 @@ class LaporanIrigasi extends Model {
     }
 
     public function countAll(?int $userId = null): int {
-        $sql = 'SELECT COUNT(*) FROM laporan_irigasi';
+        $sql = 'SELECT COUNT(*) FROM laporan_irigasi WHERE deleted_at IS NULL';
         $params = [];
         if ($userId !== null) {
-            $sql .= ' WHERE user_id = ?';
+            $sql .= ' AND user_id = ?';
             $params[] = $userId;
         }
 
@@ -63,6 +71,26 @@ class LaporanIrigasi extends Model {
         $stmt->execute($params);
 
         return (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * Seluruh ID laporan aktif (belum dihapus) untuk fitur pilih-semua lintas halaman.
+     * Scope wajib dari server: petugas hanya miliknya, admin/global sesuai parameter.
+     *
+     * @return list<int>
+     */
+    public function getAllActiveIds(?int $userId = null, int $limit = 5000): array {
+        $sql = 'SELECT id FROM laporan_irigasi WHERE deleted_at IS NULL';
+        $params = [];
+        if ($userId !== null) {
+            $sql .= ' AND user_id = ?';
+            $params[] = $userId;
+        }
+        $sql .= ' ORDER BY id DESC LIMIT ' . max(1, $limit);
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+
+        return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
     }
 
     /**
@@ -128,7 +156,7 @@ class LaporanIrigasi extends Model {
                 FROM laporan_irigasi li
                 LEFT JOIN master_kecamatan kec ON li.kecamatan_id = kec.id
                 LEFT JOIN master_desa des ON li.desa_id = des.id
-                WHERE li.user_id = :user_id
+                WHERE li.user_id = :user_id AND li.deleted_at IS NULL
                 ORDER BY li.updated_at DESC, li.id DESC
                 LIMIT {$limit}";
         $stmt = $this->db->prepare($sql);
@@ -138,14 +166,14 @@ class LaporanIrigasi extends Model {
 
     public function getStatusSummary(int $userId): array {
         $stmt = $this->db->prepare(
-            'SELECT status, COUNT(*) AS total FROM laporan_irigasi WHERE user_id = ? GROUP BY status'
+            'SELECT status, COUNT(*) AS total FROM laporan_irigasi WHERE user_id = ? AND deleted_at IS NULL GROUP BY status'
         );
         $stmt->execute([$userId]);
         return array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'total', 'status');
     }
 
     private function buildListWhere(array $filters, ?int $userId): array {
-        $where = ['1=1'];
+        $where = ['li.deleted_at IS NULL'];
         $params = [];
         if ($userId !== null) {
             $where[] = 'li.user_id = ?';

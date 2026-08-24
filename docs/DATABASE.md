@@ -142,6 +142,7 @@ Laporan serangan hama/OPT.
 | luas_serangan | DECIMAL(8,2) NULL | CHECK(0..9999.99) |
 | populasi | DECIMAL(10,2) NULL | Populasi hama |
 | foto_url | VARCHAR(300) NULL | |
+| video_url | VARCHAR(300) NULL | Video pendukung MP4, opsional |
 | catatan | TEXT NULL | |
 | status | ENUM('Draf','Submitted','Diverifikasi','Ditolak','Diarsipkan') | Default 'Draf' |
 | verified_by | INT UNSIGNED FK NULL | Admin verifikator |
@@ -357,3 +358,86 @@ users ──N verified_by (laporan_hama/irigasi)         │
 - Schema lengkap: `backend/database/schema.sql`
 - Migration runner: `backend/scripts/migrate.php`
 - Seed runner: `backend/scripts/seed.php`
+# Penambahan observasi Hama dan usulan OPT (21 Agustus 2026)
+
+Migration root `database/migrations/2026_08_21_add_hama_observation_media_and_opt_proposals.sql`
+menambahkan metode pengukuran `absolut|persentase`, nilai persentase, luas areal
+diamati, estimasi luas yang ditandai terpisah, video pendukung, serta relasi ke
+`usulan_opt`. Persentase tidak pernah disimpan sebagai hektare. `usulan_opt`
+menyimpan ownership pengusul dan hanya Admin yang dapat menyetujui, menggabungkan,
+atau menolak usulan. File migration harus dibandingkan dengan `schema_migrations`
+database runtime root sebelum dijalankan.
+
+## Indeks review Usulan OPT (23 Agustus 2026)
+
+Migration root `database/migrations/2026_08_23_add_usulan_opt_review_indexes.sql`
+append-only menambahkan indeks `idx_usulan_opt_nama_nasional`,
+`idx_usulan_opt_nama_lokal`, dan `idx_usulan_opt_created_at` pada `usulan_opt`
+untuk pola query filter/pencarian/rentang tanggal modul Review Usulan OPT.
+Status+user (`idx_usulan_opt_user_status`), status+tanggal
+(`idx_usulan_opt_status_created`), master tujuan (`fk_usulan_opt_master`), dan
+reviewer (`fk_usulan_opt_reviewer`) sudah terindeks oleh migration 21 Agustus 2026.
+
+Workflow status `usulan_opt`: `Menunggu Review` → `Disetujui` (master baru dibuat
+dalam transaksi yang sama), `Digabungkan` (ke master aktif dengan jenis sama), atau
+`Ditolak Permanen` (alasan minimal 10 karakter). Transisi dikunci `SELECT ... FOR UPDATE`;
+keputusan kedua atas usulan yang sudah direview bersifat no-op idempoten. Laporan
+yang terhubung mempertahankan `usulan_opt_id` sebagai referensi audit dan
+mendapat `master_opt_id` hasil review.
+
+## Ekspansi workflow Usulan OPT (24 Agustus 2026)
+
+Migration root append-only
+`database/migrations/2026_08_24_usulan_opt_workflow_expansion.sql`
+(sudah dijalankan, tercatat di `schema_migrations`) menambahkan:
+
+1. ENUM status baru: `Draf`, `Perlu Perbaikan`; nilai `Ditolak` dimigrasi menjadi
+   `Ditolak Permanen` via UPDATE lalu dihapus dari ENUM.
+2. Kolom identifikasi pada `usulan_opt`: `tanggal_ditemukan`, `kabupaten_id`,
+   `kecamatan_id`, `desa_id` (FK SET NULL ke master wilayah), `alamat_lokasi`,
+   `latitude`, `longitude` (CHECK rentang), `bagian_terserang`, `pola_gejala`,
+   `estimasi_terdampak` (CHECK >= 0), `satuan_terdampak`, `tingkat_keyakinan`
+   (ENUM Rendah/Sedang/Tinggi), `sumber_identifikasi`, `submitted_at`
+   (+ indeks untuk usia antrean).
+3. Tabel `usulan_opt_photos`: path/MIME/size/checksum/caption, FK CASCADE ke
+   usulan, indeks `(usulan_opt_id, created_at)` dan `checksum`.
+4. Tabel `usulan_opt_status_history`: `from_status/to_status/changed_by/catatan`,
+   FK CASCADE ke usulan dan SET NULL ke users, indeks
+   `(usulan_opt_id, created_at)` dan `(changed_by, created_at)`.
+
+**Rollback plan** (dokumentatif, jangan dieksekusi otomatis di production):
+restore backup `backups/db_backup_pre_usulan_opt_workflow_*.sql`, atau
+`DROP TABLE usulan_opt_status_history, usulan_opt_photos; ALTER TABLE usulan_opt
+DROP kolom-kolom baru + FK/CHECK/indeks terkait; MODIFY status ENUM tanpa Draf/
+Perlu Perbaikan/Ditolak Permanen; UPDATE 'Ditolak Permanen'→'Ditolak'`; hapus
+baris dari `schema_migrations`.
+## Recycle Bin Modul Pelaporan (runtime root/integrated)
+
+Migration `database/migrations/2026_08_24_add_recycle_bin_to_report_modules.sql`
+menambahkan soft delete pada tabel berikut:
+
+- `usulan_opt`
+- `laporan_hama`
+- `laporan_irigasi`
+- `laporan_lainnya`
+
+Setiap tabel memiliki `deleted_at DATETIME NULL` dan `deleted_by INT UNSIGNED
+NULL` dengan foreign key ke `users.id` (`ON DELETE SET NULL`). Record aktif
+selalu menggunakan `deleted_at IS NULL`. Penghapusan dari halaman pengelolaan
+memindahkan record ke recycle bin tanpa menghapus relasi atau berkas lampiran.
+Pemulihan mengosongkan `deleted_at` dan `deleted_by`; hanya role `admin` yang
+dapat menghapus massal, membuka recycle bin, dan memulihkan record.
+
+## Kategori lingkungan pada `master_jenis_laporan`
+
+Migration `database/migrations/2026_08_24_add_environmental_other_report_categories.sql`
+menambahkan atau memperbarui empat kategori aktif secara idempoten:
+
+- `gangguan_sosial` — Gangguan Sosial
+- `faktor_abiotik` — Faktor Abiotik
+- `bencana_cuaca` — Bencana Cuaca
+- `gangguan_fisiologis` — Gangguan Fisiologis
+
+Masing-masing kategori menyimpan definisi field dinamis yang kompatibel dengan
+form Laporan Lainnya (`text` dan `number`) pada kolom `fields_json`. Kode kategori
+bersifat unik; eksekusi ulang memperbarui definisi tanpa membuat baris duplikat.

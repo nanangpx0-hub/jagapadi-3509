@@ -76,6 +76,7 @@
 
     <form action="<?= BASE_URL ?>irigasi/create" method="POST" enctype="multipart/form-data" id="formIrigasi" class="needs-validation" novalidate>
         <?= Security::getCsrfField() ?>
+        <?= Security::getIdempotencyField() ?>
         <input type="text" name="website_hp" style="display:none" tabindex="-1" autocomplete="off">
 
         <div class="row">
@@ -93,7 +94,23 @@
                             <div class="col-md-6">
                                 <div class="form-group">
                                     <label for="tanggal">Tanggal Laporan <span class="text-danger">*</span></label>
-                                    <input type="date" class="form-control" id="tanggal" name="tanggal" value="<?= htmlspecialchars((string) ($data['tanggal'] ?? date('Y-m-d'))) ?>" required>
+                                    <?php
+                                    $tanggalHariIni = (new DateTimeImmutable(
+                                        'now',
+                                        new DateTimeZone('Asia/Jakarta')
+                                    ))->format('Y-m-d');
+                                    $tanggalLaporan = trim((string) ($data['tanggal'] ?? ''));
+                                    if ($tanggalLaporan === '') {
+                                        $tanggalLaporan = $tanggalHariIni;
+                                    }
+                                    ?>
+                                    <input type="date"
+                                           class="form-control"
+                                           id="tanggal"
+                                           name="tanggal"
+                                           value="<?= htmlspecialchars($tanggalLaporan, ENT_QUOTES, 'UTF-8') ?>"
+                                           max="<?= $tanggalHariIni ?>"
+                                           required>
                                     <div class="invalid-feedback">Silakan pilih tanggal laporan.</div>
                                 </div>
                             </div>

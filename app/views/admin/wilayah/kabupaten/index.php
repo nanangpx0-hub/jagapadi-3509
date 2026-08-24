@@ -28,7 +28,7 @@ if (!isset($_SESSION['csrf_token'])) {
                             <h3 class="card-title"><i class="fas fa-list mr-2"></i> Daftar Kabupaten/Kota</h3>
                         </div>
                         <div class="col-md-6 text-right">
-                            <a href="<?= BASE_URL ?>admin/wilayah/kabupaten/create" class="btn btn-success btn-sm">
+                            <a href="<?= BASE_URL ?>adminWilayah/kabupaten/create" class="btn btn-success btn-sm">
                                 <i class="fas fa-plus mr-1"></i> Tambah Kabupaten
                             </a>
                         </div>
@@ -300,7 +300,7 @@ $(document).ready(function() {
                 "width": "12%",
                 "render": function(data, type, row) {
                     const masterId = row.master_id || row.id;
-                    const editUrl = '<?= BASE_URL ?>admin/wilayah/kabupaten/edit/' + masterId;
+                    const editUrl = '<?= BASE_URL ?>adminWilayah/kabupaten/edit/' + masterId;
                     const namaKab = (row.nama_kabupaten || '').replace(/'/g, '&#39;');
                     
                     return `<div class="btn-group btn-group-sm" role="group">

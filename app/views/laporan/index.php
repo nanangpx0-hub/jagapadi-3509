@@ -170,7 +170,29 @@ tbody tr:hover {
     border-radius: 3px;
 }
 
-/* ===== FOTO THUMBNAIL STYLING ===== */
+/* ===== PREVIEW FOTO & VIDEO ===== */
+.report-media-preview {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    width: 140px;
+}
+
+.video-thumbnail {
+    display: block;
+    width: 140px;
+    max-height: 105px;
+    object-fit: contain;
+    border-radius: 6px;
+    background: #111;
+}
+
+.media-empty {
+    color: #6c757d;
+    font-size: .8rem;
+    text-align: center;
+}
+
 .photo-thumbnail-container {
     position: relative;
     display: inline-block;
@@ -618,6 +640,9 @@ tbody tr:hover {
                     <button id="btnBulkDelete" class="btn btn-danger btn-sm mr-2">
                         <i class="fas fa-trash"></i> Hapus Data Terpilih (<span id="selectedCount">0</span>)
                     </button>
+                    <a href="<?= BASE_URL ?>recycle-bin" class="btn btn-outline-secondary btn-sm mr-2">
+                        <i class="fas fa-recycle"></i> Recycle Bin
+                    </a>
                     <?php endif; ?>
                     <?php if(in_array($_SESSION['role'] ?? '', ['admin', 'operator', 'petugas'])): ?>
                     <a href="<?= BASE_URL ?>laporan/create" 
@@ -709,7 +734,7 @@ tbody tr:hover {
                                 <th data-sort="id" data-dir="desc" class="sortable">
                                     ID <i class="fas fa-sort fa-sm text-muted"></i>
                                 </th>
-                                <th>Foto</th>
+                                <th>Preview Foto &amp; Video</th>
                                 <th data-sort="tanggal" data-dir="desc" class="sortable">
                                     Tanggal <i class="fas fa-sort fa-sm text-muted"></i>
                                 </th>
@@ -882,9 +907,18 @@ tbody tr:hover {
         const canEdit = isAdmin || isOperator || isPetugas;
         const canDelete = isAdmin || (isPetugas && (r.status === 'Draf' || r.status === 'Ditolak'));
         const rowNo = state.perPage < 0 ? idx + 1 : (state.page - 1) * state.perPage + idx + 1;
-        const foto = r.foto_url
-            ? `<div class="photo-thumbnail-container"><img src="${BASE_URL}${r.foto_url}" alt="Foto" class="photo-thumbnail" data-full-image="${BASE_URL}${r.foto_url}" loading="lazy" onerror="this.onerror=null;this.style.display='none';this.parentElement.innerHTML='<div class=\\'photo-thumbnail no-image\\'><i class=\\'fas fa-image\\'></i></div>';"></div>`
-            : `<div class="photo-thumbnail-container"><div class="photo-thumbnail no-image"><i class="fas fa-image"></i></div></div>`;
+        const mediaUrl = (path) => path ? `${BASE_URL}${String(path).replace(/^\/+/, '')}` : '';
+        const photoUrl = mediaUrl(r.foto_url);
+        const videoUrl = mediaUrl(r.video_url);
+        const foto = photoUrl
+            ? `<div class="photo-thumbnail-container"><img src="${escapeHtml(photoUrl)}" alt="Preview foto laporan #${r.id}" class="photo-thumbnail" data-full-image="${escapeHtml(photoUrl)}" loading="lazy" onerror="this.onerror=null;this.parentElement.innerHTML='<div class=\\'photo-thumbnail no-image\\'><i class=\\'fas fa-image\\'></i></div>';"></div>`
+            : '';
+        const video = videoUrl
+            ? `<video class="video-thumbnail" controls preload="metadata" playsinline aria-label="Preview video laporan #${r.id}"><source src="${escapeHtml(videoUrl)}" type="video/mp4">Browser tidak mendukung video.</video>`
+            : '';
+        const media = foto || video
+            ? `<div class="report-media-preview">${foto}${video}</div>`
+            : `<div class="report-media-preview media-empty"><i class="fas fa-photo-video"></i><span>Media tidak tersedia</span></div>`;
         const etlWarn = (r.etl_acuan > 0 && r.populasi > r.etl_acuan) ? '<i class="fas fa-exclamation-triangle text-danger ms-1" title="Melampaui ETL"></i>' : '';
 
         const editBtn = canEdit ? `<a href="${BASE_URL}laporan/edit/${r.id}" class="btn-action btn-action-warning" title="Edit"><i class="fas fa-edit"></i></a>` : '';
@@ -913,7 +947,7 @@ tbody tr:hover {
             ${checkbox}
             <td class="text-center text-muted">${rowNo}</td>
             <td><span class="badge badge-light">#${r.id}</span></td>
-            <td>${foto}</td>
+            <td>${media}</td>
             <td>${formatDate(r.tanggal)}</td>
             <td><strong>${escapeHtml(r.nama_opt||'N/A')}</strong><br><small class="text-muted">${escapeHtml(r.jenis||'-')}</small></td>
             <td>Kab. Jember<br>Kec. ${escapeHtml(r.kecamatan||'-')}<br>Desa ${escapeHtml(r.desa||'-')}</td>
@@ -1236,35 +1270,75 @@ tbody tr:hover {
     function setupMasterCheckbox() {
         console.log('[BulkSelect] setupMasterCheckbox called');
         const checkAll = document.getElementById('checkAll');
-        if (!checkAll) return;
+        if (!checkAll || checkAll.dataset.bulkBound === '1') return;
+        checkAll.dataset.bulkBound = '1';
         checkAll.addEventListener('change', function() {
-            const checkboxes = document.querySelectorAll('#laporanTable tbody input[type="checkbox"]');
+            const checkboxes = document.querySelectorAll('#laporanTable tbody .checkbox-item');
             checkboxes.forEach(cb => cb.checked = this.checked);
             updateUI();
         });
     }
 
     function setupChildCheckboxes() {
-        console.log('[BulkSelect] setupChildCheckboxes called');
-        // Handled via event delegation on tbody
+        const body = document.getElementById('tableBody');
+        if (!body || body.dataset.bulkBound === '1') return;
+        body.dataset.bulkBound = '1';
+        body.addEventListener('change', function (event) {
+            if (event.target && event.target.classList.contains('checkbox-item')) {
+                updateUI();
+            }
+        });
     }
 
     function setupBulkDeleteHandler() {
-        console.log('[BulkSelect] setupBulkDeleteHandler called');
-        // Handled via inline onclick in button
+        const button = document.getElementById('btnBulkDelete');
+        if (!button || button.dataset.bound === '1') return;
+        button.dataset.bound = '1';
+        button.addEventListener('click', async function () {
+            const ids = Array.from(document.querySelectorAll('#laporanTable tbody .checkbox-item:checked'))
+                .map(cb => cb.value)
+                .filter(Boolean);
+            if (ids.length === 0 || !window.confirm(`Pindahkan ${ids.length} laporan ke recycle bin?`)) return;
+            const body = new URLSearchParams();
+            body.append('csrf_token', '<?= htmlspecialchars(Security::getCsrfToken(), ENT_QUOTES, 'UTF-8') ?>');
+            ids.forEach(id => body.append('ids[]', id));
+            button.disabled = true;
+            try {
+                const response = await fetch('<?= BASE_URL ?>laporan/bulk-delete', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
+                    body: body.toString()
+                });
+                const result = await response.json();
+                if (!response.ok || !result.success) throw new Error(result.message || 'Gagal menghapus laporan');
+                window.location.reload();
+            } catch (error) {
+                window.alert(error.message || 'Gagal memindahkan laporan ke recycle bin');
+                button.disabled = false;
+            }
+        });
     }
 
     function updateUI() {
         const checkAll = document.getElementById('checkAll');
-        const checkboxes = document.querySelectorAll('#laporanTable tbody input[type="checkbox"]');
-        const selected = document.querySelectorAll('#laporanTable tbody input[type="checkbox"]:checked');
+        const checkboxes = document.querySelectorAll('#laporanTable tbody .checkbox-item');
+        const selected = document.querySelectorAll('#laporanTable tbody .checkbox-item:checked');
         const count = selected.length;
-        document.getElementById('selectedCount').textContent = count;
-        document.getElementById('btnBulkDelete').disabled = count === 0;
+        if (document.getElementById('selectedCount')) document.getElementById('selectedCount').textContent = count;
+        const deleteButton = document.getElementById('btnBulkDelete');
+        if (deleteButton) {
+            deleteButton.disabled = count === 0;
+            deleteButton.classList.toggle('show', count > 0);
+        }
+        checkboxes.forEach(function (checkbox) {
+            const row = checkbox.closest('tr');
+            if (row) row.classList.toggle('row-selected', checkbox.checked);
+        });
         // Indeterminate state
         if (checkAll) {
             checkAll.indeterminate = count > 0 && count < checkboxes.length;
             checkAll.checked = count === checkboxes.length && checkboxes.length > 0;
+            checkAll.disabled = checkboxes.length === 0;
         }
     }
 

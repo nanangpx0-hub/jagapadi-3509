@@ -229,7 +229,7 @@
                                         <input type="file" class="custom-file-input" id="gambar" name="gambar" accept="image/*">
                                         <label class="custom-file-label" for="gambar">Pilih file...</label>
                                     </div>
-                                    <small class="text-muted">Format: JPG, PNG, GIF. Max: 2MB</small>
+                                    <small class="text-muted">Format: JPG, PNG, GIF, WEBP. Maks 10 MB (dikompresi otomatis jika &gt;2 MB)</small>
                                     <div class="mt-2">
                                         <img id="photoPreview" class="photo-preview img-thumbnail" src="" alt="Preview">
                                     </div>
@@ -274,20 +274,41 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // File input label update
+    // File input label update + validasi tipe & ukuran sebelum unggah
     document.getElementById('gambar').addEventListener('change', function() {
-        const fileName = this.files[0]?.name || 'Pilih file...';
+        const file = this.files[0];
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+        const maxSize = 10 * 1024 * 1024; // 10 MB, sinkron dengan OptPhotoUploader::MAX_FILE_SIZE
+
+        if (file) {
+            if (!allowedTypes.includes(file.type)) {
+                alert('Tipe file tidak diizinkan. Gunakan JPG, PNG, GIF, atau WEBP.');
+                this.value = '';
+                this.nextElementSibling.textContent = 'Pilih file...';
+                document.getElementById('photoPreview').classList.remove('has-image');
+                return;
+            }
+            if (file.size > maxSize) {
+                alert('Ukuran file maksimal 10 MB. File Anda: ' + (file.size / (1024 * 1024)).toFixed(2) + ' MB.');
+                this.value = '';
+                this.nextElementSibling.textContent = 'Pilih file...';
+                document.getElementById('photoPreview').classList.remove('has-image');
+                return;
+            }
+        }
+
+        const fileName = file?.name || 'Pilih file...';
         this.nextElementSibling.textContent = fileName;
-        
+
         // Preview image
-        if (this.files[0]) {
+        if (file) {
             const reader = new FileReader();
             reader.onload = function(e) {
                 const preview = document.getElementById('photoPreview');
                 preview.src = e.target.result;
                 preview.classList.add('has-image');
             };
-            reader.readAsDataURL(this.files[0]);
+            reader.readAsDataURL(file);
         }
     });
 });

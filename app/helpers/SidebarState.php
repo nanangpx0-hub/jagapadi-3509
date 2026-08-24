@@ -39,6 +39,18 @@ final class SidebarState
         return $includeChildren && str_starts_with($currentRoute, $targetRoute . '/');
     }
 
+    /**
+     * Label menu Usulan OPT sesuai role, atau null bila role tidak berhak.
+     */
+    public static function usulanOptMenuLabel(?string $role): ?string
+    {
+        return match ($role) {
+            'admin' => 'Usulan OPT',
+            'petugas' => 'Usulan OPT Saya',
+            default => null,
+        };
+    }
+
     private static function normalizePath(string $path): string
     {
         $path = str_replace('\\', '/', trim($path));

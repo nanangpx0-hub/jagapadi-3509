@@ -46,6 +46,12 @@ final class StorytellingAnalysisServiceTest extends TestCase
         $this->service->analyze('unknown', $this->chart([1, 2, 3]));
     }
 
+    public function testTrendRejectsSeriesWithoutMonthlyProduction(): void
+    {
+        $this->expectException(DomainException::class);
+        $this->service->analyze('trend', $this->chart([null, null, null]));
+    }
+
     private function chart(array $production, ?array $rain = null): array
     {
         $rain ??= $production;

@@ -15,7 +15,7 @@ $old = $data['old'];
                 <div class="col-sm-6">
                     <ol class="breadcrumb float-sm-right">
                         <li class="breadcrumb-item"><a href="<?= BASE_URL ?>">Home</a></li>
-                        <li class="breadcrumb-item"><a href="<?= BASE_URL ?>admin/wilayah">Wilayah</a></li>
+                        <li class="breadcrumb-item"><a href="<?= BASE_URL ?>adminWilayah">Wilayah</a></li>
                         <li class="breadcrumb-item"><a href="<?= BASE_URL ?>adminWilayah/desa">Desa</a></li>
                         <li class="breadcrumb-item active">Edit</li>
                     </ol>
@@ -40,7 +40,7 @@ $old = $data['old'];
                             <h3 class="card-title"><i class="fas fa-edit mr-2"></i> Form Edit Desa</h3>
                         </div>
 
-                        <form method="POST" action="<?= BASE_URL ?>adminWilayah/desa/edit/<?= $desa['id'] ?>" id="formDesa">
+                        <form method="POST" action="<?= BASE_URL ?>adminWilayah/desa_update/<?= $desa['id'] ?>" id="formDesa">
                             <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
                             
                             <div class="card-body">
@@ -77,23 +77,12 @@ $old = $data['old'];
                                            value="<?= htmlspecialchars($old['nama_desa'] ?? $desa['nama_desa']) ?>" required>
                                 </div>
 
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <div class="form-group">
-                                            <label for="kode_desa">Kode Desa <span class="text-danger">*</span></label>
-                                            <input type="text" class="form-control" id="kode_desa" name="kode_desa"
-                                                   value="<?= htmlspecialchars($old['kode_desa'] ?? $desa['kode_desa']) ?>"
-                                                   pattern="[0-9]{10}" maxlength="10" required>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="form-group">
-                                            <label for="kode_pos">Kode Pos</label>
-                                            <input type="text" class="form-control" id="kode_pos" name="kode_pos"
-                                                   value="<?= htmlspecialchars($old['kode_pos'] ?? $desa['kode_pos']) ?>"
-                                                   pattern="[0-9]{5}" maxlength="5">
-                                        </div>
-                                    </div>
+                                <div class="form-group">
+                                    <label for="kode_desa">Kode Desa <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="kode_desa" name="kode_desa"
+                                           value="<?= htmlspecialchars($old['kode_desa'] ?? $desa['kode_desa']) ?>"
+                                           pattern="[0-9]{10}" maxlength="10" required>
+                                    <small class="form-text text-muted">10 digit angka sesuai kode BPS.</small>
                                 </div>
                             </div>
 

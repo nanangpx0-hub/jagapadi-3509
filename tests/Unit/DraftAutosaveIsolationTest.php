@@ -38,4 +38,34 @@ final class DraftAutosaveIsolationTest extends TestCase
         self::assertStringContainsString('if (hasMeaningfulData)', $script);
         self::assertStringContainsString('this.clearDraft();', $script);
     }
+
+    public function testSubmitSavesDraftInsteadOfDeletingItBeforeServerValidation(): void
+    {
+        $script = file_get_contents(ROOT_PATH . '/public/js/draft-autosave.js');
+        self::assertStringContainsString("this.form.addEventListener('submit', () => {\n                this.saveDraft();", $script);
+        self::assertStringNotContainsString("this.form.addEventListener('submit', () => {\n                this.clearDraft();", $script);
+    }
+
+    public function testReportFormsValidateAddressBeforeNavigation(): void
+    {
+        foreach (['laporan/create.php', 'laporan-lainnya/create.php'] as $viewPath) {
+            $view = file_get_contents(ROOT_PATH . '/app/views/' . $viewPath);
+            self::assertStringContainsString('minlength="<?= $alamatMinLength ?>"', $view);
+            self::assertStringContainsString('alamatInput.reportValidity()', $view);
+            self::assertStringContainsString("addEventListener('input'", $view);
+        }
+    }
+
+    public function testOtherReportValidationTargetsTheReportFormExactly(): void
+    {
+        $view = file_get_contents(ROOT_PATH . '/app/views/laporan-lainnya/create.php');
+        self::assertStringContainsString(
+            "document.getElementById('formCreateLaporan').addEventListener('submit'",
+            $view
+        );
+        self::assertStringNotContainsString(
+            "document.querySelector('form').addEventListener('submit'",
+            $view
+        );
+    }
 }

@@ -45,7 +45,8 @@ class LaporanLainnya extends Model {
            ->leftJoin('master_desa md', 'll.desa_id = md.id')
            ->leftJoin('master_kecamatan mk', 'md.kecamatan_id = mk.id')
            ->leftJoin('master_kabupaten kab', 'mk.kabupaten_id = kab.id')
-           ->leftJoin('users v', 'll.verified_by = v.id');
+           ->leftJoin('users v', 'll.verified_by = v.id')
+           ->whereRaw('ll.deleted_at IS NULL');
 
         if (!empty($filters['jenis_id'])) {
             $qb->where('ll.jenis_id', $filters['jenis_id']);
@@ -58,7 +59,7 @@ class LaporanLainnya extends Model {
         $includeDraft = !empty($filters['include_draft']);
         $userId = isset($filters['user_id']) ? (int)$filters['user_id'] : null;
 
-        if (!$includeDraft) {
+        if (!$includeDraft && empty($filters['status'])) {
             if ($userId !== null && ($filters['show_own_draft'] ?? false)) {
                 // Tampilkan non-draft SEMUA + draft milik user ini
                 $qb->whereRaw("(ll.status != 'draft' OR ll.user_id = ?)", [$userId]);
@@ -100,7 +101,8 @@ class LaporanLainnya extends Model {
         $qb = new QueryBuilder();
         $qb->table('laporan_lainnya ll')
             ->leftJoin('users u', 'll.user_id = u.id')
-            ->leftJoin('master_jenis_laporan mjl', 'll.jenis_id = mjl.id');
+            ->leftJoin('master_jenis_laporan mjl', 'll.jenis_id = mjl.id')
+            ->whereRaw('ll.deleted_at IS NULL');
 
         if (!empty($filters['jenis_id'])) {
             $qb->where('ll.jenis_id', $filters['jenis_id']);
@@ -111,7 +113,7 @@ class LaporanLainnya extends Model {
         $includeDraft = !empty($filters['include_draft']);
         $userId = isset($filters['user_id']) ? (int)$filters['user_id'] : null;
 
-        if (!$includeDraft) {
+        if (!$includeDraft && empty($filters['status'])) {
             if ($userId !== null && ($filters['show_own_draft'] ?? false)) {
                 // Tampilkan non-draft SEMUA + draft milik user ini
                 $qb->whereRaw("(ll.status != 'draft' OR ll.user_id = ?)", [$userId]);
@@ -151,14 +153,14 @@ class LaporanLainnya extends Model {
 
     public function getStatusSummary(int $userId): array {
         $stmt = $this->db->prepare(
-            'SELECT status, COUNT(*) AS total FROM laporan_lainnya WHERE user_id = ? GROUP BY status'
+            'SELECT status, COUNT(*) AS total FROM laporan_lainnya WHERE user_id = ? AND deleted_at IS NULL GROUP BY status'
         );
         $stmt->execute([$userId]);
         return array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'total', 'status');
     }
 
     public function getChartSummary(int $userId, int $year, bool $includeDraft = false): array {
-        $statusSql = $includeDraft ? '' : " AND ll.status <> 'draft'";
+        $statusSql = " AND ll.deleted_at IS NULL" . ($includeDraft ? '' : " AND ll.status <> 'draft'");
         $params = [':user_id' => $userId, ':year' => $year];
         $trend = $this->db->prepare(
             "SELECT MONTH(ll.tanggal_kejadian) AS bulan, COUNT(*) AS total
@@ -198,8 +200,9 @@ public function getById(int $id): ?array {
                       ->leftJoin('master_desa md', 'll.desa_id = md.id')
                       ->leftJoin('master_kecamatan mk', 'md.kecamatan_id = mk.id')
                       ->leftJoin('master_kabupaten kab', 'mk.kabupaten_id = kab.id')
-                      ->leftJoin('users v', 'll.verified_by = v.id')
-                      ->where('ll.id', $id)
+                       ->leftJoin('users v', 'll.verified_by = v.id')
+                       ->where('ll.id', $id)
+                       ->whereRaw('ll.deleted_at IS NULL')
                       ->limit(1)
                       ->get();
         return !empty($result) ? $result[0] : null;
@@ -209,13 +212,19 @@ public function getById(int $id): ?array {
         $qb = new QueryBuilder();
         $result = $qb->table('laporan_lainnya')
                      ->where('kode_laporan', $kode)
+                     ->whereRaw('deleted_at IS NULL')
                      ->limit(1)
                      ->get();
         return !empty($result) ? $result[0] : null;
     }
 
     public function createReport(array $data): int {
-        return (int)$this->create($data);
+        $data['status'] = 'draft';
+        try {
+            return (int)$this->create($data);
+        } catch (PDOException $e) {
+            return 0;
+        }
     }
 
     public function updateReport(int $id, array $data): bool {
@@ -361,7 +370,7 @@ public function getById(int $id): ?array {
                     SUM(CASE WHEN ll.status = 'draft' THEN 1 ELSE 0 END) as draf
                 FROM laporan_lainnya ll
                 LEFT JOIN master_jenis_laporan mjl ON ll.jenis_id = mjl.id
-                WHERE YEAR(ll.tanggal_kejadian) = :tahun
+                WHERE YEAR(ll.tanggal_kejadian) = :tahun AND ll.deleted_at IS NULL
                 GROUP BY mjl.id, mjl.kode, mjl.nama
                 ORDER BY mjl.nama ASC";
 
@@ -371,7 +380,7 @@ public function getById(int $id): ?array {
     }
 
     public function getDashboardSummary(?int $userId = null, bool $includeDraft = false): array {
-        $whereClauses = [];
+        $whereClauses = ['deleted_at IS NULL'];
         $params = [];
 
         if ($userId !== null) {
@@ -419,6 +428,7 @@ public function getById(int $id): ?array {
                     SUM(CASE WHEN status = 'archived' THEN 1 ELSE 0 END) as archived
                 FROM laporan_lainnya
                 WHERE user_id = :user_id
+                AND deleted_at IS NULL
                 AND YEAR(tanggal_kejadian) = :year";
 
         $stmt = $this->db->prepare($sql);
@@ -448,6 +458,7 @@ public function getById(int $id): ?array {
                     COUNT(*) as count
                 FROM laporan_lainnya
                 WHERE user_id = :user_id
+                AND deleted_at IS NULL
                 AND YEAR(tanggal_kejadian) = :year
                 GROUP BY MONTH(tanggal_kejadian)
                 ORDER BY month ASC";
@@ -487,6 +498,7 @@ public function getById(int $id): ?array {
                 FROM laporan_lainnya ll
                 LEFT JOIN master_jenis_laporan mjl ON ll.jenis_id = mjl.id
                 WHERE ll.user_id = :user_id
+                AND ll.deleted_at IS NULL
                 AND YEAR(ll.tanggal_kejadian) = :year
                 GROUP BY mjl.id, mjl.kode, mjl.nama
                 ORDER BY total_laporan DESC";
@@ -570,4 +582,19 @@ public function getById(int $id): ?array {
                   ->offset($offset)
                   ->get();
     }
+
+    /**
+     * Soft delete all active reports (moves all to recycle bin)
+     *
+     * @param int $deletedBy ID of admin performing the deletion
+     * @return int Number of affected rows
+     */
+    public function softDeleteAll(int $deletedBy): int {
+        $stmt = $this->db->prepare(
+            "UPDATE `laporan_lainnya` SET deleted_at = NOW(), deleted_by = ? WHERE deleted_at IS NULL"
+        );
+        $stmt->execute([$deletedBy]);
+        return $stmt->rowCount();
+    }
 }
+

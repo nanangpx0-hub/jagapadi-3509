@@ -203,9 +203,6 @@ class LaporanController extends Controller {
                 return;
             }
 
-            // Record this submission attempt time
-            $_SESSION[$rateLimitKey] = time();
-
             $userRole = $user['role'];
 
             // Role-based user_id assignment
@@ -244,9 +241,21 @@ class LaporanController extends Controller {
                 }
             }
 
+            $metodePengukuran = $_POST['metode_pengukuran'] ?? 'absolut';
+            $persentaseSerangan = $_POST['persentase_serangan'] ?? null;
+            $luasArealDiamati = $_POST['luas_areal_diamati'] ?? null;
+            $luasEstimasi = null;
+            if ($metodePengukuran === 'persentase' && is_numeric($persentaseSerangan) && is_numeric($luasArealDiamati)) {
+                $luasEstimasi = round((float) $luasArealDiamati * (float) $persentaseSerangan / 100, 2);
+            }
+
+            $hasOptProposal = empty($_POST['master_opt_id']) && trim($_POST['nama_hama_baru'] ?? '') !== '';
+            $usulanOptId = $hasOptProposal ? -1 : null;
+
             $postData = [
                 'user_id' => $targetUserId,
                 'master_opt_id' => $_POST['master_opt_id'] ?? null,
+                'usulan_opt_id' => $usulanOptId ?: null,
                 'tanggal' => $_POST['tanggal'] ?? date('Y-m-d'),
                 'lokasi' => $lokasi, // Always set, required by database
                 'kabupaten_id' => $_POST['kabupaten_id'] !== 'unknown' ? ($_POST['kabupaten_id'] ?? null) : null,
@@ -258,6 +267,10 @@ class LaporanController extends Controller {
                 'tingkat_keparahan' => $_POST['tingkat_keparahan'] ?? null,
                 'populasi' => isset($_POST['populasi']) && $_POST['populasi'] !== '' ? (int)$_POST['populasi'] : 0,
                 'luas_serangan' => isset($_POST['luas_serangan']) && $_POST['luas_serangan'] !== '' ? (float)$_POST['luas_serangan'] : 0,
+                'metode_pengukuran' => $metodePengukuran,
+                'persentase_serangan' => $persentaseSerangan !== null && $persentaseSerangan !== '' ? (float) $persentaseSerangan : null,
+                'luas_areal_diamati' => $luasArealDiamati !== null && $luasArealDiamati !== '' ? (float) $luasArealDiamati : null,
+                'luas_serangan_estimasi' => $luasEstimasi,
                 'catatan' => $_POST['catatan'] ?? '',
                 'status' => 'Submitted'
             ];
@@ -313,19 +326,37 @@ class LaporanController extends Controller {
                 }
             }
 
+            // Foto wajib. Periksa kode error PHP secara eksplisit agar file yang
+            // sudah dipilih tidak salah dilaporkan sebagai "tidak ada foto".
+            $photo = $_FILES['foto'] ?? null;
+            $photoUploadError = is_array($photo)
+                ? (int) ($photo['error'] ?? UPLOAD_ERR_NO_FILE)
+                : UPLOAD_ERR_NO_FILE;
+            if ($photoUploadError !== UPLOAD_ERR_OK) {
+                $_SESSION['error'] = $this->laporanPhotoUploadErrorMessage($photoUploadError);
+                $this->redirect('laporan/create');
+            }
+
             // Handle file upload with automatic compression
-            if (isset($_FILES['foto']) && $_FILES['foto']['error'] == 0) {
+            if (is_array($photo)) {
                 require_once ROOT_PATH . '/app/helpers/ImageCompressor.php';
 
-                $uploadDir = UPLOAD_PATH . 'laporan/';
+                // URL yang disimpan adalah public/uploads/laporan/*, sehingga
+                // file fisik wajib ditulis ke direktori public yang sama.
+                $uploadDir = ROOT_PATH . '/public/uploads/laporan/';
                 if (!is_dir($uploadDir)) {
                     mkdir($uploadDir, 0777, true);
                 }
 
-                $file = $_FILES['foto'];
+                $file = $photo;
                 $maxSize = 2 * 1024 * 1024; // 2MB
                 $allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
                 $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
+
+                if (empty($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
+                    $_SESSION['error'] = 'Sumber file foto tidak valid. Silakan pilih ulang foto.';
+                    $this->redirect('laporan/create');
+                }
 
                 // Validate file type using finfo
                 $finfo = finfo_open(FILEINFO_MIME_TYPE);
@@ -381,6 +412,25 @@ class LaporanController extends Controller {
                 }
             }
 
+            if (empty($postData['foto_url'])) {
+                $_SESSION['error'] = 'Foto laporan gagal disimpan. Silakan pilih ulang foto dan coba lagi.';
+                $this->redirect('laporan/create');
+            }
+
+            // Video benar-benar opsional: UPLOAD_ERR_NO_FILE diterima oleh
+            // VideoUploader dan menghasilkan path null tanpa memblokir laporan.
+            if (isset($_FILES['video'])) {
+                require_once ROOT_PATH . '/app/helpers/VideoUploader.php';
+                $videoResult = (new VideoUploader())->upload($_FILES['video']);
+                if (!$videoResult['success']) {
+                    $_SESSION['error'] = $videoResult['error'];
+                    $this->redirect('laporan/create');
+                }
+                if (!empty($videoResult['path'])) {
+                    $postData['video_url'] = $videoResult['path'];
+                }
+            }
+
             // Ensure required fields are not null before database insert
             if (empty($postData['lokasi'])) {
                 $_SESSION['error'] = 'Field lokasi tidak boleh kosong. Pastikan alamat lengkap atau data wilayah sudah diisi.';
@@ -396,11 +446,47 @@ class LaporanController extends Controller {
             }
 
             // Try to create the report with comprehensive error handling
+            $db = Database::getInstance()->getConnection();
             try {
+                if ($hasOptProposal) {
+                    $db->beginTransaction();
+
+                    $usulanService = new UsulanOptService($db);
+                    $createdUsulanId = $usulanService->createFromLaporan(
+                        (int) $targetUserId,
+                        $usulanService->normalize([
+                            'nama_nasional' => trim($_POST['nama_nasional_baru'] ?? ''),
+                            'nama_lokal' => trim($_POST['nama_hama_baru']),
+                            'jenis' => $_POST['jenis_opt_baru'] ?? '',
+                            'komoditas' => trim($_POST['komoditas_opt_baru'] ?? ''),
+                            'ciri_ciri' => trim($_POST['ciri_opt_baru'] ?? ''),
+                            'wilayah' => $alamatLengkap ?: null,
+                            'tanggal_ditemukan' => (string) ($_POST['tanggal'] ?? ''),
+                            'kabupaten_id' => $postData['kabupaten_id'] ?? null,
+                            'kecamatan_id' => $postData['kecamatan_id'] ?? null,
+                            'desa_id' => $postData['desa_id'] ?? null,
+                            'alamat_lokasi' => $postData['alamat_lengkap'] ?? '',
+                            'latitude' => $postData['latitude'] ?? '',
+                            'longitude' => $postData['longitude'] ?? '',
+                        ]),
+                        (int) $user['id'],
+                        !empty($postData['foto_url']) ? (string) $postData['foto_url'] : null
+                    );
+                    $postData['usulan_opt_id'] = $createdUsulanId;
+                }
+
                 $id = $this->laporanModel->create($postData);
 
                 if (!$id || $id <= 0) {
                     throw new Exception('Gagal menyimpan laporan ke database. ID tidak valid.');
+                }
+
+                // Rate limit hanya dicatat setelah laporan benar-benar tersimpan.
+                // Pengguna yang perlu memperbaiki upload tidak terblokir 30 detik.
+                $_SESSION[$rateLimitKey] = time();
+
+                if ($db->inTransaction()) {
+                    $db->commit();
                 }
 
                 // Save tags if provided
@@ -477,15 +563,17 @@ class LaporanController extends Controller {
 
                 $_SESSION['error'] = $errorMessage;
 
-                // Show detailed error in debug mode
-                if (defined('APP_DEBUG') && APP_DEBUG) {
-                    $_SESSION['error'] .= '<br><small>Error Detail: ' . htmlspecialchars($e->getMessage()) . '</small>';
+                if ($db->inTransaction()) {
+                    $db->rollBack();
                 }
 
                 $this->redirect('laporan/create');
             } catch (Exception $e) {
-                error_log("Error creating laporan: " . $e->getMessage());
-                $_SESSION['error'] = 'Terjadi kesalahan saat menyimpan laporan: ' . htmlspecialchars($e->getMessage());
+                error_log("Error creating laporan: " . get_class($e));
+                $_SESSION['error'] = 'Terjadi kesalahan saat menyimpan laporan. Silakan coba lagi.';
+                if ($db->inTransaction()) {
+                    $db->rollBack();
+                }
                 $this->redirect('laporan/create');
             }
         }
@@ -529,6 +617,9 @@ class LaporanController extends Controller {
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $this->validateCsrfToken();
+            $editMethod = $_POST['metode_pengukuran'] ?? 'absolut';
+            $editPercentage = $_POST['persentase_serangan'] ?? null;
+            $editObservedArea = $_POST['luas_areal_diamati'] ?? null;
             $postData = [
                 'master_opt_id' => $_POST['master_opt_id'],
                 'tanggal' => $_POST['tanggal'],
@@ -542,9 +633,20 @@ class LaporanController extends Controller {
                 'tingkat_keparahan' => $_POST['tingkat_keparahan'],
                 'populasi' => $_POST['populasi'] ?? 0,
                 'luas_serangan' => $_POST['luas_serangan'] ?? 0,
+                'metode_pengukuran' => $editMethod,
+                'persentase_serangan' => $editPercentage !== null && $editPercentage !== '' ? (float) $editPercentage : null,
+                'luas_areal_diamati' => $editObservedArea !== null && $editObservedArea !== '' ? (float) $editObservedArea : null,
+                'luas_serangan_estimasi' => $editMethod === 'persentase' && is_numeric($editPercentage) && is_numeric($editObservedArea)
+                    ? round((float) $editObservedArea * (float) $editPercentage / 100, 2) : null,
                 'catatan' => $_POST['catatan'] ?? '',
                 'status' => in_array(($laporan['status'] ?? ''), ['Draf', 'Ditolak']) ? 'Submitted' : ($laporan['status'] ?? 'Submitted')
             ];
+            if (!in_array($editMethod, ['absolut', 'persentase'], true)
+                || ($editMethod === 'persentase' && ($postData['persentase_serangan'] === null
+                    || $postData['persentase_serangan'] < 0 || $postData['persentase_serangan'] > 100))) {
+                $_SESSION['error'] = 'Metode atau persentase serangan tidak valid.';
+                $this->redirect('laporan/edit/' . $id);
+            }
 
             // Role-based validation for location fields
             $userRole = $user['role'];
@@ -604,7 +706,7 @@ class LaporanController extends Controller {
             if (isset($_FILES['foto']) && $_FILES['foto']['error'] == 0) {
                 require_once ROOT_PATH . '/app/helpers/ImageCompressor.php';
 
-                $uploadDir = UPLOAD_PATH . 'laporan/';
+                $uploadDir = ROOT_PATH . '/public/uploads/laporan/';
                 if (!is_dir($uploadDir)) {
                     mkdir($uploadDir, 0777, true);
                 }
@@ -678,6 +780,18 @@ class LaporanController extends Controller {
                 }
             }
 
+            if (isset($_FILES['video'])) {
+                require_once ROOT_PATH . '/app/helpers/VideoUploader.php';
+                $videoResult = (new VideoUploader())->upload($_FILES['video']);
+                if (!$videoResult['success']) {
+                    $_SESSION['error'] = $videoResult['error'];
+                    $this->redirect('laporan/edit/' . $id);
+                }
+                if (!empty($videoResult['path'])) {
+                    $postData['video_url'] = $videoResult['path'];
+                }
+            }
+
             $this->laporanModel->update($id, $postData);
 
             if (($laporan['status'] ?? '') !== $postData['status']) {
@@ -716,7 +830,7 @@ class LaporanController extends Controller {
                 LEFT JOIN master_opt mo ON lh.master_opt_id = mo.id
                 LEFT JOIN users u ON lh.user_id = u.id
                 LEFT JOIN users v ON lh.verified_by = v.id
-                WHERE lh.id = ?";
+                WHERE lh.id = ? AND lh.deleted_at IS NULL";
 
         $result = $this->laporanModel->query($sql, [$id]);
         $laporan = $result[0] ?? null;
@@ -940,16 +1054,17 @@ class LaporanController extends Controller {
     private function clearDashboardCache(): void {
         try {
             CacheManager::getInstance()->clearPrefix('dashboard:');
+            CacheManager::getInstance()->clearPrefix('dash_summary_');
+            if (class_exists('DashboardDataAggregator')) {
+                (new DashboardDataAggregator())->clearCache('hama');
+            }
         } catch (Throwable $e) {
             error_log('Failed to clear dashboard cache: ' . $e->getMessage());
         }
     }
 
     public function delete($id) {
-        $this->checkRole(
-            ['admin', 'operator', 'petugas'],
-            'Anda tidak memiliki akses untuk menghapus laporan hama. Hanya akun dengan level Admin, Operator, dan Petugas yang dapat menghapus laporan.'
-        );
+        $this->checkRole(['admin'], 'Hanya admin yang dapat memindahkan laporan ke recycle bin.');
 
         $this->requireStateChangingRequest(['POST', 'DELETE']);
 
@@ -959,16 +1074,27 @@ class LaporanController extends Controller {
             $this->redirect('laporan');
         }
 
-        // Check ownership for petugas
-        $user = $this->getCurrentUser();
-        if ($user['role'] === 'petugas' && $laporan['user_id'] != $user['id']) {
-            $_SESSION['error'] = 'Anda hanya dapat menghapus laporan yang Anda buat sendiri';
+        $db = Database::getInstance()->getConnection();
+        try {
+            $db->beginTransaction();
+            $deleted = $this->laporanModel->softDelete((int) $id, (int) $_SESSION['user_id']);
+            if (!$deleted) {
+                $db->rollBack();
+                $_SESSION['info'] = 'Laporan sudah dipindahkan ke recycle bin';
+                $this->redirect('laporan');
+            }
+            $this->logRecycleBinActivity('soft_delete', (int) $id, 'Laporan hama dipindahkan ke recycle bin');
+            $db->commit();
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            error_log('LaporanController::delete failed: ' . $e->getMessage());
+            $_SESSION['error'] = 'Laporan gagal dipindahkan ke recycle bin.';
             $this->redirect('laporan');
         }
-
-        $this->laporanModel->delete($id);
         $this->clearDashboardCache();
-        $_SESSION['success'] = 'Laporan berhasil dihapus';
+        $_SESSION['success'] = 'Laporan dipindahkan ke recycle bin';
         $this->redirect('laporan');
     }
 
@@ -1034,20 +1160,35 @@ class LaporanController extends Controller {
             }
 
             try {
-                $deletedCount = 0;
-                foreach ($ids as $id) {
-                    if ($this->laporanModel->delete($id)) {
-                        $deletedCount++;
-                    }
+                $db = Database::getInstance()->getConnection();
+                $db->beginTransaction();
+                $deletedCount = $this->laporanModel->softDeleteMany(
+                    $ids,
+                    (int) $_SESSION['user_id']
+                );
+                if ($deletedCount > 0) {
+                    $this->logRecycleBinActivity(
+                        'bulk_soft_delete',
+                        null,
+                        "{$deletedCount} laporan hama dipindahkan ke recycle bin"
+                    );
+                }
+                $db->commit();
+                if ($deletedCount > 0) {
+                    $this->clearDashboardCache();
                 }
 
                 echo json_encode([
                     'success' => true,
-                    'message' => "Berhasil menghapus {$deletedCount} laporan",
+                    'message' => "{$deletedCount} laporan dipindahkan ke recycle bin",
                     'count' => $deletedCount
                 ]);
-            } catch (Exception $e) {
-                echo json_encode(['success' => false, 'message' => 'Terjadi kesalahan: ' . $e->getMessage()]);
+            } catch (Throwable $e) {
+                if (isset($db) && $db->inTransaction()) {
+                    $db->rollBack();
+                }
+                error_log('LaporanController::bulkDelete failed: ' . $e->getMessage());
+                echo json_encode(['success' => false, 'message' => 'Gagal memindahkan laporan ke recycle bin']);
             }
             exit;
         }
@@ -1055,6 +1196,24 @@ class LaporanController extends Controller {
 
     private function validateCsrfTokenAjax($token) {
         return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
+    }
+
+    private function logRecycleBinActivity(string $action, ?int $recordId, string $description): void
+    {
+        $db = Database::getInstance()->getConnection();
+        $stmt = $db->prepare(
+            'INSERT INTO activity_log (user_id, action, table_name, record_id, description, ip_address, user_agent) '
+            . 'VALUES (?, ?, ?, ?, ?, ?, ?)'
+        );
+        $stmt->execute([
+            (int) ($_SESSION['user_id'] ?? 0),
+            $action,
+            'laporan_hama',
+            $recordId,
+            $description,
+            $_SERVER['REMOTE_ADDR'] ?? null,
+            substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 500),
+        ]);
     }
 
     private function createNotification($userId, $title, $message, $type = 'info') {
@@ -1106,6 +1265,24 @@ class LaporanController extends Controller {
         }
     }
 
+    private function laporanPhotoUploadErrorMessage(int $error): string
+    {
+        return match ($error) {
+            UPLOAD_ERR_NO_FILE => 'Foto laporan wajib disertakan sebelum laporan dapat disimpan.',
+            UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE =>
+                'Ukuran foto melebihi batas upload server. Pilih foto yang lebih kecil.',
+            UPLOAD_ERR_PARTIAL =>
+                'Upload foto tidak lengkap. Periksa koneksi lalu pilih ulang foto.',
+            UPLOAD_ERR_NO_TMP_DIR =>
+                'Penyimpanan sementara foto tidak tersedia di server.',
+            UPLOAD_ERR_CANT_WRITE =>
+                'Server gagal menulis file foto. Silakan coba lagi.',
+            UPLOAD_ERR_EXTENSION =>
+                'Upload foto diblokir oleh konfigurasi server.',
+            default => 'Upload foto gagal. Silakan pilih ulang foto dan coba lagi.',
+        };
+    }
+
     /**
      * Validate laporan data based on user role
      * Different validation rules for admin, operator, and petugas
@@ -1114,8 +1291,8 @@ class LaporanController extends Controller {
         $errors = [];
 
         // Common validations for all roles
-        if (empty($data['master_opt_id'])) {
-            $errors[] = 'OPT wajib dipilih';
+        if (empty($data['master_opt_id']) && empty($data['usulan_opt_id'])) {
+            $errors[] = 'OPT wajib dipilih atau nama hama baru wajib diusulkan';
         }
 
         if (empty($data['tanggal'])) {
@@ -1200,8 +1377,17 @@ class LaporanController extends Controller {
             $errors[] = 'Luas serangan tidak boleh negatif';
         }
 
+        if (!in_array($data['metode_pengukuran'] ?? '', ['absolut', 'persentase'], true)) {
+            $errors[] = 'Metode pengukuran serangan tidak valid';
+        } elseif ($data['metode_pengukuran'] === 'persentase') {
+            $persentase = $data['persentase_serangan'];
+            if ($persentase === null || $persentase < 0 || $persentase > 100) {
+                $errors[] = 'Persentase serangan harus antara 0 dan 100';
+            }
+        }
+
         // Validate luas serangan tidak boleh melebihi populasi (boleh sama dengan)
-        if (isset($data['populasi']) && isset($data['luas_serangan'])) {
+        if (($data['metode_pengukuran'] ?? 'absolut') === 'absolut' && isset($data['populasi']) && isset($data['luas_serangan'])) {
             $populasi = (float)$data['populasi'];
             $luasSerangan = (float)$data['luas_serangan'];
 

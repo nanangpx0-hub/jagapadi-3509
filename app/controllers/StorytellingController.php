@@ -39,6 +39,7 @@ class StorytellingController extends Controller
             'available_years' => $this->getAvailableYears(),
             'initial_stats' => $this->getInitialStats(),
             'recent_analyses' => $this->getRecentAnalyses(5),
+            'data_availability' => $this->getDataAvailability(),
         ]);
     }
 
@@ -313,6 +314,37 @@ class StorytellingController extends Controller
 
         $currentYear = (int) date('Y');
         return range($currentYear, $currentYear - 4);
+    }
+
+    private function getDataAvailability(): array
+    {
+        try {
+            $stmt = Database::getInstance()->getConnection()->query(
+                "SELECT COUNT(*) AS verified_total,
+                        SUM(bulan IS NOT NULL) AS monthly_total,
+                        COUNT(DISTINCT CASE WHEN bulan IS NOT NULL THEN kecamatan_id END) AS monthly_regions,
+                        MAX(CASE WHEN bulan IS NOT NULL THEN updated_at END) AS monthly_updated_at
+                 FROM produksi_gabah
+                 WHERE status = 'verified'"
+            );
+            $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+            return [
+                'available' => (int) ($row['monthly_total'] ?? 0) > 0,
+                'verified_total' => (int) ($row['verified_total'] ?? 0),
+                'monthly_total' => (int) ($row['monthly_total'] ?? 0),
+                'monthly_regions' => (int) ($row['monthly_regions'] ?? 0),
+                'monthly_updated_at' => $row['monthly_updated_at'] ?? null,
+            ];
+        } catch (Throwable $e) {
+            error_log('[STORYTELLING] getDataAvailability error: ' . $e->getMessage());
+            return [
+                'available' => false,
+                'verified_total' => 0,
+                'monthly_total' => 0,
+                'monthly_regions' => 0,
+                'monthly_updated_at' => null,
+            ];
+        }
     }
 
     private function getInitialStats(): array

@@ -40,7 +40,7 @@ $old = $data['old'];
                             <h3 class="card-title"><i class="fas fa-edit mr-2"></i> Form Edit Kecamatan</h3>
                         </div>
 
-                        <form method="POST" action="<?= BASE_URL ?>adminWilayah/kecamatan/edit/<?= $kec['id'] ?>" id="formKecamatan">
+                        <form method="POST" action="<?= BASE_URL ?>adminWilayah/kecamatan_update/<?= $kec['id'] ?>" id="formKecamatan">
                             <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
                             
                             <div class="card-body">
@@ -49,33 +49,26 @@ $old = $data['old'];
                                     <p class="mb-0">
                                         <strong>Kabupaten:</strong> <?= htmlspecialchars($kec['nama_kabupaten'] ?? 'N/A') ?><br>
                                         <strong>Nama:</strong> <?= htmlspecialchars($kec['nama_kecamatan']) ?><br>
-                                        <strong>Kode:</strong> <code><?= htmlspecialchars($kec['kode_kecamatan']) ?></code>
+                                        <strong>Kode:</strong> <code><?= htmlspecialchars($kec['kode'] ?? '') ?></code>
                                     </p>
                                 </div>
 
                                 <div class="form-group">
-                                    <label for="kabupaten_id">Kabupaten/Kota <span class="text-danger">*</span></label>
-                                    <select class="form-control" id="kabupaten_id" name="kabupaten_id" required>
-                                        <?php foreach ($data['kabupaten_list'] as $kab): ?>
-                                            <option value="<?= $kab['id'] ?>" <?= ($old['kabupaten_id'] ?? $kec['kabupaten_id']) == $kab['id'] ? 'selected' : '' ?>>
-                                                <?= htmlspecialchars($kab['nama_kabupaten']) ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
+                                    <label>Kabupaten/Kota</label>
+                                    <input type="text" class="form-control" value="<?= htmlspecialchars($kec['nama_kabupaten'] ?? 'N/A') ?>" readonly>
+                                    <small class="form-text text-muted">Kabupaten tidak dapat diubah melalui edit biasa.</small>
                                 </div>
 
                                 <div class="form-group">
                                     <label for="nama_kecamatan">Nama Kecamatan <span class="text-danger">*</span></label>
-                                    <input type="text" class="form-control" id="nama_kecamatan" name="nama_kecamatan"
+                                    <input type="text" class="form-control" id="nama_kecamatan" name="nama_kecamatan" maxlength="100"
                                            value="<?= htmlspecialchars($old['nama_kecamatan'] ?? $kec['nama_kecamatan']) ?>" required>
                                 </div>
 
                                 <div class="form-group">
-                                    <label for="kode_kecamatan">Kode Kecamatan <span class="text-danger">*</span></label>
-                                    <input type="text" class="form-control" id="kode_kecamatan" name="kode_kecamatan"
-                                           value="<?= htmlspecialchars($old['kode_kecamatan'] ?? $kec['kode_kecamatan']) ?>"
-                                           pattern="[0-9]{6,7}" maxlength="7" required>
-                                    <small class="form-text text-muted">Hanya angka, panjang 6–7 digit sesuai kode BPS.</small>
+                                    <label>Kode Kecamatan (BPS)</label>
+                                    <input type="text" class="form-control" value="<?= htmlspecialchars($kec['kode'] ?? '') ?>" readonly>
+                                    <small class="form-text text-muted">Kode BPS bersifat immutable melalui edit biasa.</small>
                                 </div>
                             </div>
 

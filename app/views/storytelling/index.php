@@ -110,6 +110,21 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
         </style>
 
         <!-- Filter Toolbar -->
+        <?php $storyDataAvailability = $data_availability ?? ['available' => false]; ?>
+        <?php if (empty($storyDataAvailability['available'])): ?>
+            <div class="alert alert-warning shadow-sm" role="alert" id="storytelling-data-warning">
+                <h5 class="alert-heading"><i class="fas fa-database mr-2"></i>Data produksi bulanan belum tersedia</h5>
+                <p class="mb-2">
+                    Storytelling memerlukan data <strong>produksi terverifikasi yang memiliki bulan</strong>.
+                    Saat ini terdapat <?= (int) ($storyDataAvailability['verified_total'] ?? 0) ?> data produksi terverifikasi,
+                    tetapi <?= (int) ($storyDataAvailability['monthly_total'] ?? 0) ?> di antaranya memiliki periode bulanan.
+                </p>
+                <small>
+                    Impor atau lengkapi kolom bulan pada sumber produksi terlebih dahulu. Sistem tidak membuat estimasi bulanan
+                    dari data tahunan karena dapat menghasilkan analisis yang menyesatkan.
+                </small>
+            </div>
+        <?php endif; ?>
         <div class="filter-toolbar">
             <form id="filterForm" class="row align-items-end">
                 <div class="col-md-3 mb-3">
@@ -402,7 +417,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize Dashboard
     StorytellingDashboard.init({
         baseUrl: <?= json_encode(BASE_URL, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>,
-        csrfToken: <?= json_encode($_SESSION['csrf_token'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>
+        csrfToken: <?= json_encode($_SESSION['csrf_token'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>,
+        dataAvailable: <?= !empty($storyDataAvailability['available']) ? 'true' : 'false' ?>
     });
 
     // Initialize tooltips if Bootstrap is available

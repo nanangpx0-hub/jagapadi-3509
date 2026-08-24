@@ -82,6 +82,47 @@
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
+/* Tampilan statis: hapus efek timbul-tenggelam pada halaman OPT. */
+*, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+}
+
+.stat-card,
+.stat-card:hover,
+.card,
+.card:hover,
+.btn,
+.btn:hover,
+.btn:focus,
+.btn:active,
+.table-opt tbody tr,
+.table-opt tbody tr:hover,
+.opt-thumbnail,
+.opt-thumbnail:hover,
+.pagination .page-link,
+.form-control,
+.custom-select,
+.badge,
+.alert,
+.modal,
+.modal-dialog,
+.modal-backdrop {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+}
+
+.stat-card:hover,
+.card:hover,
+.btn:hover,
+.btn:focus,
+.btn:active,
+.table-opt tbody tr:hover,
+.opt-thumbnail:hover {
+    box-shadow: none !important;
+}
 </style>
 
 <div class="row">
@@ -120,6 +161,12 @@
 
 <div class="row">
     <div class="col-12">
+        <?php if (!empty($read_only)): ?>
+        <div class="alert alert-info" role="status">
+            <i class="fas fa-eye mr-1"></i>
+            <strong>Mode Baca Saja.</strong> Petugas dapat melihat, mencari, memfilter, membuka detail, dan mengunduh data OPT tanpa mengubah data master.
+        </div>
+        <?php endif; ?>
         <div class="card">
             <div class="card-header d-flex flex-wrap justify-content-between align-items-center">
                 <h3 class="card-title mb-2 mb-md-0">
@@ -137,7 +184,14 @@
                     <a href="<?= BASE_URL ?>opt/photos" class="btn btn-info btn-sm mr-2">
                         <i class="fas fa-images"></i> <span class="d-none d-md-inline">Foto</span>
                     </a>
-                    <?php if(in_array($_SESSION['role'] ?? '', ['admin', 'operator'])): ?>
+                    <?php if(($_SESSION['role'] ?? '') === 'admin'): ?>
+                    <form action="<?= BASE_URL ?>opt/auto-fill-photos" method="POST" class="d-inline mr-2"
+                          onsubmit="return confirm('Isi otomatis foto OPT yang masih kosong dari Wikimedia Commons?')">
+                        <?= Security::getCsrfField() ?>
+                        <button type="submit" class="btn btn-outline-info btn-sm">
+                            <i class="fas fa-magic"></i> <span class="d-none d-md-inline">Isi Foto Otomatis</span>
+                        </button>
+                    </form>
                     <a href="<?= BASE_URL ?>opt/create" class="btn btn-primary btn-sm">
                         <i class="fas fa-plus"></i> <span class="d-none d-md-inline">Tambah OPT</span>
                     </a>
@@ -191,10 +245,32 @@
                 </form>
 
                 <!-- Table -->
+                <?php if (($_SESSION['role'] ?? '') === 'admin' && !empty($data_opt)): ?>
+                <div class="d-flex flex-wrap align-items-center mb-3">
+                    <button type="button" id="optBulkDeleteButton" class="btn btn-danger btn-sm mr-2 mb-2" disabled>
+                        <i class="fas fa-trash-alt"></i> Hapus Terpilih (<span id="optSelectedCount">0</span>)
+                    </button>
+                    <button type="button" id="optDeleteAllButton" class="btn btn-outline-danger btn-sm mb-2">
+                        <i class="fas fa-trash"></i> Hapus Semua
+                    </button>
+                    <small class="text-muted ml-md-3 mb-2">Data yang sudah digunakan dalam laporan tidak akan dihapus.</small>
+                </div>
+                <form id="optBulkDeleteForm" action="<?= BASE_URL ?>opt/bulk-delete" method="POST" class="d-none">
+                    <?= Security::getCsrfField() ?>
+                </form>
+                <form id="optDeleteAllForm" action="<?= BASE_URL ?>opt/delete-all" method="POST" class="d-none">
+                    <?= Security::getCsrfField() ?>
+                </form>
+                <?php endif; ?>
                 <div class="table-responsive">
                     <table class="table table-bordered table-hover table-opt">
                         <thead>
                             <tr>
+                                <?php if (($_SESSION['role'] ?? '') === 'admin'): ?>
+                                <th width="42" class="text-center">
+                                    <input type="checkbox" id="optSelectAll" aria-label="Pilih semua OPT pada halaman ini" title="Pilih semua pada halaman ini">
+                                </th>
+                                <?php endif; ?>
                                 <th width="40">No</th>
                                 <th width="60">Foto</th>
                                 <th width="80">Kode</th>
@@ -210,7 +286,7 @@
                         <tbody>
                             <?php if(empty($data_opt)): ?>
                             <tr>
-                                <td colspan="10" class="text-center py-4">
+                                <td colspan="<?= (($_SESSION['role'] ?? '') === 'admin') ? 11 : 10 ?>" class="text-center py-4">
                                     <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
                                     <p class="text-muted mb-0">Tidak ada data OPT ditemukan</p>
                                 </td>
@@ -218,6 +294,11 @@
                             <?php else: ?>
                                 <?php $no = $pagination['from'] ?? 1; foreach($data_opt as $opt): ?>
                                 <tr>
+                                    <?php if (($_SESSION['role'] ?? '') === 'admin'): ?>
+                                    <td class="text-center">
+                                        <input type="checkbox" class="opt-row-checkbox" value="<?= (int) $opt['id'] ?>" aria-label="Pilih <?= htmlspecialchars($opt['nama_opt'] ?? 'OPT') ?>">
+                                    </td>
+                                    <?php endif; ?>
                                     <td class="text-center"><?= $no++ ?></td>
                                     <td class="text-center">
                                         <?php 
@@ -302,7 +383,7 @@
                                             <a href="<?= BASE_URL ?>opt/detail/<?= $opt['id'] ?>" class="btn btn-info" title="Detail">
                                                 <i class="fas fa-eye"></i>
                                             </a>
-                                            <?php if(in_array($_SESSION['role'] ?? '', ['admin', 'operator'])): ?>
+                                            <?php if(($_SESSION['role'] ?? '') === 'admin'): ?>
                                             <a href="<?= BASE_URL ?>opt/edit/<?= $opt['id'] ?>" class="btn btn-warning" title="Edit">
                                                 <i class="fas fa-edit"></i>
                                             </a>
@@ -396,5 +477,64 @@
         </div>
     </div>
 </div>
+
+<?php if (($_SESSION['role'] ?? '') === 'admin'): ?>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const selectAll = document.getElementById('optSelectAll');
+    const rowCheckboxes = Array.from(document.querySelectorAll('.opt-row-checkbox'));
+    const bulkButton = document.getElementById('optBulkDeleteButton');
+    const deleteAllButton = document.getElementById('optDeleteAllButton');
+    const selectedCount = document.getElementById('optSelectedCount');
+
+    function updateSelectionState() {
+        const checked = rowCheckboxes.filter(function (checkbox) { return checkbox.checked; });
+        if (selectedCount) selectedCount.textContent = String(checked.length);
+        if (bulkButton) bulkButton.disabled = checked.length === 0;
+        if (selectAll) {
+            selectAll.checked = rowCheckboxes.length > 0 && checked.length === rowCheckboxes.length;
+            selectAll.indeterminate = checked.length > 0 && checked.length < rowCheckboxes.length;
+        }
+    }
+
+    if (selectAll) {
+        selectAll.addEventListener('change', function () {
+            rowCheckboxes.forEach(function (checkbox) { checkbox.checked = selectAll.checked; });
+            updateSelectionState();
+        });
+    }
+    rowCheckboxes.forEach(function (checkbox) {
+        checkbox.addEventListener('change', updateSelectionState);
+    });
+
+    if (bulkButton) {
+        bulkButton.addEventListener('click', function () {
+            const ids = rowCheckboxes.filter(function (checkbox) { return checkbox.checked; }).map(function (checkbox) { return checkbox.value; });
+            if (ids.length === 0 || !window.confirm('Hapus permanen ' + ids.length + ' data OPT yang dipilih?')) return;
+
+            const form = document.getElementById('optBulkDeleteForm');
+            ids.forEach(function (id) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'ids[]';
+                input.value = id;
+                form.appendChild(input);
+            });
+            bulkButton.disabled = true;
+            form.submit();
+        });
+    }
+
+    if (deleteAllButton) {
+        deleteAllButton.addEventListener('click', function () {
+            const total = <?= (int) ($pagination['total'] ?? 0) ?>;
+            if (!window.confirm('Hapus permanen semua ' + total + ' data master OPT? Data yang digunakan dalam laporan akan tetap disimpan.')) return;
+            deleteAllButton.disabled = true;
+            document.getElementById('optDeleteAllForm').submit();
+        });
+    }
+});
+</script>
+<?php endif; ?>
 
 <?php include ROOT_PATH . '/app/views/layouts/footer.php'; ?>

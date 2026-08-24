@@ -553,3 +553,41 @@ sudo systemctl restart php8.2-fpm
 - [QA_CHECKLIST.md](QA_CHECKLIST.md) — Full regression checklist
 - [BLUEPRINT.md](BLUEPRINT.md) — Architecture & business rules
 - [API.md](API.md) — API contract
+
+---
+
+## 15. Checklist Konfigurasi cPanel Hosting & Domain (Ringkas)
+
+> Target hosting cPanel (document root → `backend/public`). Detail lengkap tetap mengikuti bagian 1–14 di atas.
+
+### 15.1 Database hosting
+1. cPanel → **MySQL® Databases**: buat DB `bpsjembe_jagapadi_3509`, user `bpsjembe_nanangpx`, password kuat (generate di cPanel; **jangan salin-lewat chat/repo**).
+2. **Add User To Database** dengan privilege `ALL` pada DB tersebut.
+3. **Remote MySQL**: biarkan kosong/`localhost` saja. Bila tool eksternal perlu akses, allowlist IP kantor secara spesifik — jangan `%`.
+4. Verifikasi dari server: `php scripts/check_db_connection.php --write-test`
+
+### 15.2 Environment di server
+1. Salin `.env.example` → `.env` pada root proyek di server; isi `DB_*`, `JWT_SECRET` (`php -r "echo bin2hex(random_bytes(32));"`), dan API key hash.
+2. `.env` TIDAK pernah ikut release Git (sudah di-gitignore). Backup `.env` terpisah dengan permission `600`.
+3. Uji: `php scripts/check_db_connection.php` harus `KONEKSI BERHASIL`.
+
+### 15.3 Domain & DNS
+1. A/ CNAME domain → IP server hosting (kelola di DNS registrar/hosting).
+2. Verifikasi: `nslookup <domain>` dan `ping <domain>` mengarah ke IP yang benar.
+3. Tunggu propagasi (5 menit–24 jam).
+
+### 15.4 SSL
+1. cPanel → **SSL/TLS Status** → **Run AutoSSL** (atau Let's Encrypt).
+2. Paksa HTTPS: aktifkan redirect di `.htaccess`/Nginx; pastikan `APP_URL=https://...` dan cookie `Secure` aktif otomatis (sudah ditangani aplikasi saat HTTPS).
+3. Verifikasi: `https://<domain>` tanpa warning; `curl -I https://<domain>` → `200`.
+
+### 15.5 Deployment otomatis (GitHub)
+1. Workflow: `.github/workflows/deploy.yml` — trigger push tag `deploy-*` atau manual.
+2. Simpan secret repo: `DEPLOY_SSH_HOST`, `DEPLOY_SSH_PORT`, `DEPLOY_SSH_USER`, `DEPLOY_SSH_KEY` (private key deploy khusus), `DEPLOY_RELEASE_DIR`, `DEPLOY_PROD_URL`.
+3. Kolaborator: Settings → Collaborators (invite per akun, prinsip least-privilege); aktifkan branch protection `main` (require PR + 1 approval).
+4. Jalankan pertama: buat tag `deploy-1` → pantau tab Actions.
+
+### 15.6 Rotasi kredensial (WAJIB bila pernah dibagikan via chat/dokumen)
+1. Ganti password DB di cPanel → perbarui `.env` server → `php scripts/check_db_connection.php`.
+2. Ganti password akun admin aplikasi (bukan memakai password DB).
+3. Bersihkan riwayat Git dari kredensial lama: `git filter-repo --replace-text` lalu force-push (koordinasikan dengan tim), atau jadikan repo private permanen.

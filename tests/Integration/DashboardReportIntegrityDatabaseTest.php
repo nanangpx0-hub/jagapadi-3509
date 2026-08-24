@@ -169,6 +169,10 @@ final class DashboardReportIntegrityDatabaseTest extends TestCase
         ] as [$userId, $location, $severity, $population, $area, $status]) {
             $insert->execute([$userId, '2027-03-01', $location, $severity, $population, $area, $status]);
         }
+        $insert->execute([2, '2027-03-01', 'Petugas Terhapus', 'Berat', 8888, 900, 'Submitted']);
+        $deletedId = (int) $this->db->lastInsertId();
+        $this->db->prepare('UPDATE laporan_hama SET deleted_at = NOW(), deleted_by = 1 WHERE id = ?')
+            ->execute([$deletedId]);
 
         $aggregator = new DashboardDataAggregator();
         $stats = $aggregator->getHamaStats(2027, 2);
@@ -183,7 +187,7 @@ final class DashboardReportIntegrityDatabaseTest extends TestCase
         $expectedCounts = $this->db->query(
             'SELECT status, COUNT(*) AS total
              FROM laporan_hama
-             WHERE user_id = 2
+             WHERE user_id = 2 AND deleted_at IS NULL
              GROUP BY status'
         )->fetchAll(PDO::FETCH_KEY_PAIR);
         $actualCounts = (new LaporanHama())->getStatusCounts(2);
@@ -250,6 +254,10 @@ final class DashboardReportIntegrityDatabaseTest extends TestCase
         );
         $stmt->execute([$jenisId, '2027-04-01', '{}', 'Fixture Draft', 'draft']);
         $stmt->execute([$jenisId, '2027-04-01', '{}', 'Fixture Submitted', 'submitted']);
+        $stmt->execute([$jenisId, '2027-04-01', '{}', 'Fixture Deleted', 'submitted']);
+        $deletedId = (int) $this->db->lastInsertId();
+        $this->db->prepare('UPDATE laporan_lainnya SET deleted_at = NOW(), deleted_by = 1 WHERE id = ?')
+            ->execute([$deletedId]);
 
         $stats = (new DashboardDataAggregator())->getLainnyaStats(2027);
         self::assertSame(1, (int) $stats['total_laporan']);

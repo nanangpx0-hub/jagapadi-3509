@@ -85,6 +85,8 @@ class IrigasiController extends Controller {
             'dateFrom' => $filters['date_from'],
             'dateTo' => $filters['date_to'],
             'petugasReportType' => $user['role'] === 'petugas' ? 'irigasi' : null,
+            // Seluruh ID aktif dalam scope user (admin: semua data) untuk pilih-semua lintas halaman.
+            'allIds' => $this->model->getAllActiveIds($userId),
         ]);
     }
 
@@ -291,7 +293,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $this->view('irigasi/create', [
             'title' => 'Input Data Irigasi',
-            'kabupaten' => $kabupaten
+            'kabupaten' => $kabupaten,
+            'data' => [
+                'tanggal' => (new DateTimeImmutable(
+                    'now',
+                    new DateTimeZone('Asia/Jakarta')
+                ))->format('Y-m-d'),
+            ],
         ]);
     }
 
@@ -316,12 +324,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($data['tanggal'])) {
             $errors[] = 'Tanggal laporan wajib diisi';
         } else {
-            $date = DateTime::createFromFormat('Y-m-d', (string) $data['tanggal']);
+            $localTimezone = new DateTimeZone('Asia/Jakarta');
+            $date = DateTime::createFromFormat(
+                '!Y-m-d',
+                (string) $data['tanggal'],
+                $localTimezone
+            );
             if (!$date || $date->format('Y-m-d') !== $data['tanggal']) {
                 $errors[] = 'Format tanggal laporan tidak valid';
-            } elseif ($date > new DateTime('today')) {
+            } elseif ($date > new DateTime('today', $localTimezone)) {
                 $errors[] = 'Tanggal tidak boleh melebihi hari ini';
-            } elseif ($date < new DateTime('-10 years')) {
+            } elseif ($date < new DateTime('-10 years', $localTimezone)) {
                 $errors[] = 'Tanggal laporan tidak boleh lebih dari 10 tahun yang lalu';
             }
         }
@@ -717,6 +730,7 @@ public function edit($id) {
         $id = $this->resolveId($id);
         
         try {
+            $db = Database::getInstance()->getConnection();
             $data = $this->model->find($id);
             
             if (!$data) {
@@ -725,18 +739,23 @@ public function edit($id) {
                 return;
             }
             
-            $this->model->delete($id);
-
-            // File cleanup only happens after the database row was removed.
-            if (!empty($data['foto_url'])) {
-                $photoPath = ROOT_PATH . '/' . $data['foto_url'];
-                if (file_exists($photoPath)) {
-                    unlink($photoPath);
-                }
+            $db->beginTransaction();
+            $deleted = $this->model->softDelete($id, (int) $_SESSION['user_id']);
+            if (!$deleted) {
+                $db->rollBack();
+                ErrorMessage::set('Data irigasi sudah dipindahkan ke recycle bin');
+                $this->redirect('irigasi');
+                return;
             }
-            ErrorMessage::setSuccess('Data irigasi berhasil dihapus');
+            $this->logRecycleBinActivity('soft_delete', $id, 'Laporan irigasi dipindahkan ke recycle bin');
+            $db->commit();
+            $this->clearRecycleBinCaches();
+            ErrorMessage::setSuccess('Data irigasi dipindahkan ke recycle bin');
             
         } catch (Throwable $e) {
+            if (isset($db) && $db->inTransaction()) {
+                $db->rollBack();
+            }
             error_log(sprintf(
                 '[IrigasiController::delete] id=%s | %s | user_id=%s',
                 $id,
@@ -750,6 +769,102 @@ public function edit($id) {
         }
         
         $this->redirect('irigasi/index');
+    }
+
+    public function bulkDelete(): void {
+        $this->checkAuth();
+        $this->checkRole(['admin'], 'Hanya admin yang dapat menghapus data.');
+        $this->requireStateChangingRequest(['POST']);
+        $ids = $_POST['ids'] ?? [];
+
+        // AJAX request (sama pola dengan LaporanController::bulkDelete): balas JSON.
+        if ($this->expectsJson() || (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')) {
+            header('Content-Type: application/json');
+
+            if (empty($ids) || !is_array($ids)) {
+                echo json_encode(['success' => false, 'message' => 'Tidak ada data yang dipilih']);
+                exit;
+            }
+            foreach ($ids as $id) {
+                if (!is_numeric($id)) {
+                    echo json_encode(['success' => false, 'message' => 'ID tidak valid']);
+                    exit;
+                }
+            }
+        }
+
+        $db = Database::getInstance()->getConnection();
+        try {
+            $db->beginTransaction();
+            $count = is_array($ids)
+                ? $this->model->softDeleteMany($ids, (int) $_SESSION['user_id'])
+                : 0;
+            if ($count > 0) {
+                $this->logRecycleBinActivity(
+                    'bulk_soft_delete',
+                    null,
+                    "{$count} laporan irigasi dipindahkan ke recycle bin"
+                );
+            }
+            $db->commit();
+            if ($count > 0) {
+                $this->clearRecycleBinCaches();
+            }
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            error_log('IrigasiController::bulkDelete failed: ' . $e->getMessage());
+            if ($this->expectsJson()) {
+                echo json_encode(['success' => false, 'message' => 'Gagal memindahkan laporan irigasi ke recycle bin']);
+                exit;
+            }
+            $_SESSION['error'] = 'Laporan irigasi gagal dipindahkan ke recycle bin.';
+            $this->redirect('irigasi');
+        }
+
+        // Respons JSON untuk AJAX bulk delete dari view (pola halaman /laporan).
+        if ($this->expectsJson()) {
+            echo json_encode([
+                'success' => true,
+                'message' => $count > 0
+                    ? "{$count} laporan irigasi dipindahkan ke recycle bin"
+                    : 'Tidak ada laporan irigasi yang dipilih',
+                'deleted' => (int) $count,
+            ]);
+            exit;
+        }
+
+        $_SESSION[$count > 0 ? 'success' : 'info'] = $count > 0
+            ? "{$count} laporan irigasi dipindahkan ke recycle bin"
+            : 'Tidak ada laporan irigasi yang dipilih';
+        $this->redirect('irigasi');
+    }
+
+    private function logRecycleBinActivity(string $action, ?int $recordId, string $description): void
+    {
+        $db = Database::getInstance()->getConnection();
+        $stmt = $db->prepare(
+            'INSERT INTO activity_log (user_id, action, table_name, record_id, description, ip_address, user_agent) '
+            . 'VALUES (?, ?, ?, ?, ?, ?, ?)'
+        );
+        $stmt->execute([
+            (int) ($_SESSION['user_id'] ?? 0),
+            $action,
+            'laporan_irigasi',
+            $recordId,
+            $description,
+            $_SERVER['REMOTE_ADDR'] ?? null,
+            substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 500),
+        ]);
+    }
+
+    private function clearRecycleBinCaches(): void
+    {
+        $this->invalidateStatsCache(['dashboard:', 'stats_', 'map_', 'export_']);
+        if (class_exists('DashboardDataAggregator')) {
+            (new DashboardDataAggregator())->clearCache('irrigation');
+        }
     }
 
     // =========================================================================

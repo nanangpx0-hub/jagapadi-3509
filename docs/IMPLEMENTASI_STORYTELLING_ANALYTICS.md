@@ -235,6 +235,11 @@ format hasil frontend.
 Hasil lanjutan belum otomatis disimpan. Tombol **Simpan Analisis** tetap
 menyimpan hasil storytelling utama versi `2.0.0`.
 
+Jika tidak ada baris `produksi_gabah` berstatus `verified` dengan `bulan` yang
+terisi, halaman menampilkan diagnosis jumlah data tahunan/bulanan dan
+menonaktifkan tombol analisis. Sistem sengaja tidak membentuk estimasi bulanan
+dari data tahunan karena hasilnya berisiko menyesatkan.
+
 ## 8. Pengujian
 
 Unit test:
@@ -270,6 +275,7 @@ implementasi.
 - [ ] Request tanpa CSRF ditolak.
 - [ ] Kecamatan kosong/tidak dikenal ditolak.
 - [ ] Parameter di luar batas ditolak.
+- [ ] Dataset tanpa produksi bulanan menampilkan peringatan dan menonaktifkan analisis.
 - [ ] Korelasi kurang dari tiga pasangan menghasilkan HTTP 422.
 - [ ] Outlier kurang dari lima observasi menghasilkan HTTP 422.
 - [ ] Pergantian metode memperbarui label dan batas parameter.
@@ -349,4 +355,3 @@ implementasi.
 - availability minimal 99,9%;
 - observabilitas dan runbook tersedia;
 - pengguna dapat memilih metode tanpa bantuan.
-

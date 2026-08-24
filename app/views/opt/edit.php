@@ -33,9 +33,23 @@
     top: 5px;
     left: 5px;
 }
+
+/* Halaman edit OPT harus stabil tanpa efek timbul-tenggelam. */
+.opt-edit-page,
+.opt-edit-page *,
+.opt-edit-page *::before,
+.opt-edit-page *::after {
+    animation: none !important;
+    transition: none !important;
+}
+.opt-edit-page *:hover,
+.opt-edit-page *:focus,
+.opt-edit-page *:active {
+    transform: none !important;
+}
 </style>
 
-<div class="row">
+<div class="row opt-edit-page">
     <div class="col-12">
         <div class="card">
             <div class="card-header">
@@ -265,20 +279,41 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // File input label update
+    // File input label update + validasi tipe & ukuran sebelum unggah
     document.getElementById('gambar').addEventListener('change', function() {
-        const fileName = this.files[0]?.name || 'Pilih file baru...';
+        const file = this.files[0];
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+        const maxSize = 10 * 1024 * 1024; // 10 MB, sinkron dengan OptPhotoUploader::MAX_FILE_SIZE
+
+        if (file) {
+            if (!allowedTypes.includes(file.type)) {
+                alert('Tipe file tidak diizinkan. Gunakan JPG, PNG, GIF, atau WEBP.');
+                this.value = '';
+                this.nextElementSibling.textContent = 'Pilih file baru...';
+                document.getElementById('photoPreview').classList.add('d-none');
+                return;
+            }
+            if (file.size > maxSize) {
+                alert('Ukuran file maksimal 10 MB. File Anda: ' + (file.size / (1024 * 1024)).toFixed(2) + ' MB.');
+                this.value = '';
+                this.nextElementSibling.textContent = 'Pilih file baru...';
+                document.getElementById('photoPreview').classList.add('d-none');
+                return;
+            }
+        }
+
+        const fileName = file?.name || 'Pilih file baru...';
         this.nextElementSibling.textContent = fileName;
-        
+
         // Preview image
-        if (this.files[0]) {
+        if (file) {
             const reader = new FileReader();
             reader.onload = function(e) {
                 const preview = document.getElementById('photoPreview');
                 preview.src = e.target.result;
                 preview.classList.remove('d-none');
             };
-            reader.readAsDataURL(this.files[0]);
+            reader.readAsDataURL(file);
         }
     });
 });

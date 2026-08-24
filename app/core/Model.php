@@ -125,6 +125,47 @@ class Model {
     }
 
     /**
+     * Pindahkan record ke recycle bin tanpa menghapus relasi maupun lampiran.
+     */
+    public function softDelete($id, $deletedBy) {
+        $table = preg_replace('/[^a-zA-Z0-9_]/', '', $this->table);
+        if (empty($table)) {
+            throw new RuntimeException('Invalid table name');
+        }
+
+        $stmt = $this->db->prepare(
+            "UPDATE `{$table}` SET deleted_at = NOW(), deleted_by = ? WHERE id = ? AND deleted_at IS NULL"
+        );
+        $stmt->execute([$deletedBy, $id]);
+
+        return $stmt->rowCount() === 1;
+    }
+
+    /** @param array<int,mixed> $ids */
+    public function softDeleteMany(array $ids, int $deletedBy, int $limit = 500): int {
+        $ids = array_slice(array_values(array_unique(array_filter(
+            array_map('intval', $ids),
+            static fn (int $id): bool => $id > 0
+        ))), 0, max(1, $limit));
+        if ($ids === []) {
+            return 0;
+        }
+
+        $table = preg_replace('/[^a-zA-Z0-9_]/', '', $this->table);
+        if (empty($table)) {
+            throw new RuntimeException('Invalid table name');
+        }
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $stmt = $this->db->prepare(
+            "UPDATE `{$table}` SET deleted_at = NOW(), deleted_by = ? "
+            . "WHERE id IN ({$placeholders}) AND deleted_at IS NULL"
+        );
+        $stmt->execute(array_merge([$deletedBy], $ids));
+
+        return $stmt->rowCount();
+    }
+
+    /**
      * Fetch all records and eager load configured relations.
      */
     public function with(array|string $relations): array {

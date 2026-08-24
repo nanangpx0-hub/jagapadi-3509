@@ -3,6 +3,9 @@ const { defineConfig, devices } = require('@playwright/test');
 const REMOTE_WS_ENDPOINT = process.env.REMOTE_WS_ENDPOINT;
 const CI = process.env.CI === 'true';
 const BASE_URL = process.env.BASE_URL || 'http://localhost/jagapadi-3509';
+const remoteUse = REMOTE_WS_ENDPOINT
+  ? { connectOptions: { wsEndpoint: REMOTE_WS_ENDPOINT } }
+  : {};
 
 module.exports = defineConfig({
   testDir: './tests',
@@ -11,7 +14,9 @@ module.exports = defineConfig({
   fullyParallel: CI,
   workers: CI ? 2 : 1,
   retries: CI ? 1 : 0,
-  globalSetup: require.resolve('./global-setup.js'),
+  globalSetup: process.env.SKIP_ROLE_GLOBAL_SETUP === 'true'
+    ? undefined
+    : require.resolve('./global-setup.js'),
   reporter: [
     ['html', { outputFolder: 'reports/html', open: 'never' }],
     ['json', { outputFile: 'reports/test-results.json' }],
@@ -41,9 +46,7 @@ module.exports = defineConfig({
       name: 'chromium',
       use: {
         browserName: 'chromium',
-        ...(REMOTE_WS_ENDPOINT
-          ? { connectOptions: { wsEndpoint: REMOTE_WS_ENDPOINT } }
-          : {}),
+        ...remoteUse,
       },
     },
     ...(CI
@@ -62,12 +65,14 @@ module.exports = defineConfig({
       name: 'mobile-chromium',
       use: {
         ...devices['Pixel 5'],
+        ...remoteUse,
       },
     },
     {
       name: 'tablet-chromium',
       use: {
         ...devices['iPad Pro'],
+        ...remoteUse,
       },
     },
   ],

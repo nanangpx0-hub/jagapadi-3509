@@ -126,12 +126,27 @@ final class LaporanLainnyaTest extends TestCase {
     }
 
     public function testMasterJenisLaporanCodes(): void {
-        $expectedCodes = ['bibit_baru', 'rumah_kaca', 'panen', 'bantuan_alsintan', 'kerusakan_cuaca'];
-        self::assertCount(5, $expectedCodes);
+        $expectedCodes = [
+            'bibit_baru', 'rumah_kaca', 'panen', 'bantuan_alsintan', 'kerusakan_cuaca',
+            'gangguan_sosial', 'faktor_abiotik', 'bencana_cuaca', 'gangguan_fisiologis',
+        ];
+        self::assertCount(9, $expectedCodes);
         foreach ($expectedCodes as $code) {
             self::assertIsString($code);
             self::assertNotEmpty($code);
         }
+    }
+
+    public function testEnvironmentalCategoryMigrationIsIdempotentAndComplete(): void {
+        $sql = file_get_contents(
+            ROOT_PATH . '/database/migrations/2026_08_24_add_environmental_other_report_categories.sql'
+        );
+
+        foreach (['gangguan_sosial', 'faktor_abiotik', 'bencana_cuaca', 'gangguan_fisiologis'] as $code) {
+            self::assertStringContainsString("'{$code}'", $sql);
+        }
+        self::assertStringContainsString('ON DUPLICATE KEY UPDATE', $sql);
+        self::assertStringContainsString('JSON_ARRAY', $sql);
     }
 
     public function testMigrationTableStructure(): void {

@@ -43,6 +43,11 @@ define('BASE_URL', $baseUrl);
 // Define UPLOAD_PATH
 define('UPLOAD_PATH', ROOT_PATH . '/storage/uploads/');
 
+$composerAutoload = ROOT_PATH . '/vendor/autoload.php';
+if (is_file($composerAutoload)) {
+    require_once $composerAutoload;
+}
+
 // Load .env file (base), then .env.local (overrides)
 $envPaths = [ROOT_PATH . '/.env', ROOT_PATH . '/.env.local'];
 $loadedKeys = [];
@@ -104,20 +109,30 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 
-// CORS Policy Headers - configured via environment variables
+// CORS Policy Headers - configured via environment variables with LAN/private IP support
 $corsOrigins = getenv('CORS_ALLOWED_ORIGINS');
 $allowedOrigins = $corsOrigins ? array_map('trim', explode(',', $corsOrigins)) : [
     'http://localhost',
     'http://localhost:8080',
+    'http://localhost:3000',
+    'http://10.0.2.2:8080',
     'https://bpsjember.my.id',
-    'https://jagapadi.yourdomain.com'
+    'https://jagapadi.bpsjember.my.id'
 ];
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-if (in_array($origin, $allowedOrigins, true)) {
+$isLanOrigin = false;
+if ($origin !== '') {
+    $parsedHost = parse_url($origin, PHP_URL_HOST);
+    if ($parsedHost) {
+        $isLanOrigin = filter_var($parsedHost, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+    }
+}
+
+if ($origin !== '' && (in_array($origin, $allowedOrigins, true) || $isLanOrigin)) {
     header("Access-Control-Allow-Origin: {$origin}");
     header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-API-Key, X-CSRF-TOKEN, X-Requested-With');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-API-Key, X-CSRF-TOKEN, X-Requested-With, X-Idempotency-Key');
     header('Access-Control-Allow-Credentials: true');
     header('Access-Control-Max-Age: 3600');
 }
@@ -285,6 +300,11 @@ $stateChangingMethods = [
     'kecamatan_bulk_delete',
     'kecamatan_update',
     'desa_delete',
+    'desa_update',
+    'submit',
+    'resubmit',
+    'requestrevision',
+    'delete_draft',
 ];
 
 $methodLower = strtolower($method);

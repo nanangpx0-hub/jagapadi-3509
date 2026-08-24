@@ -180,9 +180,24 @@
     align-items: center;
     justify-content: center;
 }
+
+/* Form pembuatan laporan harus stabil tanpa efek timbul-tenggelam. */
+.laporan-create-page,
+.laporan-create-page *,
+.laporan-create-page *::before,
+.laporan-create-page *::after {
+    animation: none !important;
+    transition: none !important;
+}
+
+.laporan-create-page *:hover,
+.laporan-create-page *:focus,
+.laporan-create-page *:active {
+    transform: none !important;
+}
 </style>
 
-<div class="row">
+<div class="row laporan-create-page">
     <div class="col-md-10 offset-md-1">
         <div class="card">
             <div class="card-header">
@@ -199,6 +214,7 @@
             <form action="<?= BASE_URL ?>laporan/create" method="POST" enctype="multipart/form-data" id="formCreateLaporan"
                   data-draft-user="<?= (int) ($_SESSION['user_id'] ?? 0) ?>" data-draft-module="laporan-hama">
                 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
+                <?= Security::getIdempotencyField() ?>
                 <!-- Honeypot anti-bot field (hidden from users, bots will fill this) -->
                 <div style="position: absolute; left: -9999px; top: -9999px;" aria-hidden="true">
                     <input type="text" name="website_hp" tabindex="-1" autocomplete="off" value="">
@@ -228,23 +244,44 @@
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label>Tanggal Pelaporan <span class="text-danger">*</span></label>
-                                <input type="date" name="tanggal" class="form-control" value="<?= date('Y-m-d') ?>" required>
+                                <label>Tanggal Kejadian/Pengamatan <span class="text-danger">*</span></label>
+                                <input type="date" name="tanggal" class="form-control" value="<?= date('Y-m-d') ?>" max="<?= date('Y-m-d') ?>" required>
+                                <small class="text-muted">Boleh tanggal sebelumnya; waktu pengisian dicatat otomatis.</small>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label>OPT <span class="text-danger">*</span></label>
-                                <select name="master_opt_id" class="form-control" required>
+                                <input type="search" id="optSearch" class="form-control mb-2" placeholder="Ketik nama nasional, lokal, atau ilmiah...">
+                                <select name="master_opt_id" id="masterOptSelect" class="form-control">
                                     <option value="">-- Pilih OPT --</option>
                                     <?php foreach($data_opt as $opt): ?>
-                                    <option value="<?= $opt['id'] ?>"><?= htmlspecialchars($opt['nama_opt']) ?> (<?= $opt['jenis'] ?>)</option>
+                                    <option value="<?= $opt['id'] ?>"
+                                            data-search="<?= htmlspecialchars(strtolower(($opt['nama_opt'] ?? '') . ' ' . ($opt['nama_lokal'] ?? '') . ' ' . ($opt['nama_ilmiah'] ?? ''))) ?>"
+                                            data-photo="<?= htmlspecialchars($opt['foto_url'] ?? '') ?>"><?= htmlspecialchars($opt['nama_opt']) ?><?= !empty($opt['nama_lokal']) ? ' (' . htmlspecialchars($opt['nama_lokal']) . ')' : '' ?></option>
                                     <?php endforeach; ?>
                                 </select>
+                                <div id="optPreview" class="mt-2"></div>
+                                <button type="button" class="btn btn-link px-0" id="toggleNewOpt">Hama tidak ditemukan? Ajukan nama hama baru</button>
+                                <div id="newOptFields" class="border rounded p-3" style="display:none">
+                                    <input type="text" name="nama_hama_baru" class="form-control mb-2" placeholder="Nama lokal/daerah">
+                                    <input type="text" name="nama_nasional_baru" class="form-control mb-2" placeholder="Nama nasional (jika diketahui)">
+                                    <select name="jenis_opt_baru" class="form-control mb-2"><option value="hama">Hama</option><option value="penyakit">Penyakit</option><option value="gulma">Gulma</option></select>
+                                    <input type="text" name="komoditas_opt_baru" class="form-control mb-2" placeholder="Komoditas yang diserang">
+                                    <textarea name="ciri_opt_baru" class="form-control" rows="2" placeholder="Ciri-ciri/gejala"></textarea>
+                                    <small class="text-muted">Usulan akan ditinjau Admin sebelum menjadi master resmi.</small>
+                                </div>
                             </div>
                         </div>
                     </div>
                     
+                    <div class="form-group">
+                        <label>Metode Pengukuran Serangan</label>
+                        <select name="metode_pengukuran" id="metodePengukuran" class="form-control">
+                            <option value="absolut">Luas absolut (Ha)</option>
+                            <option value="persentase">Persentase (%)</option>
+                        </select>
+                    </div>
                     <div class="row">
                         <div class="col-md-4">
                             <div class="form-group">
@@ -273,7 +310,21 @@
                         <div class="col-md-4">
                             <div class="form-group">
                                 <label>Alamat Lengkap <span class="text-danger">*</span></label>
-                                <input type="text" name="alamat_lengkap" class="form-control" placeholder="Contoh: Blok Kedawung No.12 RT 02 RW 03" required>
+                                <?php
+                                $alamatMinLength = match ($_SESSION['role'] ?? '') {
+                                    'petugas' => 10,
+                                    'operator' => 5,
+                                    default => 1,
+                                };
+                                ?>
+                                <input type="text"
+                                       name="alamat_lengkap"
+                                       class="form-control"
+                                       placeholder="Contoh: Blok Kedawung No.12 RT 02 RW 03"
+                                       minlength="<?= $alamatMinLength ?>"
+                                       data-validation-label="Alamat Lengkap"
+                                       required>
+                                <small class="text-muted">Minimal <?= $alamatMinLength ?> karakter.</small>
                             </div>
                         </div>
                     </div>
@@ -453,30 +504,69 @@
                         </div>
                     </div>
                     
+                    <div class="row percentage-field" style="display:none">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Persentase Serangan (%)</label>
+                                <input type="number" name="persentase_serangan" class="form-control" min="0" max="100" step="0.01">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Luas Areal Diamati (Ha)</label>
+                                <input type="number" name="luas_areal_diamati" class="form-control" min="0" step="0.01">
+                                <small class="text-muted">Opsional; dipakai menghitung estimasi luas.</small>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="form-group">
                         <label>Catatan</label>
                         <textarea name="catatan" id="catatanTextarea" class="form-control" rows="3" placeholder="Deskripsi kondisi, gejala, atau informasi tambahan"></textarea>
                     </div>
                     
-                    <div class="form-group">
+                    <div class="row align-items-start">
+                    <div class="col-lg-6">
+                    <div class="form-group border rounded p-3 h-100" id="fotoUploadPanel">
                         <label for="fotoInput">Upload Foto <span class="text-danger">*</span></label>
                         <div class="input-group">
                             <div class="custom-file">
-                                <input type="file" name="foto" class="custom-file-input" id="fotoInput" accept="image/jpeg,image/png,image/webp" required aria-describedby="fotoError">
-                                <label class="custom-file-label" for="fotoInput">Pilih foto...</label>
+                                <input type="file" name="foto" class="custom-file-input" id="fotoInput" accept="image/*" required aria-describedby="fotoHelp fotoError">
+                                <label class="custom-file-label" id="fotoInputLabel" for="fotoInput">Pilih foto...</label>
                             </div>
                         </div>
-                        <small class="text-muted">
+                        <small class="text-muted" id="fotoHelp">
                             <i class="fas fa-info-circle"></i> Format: JPG, PNG, WEBP. 
                             <strong>File > 2MB akan dikompresi otomatis</strong>
                         </small>
                         <div class="invalid-feedback d-block" id="fotoError" role="alert"></div>
-                        <div id="fotoPreview" class="mt-2" style="display: none;">
-                            <img id="previewImg" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" style="max-width: 300px; max-height: 300px;" class="img-thumbnail">
-                            <button type="button" class="btn btn-sm btn-danger mt-2" onclick="clearFotoPreview()">
-                                <i class="fas fa-times"></i> Hapus Foto
-                            </button>
+                        <div id="fotoPreview" class="mt-3" hidden aria-live="polite">
+                            <div class="card border-success mb-0" style="max-width: 340px;">
+                                <div class="card-body p-2 text-center">
+                                    <img id="previewImg" src="" alt="Preview foto laporan" style="display:block;width:100%;max-width:320px;max-height:320px;object-fit:contain;margin:auto;" class="img-thumbnail">
+                                    <div id="fotoPreviewInfo" class="small text-muted mt-2"></div>
+                                    <button type="button" class="btn btn-sm btn-danger mt-2" id="clearFotoButton">
+                                        <i class="fas fa-times"></i> Hapus Foto
+                                    </button>
+                                </div>
+                            </div>
                         </div>
+                    </div>
+                    </div>
+
+                    <div class="col-lg-6 mt-3 mt-lg-0">
+                    <div class="form-group border rounded p-3 h-100" id="videoUploadPanel">
+                        <label for="videoInput">Upload Video Pendukung <small class="text-muted">(opsional)</small></label>
+                        <input type="file" name="video" id="videoInput" class="form-control-file" accept="video/mp4" aria-describedby="videoHelp videoError">
+                        <small class="text-muted" id="videoHelp">MP4, maksimal 50 MB. Tidak wajib diunggah.</small>
+                        <div class="invalid-feedback d-block" id="videoError" role="alert"></div>
+                        <div id="videoPreview" class="mt-3" hidden>
+                            <video id="previewVideo" controls preload="metadata" playsinline style="display:block;width:100%;max-width:420px;max-height:280px;background:#111;border-radius:6px"></video>
+                            <div id="videoPreviewInfo" class="small text-muted mt-2"></div>
+                            <button type="button" class="btn btn-sm btn-danger mt-2" id="clearVideoButton"><i class="fas fa-times"></i> Hapus Video</button>
+                        </div>
+                    </div>
+                    </div>
                     </div>
                     
                     <input type="hidden" name="status" id="statusSelect" value="Submitted">
@@ -500,65 +590,131 @@
 </div>
 
 <script>
+document.addEventListener('DOMContentLoaded', function () {
+    const search = document.getElementById('optSearch');
+    const select = document.getElementById('masterOptSelect');
+    const originalOptions = Array.from(select.options).map(option => option.cloneNode(true));
+    search?.addEventListener('input', function () {
+        const keyword = this.value.trim().toLowerCase();
+        const selected = select.value;
+        select.replaceChildren(...originalOptions.filter((option, index) => index === 0 || (option.dataset.search || '').includes(keyword)).map(option => option.cloneNode(true)));
+        select.value = selected;
+    });
+    document.getElementById('toggleNewOpt')?.addEventListener('click', function () {
+        const fields = document.getElementById('newOptFields');
+        fields.style.display = fields.style.display === 'none' ? 'block' : 'none';
+        if (fields.style.display === 'block') select.value = '';
+    });
+    const method = document.getElementById('metodePengukuran');
+    const syncMethod = () => {
+        const percentage = method.value === 'persentase';
+        document.querySelectorAll('.percentage-field').forEach(el => el.style.display = percentage ? '' : 'none');
+        document.getElementById('luasSeranganInput').closest('.col-md-4').style.display = percentage ? 'none' : '';
+    };
+    method?.addEventListener('change', syncMethod); syncMethod();
+});
+
 const FOTO_REQUIRED_MESSAGE = 'Foto laporan wajib disertakan sebelum laporan dapat disimpan.';
 const fotoInput = document.getElementById('fotoInput');
 const fotoError = document.getElementById('fotoError');
+const fotoInputLabel = document.getElementById('fotoInputLabel');
+const fotoPreview = document.getElementById('fotoPreview');
+const previewImg = document.getElementById('previewImg');
+const fotoPreviewInfo = document.getElementById('fotoPreviewInfo');
+let fotoPreviewRequest = 0;
 
-function showFotoRequiredError(showAlert = true) {
+function showFotoError(message, showAlert = true) {
     fotoInput.classList.add('is-invalid');
-    fotoInput.setCustomValidity(FOTO_REQUIRED_MESSAGE);
-    fotoError.textContent = FOTO_REQUIRED_MESSAGE;
+    fotoInput.setCustomValidity(message);
+    fotoError.textContent = message;
     fotoInput.focus();
     fotoInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
     if (showAlert) {
-        alert(FOTO_REQUIRED_MESSAGE);
+        alert(message);
     }
 }
 
-// File input label update with compression info
-fotoInput.addEventListener('change', function(e) {
-    const fileName = e.target.files[0]?.name || 'Pilih foto...';
-    const label = document.querySelector('.custom-file-label');
-    label.textContent = fileName;
+function showFotoRequiredError(showAlert = true) {
+    showFotoError(FOTO_REQUIRED_MESSAGE, showAlert);
+}
+
+function hideFotoPreview() {
+    fotoPreviewRequest++;
+    previewImg.onload = null;
+    previewImg.onerror = null;
+    previewImg.removeAttribute('src');
+    fotoPreviewInfo.textContent = '';
+    fotoPreview.hidden = true;
+}
+
+fotoInput.addEventListener('change', function() {
+    const file = this.files && this.files.length > 0 ? this.files[0] : null;
+    document.querySelector('.file-size-info')?.remove();
+    hideFotoPreview();
+
+    if (!file) {
+        fotoInputLabel.textContent = 'Pilih foto...';
+        return;
+    }
+
+    fotoInputLabel.textContent = file.name;
+    if (file.type && !file.type.startsWith('image/')) {
+        this.value = '';
+        this.setCustomValidity('File yang dipilih harus berupa gambar.');
+        this.classList.add('is-invalid');
+        fotoError.textContent = 'File yang dipilih harus berupa gambar.';
+        return;
+    }
 
     this.setCustomValidity('');
     this.classList.remove('is-invalid');
     fotoError.textContent = '';
-    
-    const file = e.target.files[0];
-    if (file) {
-        const maxSize = 2 * 1024 * 1024; // 2MB
-        
-        // Show file size info
-        const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
-        
-        if (file.size > maxSize) {
-            // Show info that file will be compressed
-            const infoDiv = document.createElement('div');
-            infoDiv.className = 'alert alert-info mt-2';
-            infoDiv.innerHTML = `<i class="fas fa-info-circle"></i> Ukuran file: ${fileSizeMB} MB. File akan dikompresi otomatis saat upload.`;
-            
-            // Remove old info if exists
-            const oldInfo = document.querySelector('.file-size-info');
-            if (oldInfo) oldInfo.remove();
-            
-            infoDiv.className += ' file-size-info';
-            document.querySelector('.custom-file').parentElement.appendChild(infoDiv);
-        }
-        
-        // Show preview
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            document.getElementById('previewImg').src = e.target.result;
-            document.getElementById('fotoPreview').style.display = 'block';
-        };
-        reader.readAsDataURL(file);
+    const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+    const currentPreviewRequest = ++fotoPreviewRequest;
+    const reader = new FileReader();
+    previewImg.onload = function() {
+        if (currentPreviewRequest !== fotoPreviewRequest) return;
+        fotoPreview.hidden = false;
+        fotoPreviewInfo.textContent = `${file.name} • ${fileSizeMB} MB • ${previewImg.naturalWidth} × ${previewImg.naturalHeight} px`;
+    };
+    previewImg.onerror = function() {
+        if (currentPreviewRequest !== fotoPreviewRequest) return;
+        previewImg.onload = null;
+        previewImg.onerror = null;
+        hideFotoPreview();
+        // Preview adalah bantuan visual, bukan sumber validasi keamanan.
+        // Backend tetap memeriksa MIME/magic bytes sebelum menyimpan file.
+        fotoInput.setCustomValidity('');
+        fotoInput.classList.remove('is-invalid');
+        fotoError.textContent = 'Preview tidak tersedia di browser ini. Foto tetap akan divalidasi saat dikirim.';
+    };
+    reader.onload = function(event) {
+        if (currentPreviewRequest !== fotoPreviewRequest) return;
+        previewImg.src = String(event.target?.result || '');
+    };
+    reader.onerror = function() {
+        if (currentPreviewRequest !== fotoPreviewRequest) return;
+        fotoInput.setCustomValidity('');
+        fotoInput.classList.remove('is-invalid');
+        fotoError.textContent = 'Preview tidak tersedia di browser ini. Foto tetap akan divalidasi saat dikirim.';
+    };
+    reader.readAsDataURL(file);
+
+    if (file.size > 2 * 1024 * 1024) {
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'alert alert-info mt-2 file-size-info';
+        infoDiv.innerHTML = `<i class="fas fa-info-circle"></i> Ukuran file: ${fileSizeMB} MB. File akan dikompresi otomatis saat upload.`;
+        fotoInput.closest('.input-group').insertAdjacentElement('afterend', infoDiv);
     }
 });
 
 fotoInput.addEventListener('invalid', function(e) {
     e.preventDefault();
-    showFotoRequiredError(true);
+    const hasSelectedFile = Boolean(this.files && this.files.length > 0);
+    const message = hasSelectedFile && this.validationMessage
+        ? this.validationMessage
+        : FOTO_REQUIRED_MESSAGE;
+    showFotoError(message, true);
 });
 
 function clearFotoPreview() {
@@ -566,9 +722,67 @@ function clearFotoPreview() {
     fotoInput.setCustomValidity(FOTO_REQUIRED_MESSAGE);
     fotoInput.classList.add('is-invalid');
     fotoError.textContent = FOTO_REQUIRED_MESSAGE;
-    document.querySelector('.custom-file-label').textContent = 'Pilih foto...';
-    document.getElementById('fotoPreview').style.display = 'none';
+    fotoInputLabel.textContent = 'Pilih foto...';
+    document.querySelector('.file-size-info')?.remove();
+    hideFotoPreview();
 }
+
+document.getElementById('clearFotoButton').addEventListener('click', clearFotoPreview);
+
+const videoInput = document.getElementById('videoInput');
+const videoError = document.getElementById('videoError');
+const videoPreview = document.getElementById('videoPreview');
+const previewVideo = document.getElementById('previewVideo');
+const videoPreviewInfo = document.getElementById('videoPreviewInfo');
+let videoPreviewUrl = null;
+
+function clearVideoPreview() {
+    previewVideo.pause();
+    previewVideo.removeAttribute('src');
+    previewVideo.load();
+    if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
+    videoPreviewUrl = null;
+    videoInput.value = '';
+    videoInput.setCustomValidity('');
+    videoInput.classList.remove('is-invalid');
+    videoError.textContent = '';
+    videoPreviewInfo.textContent = '';
+    videoPreview.hidden = true;
+}
+
+videoInput.addEventListener('change', function() {
+    const file = this.files && this.files.length ? this.files[0] : null;
+    if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
+    videoPreviewUrl = null;
+    videoPreview.hidden = true;
+    videoError.textContent = '';
+    this.setCustomValidity('');
+    this.classList.remove('is-invalid');
+    if (!file) return;
+
+    if (file.type && file.type !== 'video/mp4') {
+        this.setCustomValidity('Video pendukung harus berupa MP4.');
+        this.classList.add('is-invalid');
+        videoError.textContent = 'Video pendukung harus berupa MP4.';
+        return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+        this.setCustomValidity('Ukuran video maksimal 50 MB.');
+        this.classList.add('is-invalid');
+        videoError.textContent = 'Ukuran video maksimal 50 MB.';
+        return;
+    }
+
+    videoPreviewUrl = URL.createObjectURL(file);
+    previewVideo.src = videoPreviewUrl;
+    videoPreviewInfo.textContent = `${file.name} • ${(file.size / (1024 * 1024)).toFixed(2)} MB`;
+    videoPreview.hidden = false;
+});
+
+document.getElementById('clearVideoButton').addEventListener('click', clearVideoPreview);
+window.addEventListener('beforeunload', function() {
+    if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
+});
 
 // Validation state
 let isFormValid = true;
@@ -700,6 +914,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Form validation and submission
 document.getElementById('formCreateLaporan').addEventListener('submit', function(e) {
+    const alamatInput = this.querySelector('[name="alamat_lengkap"]');
+    const alamatMinimum = Number(alamatInput ? alamatInput.minLength : 0);
+    if (alamatInput && alamatInput.value.trim().length < alamatMinimum) {
+        e.preventDefault();
+        alamatInput.setCustomValidity(`Alamat lengkap wajib diisi minimal ${alamatMinimum} karakter.`);
+        alamatInput.reportValidity();
+        alamatInput.focus();
+        return false;
+    }
+    if (alamatInput) alamatInput.setCustomValidity('');
     // Note: File size validation removed - server will handle compression automatically
     
     // Validate required fields
@@ -723,9 +947,17 @@ document.getElementById('formCreateLaporan').addEventListener('submit', function
         }
     }
 
-    if (!fotoInput.files || fotoInput.files.length === 0) {
+    const selectedPhoto = fotoInput.files && fotoInput.files.length > 0
+        ? fotoInput.files[0]
+        : null;
+    if (!selectedPhoto) {
         e.preventDefault();
         showFotoRequiredError(true);
+        return false;
+    }
+    if (!fotoInput.checkValidity()) {
+        e.preventDefault();
+        showFotoError(fotoInput.validationMessage || 'Foto yang dipilih tidak valid.', true);
         return false;
     }
     
@@ -779,6 +1011,10 @@ document.getElementById('formCreateLaporan').addEventListener('submit', function
             statusText = 'disimpan';
     }
     console.log(`Laporan akan ${statusText}`);
+});
+
+document.querySelector('[name="alamat_lengkap"]')?.addEventListener('input', function() {
+    this.setCustomValidity('');
 });
 
 // Status dropdown is now used for all roles (petugas, operator, admin)
@@ -1067,6 +1303,10 @@ document.getElementById('formCreateLaporan').addEventListener('submit', function
     
     if (btnGetCurrentLocation) {
         btnGetCurrentLocation.addEventListener('click', function() {
+            if (!window.isSecureContext) {
+                document.getElementById('currentLocationStatus').innerHTML = '<div class="alert alert-danger">GPS browser memerlukan HTTPS. Gunakan akses HTTPS atau pilih titik pada peta.</div>';
+                return;
+            }
             if (!navigator.geolocation) {
                 alert('Geolocation tidak didukung oleh browser Anda.');
                 return;
@@ -1145,7 +1385,7 @@ document.getElementById('formCreateLaporan').addEventListener('submit', function
                 },
                 {
                     enableHighAccuracy: true,
-                    timeout: 10000,
+                    timeout: 15000,
                     maximumAge: 0
                 }
             );
@@ -1942,6 +2182,11 @@ scheduleDefaultKabupatenJemberEnforcement();
         btnGetCurrentLocation.addEventListener('click', function() {
             const statusDiv = document.getElementById('currentLocationStatus');
             const btn = this;
+
+            if (!window.isSecureContext) {
+                statusDiv.innerHTML = '<div class="alert alert-danger">GPS browser memerlukan HTTPS. Gunakan akses HTTPS atau pilih titik pada peta.</div>';
+                return;
+            }
             
             if (!navigator.geolocation) {
                 if (statusDiv) {
@@ -2180,6 +2425,6 @@ scheduleDefaultKabupatenJemberEnforcement();
 </script>
 
 <!-- Phase 3: Draft Auto-Save and Offline Mode -->
-<script src="<?= BASE_URL ?>public/js/draft-autosave.js?v=2.0.0"></script>
+<script src="<?= BASE_URL ?>public/js/draft-autosave.js?v=2.1.0"></script>
 <script src="<?= BASE_URL ?>public/js/offline-laporan.js"></script>
 

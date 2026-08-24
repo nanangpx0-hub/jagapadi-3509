@@ -523,7 +523,7 @@ class IrrigationRuleEngine {
             SELECT debit_air, status_pintu
             FROM data_irigasi
             WHERE daerah_irigasi = (
-                SELECT nama_saluran FROM laporan_irigasi WHERE id = ?
+                SELECT nama_saluran FROM laporan_irigasi WHERE id = ? AND deleted_at IS NULL
             )
             ORDER BY tanggal DESC
             LIMIT 1

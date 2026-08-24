@@ -192,6 +192,9 @@
                         </td>
                     </tr>
                     <?php endif; ?>
+                    <?php if(!empty($laporan['video_url'])): ?>
+                    <div class="form-group"><label>Video Pendukung</label><video controls preload="metadata" class="d-block" style="max-width:100%;max-height:420px"><source src="<?= BASE_URL . htmlspecialchars($laporan['video_url']) ?>" type="video/mp4">Browser tidak mendukung video.</video></div>
+                    <?php endif; ?>
                 </table>
                 
                 <?php if(!empty($laporan['rekomendasi'])): ?>

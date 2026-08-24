@@ -249,6 +249,52 @@ Master wilayah berjenjang: Kabupaten → Kecamatan → Desa.
 - DELETE: hard delete jika tidak ada referensi laporan; soft deactivate (`aktif=0`) jika masih dirujuk
 - Validasi: nama_opt unique, jenis enum wajib, etl_acuan >= 0
 
+### Usulan OPT — Web Endpoints (Session, runtime root)
+
+Modul usulan & review master OPT dari Petugas. Workflow status:
+`Draf → Menunggu Review → {Perlu Perbaikan → Menunggu Review, Disetujui, Digabungkan, Ditolak Permanen}`.
+Semua mutasi POST + CSRF dan divalidasi ulang di controller (bukan hanya allowlist global).
+
+**Dua jalur input:**
+1. Form mandiri Petugas: `GET /usulan-opt/create` → `POST /usulan-opt/store` (`intent=draft|submit`).
+2. Otomatis dari Laporan Hama saat memilih "OPT baru": usulan langsung `Menunggu Review`,
+   dimiliki pemilik laporan yang tervalidasi, atomik dengan penyimpanan laporan
+   (satu transaksi; rollback bila laporan gagal), foto laporan menjadi foto awal.
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/usulan-opt` | Session | Admin: antrean semua usulan (tab 6 status, filter, pagination max 100, usia antrean). Petugas: "Usulan OPT Saya" miliknya saja |
+| GET | `/optsaya` | Session | Alias kompatibilitas untuk halaman `/usulan-opt`; scope Admin global dan Petugas ownership |
+| POST | `/usulan-opt/import` (`/optsaya/import`) | Session + CSRF; Admin/Petugas | Impor `.xlsx`/`.xls` maksimal 10 MB dan 5.000 baris. Struktur wajib mengikuti template; baris valid dibuat sebagai `Draf` milik user session dan hasil parsial ditampilkan sebagai ringkasan |
+| GET | `/usulan-opt/export` (`/optsaya/export`) | Session | Ekspor XLSX maksimal 10.000 baris dengan filter `status`, `jenis`, `q`, `date_from`, `date_to`; Petugas hanya datanya sendiri, Admin global |
+| GET | `/usulan-opt/template` (`/optsaya/template`) | Session; Admin/Petugas | Unduh template XLSX dengan header impor resmi dan satu baris contoh |
+| GET | `/usulan-opt/create` | admin+petugas | Form mandiri; ownership dipaksa dari session |
+| POST | `/usulan-opt/store` | admin+petugas | Simpan Draf atau kirim review; submit menuntut wilayah lengkap + minimal 1 foto |
+| GET | `/usulan-opt/detail/{id}` | Session | Detail + galeri foto + timeline status; IDOR-guarded |
+| GET | `/usulan-opt/edit/{id}` | owner | Hanya status `Draf`/`Perlu Perbaikan` |
+| POST | `/usulan-opt/update/{expected_status via body}` | owner | Conditional update (`WHERE status=expected`) mencegah lost update saat Admin mereview |
+| POST | `/usulan-opt/submit` | owner | `Draf → Menunggu Review`; validasi kelengkapan final + foto ≥1 |
+| POST | `/usulan-opt/resubmit` | owner | `Perlu Perbaikan → Menunggu Review`; catatan lama dipindah ke history |
+| POST | `/usulan-opt/delete-draft` | owner | Hanya `Draf` sendiri; tanpa bulk delete |
+| POST | `/usulan-opt/delete-photo` | owner | Foto pada `Draf`/`Perlu Perbaikan` milik sendiri |
+| POST | `/usulan-opt/request-revision` | Admin | `Menunggu Review → Perlu Perbaikan`; catatan wajib ≥10 karakter |
+| POST | `/usulan-opt/review` | Admin | `action=merge` (master aktif, jenis sama) / `action=reject` (permanen, alasan ≥10) / `action=approve` → redirect finalisasi |
+| GET | `/usulan-opt/finalize/{id}` | Admin | Form finalisasi master (validasi identik `/opt/create`) + kandidat duplikat |
+| POST | `/usulan-opt/approve-new` | Admin | Buat master + relink laporan dalam satu transaksi; duplikat → arahkan ke Gabungkan |
+| GET | `/usulan-opt/search-master?q=&match_jenis=1&proposal_jenis=` | Admin | JSON autocomplete master aktif terpaginasikan |
+
+Path berparameter `{id}` untuk GET dilayani konvensi front controller
+(`UsulanOptController@detail/edit/finalize`, nama method identifier valid);
+route statis lain terdaftar eksplisit di `config/web_routes.php`.
+
+**Aturan inti:**
+- Transaksi keputusan Admin: lock `FOR UPDATE` → cek masih pending → mutasi master/laporan/status/history/audit/notifikasi → commit; keputusan kedua = no-op.
+- Riwayat setiap transisi tersimpan di `usulan_opt_status_history` (catatan tidak sekadar ditimpa).
+- Notifikasi type stabil: `usulan_diterima`, `usulan_perlu_perbaikan`, `usulan_dikirim_ulang`, `usulan_disetujui`, `usulan_digabungkan`, `usulan_ditolak` dengan `data_json.entity=usulan_opt` + id + web_path.
+- Audit `activity_log`: create_draft/update_draft/submit/request_revision/resubmit/approve/merge/permanent_reject/delete_draft/upload_photo/delete_photo.
+- Upload foto: magic bytes finfo, MIME allowlist JPG/PNG/WebP, maks 5 MB/file dan 5 foto, nama acak, checksum SHA-256, storage `.htaccess` non-eksekusi.
+- Field administratif (`user_id`, `status`, `reviewed_by`, `reviewed_at`, `master_opt_id`) diabaikan dari payload client.
+
 ## Laporan Hama — API (Implemented — Tahap 6)
 
 ### Aturan
@@ -1379,3 +1425,12 @@ wajib CSRF token.
 - Push FCM production (device token registration + FcmPushNotifier)
 - OpenAPI/Swagger docs final
 - Generate SDK/client untuk Flutter
+# Perubahan form web laporan Hama (21 Agustus 2026)
+
+Form session `POST /laporan/create` menerima `metode_pengukuran` (`absolut` atau
+`persentase`), `persentase_serangan` (0–100), `luas_areal_diamati`, video MP4
+opsional maksimal 50 MB, dan usulan nama Hama ketika `master_opt_id` kosong.
+Tanggal adalah tanggal kejadian/pengamatan dan boleh tanggal sebelumnya, tetapi
+tidak boleh masa depan. Mutasi tetap membutuhkan session, role yang diizinkan,
+dan CSRF. Review Admin tersedia pada `GET /usulan-opt` dan
+`POST /usulan-opt/review`.

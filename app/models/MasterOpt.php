@@ -358,6 +358,14 @@ class MasterOpt extends Model {
         return ((int)($stmt->fetch(PDO::FETCH_ASSOC)['total'] ?? 0)) > 0;
     }
 
+    /**
+     * Return every master OPT identifier for the admin delete-all operation.
+     */
+    public function getAllIds(): array {
+        $stmt = $this->db->query("SELECT id FROM master_opt ORDER BY id ASC");
+        return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+    }
+
     public function toggleStatus($id) {
         $sql = "UPDATE master_opt SET aktif = CASE WHEN aktif = 1 THEN 0 ELSE 1 END WHERE id = ?";
         $stmt = $this->db->prepare($sql);

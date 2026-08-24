@@ -123,7 +123,7 @@ class WeatherService {
         $stmt = $this->db->prepare("
             SELECT id, nama_kecamatan, latitude, longitude
             FROM master_kecamatan
-            WHERE id = ?
+            WHERE id = ? AND deleted_at IS NULL
         ");
         $stmt->execute([$kecamatanId]);
         $kec = $stmt->fetch(PDO::FETCH_ASSOC);

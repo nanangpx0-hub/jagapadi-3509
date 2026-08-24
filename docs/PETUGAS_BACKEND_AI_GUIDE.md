@@ -141,7 +141,36 @@ flowchart TB
 | Master | API Wilayah/OPT read | API/root model wilayah/OPT |
 | Dashboard | `DashboardService(role,userId)` | Dashboard controller/aggregator scoped |
 | Feedback | — | Feedback controller/model/view |
+| Usulan OPT | — | `/usulan-opt` (riwayat pribadi), dibuat otomatis dari form Laporan Hama saat memilih "OPT baru" |
 | Mobile sync | Idempotency middleware/table | API root compatibility tidak selalu JWT |
+
+### 3.1 Usulan OPT (runtime root)
+
+Petugas kini **aktif mengelola usulan** melalui menu "Usulan OPT Saya":
+
+**Dua cara membuat usulan:**
+1. **Form mandiri** `/usulan-opt/create`: isi nama lokal (wajib), jenis,
+   komoditas, ciri-ciri, tanggal ditemukan, wilayah kabupaten-kecamatan-desa
+   (divalidasi hierarkinya di server), koordinat opsional, dan foto bukti.
+   Tombol **Simpan Draf** menyimpan sementara; **Kirim untuk Review** menuntut
+   wilayah lengkap + minimal satu foto.
+2. **Melalui Laporan Hama**: saat memilih "OPT baru" pada form laporan, usulan
+   otomatis dibuat berstatus `Menunggu Review` milik pemilik laporan, atomik
+   dengan penyimpanan laporan.
+
+**Siklus yang dapat dilakukan Petugas:**
+- `Draf` → Edit / Kirim / Hapus Draf (milik sendiri).
+- `Perlu Perbaikan` → baca catatan Admin (tampil menonjol di daftar, detail,
+  dan halaman edit) → perbaiki → **Resubmit**.
+- `Menunggu Review`, `Disetujui`, `Digabungkan`, `Ditolak Permanen` → hanya
+  lihat/timeline; keputusan sepenuhnya milik Admin.
+- Timeline status, reviewer, waktu keputusan, master tujuan, dan notifikasi
+  database (`usulan_diterima`, `usulan_perlu_perbaikan`, `usulan_dikirim_ulang`,
+  `usulan_disetujui`, `usulan_digabungkan`, `usulan_ditolak`) tersedia pada
+  halaman detail/riwayat.
+- Ownership dipaksa server: Petugas A tidak dapat membuka/mengubah usulan
+  Petugas B; update bersifat conditional sehingga tidak menimpa keputusan Admin
+  yang terjadi bersamaan.
 
 ## 4. Alur Operasional Petugas
 
@@ -444,6 +473,14 @@ admin_regression = passed
 Agent penerus harus melaporkan: runtime/branch/worktree, objektif, file berubah,
 migration, contract delta, test yang dijalankan, data fixture/cleanup, risiko,
 dan langkah berikutnya. Jangan menyatakan selesai hanya berdasarkan UI.
+
+### 11.5 Akses Master OPT pada runtime root
+
+Pada runtime root, role `petugas` dapat membuka `/opt`, detail OPT, galeri foto,
+serta ekspor Excel/PDF sebagai referensi kerja lapangan. Akses ini bersifat
+read-only: pencarian, filter, pagination, pratinjau, dan unduh diperbolehkan;
+create, edit, delete, bulk delete, upload foto, dan delete foto tetap dilindungi
+role Admin pada controller. UI Petugas tidak boleh menampilkan kontrol mutasi.
 
 ## 12. Kontribusi Dokumentasi
 

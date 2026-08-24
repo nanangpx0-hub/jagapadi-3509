@@ -39,18 +39,20 @@ async function loginAndSaveState(page, username, password, storagePath) {
       console.error(`${username} could not reach dashboard. Current URL: ${page.url()}`);
     }
   }
-  if (loggedIn) {
-    await page.context().storageState({ path: storagePath });
-    console.log(`Saved session state to ${storagePath} for ${username}`);
-  } else {
-    console.error(`Skipping save for ${username} — login did not succeed`);
+  if (!loggedIn) {
+    throw new Error(`Login failed for ${username}; storage state was not created`);
   }
+
+  await page.context().storageState({ path: storagePath });
+  console.log(`Saved session state to ${storagePath} for ${username}`);
 }
 
 async function runGlobalSetup() {
   console.log('GLOBAL SETUP RUNNING');
-  const browser = await chromium.launch({ headless: true });
-  console.log('BROWSER LAUNCHED');
+  const browser = process.env.REMOTE_WS_ENDPOINT
+    ? await chromium.connect(process.env.REMOTE_WS_ENDPOINT)
+    : await chromium.launch({ headless: true });
+  console.log(process.env.REMOTE_WS_ENDPOINT ? 'REMOTE BROWSER CONNECTED' : 'LOCAL BROWSER LAUNCHED');
 
   const roles = [
     { user: 'admin', pass: 'Jember3509', file: 'auth/admin.json' },
@@ -84,7 +86,8 @@ async function runGlobalSetup() {
       }
       await context.close();
     } catch (e) {
-      console.error(`Failed to setup ${role.user}: ${e.message}`);
+      await browser.close();
+      throw new Error(`Failed to setup ${role.user}: ${e.message}`);
     }
   }
 

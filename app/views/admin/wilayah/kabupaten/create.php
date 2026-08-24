@@ -17,8 +17,8 @@ if (!isset($_SESSION['csrf_token'])) {
                 <div class="col-sm-6">
                     <ol class="breadcrumb float-sm-right">
                         <li class="breadcrumb-item"><a href="<?= BASE_URL ?>">Home</a></li>
-                        <li class="breadcrumb-item"><a href="<?= BASE_URL ?>admin/wilayah">Wilayah</a></li>
-                        <li class="breadcrumb-item"><a href="<?= BASE_URL ?>admin/wilayah/kabupaten">Kabupaten</a></li>
+                        <li class="breadcrumb-item"><a href="<?= BASE_URL ?>adminWilayah">Wilayah</a></li>
+                        <li class="breadcrumb-item"><a href="<?= BASE_URL ?>adminWilayah/kabupaten">Kabupaten</a></li>
                         <li class="breadcrumb-item active">Tambah</li>
                     </ol>
                 </div>
@@ -45,7 +45,7 @@ if (!isset($_SESSION['csrf_token'])) {
                             <h3 class="card-title"><i class="fas fa-edit mr-2"></i> Form Tambah Kabupaten</h3>
                         </div>
 
-                        <form method="POST" action="<?= BASE_URL ?>admin/wilayah/kabupaten/create" id="formKabupaten">
+                        <form method="POST" action="<?= BASE_URL ?>adminWilayah/kabupaten/create" id="formKabupaten">
                             <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
                             
                             <div class="card-body">
@@ -101,7 +101,7 @@ if (!isset($_SESSION['csrf_token'])) {
                             <div class="card-footer">
                                 <div class="row">
                                     <div class="col-md-6">
-                                        <a href="<?= BASE_URL ?>admin/wilayah/kabupaten" class="btn btn-secondary">
+                                        <a href="<?= BASE_URL ?>adminWilayah/kabupaten" class="btn btn-secondary">
                                             <i class="fas fa-arrow-left"></i> Kembali
                                         </a>
                                     </div>

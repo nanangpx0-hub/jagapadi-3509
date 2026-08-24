@@ -97,6 +97,20 @@ class Controller {
     protected function requireStateChangingRequest($methods = ['POST', 'PUT', 'DELETE', 'PATCH']): void {
         $this->requireRequestMethod($methods);
         $this->requireCsrfToken();
+
+        // Double-submit guard: token sekali-pakai (opsional agar kompatibel
+        // dengan form lama). Duplikat ditolak sebelum menyentuh model.
+        if (!Security::consumeIdempotencyToken()) {
+            $_SESSION['error'] = 'Permintaan ini sudah diproses sebelumnya. Data tidak dikirim dua kali.';
+            $backTo = 'dashboard';
+            $referer = $_SERVER['HTTP_REFERER'] ?? '';
+            if ($referer !== '' && stripos($referer, BASE_URL) === 0) {
+                $path = substr($referer, strlen(BASE_URL));
+                $path = strtok($path, '?');
+                if (is_string($path) && $path !== '') { $backTo = rtrim($path, '/'); }
+            }
+            $this->redirect($backTo);
+        }
     }
 
     protected function expectsJson(): bool {
@@ -164,11 +178,37 @@ class Controller {
         if (!class_exists('CacheManager')) {
             return;
         }
+        // Standardisasi: ringkasan dashboard selalu memakai key
+        // dash_summary_{role}_{userId} — pastikan prefix ini ikut dibersihkan
+        // dari SEMUA titik invalidasi tanpa kecuali.
+        if (!in_array('dash_summary_', $prefixes, true)) {
+            $prefixes[] = 'dash_summary_';
+        }
+        if (!in_array('dashboard:', $prefixes, true)) {
+            $prefixes[] = 'dashboard:';
+        }
         $cache = CacheManager::getInstance();
         if ($cache->isAvailable()) {
             foreach ($prefixes as $prefix) {
                 $cache->clearPrefix($prefix);
             }
         }
+    }
+
+    /**
+     * Ubah path foto tersimpan menjadi URL absolut yang dapat dirender.
+     */
+    protected function photoUrl(?string $path): string {
+        if ($path === null || $path === '') {
+            return '';
+        }
+        if (stripos($path, 'http://') === 0 || stripos($path, 'https://') === 0) {
+            return $path;
+        }
+        $path = ltrim(str_replace('\\', '/', $path), '/');
+        if (strpos($path, 'public/') !== 0) {
+            $path = 'public/' . $path;
+        }
+        return BASE_URL . $path;
     }
 }

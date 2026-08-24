@@ -26,7 +26,7 @@ ini_set('display_errors', 1);
 define('ROOT_PATH', dirname(__DIR__));
 
 // Load configuration
-require_once ROOT_PATH . '/config/database.php';
+require_once __DIR__ . '/lib/db_bootstrap.php';
 
 /**
  * Password Update Class for Admin Users
@@ -36,7 +36,7 @@ class AdminPasswordUpdater {
     private $logFile;
     private $backupFile;
     private $startTime;
-    private $newPassword = 'N4n4n9J3mb3r350917*';
+    private $newPassword;
     private $bcryptCost = 12; // Higher cost for admin accounts
     private $results = [];
     
@@ -46,6 +46,8 @@ class AdminPasswordUpdater {
         $this->logFile = ROOT_PATH . '/logs/update_admin_password_' . $timestamp . '.log';
         $this->backupFile = ROOT_PATH . '/logs/backup_admin_passwords_' . $timestamp . '.json';
         $this->ensureLogDirectory();
+
+        $this->newPassword = jp_env_required('ADMIN_PASSWORD');
     }
     
     /**

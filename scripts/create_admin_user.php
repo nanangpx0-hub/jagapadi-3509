@@ -26,7 +26,7 @@ ini_set('display_errors', 1);
 define('ROOT_PATH', dirname(__DIR__));
 
 // Load configuration
-require_once ROOT_PATH . '/config/database.php';
+require_once __DIR__ . '/lib/db_bootstrap.php';
 
 /**
  * Admin User Creator Class
@@ -38,22 +38,24 @@ class AdminUserCreator {
     private $bcryptCost = 12; // Higher cost for admin accounts
     private $result = null;
     
-    // User data to create
-    private $userData = [
-        'username' => 'nanangpx@gmail.com',
-        'email' => 'nanangpx@gmail.com',
-        'password' => 'N4n4n9J3mb3r350917',
-        'role' => 'admin',
-        'nama_lengkap' => 'Nanang Pamungkas',
-        'phone' => '+6281232303096',
-        'aktif' => 1
-    ];
+    // User data to create — WAJIB dari environment, jangan hardcode kredensial.
+    private $userData = [];
     
     public function __construct() {
         $this->startTime = microtime(true);
         $timestamp = date('Y-m-d_H-i-s');
         $this->logFile = ROOT_PATH . '/logs/create_admin_user_' . $timestamp . '.log';
         $this->ensureLogDirectory();
+
+        $this->userData = [
+            'username' => jp_env_required('ADMIN_USERNAME'),
+            'email' => jp_env_required('ADMIN_EMAIL'),
+            'password' => jp_env_required('ADMIN_PASSWORD'),
+            'role' => jp_env_optional('ADMIN_ROLE', 'admin'),
+            'nama_lengkap' => jp_env_optional('ADMIN_NAME', jp_env_required('ADMIN_USERNAME')),
+            'phone' => jp_env_optional('ADMIN_PHONE'),
+            'aktif' => 1,
+        ];
     }
     
     /**
@@ -421,11 +423,11 @@ try {
     
     // Display user information
     echo "📋 User Information:\n";
-    echo "   Username: nanangpx@gmail.com\n";
-    echo "   Email: nanangpx@gmail.com\n";
-    echo "   Role: admin\n";
-    echo "   Nama Lengkap: Nanang Pamungkas\n";
-    echo "   Phone: +6281232303096\n";
+    echo "   Username: {$this->userData['username']}\n";
+    echo "   Email: {$this->userData['email']}\n";
+    echo "   Role: {$this->userData['role']}\n";
+    echo "   Nama Lengkap: {$this->userData['nama_lengkap']}\n";
+    echo "   Phone: " . ($this->userData['phone'] !== '' ? $this->userData['phone'] : '-') . "\n";
     echo "   Password: ******** (akan di-hash dengan bcrypt)\n\n";
     
     // Confirmation prompt

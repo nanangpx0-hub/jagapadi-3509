@@ -137,7 +137,7 @@ require_once ROOT_PATH . '/app/core/Security.php';
     
     <div class="app-description">
         <p>Sistem Pelaporan Fenomena Pertanian<br>BPS Kabupaten Jember</p>
-        <p><small>&copy; 2025 Nanang Pamungkas</small></p>
+        <p><small>&copy; 2026 Tim PLS - BPS Kabupaten Jember</small></p>
     </div>
 </div>
 

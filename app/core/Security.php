@@ -72,6 +72,46 @@ class Security {
     }
 
     /**
+     * ===================== DOUBLE-SUBMIT GUARD =====================
+     * Token sekali-pakai per form. Disimpan di session (maks 25) dan
+     * dikonsumsi saat POST diproses; pengiriman ulang token yang sama
+     * ditolak sehingga double-submit tidak menghasilkan data ganda.
+     */
+
+    public static function getIdempotencyField(): string {
+        if (!isset($_SESSION['idem_tokens']) || !is_array($_SESSION['idem_tokens'])) {
+            $_SESSION['idem_tokens'] = [];
+        }
+        $token = bin2hex(random_bytes(16));
+        $_SESSION['idem_tokens'][] = $token;
+        while (count($_SESSION['idem_tokens']) > 25) {
+            array_shift($_SESSION['idem_tokens']);
+        }
+        return '<input type="hidden" name="idempotency_token" value="'
+            . htmlspecialchars($token, ENT_QUOTES, 'UTF-8') . '">';
+    }
+
+    /**
+     * Konsumsi token idempotensi dari request.
+     * true  = valid / tidak ada token (kompatibel mundur)
+     * false = token sudah pernah dipakai (double submit) atau tak dikenal
+     */
+    public static function consumeIdempotencyToken(): bool {
+        $token = $_POST['idempotency_token'] ?? null;
+        if (!is_string($token) || $token === '') {
+            return true;
+        }
+        $list = $_SESSION['idem_tokens'] ?? [];
+        $index = array_search($token, $list, true);
+        if ($index === false) {
+            return false;
+        }
+        unset($list[$index]);
+        $_SESSION['idem_tokens'] = array_values($list);
+        return true;
+    }
+
+    /**
      * Extract CSRF token from standard web form, AJAX header, or JSON body.
      */
     public static function getRequestCsrfToken(): string {

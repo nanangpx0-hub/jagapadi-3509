@@ -698,6 +698,7 @@ class IrigasiController extends BaseApiController {
                     SUM(CASE WHEN status = 'Submitted' THEN 1 ELSE 0 END) as pending,
                     SUM(CASE WHEN kondisi_fisik = 'Rusak' THEN 1 ELSE 0 END) as needs_repair
                 FROM laporan_irigasi
+                WHERE deleted_at IS NULL
             ");
             $stats = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -705,6 +706,7 @@ class IrigasiController extends BaseApiController {
             $stmt = $db->query("
                 SELECT status, COUNT(*) as count
                 FROM laporan_irigasi
+                WHERE deleted_at IS NULL
                 GROUP BY status
             ");
             $statusDist = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -714,6 +716,7 @@ class IrigasiController extends BaseApiController {
                 SELECT li.id, li.nama_saluran, li.status, li.tanggal, u.nama_lengkap
                 FROM laporan_irigasi li
                 LEFT JOIN users u ON li.user_id = u.id
+                WHERE li.deleted_at IS NULL
                 ORDER BY li.created_at DESC
                 LIMIT 5
             ");

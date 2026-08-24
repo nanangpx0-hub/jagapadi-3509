@@ -180,9 +180,34 @@
     align-items: center;
     justify-content: center;
 }
+
+/* Role petugas: tampilan statis tanpa efek timbul-tenggelam. */
+.petugas-no-motion .card,
+.petugas-no-motion .card:hover,
+.petugas-no-motion .btn,
+.petugas-no-motion .btn:hover,
+.petugas-no-motion .btn:focus,
+.petugas-no-motion .btn:active,
+.petugas-no-motion .form-control,
+.petugas-no-motion .custom-select,
+.petugas-no-motion .alert,
+.petugas-no-motion .badge,
+.petugas-no-motion .skeleton-loading,
+.petugas-no-motion #autoSaveIndicator {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+}
+
+.petugas-no-motion .card:hover,
+.petugas-no-motion .btn:hover,
+.petugas-no-motion .btn:focus,
+.petugas-no-motion .btn:active {
+    box-shadow: none !important;
+}
 </style>
 
-<div class="row">
+<div class="row <?= (($_SESSION['role'] ?? '') === 'petugas') ? 'petugas-no-motion' : '' ?>">
     <div class="col-md-10 offset-md-1">
         <div class="card">
             <div class="card-header">
@@ -198,7 +223,8 @@
             </div>
             <form action="<?= BASE_URL ?>laporan-lainnya/store" method="POST" enctype="multipart/form-data" id="formCreateLaporan"
                   data-draft-user="<?= (int) ($_SESSION['user_id'] ?? 0) ?>" data-draft-module="laporan-lainnya">
-                <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
+                <?= Security::getCsrfField() ?>
+                <?= Security::getIdempotencyField() ?>
                 <!-- Honeypot anti-bot field (hidden from users, bots will fill this) -->
                 <div style="position: absolute; left: -9999px; top: -9999px;" aria-hidden="true">
                     <input type="text" name="website_hp" tabindex="-1" autocomplete="off" value="">
@@ -243,7 +269,12 @@
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label>Tanggal Kejadian <span class="text-danger">*</span></label>
-                                <input type="date" name="tanggal_kejadian" class="form-control" value="<?= date('Y-m-d') ?>" required>
+                                <input type="date"
+                                       name="tanggal_kejadian"
+                                       class="form-control"
+                                       value="<?= htmlspecialchars((string) ($tanggalHariIni ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                       max="<?= htmlspecialchars((string) ($tanggalHariIni ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                       required>
                             </div>
                         </div>
                     </div>
@@ -281,7 +312,21 @@
                         <div class="col-md-4">
                             <div class="form-group">
                                 <label>Alamat Lengkap <span class="text-danger">*</span></label>
-                                <input type="text" name="alamat_lengkap" class="form-control" placeholder="Contoh: Blok Kedawung No.12 RT 02 RW 03" required>
+                                <?php
+                                $alamatMinLength = match ($_SESSION['role'] ?? '') {
+                                    'petugas' => 10,
+                                    'operator' => 5,
+                                    default => 1,
+                                };
+                                ?>
+                                <input type="text"
+                                       name="alamat_lengkap"
+                                       class="form-control"
+                                       placeholder="Contoh: Blok Kedawung No.12 RT 02 RW 03"
+                                       minlength="<?= $alamatMinLength ?>"
+                                       data-validation-label="Alamat Lengkap"
+                                       required>
+                                <small class="text-muted">Minimal <?= $alamatMinLength ?> karakter.</small>
                             </div>
                         </div>
                     </div>
@@ -578,10 +623,16 @@ document.addEventListener('DOMContentLoaded', function() {
     if (jenisSelect) {
         jenisSelect.addEventListener('change', renderDynamicFields);
     }
+    const alamatInput = document.querySelector('[name="alamat_lengkap"]');
+    if (alamatInput) {
+        alamatInput.addEventListener('input', function() {
+            this.setCustomValidity('');
+        });
+    }
 });
 
 // Form validation and submission
-document.querySelector('form').addEventListener('submit', function(e) {
+document.getElementById('formCreateLaporan').addEventListener('submit', function(e) {
     // Note: File size validation removed - server will handle compression automatically
     
     // Validate required fields
@@ -593,6 +644,17 @@ document.querySelector('form').addEventListener('submit', function(e) {
         { name: 'desa_id', label: 'Desa' },
         { name: 'alamat_lengkap', label: 'Alamat Lengkap' }
     ];
+
+    const alamatInput = this.querySelector('[name="alamat_lengkap"]');
+    const alamatMinimum = Number(alamatInput ? alamatInput.minLength : 0);
+    if (alamatInput && alamatInput.value.trim().length < alamatMinimum) {
+        e.preventDefault();
+        alamatInput.setCustomValidity(`Alamat lengkap wajib diisi minimal ${alamatMinimum} karakter.`);
+        alamatInput.reportValidity();
+        alamatInput.focus();
+        return false;
+    }
+    if (alamatInput) alamatInput.setCustomValidity('');
     
     for (let field of requiredFields) {
         const input = document.querySelector(`[name="${field.name}"]`);
@@ -2057,6 +2119,6 @@ scheduleDefaultKabupatenJemberEnforcement();
 </script>
 
 <!-- Phase 3: Draft Auto-Save and Offline Mode -->
-<script src="<?= BASE_URL ?>public/js/draft-autosave.js?v=2.0.0"></script>
+<script src="<?= BASE_URL ?>public/js/draft-autosave.js?v=2.1.0"></script>
 <script src="<?= BASE_URL ?>public/js/offline-laporan.js"></script>
 

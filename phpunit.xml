@@ -19,9 +19,21 @@
             <file>tests/Unit/SidebarStateTest.php</file>
       <file>tests/Unit/DraftAutosaveIsolationTest.php</file>
       <file>tests/Unit/DashboardWeatherAlertsTest.php</file>
+      <file>tests/Unit/MasterOptServiceValidationTest.php</file>
+      <file>tests/Unit/UsulanOptServicePayloadTest.php</file>
+      <file>tests/Unit/UsulanOptMenuContractTest.php</file>
+      <file>tests/Unit/UsulanOptExcelServiceTest.php</file>
+      <file>tests/Unit/UsulanOptExcelContractTest.php</file>
+      <file>tests/Unit/FeedbackAttachmentUploadTest.php</file>
+      <file>tests/Unit/BulkSelectionContractTest.php</file>
+      <file>tests/Unit/LaporanHamaEnhancementContractTest.php</file>
+      <file>tests/Unit/OptBulkDeleteContractTest.php</file>
+      <file>tests/Unit/OtherReportImportServiceTest.php</file>
+
         </testsuite>
         <testsuite name="Integration">
             <file>tests/Integration/DataStoryServiceDatabaseTest.php</file>
+            <file>tests/Integration/AdminWilayahUsulanOptContractTest.php</file>
             <file>tests/Integration/BpsDataSourceDatabaseTest.php</file>
             <file>tests/Integration/BpsMonthlyHarvestPaginationDatabaseTest.php</file>
             <file>tests/Integration/HargaKomoditasDatabaseTest.php</file>
@@ -29,8 +41,13 @@
             <file>tests/Integration/DashboardReportIntegrityDatabaseTest.php</file>
             <file>tests/Integration/LaporanHamaArchiveDatabaseTest.php</file>
             <file>tests/Integration/LaporanHamaFilterDatabaseTest.php</file>
+            <file>tests/Integration/LaporanLainnyaStoreDatabaseTest.php</file>
 <file>tests/Integration/PetugasNavigationAndSummaryTest.php</file>
             <file>tests/Integration/FeedbackSecurityDatabaseTest.php</file>
+            <file>tests/Integration/UsulanOptReviewDatabaseTest.php</file>
+            <file>tests/Integration/UsulanOptWorkflowDatabaseTest.php</file>
+            <file>tests/Integration/UsulanOptBulkDeleteDatabaseTest.php</file>
+            <file>tests/Integration/OtherReportImportDatabaseTest.php</file>
         </testsuite>
     </testsuites>
     <php>

@@ -1,9 +1,13 @@
 <?php
+require_once ROOT_PATH . '/app/services/MasterOptService.php';
+
 class OptController extends Controller {
     private $optModel;
+    private $masterService;
     
     public function __construct() {
         $this->optModel = $this->model('MasterOpt');
+        $this->masterService = new MasterOptService();
     }
     
     /**
@@ -42,6 +46,7 @@ class OptController extends Controller {
         
         $data = [
             'title' => 'Master Data OPT',
+            'read_only' => ($_SESSION['role'] ?? '') === 'petugas',
             'data_opt' => $result['data'],
             'pagination' => [
                 'total' => $result['total'],
@@ -78,52 +83,25 @@ class OptController extends Controller {
             }
             
             // Collect form data with new fields
-            $postData = [
-                'kode_opt' => trim($_POST['kode_opt'] ?? ''),
-                'nama_opt' => trim($_POST['nama_opt'] ?? ''),
-                'nama_ilmiah' => trim($_POST['nama_ilmiah'] ?? ''),
-                'nama_lokal' => trim($_POST['nama_lokal'] ?? ''),
-                'jenis' => strtolower(trim((string) ($_POST['jenis'] ?? ''))),
-                'kingdom' => trim($_POST['kingdom'] ?? ''),
-                'filum' => trim($_POST['filum'] ?? ''),
-                'kelas' => trim($_POST['kelas'] ?? ''),
-                'ordo' => trim($_POST['ordo'] ?? ''),
-                'famili' => trim($_POST['famili'] ?? ''),
-                'genus' => trim($_POST['genus'] ?? ''),
-                'status_karantina' => $_POST['status_karantina'] ?? 'Tidak',
-                'tingkat_bahaya' => $_POST['tingkat_bahaya'] ?? 'Sedang',
-                'deskripsi' => trim($_POST['deskripsi'] ?? ''),
-                'etl_acuan' => isset($_POST['etl_acuan']) && $_POST['etl_acuan'] !== '' ? (float) $_POST['etl_acuan'] : null,
-                'rekomendasi' => trim($_POST['rekomendasi'] ?? ''),
-                'referensi' => trim($_POST['referensi'] ?? ''),
-                'foto_url' => $_POST['foto_url'] ?? null
-            ];
-            
-            // Remove empty values for optional fields
-            foreach (['nama_ilmiah', 'nama_lokal', 'filum', 'kelas', 'ordo', 'famili', 'genus', 'referensi'] as $field) {
-                if (empty($postData[$field])) {
-                    $postData[$field] = null;
-                }
+            $postData = $this->masterService->normalize($_POST);
+            if (!array_key_exists('aktif', $_POST)) {
+                unset($postData['aktif']);
             }
             
-            // Validate required fields
-            $errors = [];
-            if (empty($postData['kode_opt'])) {
-                $errors[] = 'Kode OPT wajib diisi';
-            }
-            if (empty($postData['nama_opt'])) {
-                $errors[] = 'Nama OPT wajib diisi';
-            }
-            if (empty($postData['jenis'])) {
-                $errors[] = 'Jenis OPT wajib dipilih';
-            } elseif (!in_array($postData['jenis'], ['hama', 'penyakit', 'gulma'], true)) {
-                $errors[] = 'Jenis OPT tidak valid';
-            }
+            // Validate required fields via shared service
+            $errors = $this->masterService->validate($postData);
             
             if (!empty($errors)) {
                 $_SESSION['error'] = implode('<br>', $errors);
-                $_SESSION['form_data'] = $postData;
+                $_SESSION['form_data'] = $_POST;
                 error_log('OPT Create - Validation Error: ' . implode(', ', $errors));
+                $this->redirect('opt/create');
+                return;
+            }
+
+            if (!empty($this->masterService->findDuplicates($postData))) {
+                $_SESSION['error'] = 'Master OPT dengan kode atau nama serupa sudah ada. Periksa daftar OPT atau ubah data.';
+                $_SESSION['form_data'] = $_POST;
                 $this->redirect('opt/create');
                 return;
             }
@@ -133,7 +111,7 @@ class OptController extends Controller {
                 try {
                     require_once ROOT_PATH . '/app/helpers/OptPhotoUploader.php';
                     $uploader = new OptPhotoUploader();
-                    $result = $uploader->upload($_FILES['gambar']);
+                    $result = $uploader->upload($_FILES['gambar'], null, null, $postData['nama_opt'] ?? null);
                     
                     if ($result['success']) {
                         $postData['foto_url'] = $result['path'];
@@ -172,8 +150,8 @@ class OptController extends Controller {
                 $_SESSION['form_data'] = $postData;
                 $this->redirect('opt/create');
             } catch (Exception $e) {
-                error_log('OPT Create - Error: ' . $e->getMessage());
-                $_SESSION['error'] = 'Gagal menyimpan data: ' . $e->getMessage();
+                error_log('OPT Create - Error: ' . get_class($e));
+                $_SESSION['error'] = 'Gagal menyimpan data OPT. Periksa kembali nilai yang dimasukkan.';
                 $_SESSION['form_data'] = $postData;
                 $this->redirect('opt/create');
             }
@@ -209,35 +187,11 @@ class OptController extends Controller {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $this->validateCsrfToken();
             
-            $postData = [
-                'kode_opt' => trim($_POST['kode_opt'] ?? ''),
-                'nama_opt' => trim($_POST['nama_opt'] ?? ''),
-                'nama_ilmiah' => trim($_POST['nama_ilmiah'] ?? ''),
-                'nama_lokal' => trim($_POST['nama_lokal'] ?? ''),
-                'jenis' => strtolower(trim((string) ($_POST['jenis'] ?? ''))),
-                'kingdom' => trim($_POST['kingdom'] ?? ''),
-                'filum' => trim($_POST['filum'] ?? ''),
-                'kelas' => trim($_POST['kelas'] ?? ''),
-                'ordo' => trim($_POST['ordo'] ?? ''),
-                'famili' => trim($_POST['famili'] ?? ''),
-                'genus' => trim($_POST['genus'] ?? ''),
-                'status_karantina' => $_POST['status_karantina'] ?? 'Tidak',
-                'tingkat_bahaya' => $_POST['tingkat_bahaya'] ?? 'Sedang',
-                'deskripsi' => trim($_POST['deskripsi'] ?? ''),
-                'etl_acuan' => isset($_POST['etl_acuan']) && $_POST['etl_acuan'] !== '' ? (float) $_POST['etl_acuan'] : null,
-                'rekomendasi' => trim($_POST['rekomendasi'] ?? ''),
-                'referensi' => trim($_POST['referensi'] ?? '')
-            ];
-            
-            // Remove empty values for optional fields
-            foreach (['nama_ilmiah', 'nama_lokal', 'filum', 'kelas', 'ordo', 'famili', 'genus', 'referensi'] as $field) {
-                if (empty($postData[$field])) {
-                    $postData[$field] = null;
-                }
-            }
+            $postData = $this->masterService->normalize($_POST);
+            unset($postData['aktif']);
 
-            if (empty($postData['nama_opt']) || !in_array($postData['jenis'], ['hama', 'penyakit', 'gulma'], true)) {
-                $_SESSION['error'] = 'Nama dan jenis OPT harus valid';
+            if (!empty($this->masterService->findDuplicates($postData, (int) $id))) {
+                $_SESSION['error'] = 'Master OPT lain dengan kode atau nama serupa sudah ada.';
                 $this->redirect('opt/edit/' . $id);
                 return;
             }
@@ -259,7 +213,7 @@ class OptController extends Controller {
                 try {
                     require_once ROOT_PATH . '/app/helpers/OptPhotoUploader.php';
                     $uploader = new OptPhotoUploader();
-                    $result = $uploader->upload($_FILES['gambar'], $id, $oldPhotoPath);
+                    $result = $uploader->upload($_FILES['gambar'], $id, $oldPhotoPath, $postData['nama_opt'] ?? null);
                     
                     if ($result['success']) {
                         $postData['foto_url'] = $result['path'];
@@ -328,6 +282,136 @@ class OptController extends Controller {
         
         $this->redirect('opt');
     }
+
+    /**
+     * Delete the master OPT rows selected by an administrator.
+     */
+    public function bulkDelete(): void {
+        $this->checkRole(['admin']);
+        $this->requireStateChangingRequest(['POST']);
+
+        $rawIds = $_POST['ids'] ?? [];
+        if (!is_array($rawIds)) {
+            $rawIds = [];
+        }
+
+        $ids = array_values(array_unique(array_filter(
+            array_map('intval', $rawIds),
+            static fn (int $id): bool => $id > 0
+        )));
+
+        if ($ids === []) {
+            $_SESSION['error'] = 'Pilih minimal satu data OPT yang akan dihapus.';
+            $this->redirect('opt');
+            return;
+        }
+
+        $this->deleteOptCollection($ids);
+        $this->redirect('opt');
+    }
+
+    /**
+     * Delete every unused master OPT row. Rows referenced by reports are kept.
+     */
+    public function deleteAll(): void {
+        $this->checkRole(['admin']);
+        $this->requireStateChangingRequest(['POST']);
+
+        $ids = $this->optModel->getAllIds();
+        if ($ids === []) {
+            $_SESSION['error'] = 'Tidak ada data OPT yang dapat dihapus.';
+            $this->redirect('opt');
+            return;
+        }
+
+        $this->deleteOptCollection($ids);
+        $this->redirect('opt');
+    }
+
+    /** Isi foto master yang masih kosong dari Wikimedia Commons. */
+    public function autoFillPhotos(): void {
+        $this->checkRole(['admin']);
+        $this->requireStateChangingRequest(['POST']);
+        $this->validateCsrfToken();
+
+        require_once ROOT_PATH . '/app/services/OptAutoPhotoService.php';
+        try {
+            $service = new OptAutoPhotoService(Database::getInstance()->getConnection());
+            $cursor = max(0, (int) ($_SESSION['opt_auto_photo_cursor'] ?? 0));
+            $result = $service->fillMissing(15, $cursor);
+            if ($result['processed'] === 0 && $cursor > 0) {
+                unset($_SESSION['opt_auto_photo_cursor']);
+                $result = $service->fillMissing(15, 0);
+            }
+            $_SESSION['opt_auto_photo_cursor'] = $result['last_id'];
+            $message = sprintf(
+                '%d foto OPT berhasil ditambahkan otomatis. %d data gagal atau belum menemukan gambar yang cocok.',
+                $result['updated'],
+                $result['failed']
+            );
+            $_SESSION[$result['updated'] > 0 ? 'success' : 'info'] = $message;
+        } catch (Throwable $e) {
+            error_log('OPT automatic photo fill failed');
+            $_SESSION['error'] = 'Pengisian foto otomatis gagal. Silakan coba kembali.';
+        }
+
+        $this->redirect('opt');
+    }
+
+    /**
+     * Apply the same dependency and photo cleanup rules used by single delete.
+     */
+    private function deleteOptCollection(array $ids): void {
+        $deleted = 0;
+        $used = 0;
+        $missingOrFailed = 0;
+
+        require_once ROOT_PATH . '/app/helpers/OptPhotoUploader.php';
+        $uploader = new OptPhotoUploader();
+
+        foreach ($ids as $id) {
+            try {
+                $opt = $this->optModel->find($id);
+                if (!$opt) {
+                    $missingOrFailed++;
+                    continue;
+                }
+
+                if ($this->optModel->isUsedInReports($id)) {
+                    $used++;
+                    continue;
+                }
+
+                $photoPath = $opt['foto_url'] ?? $opt['gambar'] ?? null;
+                if (!$this->optModel->delete($id)) {
+                    $missingOrFailed++;
+                    continue;
+                }
+
+                $deleted++;
+                if (!empty($photoPath)) {
+                    $uploader->deletePhoto($photoPath);
+                }
+            } catch (Throwable $e) {
+                $missingOrFailed++;
+                error_log('OPT bulk delete error for ID ' . $id . ': ' . $e->getMessage());
+            }
+        }
+
+        $message = $deleted . ' data OPT berhasil dihapus.';
+        if ($used > 0) {
+            $message .= ' ' . $used . ' data dilewati karena sudah digunakan dalam laporan.';
+        }
+        if ($missingOrFailed > 0) {
+            $message .= ' ' . $missingOrFailed . ' data tidak ditemukan atau gagal dihapus.';
+        }
+
+        if ($deleted > 0) {
+            $_SESSION['success'] = $message;
+        } else {
+            $_SESSION['error'] = $message;
+        }
+    }
     
     /**
      * View OPT detail
@@ -352,7 +436,7 @@ class OptController extends Controller {
      * Export to Excel
      */
     public function exportExcel() {
-        $this->checkRole(['admin', 'operator']);
+        $this->checkRole(['admin', 'operator', 'petugas']);
         
         // Get filter parameters
         $search = trim($_GET['search'] ?? '');
@@ -445,7 +529,7 @@ class OptController extends Controller {
      * Export to PDF (HTML for print)
      */
     public function exportPdf() {
-        $this->checkRole(['admin', 'operator']);
+        $this->checkRole(['admin', 'operator', 'petugas']);
         
         // Get filter parameters
         $search = trim($_GET['search'] ?? '');
@@ -653,9 +737,16 @@ class OptController extends Controller {
             
             $optId = isset($_POST['opt_id']) && is_numeric($_POST['opt_id']) ? (int)$_POST['opt_id'] : null;
             $oldPhotoPath = !empty($_POST['old_photo']) ? $_POST['old_photo'] : null;
-            
+            $label = null;
+            if (!empty($_POST['nama_opt'])) {
+                $label = (string) $_POST['nama_opt'];
+            } elseif ($optId !== null) {
+                $existing = $this->optModel->find($optId);
+                $label = $existing['nama_opt'] ?? null;
+            }
+
             $uploader = new OptPhotoUploader();
-            $result = $uploader->upload($_FILES['photo'], $optId, $oldPhotoPath);
+            $result = $uploader->upload($_FILES['photo'], $optId, $oldPhotoPath, $label);
             
             if ($result['success']) {
                 $pathForUrl = strpos($result['path'], 'public/') === 0 ? $result['path'] : 'public/' . $result['path'];
@@ -670,10 +761,10 @@ class OptController extends Controller {
             }
             
         } catch (Exception $e) {
-            error_log('OPT Photo Upload Error: ' . $e->getMessage());
+            error_log('OPT Photo Upload Error: ' . get_class($e));
             echo json_encode([
                 'success' => false,
-                'error' => 'Terjadi kesalahan saat mengupload: ' . $e->getMessage(),
+                'error' => 'Terjadi kesalahan saat mengupload foto.',
                 'code' => 'EXCEPTION'
             ]);
         }
@@ -758,8 +849,8 @@ class OptController extends Controller {
             });
             
         } catch (Exception $e) {
-            error_log('OPT Photos - Error scanning directory: ' . $e->getMessage());
-            $_SESSION['error'] = 'Gagal membaca daftar foto: ' . $e->getMessage();
+            error_log('OPT Photos - Error scanning directory: ' . get_class($e));
+            $_SESSION['error'] = 'Gagal membaca daftar foto.';
         }
         
         $data = [
@@ -821,10 +912,10 @@ class OptController extends Controller {
             }
             
         } catch (Exception $e) {
-            error_log('OPT Photo Delete Error: ' . $e->getMessage());
+            error_log('OPT Photo Delete Error: ' . get_class($e));
             echo json_encode([
                 'success' => false,
-                'error' => 'Terjadi kesalahan: ' . $e->getMessage(),
+                'error' => 'Terjadi kesalahan saat menghapus foto.',
                 'code' => 'EXCEPTION'
             ]);
         }

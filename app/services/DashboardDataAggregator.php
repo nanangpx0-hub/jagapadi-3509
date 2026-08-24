@@ -729,7 +729,7 @@ class DashboardDataAggregator {
      *               bila include_draft=true, selain itu Submitted + Diverifikasi.
      */
     private function buildHamaScopeFilter(?int $userId, ?int $kecamatanId, bool $includeDraft): array {
-        $sql = '';
+        $sql = ' AND lh.deleted_at IS NULL';
         $params = [];
 
         if ($kecamatanId !== null) {
@@ -953,6 +953,7 @@ class DashboardDataAggregator {
                 FROM laporan_hama lh
                 LEFT JOIN master_opt mo ON lh.master_opt_id = mo.id
                 WHERE lh.tanggal >= :year_start AND lh.tanggal < :year_end
+                AND lh.deleted_at IS NULL
                 AND lh.latitude IS NOT NULL
                 AND lh.longitude IS NOT NULL";
 
@@ -1221,7 +1222,7 @@ class DashboardDataAggregator {
         $years = [];
         
         // From laporan_hama
-        $sql = "SELECT DISTINCT YEAR(tanggal) as year FROM laporan_hama ORDER BY year DESC";
+        $sql = "SELECT DISTINCT YEAR(tanggal) as year FROM laporan_hama WHERE deleted_at IS NULL ORDER BY year DESC";
         $stmt = $this->db->prepare($sql);
         $stmt->execute();
         $hamaYears = array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'year');
@@ -1288,10 +1289,10 @@ class DashboardDataAggregator {
         $whereStatus = $includeDraft ? "" : " AND status <> 'draft'";
         $sql = "SELECT
                     COUNT(*) as total_laporan,
-                    (SELECT COUNT(*) FROM laporan_lainnya WHERE YEAR(tanggal_kejadian) = ? AND status = 'draft') as draf,
+                    (SELECT COUNT(*) FROM laporan_lainnya WHERE YEAR(tanggal_kejadian) = ? AND status = 'draft' AND deleted_at IS NULL) as draf,
                     SUM(CASE WHEN status = 'verified' THEN 1 ELSE 0 END) as diverifikasi
                 FROM laporan_lainnya
-                WHERE YEAR(tanggal_kejadian) = ?" . $whereStatus;
+                WHERE YEAR(tanggal_kejadian) = ? AND deleted_at IS NULL" . $whereStatus;
 
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$year, $year]);
@@ -1312,6 +1313,7 @@ class DashboardDataAggregator {
                 FROM laporan_lainnya ll
                 LEFT JOIN master_jenis_laporan mjl ON ll.jenis_id = mjl.id
                 WHERE YEAR(ll.tanggal_kejadian) = :year
+                  AND ll.deleted_at IS NULL
                   AND ll.status <> 'draft'
                 GROUP BY mjl.id, mjl.nama, mjl.kode
                 ORDER BY total_laporan DESC
@@ -1335,6 +1337,7 @@ class DashboardDataAggregator {
                     SUM(CASE WHEN status = 'verified' THEN 1 ELSE 0 END) as diverifikasi
                 FROM laporan_lainnya
                 WHERE YEAR(tanggal_kejadian) = :year
+                  AND deleted_at IS NULL
                   AND status <> 'draft'
                 GROUP BY MONTH(tanggal_kejadian)
                 ORDER BY bulan";

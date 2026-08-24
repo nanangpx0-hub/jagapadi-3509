@@ -50,6 +50,12 @@ class DashboardController extends Controller {
     }
 
     private function dashboardCacheKey(string $section, ?int $userId = null, array $params = []): string {
+        // Standardisasi kontrak ringkasan dashboard: dash_summary_{role}_{userId}
+        if ($section === 'stats') {
+            $role = $_SESSION['role'] ?? 'guest';
+            return "dash_summary_{$role}_" . ($userId ?? 'all');
+        }
+
         $scope = $userId === null ? 'all' : 'user_' . $userId;
         $paramHash = empty($params) ? 'default' : sha1(json_encode($params));
 

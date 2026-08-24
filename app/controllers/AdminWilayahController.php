@@ -589,69 +589,64 @@ class AdminWilayahController extends Controller {
         $kecamatan = $this->kecModel->findByIdWithKabupaten($id);
         if (!$kecamatan) {
             $_SESSION['error'] = 'Kecamatan tidak ditemukan';
-            $this->redirect('admin/wilayah/kecamatan');
+            $this->redirect('adminWilayah/kecamatan');
         }
         
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            // Policy edit authoritative sama dengan modal rename:
+            // hanya nama_kecamatan yang boleh berubah.
             $this->validateCSRF();
-            
+
             $data = [
-                'kabupaten_id' => $_POST['kabupaten_id'] ?? '',
                 'nama_kecamatan' => trim($_POST['nama_kecamatan'] ?? ''),
-                'kode_kecamatan' => trim($_POST['kode_kecamatan'] ?? ''),
-                'updated_by' => $_SESSION['user_id']
+                'kode_kecamatan' => $kecamatan['kode'],
+                'kabupaten_id' => (int) $kecamatan['kabupaten_id'],
             ];
-            
-            // Validation
+
             $errors = [];
-            if (empty($data['kabupaten_id'])) {
-                $errors[] = 'Kabupaten wajib dipilih';
-            } elseif (!$this->kabModel->findById($data['kabupaten_id'])) {
-                $errors[] = 'Kabupaten tidak valid';
-            }
-            if (empty($data['nama_kecamatan'])) {
+            if ($data['nama_kecamatan'] === '') {
                 $errors[] = 'Nama kecamatan wajib diisi';
+            } elseif (mb_strlen($data['nama_kecamatan']) > 100) {
+                $errors[] = 'Nama kecamatan maksimal 100 karakter';
+            } elseif ($this->kecModel->checkNameExists(
+                $kecamatan['kabupaten_id'],
+                $data['nama_kecamatan'],
+                (int) $id
+            )) {
+                $errors[] = 'Nama kecamatan sudah digunakan dalam kabupaten ini';
             }
-            if (empty($data['kode_kecamatan'])) {
-                $errors[] = 'Kode wilayah wajib diisi';
-            } elseif (!preg_match('/^[0-9]{6,7}$/', $data['kode_kecamatan'])) {
-                $errors[] = 'Format kode kecamatan harus 6–7 digit angka';
-            } elseif ($data['kode_kecamatan'] != $kecamatan['kode'] && 
-                      $this->kecModel->checkKodeExists($data['kode_kecamatan'])) {
-                $errors[] = 'Kode wilayah sudah digunakan';
-            }
-            
+
             if (!empty($errors)) {
-                error_log('Edit kecamatan validation error: ' . implode('; ', $errors));
                 $_SESSION['error'] = implode(', ', $errors);
-                $_SESSION['old'] = $data;
-                $this->redirect('admin/wilayah/kecamatan/edit/' . $id);
+                $_SESSION['old'] = ['nama_kecamatan' => $data['nama_kecamatan']];
+                $this->redirect('adminWilayah/kecamatan_edit/' . $id);
             }
-            
+
             try {
-                $this->kecModel->update($id, $data);
+                $ok = $this->kecModel->updateNameOnly((int) $id, $data['nama_kecamatan'], (int) $_SESSION['user_id']);
             } catch (Exception $e) {
-                error_log('Edit kecamatan update failed: ' . $e->getMessage());
-                $_SESSION['error'] = 'Gagal memperbarui kecamatan: ' . $e->getMessage();
-                $_SESSION['old'] = $data;
-                $this->redirect('admin/wilayah/kecamatan/edit/' . $id);
+                error_log('Edit kecamatan update failed');
+                $ok = false;
             }
-            // Clear caches for both old and new kabupaten
-            $this->kecModel->clearCacheByKabupaten($kecamatan['kabupaten_id']);
-            $this->kecModel->clearCacheByKabupaten($data['kabupaten_id']);
-            
-            // Audit log
+            if (!$ok) {
+                $_SESSION['error'] = 'Gagal memperbarui kecamatan.';
+                $_SESSION['old'] = ['nama_kecamatan' => $data['nama_kecamatan']];
+                $this->redirect('adminWilayah/kecamatan_edit/' . $id);
+            }
+
+            $this->kecModel->clearCacheByKabupaten((int) $kecamatan['kabupaten_id']);
+
             $this->auditModel->log([
                 'user_id' => $_SESSION['user_id'],
                 'table_name' => 'master_kecamatan',
                 'record_id' => $id,
                 'action' => 'UPDATE',
-                'old_values' => json_encode($kecamatan),
-                'new_values' => json_encode($data)
+                'old_values' => json_encode(['nama_kecamatan' => $kecamatan['nama_kecamatan']]),
+                'new_values' => json_encode(['nama_kecamatan' => $data['nama_kecamatan']])
             ]);
-            
+
             $_SESSION['success'] = 'Kecamatan berhasil diperbarui';
-            $this->redirect('admin/wilayah/kecamatan');
+            $this->redirect('adminWilayah/kecamatan');
         }
         
         $data = [
@@ -771,69 +766,91 @@ class AdminWilayahController extends Controller {
         $this->checkRole(['admin']);
         $this->validateCSRF();
         $this->setSecurityHeaders();
-        header('Content-Type: application/json');
+        
+        $isAjax = stripos($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '', 'xmlhttprequest') !== false;
+        if (!$isAjax) {
+            header('Content-Type: text/html; charset=utf-8');
+        } else {
+            header('Content-Type: application/json');
+        }
+        
+        $fail = function (int $status, string $message) use ($id, $isAjax) {
+            http_response_code($status);
+            if ($isAjax) {
+                echo json_encode(['success' => false, 'message' => $message]);
+                exit;
+            }
+            $_SESSION['error'] = $message;
+            $this->redirect('adminWilayah/kecamatan_edit/' . $id);
+        };
         
         $kecamatan = $this->kecModel->findById($id);
         if (!$kecamatan) {
-            http_response_code(404);
-            echo json_encode(['success' => false, 'message' => 'Kecamatan tidak ditemukan']);
-            exit;
+            if ($isAjax) { http_response_code(404); }
+            $fail($isAjax ? 404 : 400, 'Kecamatan tidak ditemukan');
         }
         
-        // Get JSON data
+        // Terima JSON (modal AJAX) maupun form POST (halaman edit).
         $input = json_decode(file_get_contents('php://input'), true);
         if (!$input) {
-            // Fallback to POST data
             $input = $_POST;
         }
         
+        // Policy edit authoritative: hanya nama. Kode BPS & kabupaten immutable.
         $data = [
-            'nama_kecamatan' => trim($input['nama_kecamatan'] ?? ''),
+            'nama_kecamatan' => trim((string) ($input['nama_kecamatan'] ?? '')),
             'kode_kecamatan' => $kecamatan['kode'],
-            'kabupaten_id' => (int)$kecamatan['kabupaten_id'],
-            'updated_by' => $_SESSION['user_id']
+            'kabupaten_id' => (int) $kecamatan['kabupaten_id'],
         ];
         
-        // Validation
         $errors = [];
-        if (empty($data['nama_kecamatan'])) {
+        if ($data['nama_kecamatan'] === '') {
             $errors[] = 'Nama kecamatan wajib diisi';
+        } elseif (mb_strlen($data['nama_kecamatan']) > 100) {
+            $errors[] = 'Nama kecamatan maksimal 100 karakter';
         }
-
-        // Prevent changing kode_kecamatan or kabupaten_id via edit (must stay as existing)
-        if (isset($input['kode_kecamatan']) && trim($input['kode_kecamatan']) !== $kecamatan['kode']) {
+        if (isset($input['kode_kecamatan']) && trim((string) $input['kode_kecamatan']) !== $kecamatan['kode']) {
             $errors[] = 'Kode wilayah (BPS) tidak boleh diubah melalui edit ini';
         }
-        if (isset($input['kabupaten_id']) && (string)$input['kabupaten_id'] !== (string)$kecamatan['kabupaten_id']) {
+        if (isset($input['kabupaten_id']) && (string) (int) $input['kabupaten_id'] !== (string) $kecamatan['kabupaten_id']) {
             $errors[] = 'Kabupaten tidak boleh diubah melalui edit ini';
         }
-
-        // Enforce uniqueness of name within kabupaten
-        if ($this->kecModel->checkNameExists($kecamatan['kabupaten_id'], $data['nama_kecamatan'], $id)) {
+        if ($data['nama_kecamatan'] !== '' && $this->kecModel->checkNameExists($kecamatan['kabupaten_id'], $data['nama_kecamatan'], (int) $id)) {
             $errors[] = 'Nama kecamatan sudah digunakan dalam kabupaten ini';
         }
         
         if (!empty($errors)) {
-            http_response_code(400);
-            echo json_encode(['success' => false, 'message' => implode(', ', $errors)]);
-            exit;
+            $fail(400, implode(', ', $errors));
         }
         
-        // Update only name
-        $this->kecModel->updateNameOnly($id, $data['nama_kecamatan'], $_SESSION['user_id']);
+        try {
+            $ok = $this->kecModel->updateNameOnly((int) $id, $data['nama_kecamatan'], (int) $_SESSION['user_id']);
+        } catch (Exception $e) {
+            error_log('Kecamatan update failed');
+            $ok = false;
+        }
+        if (!$ok) {
+            $fail(500, 'Gagal memperbarui kecamatan.');
+        }
         
-        // Audit log
+        $this->kecModel->clearCacheByKabupaten((int) $kecamatan['kabupaten_id']);
+        
+        // Audit log old/new hanya field yang berubah.
         $this->auditModel->log([
             'user_id' => $_SESSION['user_id'],
             'table_name' => 'master_kecamatan',
             'record_id' => $id,
             'action' => 'UPDATE',
-            'old_values' => json_encode($kecamatan),
-            'new_values' => json_encode($data)
+            'old_values' => json_encode(['nama_kecamatan' => $kecamatan['nama_kecamatan']]),
+            'new_values' => json_encode(['nama_kecamatan' => $data['nama_kecamatan']])
         ]);
         
-        echo json_encode(['success' => true, 'message' => 'Kecamatan berhasil diperbarui']);
-        exit;
+        if ($isAjax) {
+            echo json_encode(['success' => true, 'message' => 'Kecamatan berhasil diperbarui']);
+            exit;
+        }
+        $_SESSION['success'] = 'Kecamatan berhasil diperbarui';
+        $this->redirect('adminWilayah/kecamatan');
     }
     
     // ==================== DESA CRUD ====================
@@ -1048,7 +1065,6 @@ class AdminWilayahController extends Controller {
                 'kecamatan_id' => $_POST['kecamatan_id'] ?? '',
                 'nama_desa' => trim($_POST['nama_desa'] ?? ''),
                 'kode_desa' => trim($_POST['kode_desa'] ?? ''),
-                'kode_pos' => trim($_POST['kode_pos'] ?? ''),
                 'created_by' => $_SESSION['user_id']
             ];
             
@@ -1105,57 +1121,13 @@ class AdminWilayahController extends Controller {
         $desa = $this->desaModel->findByIdWithHierarchy($id);
         if (!$desa) {
             $_SESSION['error'] = 'Desa tidak ditemukan';
-            $this->redirect('admin/wilayah/desa');
+            $this->redirect('adminWilayah/desa');
         }
         
+        // Mutasi hanya lewat POST /adminWilayah/desa_update/{id}.
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $this->validateCSRF();
-            
-            $data = [
-                'kecamatan_id' => $_POST['kecamatan_id'] ?? '',
-                'nama_desa' => trim($_POST['nama_desa'] ?? ''),
-                'kode_desa' => trim($_POST['kode_desa'] ?? ''),
-                'kode_pos' => trim($_POST['kode_pos'] ?? ''),
-                'updated_by' => $_SESSION['user_id']
-            ];
-            
-            // Validation
-            $errors = [];
-            if (empty($data['kecamatan_id'])) {
-                $errors[] = 'Kecamatan wajib dipilih';
-            } elseif (!$this->kecModel->findById($data['kecamatan_id'])) {
-                $errors[] = 'Kecamatan tidak valid';
-            }
-            if (empty($data['nama_desa'])) {
-                $errors[] = 'Nama desa wajib diisi';
-            }
-            if (empty($data['kode_desa'])) {
-                $errors[] = 'Kode desa wajib diisi';
-            } elseif ($data['kode_desa'] != $desa['kode'] && 
-                      $this->desaModel->checkKodeExists($data['kode_desa'])) {
-                $errors[] = 'Kode desa sudah digunakan';
-            }
-            
-            if (!empty($errors)) {
-                $_SESSION['error'] = implode(', ', $errors);
-                $_SESSION['old'] = $data;
-                $this->redirect('admin/wilayah/desa/edit/' . $id);
-            }
-            
-            $this->desaModel->update($id, $data);
-            
-            // Audit log
-            $this->auditModel->log([
-                'user_id' => $_SESSION['user_id'],
-                'table_name' => 'master_desa',
-                'record_id' => $id,
-                'action' => 'UPDATE',
-                'old_values' => json_encode($desa),
-                'new_values' => json_encode($data)
-            ]);
-            
-            $_SESSION['success'] = 'Desa berhasil diperbarui';
-            $this->redirect('admin/wilayah/desa');
+            $_SESSION['info'] = 'Gunakan tombol Simpan untuk memperbarui data.';
+            $this->redirect('adminWilayah/desa_edit/' . $id);
         }
         
         $data = [
@@ -1168,6 +1140,113 @@ class AdminWilayahController extends Controller {
         unset($_SESSION['old']);
         
         $this->view('admin/wilayah/desa/edit', $data);
+    }
+    
+    /**
+     * Update desa (POST). Kontrak canonical: /adminWilayah/desa_update/{id}.
+     * Validasi server penuh termasuk hierarki Kabupaten-Kecamatan-Desa,
+     * duplikasi kode/nama, dan format kode BPS 10 digit sesuai data aktif.
+     */
+    public function desa_update($id) {
+        $this->checkRole(['admin']);
+        $this->validateCSRF();
+        
+        $desa = $this->desaModel->findByIdWithHierarchy($id);
+        if (!$desa) {
+            $_SESSION['error'] = 'Desa tidak ditemukan';
+            $this->redirect('adminWilayah/desa');
+        }
+        
+        // Normalisasi input.
+        $kabupatenIdRaw = trim((string) ($_POST['kabupaten_id'] ?? ''));
+        $data = [
+            'kecamatan_id' => (int) ($_POST['kecamatan_id'] ?? 0),
+            'nama_desa' => mb_substr(preg_replace('/\s+/u', ' ', trim((string) ($_POST['nama_desa'] ?? ''))) ?? '', 0, 100),
+            'kode_desa' => preg_replace('/[^0-9]/', '', (string) ($_POST['kode_desa'] ?? '')),
+        ];
+        
+        // Validasi.
+        $errors = [];
+        $kabupatenId = null;
+        
+        if ($kabupatenIdRaw === '' || !is_numeric($kabupatenIdRaw)) {
+            $errors[] = 'Kabupaten wajib dipilih';
+        } else {
+            $kabupatenId = (int) $kabupatenIdRaw;
+            if (!$this->kabModel->findById($kabupatenId)) {
+                $errors[] = 'Kabupaten tidak valid';
+            }
+        }
+        
+        if ($data['kecamatan_id'] <= 0) {
+            $errors[] = 'Kecamatan wajib dipilih';
+        } elseif (!$this->kecModel->findById($data['kecamatan_id'])) {
+            $errors[] = 'Kecamatan tidak valid';
+        } elseif ($kabupatenId !== null && !$this->desaModel->validateKecamatanInKabupaten($data['kecamatan_id'], $kabupatenId)) {
+            $errors[] = 'Kecamatan tidak berada dalam Kabupaten yang dipilih';
+        }
+        
+        if ($data['nama_desa'] === '') {
+            $errors[] = 'Nama desa wajib diisi';
+        } elseif (mb_strlen($data['nama_desa']) > 100) {
+            $errors[] = 'Nama desa maksimal 100 karakter';
+        } elseif ($data['kecamatan_id'] > 0 && $this->desaModel->checkNameExists($data['kecamatan_id'], $data['nama_desa'], (int) $id)) {
+            $errors[] = 'Nama desa sudah digunakan dalam kecamatan ini';
+        }
+        
+        if ($data['kode_desa'] === '') {
+            $errors[] = 'Kode desa wajib diisi';
+        } elseif (!preg_match('/^\d{10}$/', $data['kode_desa'])) {
+            $errors[] = 'Format kode desa harus 10 digit angka (standar BPS)';
+        } elseif ($data['kode_desa'] != $desa['kode'] && $this->desaModel->checkKodeExists($data['kode_desa'], (int) $id)) {
+            $errors[] = 'Kode desa sudah digunakan';
+        }
+        
+        if (!empty($errors)) {
+            $_SESSION['error'] = implode(', ', $errors);
+            $_SESSION['old'] = [
+                'kecamatan_id' => $data['kecamatan_id'],
+                'nama_desa' => $_POST['nama_desa'] ?? '',
+                'kode_desa' => $_POST['kode_desa'] ?? '',
+                'kabupaten_id' => $kabupatenIdRaw,
+            ];
+            $this->redirect('adminWilayah/desa_edit/' . $id);
+        }
+        
+        try {
+            $this->desaModel->update((int) $id, $data);
+        } catch (Exception $e) {
+            error_log('Desa update failed');
+            $_SESSION['error'] = 'Gagal memperbarui desa.';
+            $_SESSION['old'] = [
+                'kecamatan_id' => $data['kecamatan_id'],
+                'nama_desa' => $_POST['nama_desa'] ?? '',
+                'kode_desa' => $_POST['kode_desa'] ?? '',
+                'kabupaten_id' => $kabupatenIdRaw,
+            ];
+            $this->redirect('adminWilayah/desa_edit/' . $id);
+        }
+        
+        // Audit old/new (hanya field kontrak).
+        $this->auditModel->log([
+            'user_id' => $_SESSION['user_id'],
+            'table_name' => 'master_desa',
+            'record_id' => $id,
+            'action' => 'UPDATE',
+            'old_values' => json_encode([
+                'kecamatan_id' => $desa['kecamatan_id'],
+                'nama_desa' => $desa['nama_desa'],
+                'kode_desa' => $desa['kode'],
+            ]),
+            'new_values' => json_encode([
+                'kecamatan_id' => $data['kecamatan_id'],
+                'nama_desa' => $data['nama_desa'],
+                'kode_desa' => $data['kode_desa'],
+            ])
+        ]);
+        
+        $_SESSION['success'] = 'Desa berhasil diperbarui';
+        $this->redirect('adminWilayah/desa');
     }
     
     public function desa_delete($id) {

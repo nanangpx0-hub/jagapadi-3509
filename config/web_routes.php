@@ -1,8 +1,8 @@
 <?php
 /**
- * JAGAPADI — Explicit Web Route Map
+ * JAGAPADI â€” Explicit Web Route Map
  *
- * Route web eksplisit (URL → Controller@method). Route yang terdaftar di sini
+ * Route web eksplisit (URL â†’ Controller@method). Route yang terdaftar di sini
  * dipakai persis seperti didefinisikan (tanpa konversi str_replace), sehingga
  * meminimalkan risiko collision nama route.
  *
@@ -41,6 +41,7 @@ return [
     'laporan/store' => 'Laporan@store',
     'laporan/detail' => 'Laporan@detail',
     'laporan/fetch' => 'Laporan@fetch',
+    'laporan/bulk-delete' => 'Laporan@bulkDelete',
     'laporan/hama' => 'LaporanHama@index',
 
     // Laporan Lainnya (web)
@@ -50,12 +51,21 @@ return [
     'laporan-lainnya/summary' => 'LaporanLainnya@summary',
     'laporan-lainnya/report' => 'LaporanLainnya@report',
     'laporan-lainnya/export' => 'LaporanLainnya@export',
+    'laporan-lainnya/bulk-delete' => 'LaporanLainnya@bulkDelete',
+    'laporan-lainnya/delete-all' => 'LaporanLainnya@deleteAll',
 
     // Irigasi
     'irigasi' => 'Irigasi@index',
     'irigasi/create' => 'Irigasi@create',
     'irigasi/store' => 'Irigasi@store',
     'irigasi/monitoring' => 'Irigasi@monitoring',
+    'irigasi/bulk-delete' => 'Irigasi@bulkDelete',
+
+    // Recycle bin khusus Admin
+    'recycle-bin' => 'RecycleBin@index',
+    'recycle-bin/restore' => 'RecycleBin@restore',
+    'recycle-bin/bulk-restore' => 'RecycleBin@bulkRestore',
+    'recycle-bin/bulk-delete' => 'RecycleBin@bulkDelete',
 
     // Irigasi Scraper
     'irigasiScraper' => 'IrigasiScraper@index',
@@ -109,6 +119,32 @@ return [
 
     // Master
     'opt' => 'Opt@index',
+    'opttambahkan' => 'Opt@create',
+    'opt/bulk-delete' => 'Opt@bulkDelete',
+    'opt/delete-all' => 'Opt@deleteAll',
+    'opt/auto-fill-photos' => 'Opt@autoFillPhotos',
+    'usulan-opt' => 'UsulanOpt@index',
+    'usulan-opt/create' => 'UsulanOpt@create',
+    'usulan-opt/store' => 'UsulanOpt@store',
+    'usulan-opt/update' => 'UsulanOpt@update',
+    'usulan-opt/submit' => 'UsulanOpt@submit',
+    'usulan-opt/resubmit' => 'UsulanOpt@resubmit',
+    'usulan-opt/delete-draft' => 'UsulanOpt@deleteDraft',
+    'usulan-opt/delete-photo' => 'UsulanOpt@deletePhoto',
+    'usulan-opt/request-revision' => 'UsulanOpt@requestRevision',
+    'usulan-opt/review' => 'UsulanOpt@review',
+    'usulan-opt/approve-new' => 'UsulanOpt@approveNew',
+    'usulan-opt/bulk-approve' => 'UsulanOpt@bulkApprove',
+    'usulan-opt/search-master' => 'UsulanOpt@searchMaster',
+    'usulan-opt/bulk-delete' => 'UsulanOpt@bulkDelete',
+    'usulan-opt/import' => 'UsulanOpt@importExcel',
+    'usulan-opt/export' => 'UsulanOpt@exportExcel',
+    'usulan-opt/template' => 'UsulanOpt@downloadTemplate',
+    // Alias kompatibilitas URL "OPT Saya".
+    'optsaya' => 'UsulanOpt@index',
+    'optsaya/import' => 'UsulanOpt@importExcel',
+    'optsaya/export' => 'UsulanOpt@exportExcel',
+    'optsaya/template' => 'UsulanOpt@downloadTemplate',
     'user' => 'User@index',
     'user/exportCsv' => 'User@exportCsv',
     'user/exportExcel' => 'User@exportExcel',
@@ -123,4 +159,16 @@ return [
 
     // Analisis hama
     'laporan-hama/analytics' => 'LaporanHama@analytics',
+
+    // Usulan OPT â€” Petugas (form mandiri) & Admin (request revision)
+    'usulan-opt/create' => 'UsulanOpt@create',
+    'usulan-opt/store' => 'UsulanOpt@store',
+    'usulan-opt/submit' => 'UsulanOpt@submit',
+    'usulan-opt/resubmit' => 'UsulanOpt@resubmit',
+    'usulan-opt/delete-draft' => 'UsulanOpt@deleteDraft',
+    'usulan-opt/request-revision' => 'UsulanOpt@requestRevision',
+    'usulan-opt/update' => 'UsulanOpt@update',
+    // Konvensi parameterized (2 segmen): /usulan-opt/edit/{id} dan
+    // /update/{id} dipetakan otomatis oleh fallback index.php;
+    // submit/resubmit/delete-draft juga menerima {id} pada segmen URL.
 ];

@@ -63,7 +63,7 @@ class WindIntegrationService {
                             COUNT(*) as jumlah_laporan,
                             GROUP_CONCAT(DISTINCT jenis_hama) as jenis_hama
                         FROM laporan_hama
-                        WHERE tanggal_laporan BETWEEN ? AND ?
+                        WHERE tanggal_laporan BETWEEN ? AND ? AND deleted_at IS NULL
                         GROUP BY DATE(tanggal_laporan)";
             
             $pestStmt = $this->db->prepare($pestSql);

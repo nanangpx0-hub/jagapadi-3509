@@ -208,7 +208,7 @@ class ExportController extends Controller {
             <li>Untuk menyimpan sebagai PDF: Klik tombol Print, lalu pilih "Save as PDF"</li>
         </ul>
         <p><strong>BPS Kabupaten Jember</strong></p>
-        <p>Pengembang: Nanang Pamungkas | Email: nanangpx@gmail.com | WA: +6281232303096</p>
+        <p>Dikembangkan oleh Tim JAGAPADI — BPS Kabupaten Jember</p>
     </div>
 </body>
 </html>';

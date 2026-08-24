@@ -8,12 +8,13 @@
             </div>
             <form action="<?= BASE_URL ?>laporan/edit/<?= $laporan['id'] ?>" method="POST" enctype="multipart/form-data">
                 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
+                <?= Security::getIdempotencyField() ?>
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label>Tanggal Pelaporan <span class="text-danger">*</span></label>
-                                <input type="date" name="tanggal" class="form-control" value="<?= $laporan['tanggal'] ?>" required>
+                                <label>Tanggal Kejadian/Pengamatan <span class="text-danger">*</span></label>
+                                <input type="date" name="tanggal" class="form-control" value="<?= $laporan['tanggal'] ?>" max="<?= date('Y-m-d') ?>" required>
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -31,6 +32,7 @@
                         </div>
                     </div>
                     
+                    <div class="form-group"><label>Metode Pengukuran</label><select name="metode_pengukuran" class="form-control"><option value="absolut" <?= ($laporan['metode_pengukuran'] ?? 'absolut') === 'absolut' ? 'selected' : '' ?>>Luas absolut (Ha)</option><option value="persentase" <?= ($laporan['metode_pengukuran'] ?? '') === 'persentase' ? 'selected' : '' ?>>Persentase (%)</option></select></div>
                     <div class="row">
                         <div class="col-md-4">
                             <div class="form-group">
@@ -50,6 +52,8 @@
                                 <?php endif; ?>
                             </div>
                         </div>
+                        <div class="col-md-4"><div class="form-group"><label>Persentase Serangan (%)</label><input type="number" name="persentase_serangan" class="form-control" min="0" max="100" step="0.01" value="<?= htmlspecialchars((string) ($laporan['persentase_serangan'] ?? '')) ?>"></div></div>
+                        <div class="col-md-4"><div class="form-group"><label>Luas Areal Diamati (Ha)</label><input type="number" name="luas_areal_diamati" class="form-control" min="0" step="0.01" value="<?= htmlspecialchars((string) ($laporan['luas_areal_diamati'] ?? '')) ?>"></div></div>
                         <div class="col-md-4">
                             <div class="form-group">
                                 <label>Kecamatan <?= $requiredMark ?></label>
@@ -84,6 +88,7 @@
                             </div>
                         </div>
                     </div>
+                    <div class="form-group"><label>Video Pendukung</label><?php if (!empty($laporan['video_url'])): ?><video controls preload="metadata" class="d-block mb-2" style="max-width:320px"><source src="<?= BASE_URL . htmlspecialchars($laporan['video_url']) ?>" type="video/mp4"></video><?php endif; ?><input type="file" name="video" class="form-control-file" accept="video/mp4"><small class="text-muted">MP4 maksimal 50 MB; kosongkan untuk mempertahankan video saat ini.</small></div>
                     
                     <div class="row">
                         <div class="col-md-6">

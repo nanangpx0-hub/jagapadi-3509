@@ -59,6 +59,9 @@ final class StorytellingAnalysisService
                 ? round(array_sum($numeric) / $window, 3) : null;
         }
         $values = $this->numericValues($series['production']);
+        if (count($values) < 2) {
+            throw new DomainException('Analisis tren membutuhkan minimal 2 observasi produksi bulanan.');
+        }
         $first = $values[0] ?? null;
         $last = $values[count($values) - 1] ?? null;
         $change = $first !== null && $last !== null && abs($first) > 0.000001

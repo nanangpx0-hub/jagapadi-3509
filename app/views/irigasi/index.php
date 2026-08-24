@@ -8,11 +8,97 @@ $errorMsg = ErrorMessage::flash();
 
 <?php if (($petugasReportType ?? null) === 'irigasi'): ?>
     <?php require ROOT_PATH . '/app/views/reports/petugas_list.php'; ?>
-    <?php require_once ROOT_PATH . '/app/views/layouts/footer.php'; ?>
+<!-- CSS untuk Menonaktifkan Efek Hover/Timbul-Tenggelam (sama dengan halaman /laporan) -->
+<link rel="stylesheet" href="<?= BASE_URL ?>public/css/hover-disabled.css">
+
+<?php require_once ROOT_PATH . '/app/views/layouts/footer.php'; ?>
     <?php return; ?>
 <?php endif; ?>
 
 <style>
+/* ===== MASTER CHECKBOX STYLING (sama pola /laporan) ===== */
+#irigasiSelectAll {
+    cursor: pointer;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    vertical-align: middle;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    border: 2px solid #6c757d;
+    border-radius: 4px;
+    background-color: #fff;
+    position: relative;
+    outline: none;
+}
+
+#irigasiSelectAll:checked {
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+#irigasiSelectAll:checked::after {
+    content: '';
+    position: absolute;
+    left: 6px;
+    top: 2px;
+    width: 5px;
+    height: 10px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+#irigasiSelectAll:indeterminate {
+    background-color: #17a2b8;
+    border-color: #17a2b8;
+}
+
+#irigasiSelectAll:indeterminate::after {
+    content: '';
+    position: absolute;
+    left: 3px;
+    top: 7px;
+    width: 10px;
+    height: 2px;
+    background-color: white;
+    transform: none;
+}
+
+#irigasiSelectAll:focus {
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.35);
+}
+
+/* ===== CHILD CHECKBOX STYLING ===== */
+.irigasi-row-check {
+    cursor: pointer;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    vertical-align: middle;
+}
+
+/* ===== BULK DELETE BUTTON ===== */
+#irigasiBulkDelete {
+    display: none;
+}
+
+#irigasiBulkDelete.show {
+    display: inline-block;
+}
+
+#irigasiBulkDelete:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* ===== ROW SELECTION STYLING ===== */
+.row-selected {
+    background-color: #fff3cd !important;
+    border-left: 3px solid #ffc107;
+}
+
 /* ===== TOMBOL AKSI STYLING (Matching laporan page design) ===== */
 .btn-action-group {
     display: flex;
@@ -480,24 +566,84 @@ $errorMsg = ErrorMessage::flash();
 /* Disable all repeating/blinking/pulsing (timbul tenggelam) animations on this page */
 *, *::before, *::after {
     animation: none !important;
+    transition: none !important;
 }
-</style>
 
-<!-- DataTables CSS -->
-<link rel="stylesheet" href="<?= BASE_URL ?>public/vendor/css/dataTables.bootstrap4.min.css">
-<link rel="stylesheet" href="<?= BASE_URL ?>public/vendor/css/responsive.bootstrap4.min.css">
-<style>
-#dataTable_wrapper .dataTables_filter,
-#dataTable_wrapper .dataTables_length { margin-bottom: 0.75rem; }
-#dataTable_wrapper .dataTables_filter input { margin-left: 0.5rem; }
-#dataTable_wrapper .dataTables_paginate .pagination { justify-content: center; margin-top: 0.5rem; }
-#dataTable_wrapper .dataTables_info { padding-top: 0.75rem; }
+/* ===== MATIKAN EFEK TIMBUL-TENGGELAM (lift/bobbing & transisi gerak) ===== */
+.btn-action:hover,
+.btn-action:active,
+.btn-auto-run:hover,
+.btn-auto-run:active,
+#irigasiBulkDelete:hover,
+#irigasiBulkDelete:active {
+    transform: none !important;
+    box-shadow: none !important;
+    transition: none !important;
+}
+
+.btn-action,
+.btn-auto-run,
+.toast-notification,
+.toggle-slider,
+.btn-action::after,
+.btn-action::before {
+    transition: none !important;
+    animation: none !important;
+}
+
+/* Tooltip tampil statis tanpa gerak naik */
+.btn-action::after {
+    transform: translateX(-50%) !important;
+}
+.btn-action:hover::after {
+    transform: translateX(-50%) !important;
+}
+
+/* Toast tampil/hilang instan tanpa slide */
+.toast-notification {
+    transform: none !important;
+    transition: none !important;
+}
+
+/* Progress bar tanpa transisi lebar */
+.progress-fill {
+    transition: none !important;
+}
+
+/* Matikan efek timbul-tenggelam dari stylesheet dan mobile-enhancements global. */
+.container-fluid .btn,
+.container-fluid .btn:hover,
+.container-fluid .btn:focus,
+.container-fluid .btn:active,
+.container-fluid .card,
+.container-fluid .card:hover,
+.container-fluid table tbody tr,
+.container-fluid table tbody tr:hover,
+.container-fluid .badge,
+.container-fluid .alert,
+.container-fluid .pagination .page-link,
+.container-fluid .form-control,
+.container-fluid .irigasi-row-check,
+.container-fluid #irigasiSelectAllButton,
+.container-fluid #irigasiBulkDelete {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+}
+
+.container-fluid .card:hover,
+.container-fluid table tbody tr:hover,
+.container-fluid .btn:hover,
+.container-fluid .btn:focus,
+.container-fluid .btn:active {
+    box-shadow: none !important;
+}
 </style>
 
 <div class="container-fluid">
     <!-- Alert Messages -->
     <?php if ($successMsg): ?>
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
+    <div class="alert alert-success alert-dismissible show" role="alert">
         <i class="icon fas fa-check"></i> <strong>Sukses!</strong> <?= htmlspecialchars($successMsg) ?>
         <button type="button" class="close" data-dismiss="alert" aria-label="Close">
             <span aria-hidden="true">&times;</span>
@@ -506,7 +652,7 @@ $errorMsg = ErrorMessage::flash();
     <?php endif; ?>
 
     <?php if ($errorMsg): ?>
-    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+    <div class="alert alert-danger alert-dismissible show" role="alert">
         <i class="icon fas fa-ban"></i> <strong>Error!</strong> <?= htmlspecialchars($errorMsg) ?>
         <button type="button" class="close" data-dismiss="alert" aria-label="Close">
             <span aria-hidden="true">&times;</span>
@@ -566,10 +712,22 @@ $errorMsg = ErrorMessage::flash();
 
     <div class="card shadow">
         <div class="card-body">
+            <?php if (($_SESSION['role'] ?? '') === 'admin'): ?>
+            <div class="mb-3 d-flex flex-wrap justify-content-end align-items-center">
+                <a href="<?= BASE_URL ?>recycle-bin" class="btn btn-outline-secondary btn-sm mr-2"><i class="fas fa-recycle"></i> Recycle Bin</a>
+                <button type="button" id="irigasiSelectAllButton" class="btn btn-outline-primary btn-sm mr-2">
+                    <i class="fas fa-check-double"></i> Pilih Semua Data
+                </button>
+                <button type="button" id="irigasiBulkDelete" class="btn btn-danger btn-sm mr-2" disabled>
+                    <i class="fas fa-trash"></i> Hapus Data Terpilih (<span id="selectedCount">0</span>)
+                </button>
+            </div>
+            <?php endif; ?>
             <div class="table-responsive">
                 <table class="table table-bordered table-hover" id="dataTable">
                     <thead class="thead-light">
                         <tr>
+                            <?php if (($_SESSION['role'] ?? '') === 'admin'): ?><th width="40"><input type="checkbox" id="irigasiSelectAll" title="Pilih semua data pada halaman ini"></th><?php endif; ?>
                             <th width="50" class="text-center">No</th>
                             <th>No Laporan</th>
                             <th>Tanggal</th>
@@ -585,6 +743,7 @@ $errorMsg = ErrorMessage::flash();
                         <?php $no = (($page ?? 1) - 1) * ($perPage ?? 25); ?>
                         <?php foreach ($laporan as $item): ?>
                         <tr>
+                            <?php if (($_SESSION['role'] ?? '') === 'admin'): ?><td><input type="checkbox" class="irigasi-row-check" value="<?= (int) $item['id'] ?>"></td><?php endif; ?>
                             <td class="text-center text-muted"><?= ++$no ?></td>
                             <td>
                                 <span class="badge badge-light border"><?= htmlspecialchars($item['nomor_laporan'] ?? '-') ?></span>
@@ -684,7 +843,7 @@ $errorMsg = ErrorMessage::flash();
                                 
                                 <!-- Modal Verifikasi -->
                                 <?php if($userRole === 'admin' && $item['status'] == 'Submitted'): ?>
-                                <div class="modal fade" id="verifyModal<?= (int) $item['id'] ?>" tabindex="-1">
+                                <div class="modal" id="verifyModal<?= (int) $item['id'] ?>" tabindex="-1">
                                     <div class="modal-dialog">
                                         <div class="modal-content">
                                             <form action="<?= BASE_URL ?>irigasi/verify/<?= (int) $item['id'] ?>" method="POST">
@@ -744,6 +903,172 @@ $errorMsg = ErrorMessage::flash();
         </div>
     </div>
 </div>
+
+<?php if (($_SESSION['role'] ?? '') === 'admin'): ?>
+<script>
+/**
+ * Master Checkbox & Bulk Delete — pola halaman /laporan + pilih-semua lintas halaman.
+ * - "Pilih Semua" memilih SELURUH data irigasi aktif (semua halaman), bukan hanya
+ *   baris yang tampak; daftar ID lengkap disematkan server-side (scope user).
+ * - Seleksi per baris tetap mempengaruhi hitungan global (Set).
+ * - Bulk delete via AJAX POST, respons JSON.
+ */
+(function() {
+    'use strict';
+
+    // Seluruh ID aktif dalam scope user (admin: semua data) — dari controller.
+    const ALL_IDS = <?= json_encode(array_values(array_map('intval', $allIds ?? [])), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+
+    function qs(sel) { return document.querySelector(sel); }
+    function qsa(sel) { return document.querySelectorAll(sel); }
+
+    const selectedIds = new Set();
+
+    function getBoxes() { return document.querySelectorAll('.irigasi-row-check'); }
+
+    // ========== BULK SELECT HELPER FUNCTIONS ==========
+    function setupMasterCheckbox() {
+        const all = document.getElementById('irigasiSelectAll');
+        if (!all || all.dataset.bulkBound === '1') return;
+        all.dataset.bulkBound = '1';
+        all.addEventListener('change', function() {
+            getBoxes().forEach(function(box) {
+                box.checked = all.checked;
+                const id = parseInt(box.value, 10);
+                if (all.checked) selectedIds.add(id); else selectedIds.delete(id);
+            });
+            updateUI();
+        });
+        all.addEventListener('click', e => e.stopPropagation());
+    }
+
+    function setupChildCheckboxes() {
+        // Delegasi di body: tahan terhadap redraw/rebuild DOM oleh DataTables
+        if (document.body.dataset.irigasiChildBound === '1') return;
+        document.body.dataset.irigasiChildBound = '1';
+        document.body.addEventListener('change', function(event) {
+            if (event.target && event.target.classList.contains('irigasi-row-check')) {
+                const id = parseInt(event.target.value, 10);
+                if (event.target.checked) {
+                    selectedIds.add(id);
+                } else {
+                    selectedIds.delete(id);
+                }
+                updateUI();
+            }
+        });
+    }
+
+    function setupBulkDeleteHandler() {
+        const button = document.getElementById('irigasiBulkDelete');
+        if (!button || button.dataset.bound === '1') return;
+        button.dataset.bound = '1';
+        button.addEventListener('click', async function() {
+            const ids = Array.from(selectedIds);
+            if (ids.length === 0 || !window.confirm(`Pindahkan ${ids.length} laporan irigasi ke recycle bin?`)) return;
+
+            const body = new URLSearchParams();
+            body.append('csrf_token', '<?= htmlspecialchars(Security::getCsrfToken(), ENT_QUOTES, 'UTF-8') ?>');
+            ids.forEach(id => body.append('ids[]', id));
+
+            button.disabled = true;
+            try {
+                const response = await fetch('<?= BASE_URL ?>irigasi/bulk-delete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: body.toString()
+                });
+                let result = null;
+                try { result = await response.json(); } catch (e) { result = null; }
+                if (!response.ok || !result || !result.success) {
+                    throw new Error((result && result.message) || `Gagal menghapus laporan (HTTP ${response.status})`);
+                }
+                window.location.reload();
+            } catch (error) {
+                window.alert(error.message || 'Gagal memindahkan laporan irigasi ke recycle bin');
+                button.disabled = false;
+                updateUI();
+            }
+        });
+    }
+
+    function setupSelectAllDataButton() {
+        const button = document.getElementById('irigasiSelectAllButton');
+        if (!button || button.dataset.bound === '1') return;
+        button.dataset.bound = '1';
+        button.addEventListener('click', function() {
+            const selectingAll = selectedIds.size < ALL_IDS.length;
+            selectedIds.clear();
+            if (selectingAll) ALL_IDS.forEach(id => selectedIds.add(id));
+            getBoxes().forEach(function(box) {
+                box.checked = selectedIds.has(parseInt(box.value, 10));
+            });
+            updateUI();
+        });
+    }
+
+    function updateUI() {
+        const checkAll = document.getElementById('irigasiSelectAll');
+        const boxes = getBoxes();
+        const count = selectedIds.size;
+        const total = ALL_IDS.length;
+
+        if (document.getElementById('selectedCount')) {
+            document.getElementById('selectedCount').textContent = count;
+        }
+        const deleteButton = document.getElementById('irigasiBulkDelete');
+        if (deleteButton) {
+            deleteButton.disabled = count === 0;
+            deleteButton.classList.toggle('show', count > 0);
+        }
+        boxes.forEach(function(checkbox) {
+            const row = checkbox.closest('tr');
+            if (row) row.classList.toggle('row-selected', checkbox.checked);
+        });
+        if (checkAll) {
+            const checkedOnPage = Array.from(boxes).filter(box => box.checked).length;
+            checkAll.disabled = boxes.length === 0;
+            checkAll.checked = boxes.length > 0 && checkedOnPage === boxes.length;
+            checkAll.indeterminate = checkedOnPage > 0 && checkedOnPage < boxes.length;
+        }
+        const allDataButton = document.getElementById('irigasiSelectAllButton');
+        if (allDataButton) {
+            allDataButton.innerHTML = count === total && total > 0
+                ? '<i class="fas fa-times"></i> Batalkan Semua Pilihan'
+                : '<i class="fas fa-check-double"></i> Pilih Semua Data';
+            allDataButton.disabled = total === 0;
+        }
+    }
+
+    function initBulkSelect() {
+        setupMasterCheckbox();
+        setupChildCheckboxes();
+        setupSelectAllDataButton();
+        setupBulkDeleteHandler();
+        document.querySelectorAll('.irigasi-row-check').forEach(function(box) {
+            box.checked = selectedIds.has(parseInt(box.value, 10));
+        });
+        updateUI();
+    }
+
+    window.irigasiSyncBulkSelection = updateUI;
+
+    // Re-sync setelah DataTables menggambar ulang baris (pagination/search/sort)
+    if (window.jQuery && window.jQuery.fn && window.jQuery.fn.DataTable) {
+        window.jQuery(document).on('draw.dt', function() { initBulkSelect(); });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initBulkSelect);
+    } else {
+        initBulkSelect();
+    }
+})();
+</script>
+<?php endif; ?>
 
 <!-- SCRIPT_START_MARKER -->
 <div id="script-marker-test" style="display:none;">Script should follow</div>
@@ -958,7 +1283,7 @@ const IrigasiActionController = (function() {
                         
                         // Create backdrop
                         var backdrop = document.createElement('div');
-                        backdrop.className = 'modal-backdrop fade show';
+                        backdrop.className = 'modal-backdrop show';
                         backdrop.id = 'modal-backdrop';
                         document.body.appendChild(backdrop);
                     }
@@ -994,28 +1319,31 @@ const IrigasiActionController = (function() {
      * Initialize delete confirmation handlers
      */
     function initDeleteHandlers() {
-        document.querySelectorAll('.btn-action-danger[title="Hapus"]').forEach(function(link) {
-            // Remove inline onclick
-            link.removeAttribute('onclick');
+        document.querySelectorAll('.btn-action-danger[title="Hapus"]').forEach(function(button) {
+            if (button.dataset.deleteBound === '1') return;
+            button.dataset.deleteBound = '1';
+            button.removeAttribute('onclick');
             
-            link.addEventListener('click', function(e) {
+            button.addEventListener('click', function(e) {
+                if (this.dataset.deleteConfirmed === '1') return;
                 e.preventDefault();
-                const href = this.getAttribute('href');
-                
-                logAction('Delete requested', { url: href });
+                const form = this.closest('form');
+                const href = this.tagName === 'A' ? this.getAttribute('href') : null;
                 
                 showConfirmDialog({
                     title: 'Konfirmasi Hapus',
-                    message: 'Yakin ingin menghapus data ini? Data yang dihapus tidak dapat dikembalikan.',
+                    message: 'Pindahkan laporan irigasi ini ke recycle bin?',
                     confirmText: 'Hapus',
                     confirmClass: 'btn-danger',
                     icon: 'trash-alt'
                 }).then(confirmed => {
                     if (confirmed) {
-                        logAction('Delete confirmed', { url: href });
-                        window.location.href = href;
-                    } else {
-                        logAction('Delete cancelled', { url: href });
+                        if (form) {
+                            this.dataset.deleteConfirmed = '1';
+                            form.requestSubmit ? form.requestSubmit(this) : form.submit();
+                        } else if (href) {
+                            window.location.href = href;
+                        }
                     }
                 });
             });
@@ -1400,26 +1728,6 @@ document.addEventListener('DOMContentLoaded', function() {
             clearInterval(checkInterval);
             IrigasiActionController.init();
         }, 3000);
-    }
-});
-</script>
-
-<!-- DataTables JS (jQuery sudah dimuat di head header.php) -->
-<script src="<?= BASE_URL ?>public/vendor/js/dataTables-1.13.7.min.js"></script>
-<script src="<?= BASE_URL ?>public/vendor/js/dataTables.bootstrap4.min.js"></script>
-<script src="<?= BASE_URL ?>public/vendor/js/dataTables.responsive.min.js"></script>
-<script>
-$(function() {
-    if ($.fn.DataTable && $('#dataTable').length) {
-        $('#dataTable').DataTable({
-            responsive: true,
-            pageLength: 25,
-            lengthMenu: [10, 25, 50, 100],
-            order: [[0, 'asc']],
-            language: {
-                url: '<?= BASE_URL ?>public/vendor/datatables/id-1.13.7.json'
-            }
-        });
     }
 });
 </script>

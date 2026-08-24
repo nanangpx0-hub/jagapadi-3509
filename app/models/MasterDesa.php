@@ -89,6 +89,8 @@ class MasterDesa extends Model {
         $sql = "INSERT INTO master_desa (kecamatan_id, nama_desa, kode) VALUES (?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$data['kecamatan_id'], $data['nama_desa'], $data['kode_desa']]);
+        // Read path memakai master_desa_kec_by_kode_*; legacy key ikut dibersihkan.
+        Cache::delete('master_desa_kec_by_kode_' . $data['kecamatan_id']);
         Cache::delete('master_desa_kec_' . $data['kecamatan_id']);
         return $this->db->lastInsertId();
     }
@@ -101,10 +103,12 @@ class MasterDesa extends Model {
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$data['kecamatan_id'], $data['nama_desa'], $data['kode_desa'], $id]);
         
-        // Clear cache for both old and new kecamatan
+        // Clear cache for both old and new kecamatan (read key + legacy key)
         if ($old) {
+            Cache::delete('master_desa_kec_by_kode_' . $old['kecamatan_id']);
             Cache::delete('master_desa_kec_' . $old['kecamatan_id']);
         }
+        Cache::delete('master_desa_kec_by_kode_' . $data['kecamatan_id']);
         Cache::delete('master_desa_kec_' . $data['kecamatan_id']);
         
         return $stmt->rowCount();
@@ -119,6 +123,7 @@ class MasterDesa extends Model {
         $stmt->execute([$id]);
         
         if ($data) {
+            Cache::delete('master_desa_kec_by_kode_' . $data['kecamatan_id']);
             Cache::delete('master_desa_kec_' . $data['kecamatan_id']);
         }
         
@@ -134,6 +139,23 @@ class MasterDesa extends Model {
             $params[] = $excludeId;
         }
         
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return ($stmt->fetch()['c'] ?? 0) > 0;
+    }
+    
+    /**
+     * Cek duplikasi nama desa dalam satu kecamatan, dengan current ID dikecualikan.
+     */
+    public function checkNameExists(int $kecamatanId, string $namaDesa, ?int $excludeId = null): bool {
+        $sql = "SELECT COUNT(*) as c FROM master_desa WHERE kecamatan_id = ? AND nama_desa = ?";
+        $params = [$kecamatanId, $namaDesa];
+
+        if ($excludeId !== null && $excludeId > 0) {
+            $sql .= " AND id != ?";
+            $params[] = $excludeId;
+        }
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         return ($stmt->fetch()['c'] ?? 0) > 0;

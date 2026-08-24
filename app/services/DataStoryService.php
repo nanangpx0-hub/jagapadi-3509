@@ -537,6 +537,7 @@ class DataStoryService
              FROM laporan_hama lh
              LEFT JOIN master_opt mo ON lh.master_opt_id = mo.id
              WHERE lh.tanggal >= ? AND lh.tanggal < ? AND lh.kecamatan_id = ?
+               AND lh.deleted_at IS NULL
                AND lh.status IN ('Submitted', 'Diverifikasi')"
         );
         $stmt->execute([$start->format('Y-m-d'), $end->format('Y-m-d'), $wilayahId]);
@@ -893,6 +894,7 @@ class DataStoryService
             "SELECT YEAR(tanggal) AS tahun, MONTH(tanggal) AS bulan, COUNT(*) AS total_laporan
              FROM laporan_hama
              WHERE tanggal >= ? AND tanggal < ? AND kecamatan_id = ?
+               AND deleted_at IS NULL
                AND status IN ('Submitted', 'Diverifikasi')
              GROUP BY YEAR(tanggal), MONTH(tanggal)"
         );

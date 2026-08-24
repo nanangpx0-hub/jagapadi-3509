@@ -20,6 +20,7 @@ class LaporanHama extends Model {
 protected $fillable = [
         'user_id',
         'master_opt_id',
+        'usulan_opt_id',
         'tanggal',
         'lokasi',
         'latitude',
@@ -27,7 +28,12 @@ protected $fillable = [
         'tingkat_keparahan',
         'populasi',
         'luas_serangan',
+        'metode_pengukuran',
+        'persentase_serangan',
+        'luas_areal_diamati',
+        'luas_serangan_estimasi',
         'foto_url',
+        'video_url',
         'status',
         'catatan',
         'catatan_verifikasi',
@@ -39,6 +45,13 @@ protected $fillable = [
         'alamat_lengkap',
         'nomor_laporan',
     ];
+
+    public function find($id) {
+        $stmt = $this->db->prepare('SELECT * FROM laporan_hama WHERE id = ? AND deleted_at IS NULL LIMIT 1');
+        $stmt->execute([(int) $id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row === false ? null : $row;
+    }
     protected array $relations = [
         'user' => [
             'type' => 'belongsTo',
@@ -330,7 +343,7 @@ protected $fillable = [
      */
     public function count(): int {
         $qb = new QueryBuilder();
-        return $qb->table('laporan_hama')->count();
+        return $qb->table('laporan_hama')->whereRaw('deleted_at IS NULL')->count();
     }
 
     /**
@@ -339,11 +352,11 @@ protected $fillable = [
      * @return array<string, int>
      */
     public function getStatusCounts(?int $userId = null): array {
-        $sql = 'SELECT status, COUNT(*) AS total FROM laporan_hama';
+        $sql = 'SELECT status, COUNT(*) AS total FROM laporan_hama WHERE deleted_at IS NULL';
         $params = [];
 
         if ($userId !== null) {
-            $sql .= ' WHERE user_id = :user_id';
+            $sql .= ' AND user_id = :user_id';
             $params[':user_id'] = $userId;
         }
 
@@ -377,6 +390,7 @@ protected $fillable = [
                 FROM laporan_hama lh
                 LEFT JOIN master_opt mo ON lh.master_opt_id = mo.id
                 WHERE lh.status IN ('Submitted', 'Diverifikasi')
+                AND lh.deleted_at IS NULL
                 AND mo.nama_opt IS NOT NULL";
 
             if ($userId !== null) {
@@ -429,6 +443,7 @@ protected $fillable = [
                     AVG(populasi) as avg_populasi
                 FROM laporan_hama
                 WHERE status IN ('Submitted', 'Diverifikasi')
+                AND deleted_at IS NULL
                 AND tingkat_keparahan IS NOT NULL";
 
             if ($userId !== null) {
@@ -503,6 +518,7 @@ protected $fillable = [
                     COUNT(*) as jumlah_laporan
                 FROM laporan_hama
                 WHERE YEAR(tanggal) = :year
+                AND deleted_at IS NULL
                 AND status IN ('Submitted', 'Diverifikasi')
                 AND luas_serangan > 0";
 
@@ -588,9 +604,16 @@ protected $fillable = [
         ];
 
         $qb = new QueryBuilder();
-        return $qb->table('laporan_hama')
+        $result = $qb->table('laporan_hama')
                   ->where('id', $id)
                   ->update($data);
+        $this->afterSave();
+        return $result;
+    }
+
+    /** Hook pasca-simpan: standardisasi invalidasi cache dashboard. */
+    public function afterSave(): void {
+        if (class_exists('DashboardCacheBust')) { DashboardCacheBust::clear(); }
     }
 
     public function archive(
@@ -611,7 +634,7 @@ protected $fillable = [
 
         try {
             $select = $this->db->prepare(
-                'SELECT status FROM laporan_hama WHERE id = ? FOR UPDATE'
+                'SELECT status FROM laporan_hama WHERE id = ? AND deleted_at IS NULL FOR UPDATE'
             );
             $select->execute([$id]);
             $status = $select->fetchColumn();
@@ -841,7 +864,7 @@ protected $fillable = [
      */
     public function getDashboardStats(?int $userId = null, bool $includeDraft = false): array {
         try {
-            $whereClauses = [];
+            $whereClauses = ['deleted_at IS NULL'];
             $params = [];
 
             if ($userId !== null) {
@@ -927,6 +950,7 @@ protected $fillable = [
                     SUM(luas_serangan) as total_luas
                 FROM laporan_hama
                 WHERE YEAR(tanggal) = :year
+                AND deleted_at IS NULL
                 AND status IN ('Submitted', 'Diverifikasi')";
 
             if ($userId !== null) {
@@ -1016,6 +1040,7 @@ protected $fillable = [
             LEFT JOIN master_opt mo ON lh.master_opt_id = mo.id
             LEFT JOIN users u ON lh.user_id = u.id
             WHERE lh.status IN ('Submitted', 'Diverifikasi')
+            AND lh.deleted_at IS NULL
             AND lh.latitude IS NOT NULL
             AND lh.longitude IS NOT NULL";
 
@@ -1053,7 +1078,7 @@ protected $fillable = [
                     COUNT(lh.id) as total_laporan
                 FROM laporan_hama lh
                 JOIN master_kecamatan mk ON lh.kecamatan_id = mk.id
-                WHERE lh.status IN ('Submitted', 'Diverifikasi')";
+                WHERE lh.status IN ('Submitted', 'Diverifikasi') AND lh.deleted_at IS NULL";
 
             if ($userId !== null) {
                 $sqlCount .= " AND lh.user_id = :user_id";
@@ -1079,7 +1104,7 @@ protected $fillable = [
                     SUM(lh.luas_serangan) as total_luas
                 FROM laporan_hama lh
                 JOIN master_kecamatan mk ON lh.kecamatan_id = mk.id
-                WHERE lh.status IN ('Submitted', 'Diverifikasi')";
+                WHERE lh.status IN ('Submitted', 'Diverifikasi') AND lh.deleted_at IS NULL";
 
             if ($userId !== null) {
                 $sqlArea .= " AND lh.user_id = :user_id";
@@ -1134,6 +1159,7 @@ protected $fillable = [
             ->leftJoin('master_kecamatan mk', 'md.kecamatan_id = mk.id')
             ->leftJoin('master_kabupaten mkab', 'mk.kabupaten_id = mkab.id')
             ->where('lh.id', $id)
+            ->whereRaw('lh.deleted_at IS NULL')
             ->first();
     }
 
@@ -1157,6 +1183,7 @@ protected $fillable = [
             ])
             ->leftJoin('master_opt mo', 'lh.master_opt_id = mo.id')
             ->leftJoin('users u', 'lh.user_id = u.id')
+            ->whereRaw('lh.deleted_at IS NULL')
             ->leftJoin('users v', 'lh.verified_by = v.id')
             ->where('lh.id', $id)
             ->first();
@@ -1284,6 +1311,7 @@ protected $fillable = [
             SELECT DATE(tanggal) as tanggal, COUNT(*) as total
             FROM laporan_hama
             WHERE tanggal >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+              AND deleted_at IS NULL
         ";
         $params = [$days];
         if ($userId !== null) {
@@ -1306,7 +1334,7 @@ protected $fillable = [
                 SUM(lh.luas_serangan) as total_luas
             FROM laporan_hama lh
             LEFT JOIN master_kecamatan mk ON lh.kecamatan_id = mk.id
-            WHERE 1=1
+            WHERE lh.deleted_at IS NULL
         ";
         $params = [];
         if ($userId !== null) {
@@ -1330,7 +1358,7 @@ protected $fillable = [
             LEFT JOIN master_opt mo ON lh.master_opt_id = mo.id
             LEFT JOIN master_desa md ON lh.desa_id = md.id
             LEFT JOIN users u ON lh.user_id = u.id
-            WHERE 1=1
+            WHERE lh.deleted_at IS NULL
         ";
         $params = [];
         if ($userId !== null) {
@@ -1353,6 +1381,7 @@ protected $fillable = [
             SELECT id, tanggal, tingkat_keparahan, lokasi
             FROM laporan_hama
             WHERE tingkat_keparahan = 'Berat' AND status IN ('Submitted', 'Diverifikasi')
+              AND deleted_at IS NULL
         ";
         $params = [];
         if ($userId !== null) {
@@ -1385,7 +1414,7 @@ protected $fillable = [
         error_log("[LaporanHama::fetchPaginated] Entered - page=$page, perPage=$perPage, userId=$userId, filters=" . json_encode($filters));
 
         try {
-            $where = ['1=1'];
+            $where = ['lh.deleted_at IS NULL'];
             $params = [];
 
             // Role-based: petugas only sees their own
@@ -1472,6 +1501,7 @@ protected $fillable = [
                 lh.populasi,
                 lh.luas_serangan,
                 lh.foto_url,
+                lh.video_url,
                 lh.status,
                 lh.catatan,
                 lh.catatan_verifikasi,

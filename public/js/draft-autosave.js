@@ -45,9 +45,10 @@
             // Start auto-save interval
             this.startAutoSave();
 
-            // Clear draft on successful form submission
+            // Simpan keadaan terakhir sebelum request. Jangan hapus di sini:
+            // submit belum tentu berhasil dan server dapat mengembalikan validasi.
             this.form.addEventListener('submit', () => {
-                this.clearDraft();
+                this.saveDraft();
             });
 
             // Save on page unload (for accidental closes)
