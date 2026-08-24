@@ -131,8 +131,11 @@ tmp_check*.php
 .rnd
 76
 playwright-report/
-reports/
+/reports/
+!app/views/reports/
+!app/views/reports/**
 storage/uploads/
+
 
 # --- Vendor & cache at repo root ---
 /vendor/
