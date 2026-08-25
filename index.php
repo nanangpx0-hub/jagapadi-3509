@@ -109,7 +109,7 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 
-// CORS Policy Headers - configured via environment variables with LAN/private IP support
+// CORS Policy Headers - strict whitelist via CORS_ALLOWED_ORIGINS
 $corsOrigins = getenv('CORS_ALLOWED_ORIGINS');
 $allowedOrigins = $corsOrigins ? array_map('trim', explode(',', $corsOrigins)) : [
     'http://localhost',
@@ -121,15 +121,8 @@ $allowedOrigins = $corsOrigins ? array_map('trim', explode(',', $corsOrigins)) :
 ];
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-$isLanOrigin = false;
-if ($origin !== '') {
-    $parsedHost = parse_url($origin, PHP_URL_HOST);
-    if ($parsedHost) {
-        $isLanOrigin = filter_var($parsedHost, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
-    }
-}
 
-if ($origin !== '' && (in_array($origin, $allowedOrigins, true) || $isLanOrigin)) {
+if ($origin !== '' && in_array($origin, $allowedOrigins, true)) {
     header("Access-Control-Allow-Origin: {$origin}");
     header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH');
     header('Access-Control-Allow-Headers: Content-Type, Authorization, X-API-Key, X-CSRF-TOKEN, X-Requested-With, X-Idempotency-Key');

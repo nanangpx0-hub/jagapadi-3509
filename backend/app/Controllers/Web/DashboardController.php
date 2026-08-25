@@ -157,8 +157,6 @@ $kecamatanId = isset($_GET['kecamatan_id']) && $_GET['kecamatan_id'] !== '' ? (i
             $this->jsonResponse($e->getMessage(), 422);
         }
     }
-}
-    }
 
     private function logDashboardAccess(int $userId, string $role, string $action, string $scope, array $details = []): void
     {

@@ -96,7 +96,7 @@ if (isset($_SESSION['user_id'])) {
     $_SESSION['_last_activity'] = time();
 }
 
-// CORS — restricted origins with LAN/private IP support
+// CORS — strict whitelist via CORS_ALLOWED_ORIGINS (no LAN auto-allow in production)
 $allowedOrigins = [];
 $corsFromEnv = Env::get('CORS_ALLOWED_ORIGINS', '');
 if ($corsFromEnv !== '') {
@@ -106,15 +106,8 @@ if (empty($allowedOrigins)) {
     $allowedOrigins = ['http://localhost', 'http://localhost:8080', 'http://localhost:3000', 'http://10.0.2.2:8080'];
 }
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-$isLanOrigin = false;
-if ($origin !== '') {
-    $parsedHost = parse_url($origin, PHP_URL_HOST);
-    if ($parsedHost) {
-        $isLanOrigin = filter_var($parsedHost, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
-    }
-}
 
-if ($origin !== '' && (in_array($origin, $allowedOrigins, true) || $isLanOrigin)) {
+if ($origin !== '' && in_array($origin, $allowedOrigins, true)) {
     header("Access-Control-Allow-Origin: $origin");
     header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH');
     header('Access-Control-Allow-Headers: Content-Type, Authorization, X-CSRF-TOKEN, X-Requested-With, X-Idempotency-Key');

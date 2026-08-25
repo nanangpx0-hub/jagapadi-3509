@@ -8,6 +8,7 @@ use App\Core\BaseApiController;
 use App\Core\Env;
 use App\Core\Jwt;
 use App\Core\Request;
+use App\Core\Security;
 use App\Models\User;
 use App\Models\ActivityLog;
 use App\Helpers\JwtBlacklist;
@@ -17,6 +18,14 @@ class AuthController extends BaseApiController
 {
     public function login(): void
     {
+        $ip = Request::ip();
+        $bruteKey = 'api_login_' . $ip;
+        if (Security::checkBruteForce($bruteKey, 5, 900)) {
+            ActivityLog::log(null, 'login_failed', 'users', null, "API login brute-force block for IP: $ip");
+            $this->error('TooManyRequests', 'Terlalu banyak percobaan login. Coba lagi nanti.', [], 429);
+            return;
+        }
+
         $username = Request::input('username', '');
         $password = Request::input('password', '');
 
@@ -31,6 +40,7 @@ class AuthController extends BaseApiController
         $user = User::findByUsername($username);
 
         if ($user === null || !User::verifyPassword($password, $user['password'])) {
+            Security::incrementBruteForce($bruteKey);
             ActivityLog::log(null, 'login_failed', 'users', null, "API login gagal untuk username: $username");
             $this->error('Unauthorized', 'Username atau password salah.', [], 401);
             return;
@@ -41,6 +51,8 @@ class AuthController extends BaseApiController
             $this->error('Unauthorized', 'Autentikasi gagal.', [], 401);
             return;
         }
+
+        Security::clearBruteForce($bruteKey);
 
         $jwtExpiry = (int) Env::get('JWT_EXPIRY', '3600');
         $token = Jwt::encode([

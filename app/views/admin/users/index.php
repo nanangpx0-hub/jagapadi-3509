@@ -181,4 +181,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
+<!-- Nonaktifkan animasi timbul-tenggelam -->
+<link rel="stylesheet" href="<?= BASE_URL ?>public/css/hover-disabled.css">
+
 <?php include ROOT_PATH . '/app/views/layouts/footer.php'; ?>
