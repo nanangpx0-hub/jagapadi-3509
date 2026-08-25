@@ -106,7 +106,7 @@ class UserController extends BaseApiController {
             }
             
             // Validate role
-            $validRoles = ['admin', 'operator', 'petugas'];
+            $validRoles = ['admin', 'operator', 'petugas', 'statistisi', 'viewer'];
             if (!in_array($data['role'], $validRoles)) {
                 $this->sendError('Invalid role. Must be one of: ' . implode(', ', $validRoles), 400);
             }
@@ -195,7 +195,7 @@ class UserController extends BaseApiController {
                     $this->sendError('Only admin can change user roles', 403);
                 }
                 
-                $validRoles = ['admin', 'operator', 'petugas'];
+                $validRoles = ['admin', 'operator', 'petugas', 'statistisi', 'viewer'];
                 if (!in_array($data['role'], $validRoles)) {
                     $this->sendError('Invalid role. Must be one of: ' . implode(', ', $validRoles), 400);
                 }

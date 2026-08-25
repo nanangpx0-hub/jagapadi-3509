@@ -49,7 +49,10 @@
                         <label>Role <span class="text-danger">*</span></label>
                         <select name="role" class="form-control" required data-validate='{"required":true}'>
                             <option value="admin" <?= ($user['role'] === 'admin') ? 'selected' : '' ?>>Admin</option>
+                            <option value="operator" <?= ($user['role'] === 'operator') ? 'selected' : '' ?>>Operator</option>
                             <option value="petugas" <?= ($user['role'] === 'petugas') ? 'selected' : '' ?>>Petugas</option>
+                            <option value="statistisi" <?= ($user['role'] === 'statistisi') ? 'selected' : '' ?>>Statistisi</option>
+                            <option value="viewer" <?= ($user['role'] === 'viewer') ? 'selected' : '' ?>>Viewer</option>
                         </select>
                     </div>
                     

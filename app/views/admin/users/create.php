@@ -53,7 +53,10 @@
                         <select name="role" class="form-control" required data-validate='{"required":true}'>
                             <option value="">Pilih Role</option>
                             <option value="admin" <?= ($_SESSION['old']['role'] ?? '') === 'admin' ? 'selected' : '' ?>>Admin</option>
+                            <option value="operator" <?= ($_SESSION['old']['role'] ?? '') === 'operator' ? 'selected' : '' ?>>Operator</option>
                             <option value="petugas" <?= ($_SESSION['old']['role'] ?? '') === 'petugas' ? 'selected' : '' ?>>Petugas</option>
+                            <option value="statistisi" <?= ($_SESSION['old']['role'] ?? '') === 'statistisi' ? 'selected' : '' ?>>Statistisi</option>
+                            <option value="viewer" <?= ($_SESSION['old']['role'] ?? '') === 'viewer' ? 'selected' : '' ?>>Viewer</option>
                         </select>
                     </div>
                     

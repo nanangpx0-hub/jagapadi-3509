@@ -99,7 +99,8 @@ class UserController extends Controller {
             $errors[] = 'Konfirmasi password tidak cocok';
         }
         
-        if (empty($role) || !in_array($role, ['admin', 'petugas'])) {
+        $allowedRoles = ['admin', 'operator', 'petugas', 'statistisi', 'viewer'];
+        if (empty($role) || !in_array($role, $allowedRoles, true)) {
             $errors[] = 'Role tidak valid';
         }
         
@@ -298,7 +299,8 @@ class UserController extends Controller {
             }
         }
         
-        if (empty($role) || !in_array($role, ['admin', 'petugas'])) {
+        $allowedRoles = ['admin', 'operator', 'petugas', 'statistisi', 'viewer'];
+        if (empty($role) || !in_array($role, $allowedRoles, true)) {
             $errors[] = 'Role tidak valid';
         }
         

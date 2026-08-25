@@ -29,8 +29,9 @@
                         <option value="">Semua Role</option>
                         <option value="admin" <?= ($roleFilter === 'admin') ? 'selected' : '' ?>>Admin</option>
                         <option value="operator" <?= ($roleFilter === 'operator') ? 'selected' : '' ?>>Operator</option>
-                        <option value="viewer" <?= ($roleFilter === 'viewer') ? 'selected' : '' ?>>Viewer</option>
                         <option value="petugas" <?= ($roleFilter === 'petugas') ? 'selected' : '' ?>>Petugas</option>
+                        <option value="statistisi" <?= ($roleFilter === 'statistisi') ? 'selected' : '' ?>>Statistisi</option>
+                        <option value="viewer" <?= ($roleFilter === 'viewer') ? 'selected' : '' ?>>Viewer</option>
                     </select>
                 </div>
                 <div class="col-md-3 mb-2">
@@ -79,8 +80,9 @@
                             $roleColors = [
                                 'admin' => 'danger',
                                 'operator' => 'warning',
-                                'viewer' => 'info',
-                                'petugas' => 'success'
+                                'petugas' => 'success',
+                                'statistisi' => 'primary',
+                                'viewer' => 'info'
                             ];
                             $roleColor = $roleColors[$user['role']] ?? 'secondary';
                             ?>

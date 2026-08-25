@@ -23,7 +23,7 @@ class UserImportService {
     const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
     const ALLOWED_EXTENSIONS = ['xlsx', 'xls', 'csv'];
     const REQUIRED_COLUMNS = ['Nama Lengkap', 'Username', 'Email', 'Role', 'Status'];
-    const VALID_ROLES = ['admin', 'operator', 'viewer', 'petugas'];
+    const VALID_ROLES = ['admin', 'operator', 'petugas', 'statistisi', 'viewer'];
     const VALID_STATUSES = ['Aktif', 'Nonaktif', 'active', 'inactive', '1', '0'];
     
     // Rate limiting
