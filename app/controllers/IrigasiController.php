@@ -573,6 +573,14 @@ public function edit($id) {
             }
             
             try {
+                // Pertahankan wilayah existing bila dikirim kosong (anti-hilang
+                // tak sengaja); validasi relasi tetap berjalan setelah merge.
+                foreach (['kabupaten_id', 'kecamatan_id', 'desa_id'] as $wilayahField) {
+                    if (empty($_POST[$wilayahField]) && !empty($data[$wilayahField])) {
+                        $_POST[$wilayahField] = $data[$wilayahField];
+                    }
+                }
+
                 // Validate input
                 $errors = $this->validateInput($_POST);
                 

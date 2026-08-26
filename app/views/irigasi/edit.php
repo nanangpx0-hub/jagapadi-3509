@@ -614,7 +614,28 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.getElementById('kabupatenSelect').addEventListener('change', e => loadKecamatan(e.target.value));
     document.getElementById('kecamatanSelect').addEventListener('change', e => loadDesa(e.target.value));
-    loadKabupaten();
+
+    // Prefill berantai dari nilai existing agar wilayah tidak kosong saat edit
+    window.__wilayahAwal = {
+        kab: <?= json_encode((int) ($data['kabupaten_id'] ?? 0)) ?>,
+        kec: <?= json_encode((int) ($data['kecamatan_id'] ?? 0)) ?>,
+        desa: <?= json_encode((int) ($data['desa_id'] ?? 0)) ?>
+    };
+
+    (async function initWilayahPrefill() {
+        await loadKabupaten();
+        const awal = window.__wilayahAwal || {};
+        const selKab = document.getElementById('kabupatenSelect');
+        if (!awal.kab) return;
+        selKab.value = String(awal.kab);
+        await loadKecamatan(awal.kab);
+        if (!awal.kec) return;
+        document.getElementById('kecamatanSelect').value = String(awal.kec);
+        await loadDesa(awal.kec);
+        if (awal.desa) {
+            document.getElementById('desaSelect').value = String(awal.desa);
+        }
+    })();
 
     // ============================================================================
     // COORDINATE LOGIC
