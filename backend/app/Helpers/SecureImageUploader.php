@@ -37,18 +37,6 @@ class SecureImageUploader
             throw new \DomainException('File tidak valid.');
         }
 
-        if ($file['tmp_name'] === '') {
-            throw new \DomainException('File tidak valid.');
-        }
-
-        if ($file['tmp_name'] === '' || !is_file($file['tmp_name'])) {
-            throw new \DomainException('File tidak valid.');
-        }
-
-        if (!self::$testMode && !is_uploaded_file($file['tmp_name'])) {
-            throw new \DomainException('File tidak valid.');
-        }
-
         if ($file['size'] <= 0) {
             throw new \DomainException('File kosong.');
         }
@@ -106,9 +94,9 @@ class SecureImageUploader
 
         $finalSize = filesize($destPath);
 
-        if ($finalSize > 2097152) {
+        if ($finalSize > ImageCompressor::DEFAULT_TARGET_BYTES) {
             try {
-                ImageCompressor::compress($destPath);
+                ImageCompressor::compress($destPath, ImageCompressor::DEFAULT_TARGET_BYTES);
                 $finalSize = filesize($destPath);
             } catch (\Throwable $e) {
                 Logger::error('Kompresi gambar gagal, file tetap disimpan', [

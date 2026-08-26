@@ -11,6 +11,8 @@ use App\Controllers\Api\MeController;
 use App\Controllers\Api\NotificationController as ApiNotificationController;
 use App\Controllers\Api\LaporanHamaController as ApiLaporanHamaController;
 use App\Controllers\Api\LaporanIrigasiController as ApiLaporanIrigasiController;
+use App\Controllers\Api\LaporanHistoryController as ApiLaporanHistoryController;
+use App\Controllers\Api\LaporanVideoController as ApiLaporanVideoController;
 use App\Controllers\Api\LaporanPupukController as ApiLaporanPupukController;
 use App\Controllers\Api\LaporanPanenController as ApiLaporanPanenController;
 use App\Controllers\Api\LaporanCuacaController as ApiLaporanCuacaController;
@@ -225,6 +227,14 @@ $router->post('/api/v1/laporan-hama/{id}/archive', [ApiLaporanHamaController::cl
 $router->post('/api/v1/laporan-hama/{id}/resubmit', [ApiLaporanHamaController::class, 'resubmit'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-hama/{id}/foto/delete', [ApiLaporanHamaController::class, 'deleteFoto'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-hama/{id}/foto', [ApiLaporanHamaController::class, 'uploadFoto'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
+
+// ================================
+// API v1 — Status History (timeline mobile)
+// ================================
+$router->get('/api/v1/laporan-hama/{id}/history', [ApiLaporanHistoryController::class, 'hamaHistory'], [ApiAuthMiddleware::class]);
+$router->get('/api/v1/laporan-irigasi/{id}/history', [ApiLaporanHistoryController::class, 'irigasiHistory'], [ApiAuthMiddleware::class]);
+$router->post('/api/v1/laporan-hama/{id}/video', [ApiLaporanVideoController::class, 'uploadVideo'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
+$router->post('/api/v1/laporan-hama/{id}/video/delete', [ApiLaporanVideoController::class, 'deleteVideo'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
 
 // ================================
 // Web â€” Laporan Irigasi (petugas + admin)
