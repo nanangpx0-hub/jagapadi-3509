@@ -1044,6 +1044,16 @@ class _MenuGridState extends State<_MenuGrid>
             'Alat dan Sarana. ${actionHint(verify: 'Verifikasi laporan sarana', create: 'Laporkan kondisi sarana', read: 'Lihat laporan sarana')}',
       ),
       _FeatureCard(
+        key: const Key('menu_usulan_opt'),
+        icon: Icons.bug_report_outlined,
+        title: 'Usulan OPT',
+        subtitle: 'Usulkan hama/penyakit/gulma baru',
+        color: const Color(0xFF2E7D32),
+        onTap: () => context.push('/usulan-opt'),
+        semanticsLabel:
+            'Usulan OPT. Usulkan organisme pengganggu tanaman baru untuk direview Admin.',
+      ),
+      _FeatureCard(
         key: const Key('menu_notifikasi'),
         icon: Icons.notifications_outlined,
         title: 'Notifikasi',

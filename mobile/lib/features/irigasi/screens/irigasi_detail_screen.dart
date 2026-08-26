@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/config.dart';
 import '../../../core/permissions.dart';
+import '../../../core/report_edit_access.dart';
 import '../../../core/theme.dart';
 import '../../../core/widgets/mini_map_preview.dart';
 import '../../../core/widgets/status_timeline.dart';
@@ -287,8 +288,12 @@ class _IrigasiDetailScreenState extends State<IrigasiDetailScreen> {
                       ],
 
                       // Explicit Action Buttons for Field Officer (Petugas)
-                      if ((auth.user?.can(ReportCapability.canSubmitReport) ??
-                          false)) ...[
+                      if (ReportEditAccess.canShowEditActions(
+                        reportUserId: l?.userId,
+                        currentUserId: auth.user?.id,
+                        hasCapability:
+                            auth.user?.can(ReportCapability.canSubmitReport) ?? false,
+                      )) ...[
                         if (l.status == 'Draf') ...[
                           Row(
                             children: [

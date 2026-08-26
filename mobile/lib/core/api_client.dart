@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'photo_validator.dart';
 import 'secure_storage.dart';
 import 'config.dart';
+import 'video_validator.dart';
 
 /// Amplop respons standar JAGAPADI API.
 class ApiResponse<T> {
@@ -309,11 +310,81 @@ class ApiClient {
     }
   }
 
+  /// Unggah video pendukung laporan hama.
+  ///
+  /// Backend `VideoUploader` menerima MP4 maksimal 50 MB di endpoint
+  /// `/laporan-hama/{id}/video` (multipart field: `video`).
+  Future<ApiResponse<Map<String, dynamic>>> uploadVideo(
+    String path,
+    String filePath, {
+    void Function(double progress)? onSendProgress,
+    int maxRetries = AppConfig.maxRetries,
+  }) async {
+    final validation = VideoValidator.validateFile(File(filePath));
+    if (validation != null) {
+      return ApiResponse(
+        success: false,
+        message: validation,
+        statusCode: 0,
+      );
+    }
+
+    int attempt = 0;
+    while (true) {
+      try {
+        final formData = FormData.fromMap({
+          'video': await MultipartFile.fromFile(
+            filePath,
+            filename:
+                'video_${DateTime.now().millisecondsSinceEpoch}.${_videoExtensionOf(filePath)}',
+          ),
+        });
+        final response = await _dio.post(
+          path,
+          data: formData,
+          onSendProgress: onSendProgress == null
+              ? null
+              : (sent, total) {
+                  if (total <= 0) return;
+                  onSendProgress(sent / total);
+                },
+          options: Options(
+            sendTimeout: const Duration(milliseconds: AppConfig.uploadTimeout * 3),
+          ),
+        );
+        return ApiResponse.fromJson(
+          response.data as Map<String, dynamic>,
+          response.statusCode ?? 200,
+        );
+      } on DioException catch (e) {
+        attempt++;
+        if (_isRetryable(e) && attempt <= maxRetries) {
+          final delay = _backoffDelay(attempt);
+          _log(
+            'Retry upload video $attempt/$maxRetries untuk $path',
+            level: _LogLevel.warning,
+          );
+          await Future<void>.delayed(delay);
+          continue;
+        }
+        return _handleDioError(e, path: path);
+      }
+    }
+  }
+
   /// Backoff eksponensial: base × 2^(attempt-1) → 1s, 2s, 4s, …
   Duration _backoffDelay(int attempt) {
     return Duration(
       milliseconds: AppConfig.retryBaseDelayMs * (1 << (attempt - 1)),
     );
+  }
+
+  /// Ekstensi aman untuk nama file video multipart (default mp4).
+  String _videoExtensionOf(String path) {
+    final dot = path.lastIndexOf('.');
+    if (dot == -1 || dot == path.length - 1) return 'mp4';
+    final ext = path.substring(dot + 1).toLowerCase();
+    return ext == 'mov' ? 'mov' : 'mp4';
   }
 
   // ── Token Refresh ────────────────────────────────────────────────────────

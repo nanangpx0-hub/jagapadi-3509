@@ -26,6 +26,9 @@ import '../features/cuaca/screens/cuaca_form_screen.dart';
 import '../features/alat_sarana/screens/alat_sarana_list_screen.dart';
 import '../features/alat_sarana/screens/alat_sarana_detail_screen.dart';
 import '../features/alat_sarana/screens/alat_sarana_form_screen.dart';
+import '../features/usulan_opt/screens/usulan_opt_list_screen.dart';
+import '../features/usulan_opt/screens/usulan_opt_detail_screen.dart';
+import '../features/usulan_opt/screens/usulan_opt_form_screen.dart';
 import 'permissions.dart';
 import 'secure_storage.dart';
 
@@ -252,6 +255,30 @@ class AppRouter {
         GoRoute(
           path: '/laporan',
           builder: (_, __) => const LaporanTerpaduScreen(),
+        ),
+        GoRoute(
+          path: '/usulan-opt',
+          builder: (_, __) => const UsulanOptListScreen(),
+          routes: [
+            GoRoute(
+              path: 'create',
+              builder: (_, __) => const UsulanOptFormScreen(),
+            ),
+            GoRoute(
+              path: ':id',
+              builder: (_, state) => UsulanOptDetailScreen(
+                id: int.tryParse(state.pathParameters['id'] ?? '') ?? 0,
+              ),
+              routes: [
+                GoRoute(
+                  path: 'edit',
+                  builder: (_, state) => UsulanOptFormScreen(
+                    id: int.tryParse(state.pathParameters['id'] ?? '') ?? 0,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
         GoRoute(
           path: '/notifications',

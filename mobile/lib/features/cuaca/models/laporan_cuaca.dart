@@ -1,5 +1,6 @@
 class LaporanCuaca {
   final int id;
+  final int? userId;
   final String? nomorLaporan;
   final String status;
   final String? tanggal;
@@ -27,6 +28,7 @@ class LaporanCuaca {
 
   LaporanCuaca({
     required this.id,
+    this.userId,
     this.nomorLaporan,
     required this.status,
     this.tanggal,
@@ -57,6 +59,7 @@ class LaporanCuaca {
     final data = j['data'] as Map<String, dynamic>? ?? j;
     return LaporanCuaca(
       id: data['id'] as int? ?? 0,
+      userId: data['user_id'] as int?,
       nomorLaporan: data['nomor_laporan'] as String?,
       status: data['status'] as String? ?? 'Draf',
       tanggal: data['tanggal'] as String?,

@@ -80,8 +80,8 @@ class SyncService {
       }
 
       // Idempotency: key stabil per draf — sama untuk semua retry. Backend
-      // belum mendukung header ini (lihat docs/mobile/API_COMPATIBILITY.md),
-      // namun dikirim agar siap saat backend menerapkannya.
+      // mendukung header ini melalui IdempotencyMiddleware (replay respons
+      // tersimpan untuk key+payload identik).
       final idempotencyHeaders = item.clientOperationId == null
           ? null
           : <String, String>{

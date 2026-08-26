@@ -14,6 +14,7 @@ class LocalDraftItem {
   final Map<String, dynamic> payload;
   final int? serverId;
   final String? fotoPath;
+  final String? videoPath;
   final String createdAt;
   final String? syncedAt;
   final String syncState;
@@ -29,6 +30,7 @@ class LocalDraftItem {
     required this.payload,
     this.serverId,
     this.fotoPath,
+    this.videoPath,
     required this.createdAt,
     this.syncedAt,
     this.syncState = 'pending',
@@ -45,6 +47,7 @@ class LocalDraftItem {
         'payload': json.encode(payload),
         'server_id': serverId,
         'foto_path': fotoPath,
+        if (videoPath != null) 'video_path': videoPath,
         'created_at': createdAt,
         'synced_at': syncedAt,
         'sync_state': syncState,
@@ -62,6 +65,7 @@ class LocalDraftItem {
             as Map<String, dynamic>,
         serverId: map['server_id'] as int?,
         fotoPath: map['foto_path'] as String?,
+        videoPath: map['video_path'] as String?,
         createdAt:
             map['created_at'] as String? ?? DateTime.now().toIso8601String(),
         syncedAt: map['synced_at'] as String?,
@@ -109,7 +113,7 @@ class LocalDb {
     final path = join(await getDatabasesPath(), filePath);
     return openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -124,6 +128,7 @@ class LocalDb {
         payload TEXT NOT NULL,
         server_id INTEGER,
         foto_path TEXT,
+        video_path TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         synced_at TEXT,
@@ -170,6 +175,12 @@ class LocalDb {
         'ALTER TABLE local_drafts ADD COLUMN client_operation_id TEXT',
       );
     }
+    // v3 → v4: path video pendukung agar draf lokal bisa dipulihkan lengkap.
+    if (oldVersion < 4) {
+      await db.execute(
+        'ALTER TABLE local_drafts ADD COLUMN video_path TEXT',
+      );
+    }
   }
 
   Future<int?> _currentUserId() async {
@@ -184,6 +195,7 @@ class LocalDb {
     required String type,
     required Map<String, dynamic> payload,
     String? fotoPath,
+    String? videoPath,
     int? serverId,
     String? clientOperationId,
   }) async {
@@ -199,6 +211,7 @@ class LocalDb {
       payload: payload,
       serverId: serverId,
       fotoPath: fotoPath,
+      videoPath: videoPath,
       createdAt: now,
       syncedAt: null,
       syncState: serverId == null ? 'pending' : 'pending_update',
@@ -230,6 +243,8 @@ class LocalDb {
     Map<String, dynamic>? payload,
     int? serverId,
     String? fotoPath,
+    String? videoPath,
+    bool clearVideo = false,
   }) async {
     final userId = await _currentUserId();
     if (userId == null) return 0;
@@ -245,6 +260,11 @@ class LocalDb {
     if (fotoPath != null) {
       values['foto_path'] = fotoPath;
       values['photo_synced'] = 0;
+    }
+    if (clearVideo) {
+      values['video_path'] = null;
+    } else if (videoPath != null) {
+      values['video_path'] = videoPath;
     }
     return (await database).update(
       'local_drafts',

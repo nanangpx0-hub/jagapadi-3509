@@ -16,6 +16,7 @@ import 'features/cuaca/providers/laporan_cuaca_provider.dart';
 import 'features/alat_sarana/providers/laporan_alat_sarana_provider.dart';
 import 'features/laporan/providers/laporan_terpadu_provider.dart';
 import 'features/notifications/providers/notification_provider.dart';
+import 'features/usulan_opt/providers/usulan_opt_provider.dart';
 import 'features/wilayah/providers/wilayah_provider.dart';
 
 /// Root widget aplikasi JAGAPADI.
@@ -143,6 +144,11 @@ class _JagapadiAppState extends State<JagapadiApp> with WidgetsBindingObserver {
         ),
         ChangeNotifierProvider(
           create: (_) => LaporanAlatSaranaProvider(_apiClient),
+        ),
+
+        // ── Usulan OPT ─────────────────────────────────────────────────────
+        ChangeNotifierProvider(
+          create: (_) => UsulanOptProvider(_apiClient),
         ),
 
         // ── Wilayah cascading (Kabupaten → Kecamatan → Desa) ─────────────
