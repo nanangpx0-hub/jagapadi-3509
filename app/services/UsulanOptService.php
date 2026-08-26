@@ -38,7 +38,7 @@ final class UsulanOptService
     ];
 
     private PDO $db;
-    private UsulanOpt $model;
+    public UsulanOpt $model;
 
     public function __construct(?PDO $db = null)
     {
@@ -273,6 +273,25 @@ final class UsulanOptService
             $id,
             'Usulan OPT dari impor Excel Admin masuk antrean review.'
         );
+        return $id;
+    }
+
+    /**
+     * Buat usulan langsung berstatus Menunggu Review dari pemilik (API mobile).
+     * Setara submitDraft tetapi tanpa memerlukan draf pendahuluan.
+     *
+     * @param array<string,mixed> $data hasil normalize()
+     */
+    public function createPendingFromOwner(int $ownerId, array $data, int $actorId): int
+    {
+        $row = $this->buildRow($ownerId, $data, UsulanOpt::STATUS_PENDING);
+        $row['submitted_at'] = date('Y-m-d H:i:s');
+
+        $id = (int) $this->insertRow($row);
+        $this->model->addHistory($id, null, UsulanOpt::STATUS_PENDING, $actorId, 'Dibuat via API mobile');
+        $this->notifyOwner($ownerId, $id, 'usulan_diterima', 'Usulan OPT terkirim', 'Usulan OPT Anda menunggu review Admin.');
+        $this->writeAudit($actorId, 'create_pending_api', $id, 'Usulan OPT dibuat via API mobile');
+
         return $id;
     }
 

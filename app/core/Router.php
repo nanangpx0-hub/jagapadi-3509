@@ -184,6 +184,14 @@ class Router {
         $this->delete('/api/opt/{id}', 'Api\OptController@destroy', ['auth', 'admin']);
         $this->post('/api/opt/{id}/toggle-status', 'Api\OptController@toggleStatus', ['auth', 'admin']);
 
+        // Usulan OPT API Routes (mobile) — CSRF di-enforce di index.php stateChangingMethods
+        $this->get('/api/v1/usulan-opt', 'Api\UsulanOptController@index', ['auth']);
+        $this->get('/api/v1/usulan-opt/{id}', 'Api\UsulanOptController@show', ['auth']);
+        $this->post('/api/v1/usulan-opt', 'Api\UsulanOptController@store', ['auth']);
+        $this->put('/api/v1/usulan-opt/{id}', 'Api\UsulanOptController@update', ['auth']);
+        $this->post('/api/v1/usulan-opt/{id}/submit', 'Api\UsulanOptController@submit', ['auth']);
+        $this->post('/api/v1/usulan-opt/{id}/resubmit', 'Api\UsulanOptController@resubmit', ['auth']);
+
         // Data Storytelling API Routes (NEW)
         $this->get('/api/storytelling/analyses', 'Api\StorytellingController@getAnalyses', ['auth', 'statistisi']);
         $this->get('/api/storytelling/analyses/{id}', 'Api\StorytellingController@getAnalysis', ['auth', 'statistisi']);
