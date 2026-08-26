@@ -175,9 +175,18 @@ class LaporanHamaController extends Controller
 
         $laporan = $result['data'];
 
-        if (!LaporanStatus::isEditableByPetugas($laporan['status'])) {
-            $_SESSION['flash_error'] = 'Laporan dengan status ini tidak dapat diedit.';
+        // Hanya petugas pemilik laporan yang boleh membuka form edit.
+        if ($currentUser['role'] !== 'petugas') {
+            $_SESSION['flash_error'] = 'Laporan tidak ditemukan.';
+            $this->redirect('/laporan-hama');
+            return;
+        }
+
+        $denial = \App\Helpers\LaporanPolicy::editDenial($laporan, $currentUser['id']);
+        if ($denial !== null) {
+            $_SESSION['flash_error'] = $denial['message'];
             $this->redirect('/laporan-hama/' . $id);
+            return;
         }
 
         $kabupaten = MasterKabupaten::all('nama_kabupaten', 'ASC');

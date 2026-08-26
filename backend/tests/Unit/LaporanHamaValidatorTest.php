@@ -134,4 +134,53 @@ class LaporanHamaValidatorTest extends TestCase
             $errors['foto'] ?? null
         );
     }
+
+    public function testMetodePengukuranInvalidRejected(): void
+    {
+        $errors = LaporanHamaValidator::validateDraft(['metode_pengukuran' => 'tebakan']);
+        $this->assertArrayHasKey('metode_pengukuran', $errors);
+    }
+
+    public function testMetodePersentaseAccepted(): void
+    {
+        $errors = LaporanHamaValidator::validateDraft([
+            'metode_pengukuran' => 'persentase',
+            'persentase_serangan' => 45.5,
+            'luas_areal_diamati' => 2,
+        ]);
+        $this->assertArrayNotHasKey('metode_pengukuran', $errors);
+        $this->assertArrayNotHasKey('persentase_serangan', $errors);
+        $this->assertArrayNotHasKey('luas_areal_diamati', $errors);
+    }
+
+    public function testPersentaseSeranganOutOfRangeRejected(): void
+    {
+        $errors = LaporanHamaValidator::validateDraft(['persentase_serangan' => 120]);
+        $this->assertArrayHasKey('persentase_serangan', $errors);
+    }
+
+    public function testSubmitPersentaseModeDoesNotRequireLuasSerangan(): void
+    {
+        $errors = LaporanHamaValidator::validateSubmit([
+            'metode_pengukuran' => 'persentase',
+            'persentase_serangan' => 30,
+        ]);
+
+        // Mode persentase tidak menuntut luas_serangan.
+        $this->assertArrayNotHasKey('luas_serangan', $errors);
+        // Nilai persentase yang diberikan valid → tidak ada error bidang itu.
+        $this->assertArrayNotHasKey('persentase_serangan', $errors);
+        // Field wajib lainnya tetap dituntut.
+        $this->assertArrayHasKey('tanggal', $errors);
+        $this->assertArrayHasKey('populasi', $errors);
+    }
+
+    public function testSubmitAbsolutModeStillRequiresLuasSerangan(): void
+    {
+        $errors = LaporanHamaValidator::validateSubmit([
+            'metode_pengukuran' => 'absolut',
+            'populasi' => 5,
+        ]);
+        $this->assertArrayHasKey('luas_serangan', $errors);
+    }
 }

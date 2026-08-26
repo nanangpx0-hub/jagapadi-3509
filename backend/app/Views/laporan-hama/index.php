@@ -127,7 +127,7 @@
             <td><?= date('d/m/Y H:i', strtotime($lh['updated_at'])) ?></td>
             <td>
                 <a href="/laporan-hama/<?= (int) $lh['id'] ?>" class="btn-sm btn-view">Detail</a>
-                <?php if ($lh['status'] === 'Draf' && $currentUser['role'] === 'petugas'): ?>
+                <?php if ($lh['status'] === 'Draf' && $currentUser['role'] === 'petugas' && (int) $lh['user_id'] === (int) $currentUser['id']): ?>
                     <a href="/laporan-hama/<?= (int) $lh['id'] ?>/edit" class="btn-sm btn-edit">Edit</a>
                     <form method="POST" action="/laporan-hama/<?= (int) $lh['id'] ?>/delete" style="display:inline" onsubmit="return confirm('Hapus draf ini?')">
                         <?= \App\Core\Security::csrfField() ?>

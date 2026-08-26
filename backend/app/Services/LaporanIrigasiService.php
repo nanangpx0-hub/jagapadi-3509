@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Core\Database;
 use App\Core\Logger;
 use App\Helpers\LaporanIrigasiValidator;
+use App\Helpers\LaporanPolicy;
 use App\Helpers\LaporanStatus;
 use App\Helpers\NomorLaporanGenerator;
 use App\Models\ActivityLog;
@@ -56,8 +57,9 @@ class LaporanIrigasiService
             return ['success' => false, 'error' => 'NotFound', 'message' => 'Laporan tidak ditemukan.', 'code' => 404];
         }
 
-        if (!LaporanStatus::isEditableByPetugas($existing['status'])) {
-            return ['success' => false, 'error' => 'Conflict', 'message' => 'Laporan dengan status ini tidak dapat diubah.', 'code' => 409];
+        $denial = LaporanPolicy::editDenial($existing, $userId);
+        if ($denial !== null) {
+            return ['success' => false] + $denial;
         }
 
         $errors = LaporanIrigasiValidator::validateDraft($input);
@@ -117,6 +119,7 @@ class LaporanIrigasiService
     {
         $errors = LaporanIrigasiValidator::validateSubmit($input);
         if (count($errors) > 0) {
+            self::reportSubmitFailure($userId, 'validation', 'Data laporan tidak valid', $errors);
             return [
                 'success' => false,
                 'error' => 'ValidationError',
@@ -149,9 +152,11 @@ class LaporanIrigasiService
 
             DashboardService::invalidateCache();
             self::notifyAdminsAboutSubmission('irigasi', (int) $id, $nomor, $userId);
+            self::reportSubmitSuccess($userId, (int) $id, $nomor);
             return ['success' => true, 'message' => 'Laporan irigasi berhasil dikirim', 'data' => $laporan, 'code' => 201];
         } catch (\Throwable $e) {
             $pdo->rollBack();
+            self::reportSubmitFailure($userId, 'server_error', 'Kesalahan server saat menyimpan laporan.');
             throw $e;
         }
     }
@@ -160,16 +165,25 @@ class LaporanIrigasiService
     {
         $existing = LaporanIrigasi::findAccessibleById($id, ['id' => $userId, 'role' => 'petugas']);
         if ($existing === null) {
+            self::reportSubmitFailure($userId, 'not_found', 'Laporan tidak ditemukan.', [], $id);
             return ['success' => false, 'error' => 'NotFound', 'message' => 'Laporan tidak ditemukan.', 'code' => 404];
         }
 
         if ($existing['status'] !== 'Draf') {
+            self::reportSubmitFailure(
+                $userId,
+                'conflict',
+                "Laporan berstatus {$existing['status']} tidak dapat dikirim.",
+                [],
+                $id
+            );
             return ['success' => false, 'error' => 'Conflict', 'message' => 'Hanya laporan dengan status Draf yang dapat dikirim.', 'code' => 409];
         }
 
         $merged = array_merge(array_filter($existing, fn($v) => $v !== null), $input);
         $errors = LaporanIrigasiValidator::validateSubmit($merged);
         if (count($errors) > 0) {
+            self::reportSubmitFailure($userId, 'validation', 'Data laporan tidak valid', $errors, $id);
             return [
                 'success' => false,
                 'error' => 'ValidationError',
@@ -205,9 +219,11 @@ class LaporanIrigasiService
 
             DashboardService::invalidateCache();
             self::notifyAdminsAboutSubmission('irigasi', $id, $nomor, $userId);
+            self::reportSubmitSuccess($userId, $id, $nomor);
             return ['success' => true, 'message' => 'Laporan irigasi berhasil dikirim', 'data' => $laporan, 'code' => 200];
         } catch (\Throwable $e) {
             $pdo->rollBack();
+            self::reportSubmitFailure($userId, 'server_error', 'Kesalahan server saat menyimpan laporan.', [], $id);
             throw $e;
         }
     }
@@ -358,18 +374,21 @@ class LaporanIrigasiService
     {
         $existing = LaporanIrigasi::findAccessibleById($id, ['id' => $userId, 'role' => 'petugas']);
         if ($existing === null) {
+            self::reportSubmitFailure($userId, 'not_found', 'Laporan tidak ditemukan.', [], $id);
             return ['success' => false, 'error' => 'NotFound', 'message' => 'Laporan tidak ditemukan.', 'code' => 404];
         }
 
         try {
             LaporanStatus::assertCanTransition($existing['status'], LaporanStatus::SUBMITTED, 'petugas');
         } catch (\DomainException $e) {
+            self::reportSubmitFailure($userId, 'conflict', $e->getMessage(), [], $id);
             return ['success' => false, 'error' => 'Conflict', 'message' => $e->getMessage(), 'code' => 409];
         }
 
         $merged = array_merge(array_filter($existing, fn($v) => $v !== null), $input);
         $errors = LaporanIrigasiValidator::validateSubmit($merged);
         if (count($errors) > 0) {
+            self::reportSubmitFailure($userId, 'validation', 'Data laporan tidak valid', $errors, $id);
             return [
                 'success' => false,
                 'error' => 'ValidationError',
@@ -404,10 +423,38 @@ class LaporanIrigasiService
 
             DashboardService::invalidateCache();
             self::notifyAdminsAboutResubmit('irigasi', $id, $nomor, $userId);
+            self::reportSubmitSuccess($userId, $id, $nomor);
             return ['success' => true, 'message' => 'Laporan irigasi berhasil dikirim ulang', 'data' => $laporan, 'code' => 200];
         } catch (\Throwable $e) {
             $pdo->rollBack();
+            self::reportSubmitFailure($userId, 'server_error', 'Kesalahan server saat mengirim ulang laporan.', [], $id);
             throw $e;
+        }
+    }
+
+    private static function reportSubmitSuccess(int $userId, int $laporanId, string $nomor): void
+    {
+        try {
+            (new NotificationService())->notifySubmitSuccessToOwner($userId, 'irigasi', $laporanId, $nomor);
+        } catch (\Throwable $e) {
+            Logger::warning('Submit success notification failed', ['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * @param array<string, string> $errors
+     */
+    private static function reportSubmitFailure(
+        int $userId,
+        string $code,
+        string $message,
+        array $errors = [],
+        ?int $laporanId = null
+    ): void {
+        try {
+            (new NotificationService())->notifySubmitFailureToOwner($userId, 'irigasi', $laporanId, $code, $message, $errors);
+        } catch (\Throwable $e) {
+            Logger::warning('Submit failure notification failed', ['error' => $e->getMessage()]);
         }
     }
 

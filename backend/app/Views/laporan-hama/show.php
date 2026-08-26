@@ -130,7 +130,7 @@
     <div class="action-group">
         <a href="/laporan-hama" class="btn btn-secondary">Kembali ke Daftar</a>
 
-        <?php if ($laporan['status'] === 'Draf' && $currentUser['role'] === 'petugas'): ?>
+        <?php if ($laporan['status'] === 'Draf' && $currentUser['role'] === 'petugas' && (int) $laporan['user_id'] === (int) $currentUser['id']): ?>
             <a href="/laporan-hama/<?= (int) $laporan['id'] ?>/edit" class="btn btn-primary">Edit</a>
             <form method="POST" action="/laporan-hama/<?= (int) $laporan['id'] ?>/submit" style="display:inline">
                 <?= \App\Core\Security::csrfField() ?>
@@ -165,7 +165,7 @@
             </form>
         <?php endif; ?>
 
-        <?php if ($laporan['status'] === 'Ditolak' && $currentUser['role'] === 'petugas'): ?>
+        <?php if ($laporan['status'] === 'Ditolak' && $currentUser['role'] === 'petugas' && (int) $laporan['user_id'] === (int) $currentUser['id']): ?>
             <a href="/laporan-hama/<?= (int) $laporan['id'] ?>/edit" class="btn btn-primary">Edit &amp; Perbaiki</a>
             <form method="POST" action="/laporan-hama/<?= (int) $laporan['id'] ?>/resubmit" style="display:inline">
                 <?= \App\Core\Security::csrfField() ?>

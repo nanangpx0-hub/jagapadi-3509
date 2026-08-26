@@ -111,7 +111,7 @@
             <td><?= date('d/m/Y H:i', strtotime($li['updated_at'])) ?></td>
             <td>
                 <a href="/laporan-irigasi/<?= (int) $li['id'] ?>" class="btn-sm btn-view">Detail</a>
-                <?php if ($li['status'] === 'Draf' && $currentUser['role'] === 'petugas'): ?>
+                <?php if ($li['status'] === 'Draf' && $currentUser['role'] === 'petugas' && (int) $li['user_id'] === (int) $currentUser['id']): ?>
                     <a href="/laporan-irigasi/<?= (int) $li['id'] ?>/edit" class="btn-sm btn-edit">Edit</a>
                     <form method="POST" action="/laporan-irigasi/<?= (int) $li['id'] ?>/delete" style="display:inline" onsubmit="return confirm('Hapus draf ini?')">
                         <?= \App\Core\Security::csrfField() ?>

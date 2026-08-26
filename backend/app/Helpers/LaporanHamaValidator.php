@@ -73,6 +73,26 @@ class LaporanHamaValidator
             }
         }
 
+        if (isset($input['metode_pengukuran']) && $input['metode_pengukuran'] !== '') {
+            if (!in_array($input['metode_pengukuran'], ['absolut', 'persentase'], true)) {
+                $errors['metode_pengukuran'] = 'Metode pengukuran harus absolut atau persentase.';
+            }
+        }
+
+        if (isset($input['persentase_serangan']) && $input['persentase_serangan'] !== '') {
+            $val = (float) $input['persentase_serangan'];
+            if ($val < 0 || $val > 100) {
+                $errors['persentase_serangan'] = 'Persentase serangan harus antara 0 dan 100.';
+            }
+        }
+
+        if (isset($input['luas_areal_diamati']) && $input['luas_areal_diamati'] !== '') {
+            $val = (float) $input['luas_areal_diamati'];
+            if ($val < 0 || $val > 99999999.99) {
+                $errors['luas_areal_diamati'] = 'Luas areal diamati harus >= 0.';
+            }
+        }
+
         if (isset($input['luas_serangan']) && $input['luas_serangan'] !== '') {
             $val = (float) $input['luas_serangan'];
             if ($val < 0 || $val > 9999.99) {
@@ -120,6 +140,9 @@ class LaporanHamaValidator
     {
         $errors = [];
 
+        $metode = $input['metode_pengukuran'] ?? 'absolut';
+        $isPersentase = $metode === 'persentase';
+
         $required = [
             'tanggal' => 'Tanggal wajib diisi.',
             'master_opt_id' => 'OPT wajib diisi.',
@@ -127,9 +150,14 @@ class LaporanHamaValidator
             'kecamatan_id' => 'Kecamatan wajib diisi.',
             'desa_id' => 'Desa wajib diisi.',
             'tingkat_keparahan' => 'Tingkat keparahan wajib diisi.',
-            'luas_serangan' => 'Luas serangan wajib diisi.',
             'populasi' => 'Populasi wajib diisi.',
         ];
+
+        if ($isPersentase) {
+            $required['persentase_serangan'] = 'Persentase serangan wajib diisi untuk mode persentase.';
+        } else {
+            $required['luas_serangan'] = 'Luas serangan wajib diisi.';
+        }
 
         foreach ($required as $field => $message) {
             if (!isset($input[$field]) || (is_string($input[$field]) && trim($input[$field]) === '')) {
@@ -184,14 +212,18 @@ class LaporanHamaValidator
                 $errors['tingkat_keparahan'] = 'Tingkat keparahan harus Ringan, Sedang, atau Berat.';
             }
 
-            $ls = (float) $input['luas_serangan'];
-            if ($ls < 0 || $ls > 9999.99) {
-                $errors['luas_serangan'] = 'Luas serangan harus antara 0 dan 9999.99.';
+            if (!$isPersentase && isset($input['luas_serangan']) && $input['luas_serangan'] !== '') {
+                $ls = (float) $input['luas_serangan'];
+                if ($ls < 0 || $ls > 9999.99) {
+                    $errors['luas_serangan'] = 'Luas serangan harus antara 0 dan 9999.99.';
+                }
             }
 
-            $pop = (float) $input['populasi'];
-            if ($pop < 0) {
-                $errors['populasi'] = 'Populasi harus >= 0.';
+            if (isset($input['populasi']) && $input['populasi'] !== '') {
+                $pop = (float) $input['populasi'];
+                if ($pop < 0) {
+                    $errors['populasi'] = 'Populasi harus >= 0.';
+                }
             }
         }
 

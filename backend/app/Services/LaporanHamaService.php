@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Core\Database;
 use App\Core\Logger;
 use App\Helpers\LaporanHamaValidator;
+use App\Helpers\LaporanPolicy;
 use App\Helpers\LaporanStatus;
 use App\Helpers\NomorLaporanGenerator;
 use App\Models\ActivityLog;
@@ -19,7 +20,8 @@ class LaporanHamaService
     private const DRAFT_ALLOWED = [
         'master_opt_id', 'tanggal', 'kabupaten_id', 'kecamatan_id', 'desa_id',
         'lokasi', 'alamat_lengkap', 'latitude', 'longitude',
-        'tingkat_keparahan', 'luas_serangan', 'populasi', 'foto_url', 'catatan',
+        'tingkat_keparahan', 'luas_serangan', 'persentase_serangan',
+        'luas_areal_diamati', 'metode_pengukuran', 'populasi', 'foto_url', 'catatan',
     ];
 
     public static function createDraft(int $userId, array $input, string $ip, string $userAgent): array
@@ -57,8 +59,9 @@ class LaporanHamaService
             return ['success' => false, 'error' => 'NotFound', 'message' => 'Laporan tidak ditemukan.', 'code' => 404];
         }
 
-        if (!LaporanStatus::isEditableByPetugas($existing['status'])) {
-            return ['success' => false, 'error' => 'Conflict', 'message' => 'Laporan dengan status ini tidak dapat diubah.', 'code' => 409];
+        $denial = LaporanPolicy::editDenial($existing, $userId);
+        if ($denial !== null) {
+            return ['success' => false] + $denial;
         }
 
         $errors = LaporanHamaValidator::validateDraft($input);
@@ -118,6 +121,7 @@ class LaporanHamaService
     {
         $errors = LaporanHamaValidator::validateSubmit($input);
         if (count($errors) > 0) {
+            self::reportSubmitFailure($userId, 'validation', 'Data laporan tidak valid', $errors);
             return [
                 'success' => false,
                 'error' => 'ValidationError',
@@ -150,9 +154,11 @@ class LaporanHamaService
 
             DashboardService::invalidateCache();
             self::notifyAdminsAboutSubmission('hama', (int) $id, $nomor, $userId);
+            self::reportSubmitSuccess($userId, (int) $id, $nomor);
             return ['success' => true, 'message' => 'Laporan hama berhasil dikirim', 'data' => $laporan, 'code' => 201];
         } catch (\Throwable $e) {
             $pdo->rollBack();
+            self::reportSubmitFailure($userId, 'server_error', 'Kesalahan server saat menyimpan laporan.');
             throw $e;
         }
     }
@@ -161,16 +167,25 @@ class LaporanHamaService
     {
         $existing = LaporanHama::findAccessibleById($id, ['id' => $userId, 'role' => 'petugas']);
         if ($existing === null) {
+            self::reportSubmitFailure($userId, 'not_found', 'Laporan tidak ditemukan.', [], $id);
             return ['success' => false, 'error' => 'NotFound', 'message' => 'Laporan tidak ditemukan.', 'code' => 404];
         }
 
         if ($existing['status'] !== 'Draf') {
+            self::reportSubmitFailure(
+                $userId,
+                'conflict',
+                "Laporan berstatus {$existing['status']} tidak dapat dikirim.",
+                [],
+                $id
+            );
             return ['success' => false, 'error' => 'Conflict', 'message' => 'Hanya laporan dengan status Draf yang dapat dikirim.', 'code' => 409];
         }
 
         $merged = array_merge(array_filter($existing, fn($v) => $v !== null), $input);
         $errors = LaporanHamaValidator::validateSubmit($merged);
         if (count($errors) > 0) {
+            self::reportSubmitFailure($userId, 'validation', 'Data laporan tidak valid', $errors, $id);
             return [
                 'success' => false,
                 'error' => 'ValidationError',
@@ -206,9 +221,11 @@ class LaporanHamaService
 
             DashboardService::invalidateCache();
             self::notifyAdminsAboutSubmission('hama', $id, $nomor, $userId);
+            self::reportSubmitSuccess($userId, $id, $nomor);
             return ['success' => true, 'message' => 'Laporan hama berhasil dikirim', 'data' => $laporan, 'code' => 200];
         } catch (\Throwable $e) {
             $pdo->rollBack();
+            self::reportSubmitFailure($userId, 'server_error', 'Kesalahan server saat menyimpan laporan.', [], $id);
             throw $e;
         }
     }
@@ -397,18 +414,21 @@ class LaporanHamaService
     {
         $existing = LaporanHama::findAccessibleById($id, ['id' => $userId, 'role' => 'petugas']);
         if ($existing === null) {
+            self::reportSubmitFailure($userId, 'not_found', 'Laporan tidak ditemukan.', [], $id);
             return ['success' => false, 'error' => 'NotFound', 'message' => 'Laporan tidak ditemukan.', 'code' => 404];
         }
 
         try {
             LaporanStatus::assertCanTransition($existing['status'], LaporanStatus::SUBMITTED, 'petugas');
         } catch (\DomainException $e) {
+            self::reportSubmitFailure($userId, 'conflict', $e->getMessage(), [], $id);
             return ['success' => false, 'error' => 'Conflict', 'message' => $e->getMessage(), 'code' => 409];
         }
 
         $merged = array_merge(array_filter($existing, fn($v) => $v !== null), $input);
         $errors = LaporanHamaValidator::validateSubmit($merged);
         if (count($errors) > 0) {
+            self::reportSubmitFailure($userId, 'validation', 'Data laporan tidak valid', $errors, $id);
             return [
                 'success' => false,
                 'error' => 'ValidationError',
@@ -443,10 +463,38 @@ class LaporanHamaService
 
             DashboardService::invalidateCache();
             self::notifyAdminsAboutResubmit('hama', $id, $nomor, $userId);
+            self::reportSubmitSuccess($userId, $id, $nomor);
             return ['success' => true, 'message' => 'Laporan hama berhasil dikirim ulang', 'data' => $laporan, 'code' => 200];
         } catch (\Throwable $e) {
             $pdo->rollBack();
+            self::reportSubmitFailure($userId, 'server_error', 'Kesalahan server saat mengirim ulang laporan.', [], $id);
             throw $e;
+        }
+    }
+
+    private static function reportSubmitSuccess(int $userId, int $laporanId, string $nomor): void
+    {
+        try {
+            (new NotificationService())->notifySubmitSuccessToOwner($userId, 'hama', $laporanId, $nomor);
+        } catch (\Throwable $e) {
+            Logger::warning('Submit success notification failed', ['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * @param array<string, string> $errors
+     */
+    private static function reportSubmitFailure(
+        int $userId,
+        string $code,
+        string $message,
+        array $errors = [],
+        ?int $laporanId = null
+    ): void {
+        try {
+            (new NotificationService())->notifySubmitFailureToOwner($userId, 'hama', $laporanId, $code, $message, $errors);
+        } catch (\Throwable $e) {
+            Logger::warning('Submit failure notification failed', ['error' => $e->getMessage()]);
         }
     }
 

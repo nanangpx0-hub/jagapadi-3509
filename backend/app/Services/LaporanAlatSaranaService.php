@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Core\Database;
 use App\Core\Logger;
 use App\Helpers\LaporanAlatSaranaValidator;
+use App\Helpers\LaporanPolicy;
 use App\Helpers\LaporanStatus;
 use App\Helpers\NomorLaporanGenerator;
 use App\Models\ActivityLog;
@@ -57,8 +58,9 @@ class LaporanAlatSaranaService
             return ['success' => false, 'error' => 'NotFound', 'message' => 'Laporan tidak ditemukan.', 'code' => 404];
         }
 
-        if (!LaporanStatus::isEditableByPetugas($existing['status'])) {
-            return ['success' => false, 'error' => 'Conflict', 'message' => 'Laporan dengan status ini tidak dapat diubah.', 'code' => 409];
+        $denial = LaporanPolicy::editDenial($existing, $userId);
+        if ($denial !== null) {
+            return ['success' => false] + $denial;
         }
 
         $errors = LaporanAlatSaranaValidator::validateDraft($input);

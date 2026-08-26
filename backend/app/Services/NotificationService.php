@@ -124,6 +124,99 @@ class NotificationService
         return Notification::pruneOlderThan($days);
     }
 
+    /**
+     * Notifikasi tanda terima sukses kirim laporan kepada petugas pengirim,
+     * memuat nomor laporan dan waktu pencatatan (persyaratan notifikasi ganda).
+     */
+    public function notifySubmitSuccessToOwner(
+        int $ownerId,
+        string $entity,
+        int $laporanId,
+        string $nomor
+    ): void {
+        $submittedAt = date('Y-m-d H:i:s');
+        $this->notifyUser(
+            $ownerId,
+            'laporan_submit_success',
+            'Laporan berhasil dikirim',
+            "{$nomor} tercatat pada {$submittedAt} WIB.",
+            [
+                'entity' => $entity,
+                'laporan_id' => $laporanId,
+                'nomor_laporan' => $nomor,
+                'status' => 'Submitted',
+                'submitted_at' => $submittedAt,
+                'web_path' => "/laporan-{$entity}/{$laporanId}",
+                'api_path' => "/api/v1/laporan-{$entity}/{$laporanId}",
+            ]
+        );
+    }
+
+    /**
+     * Notifikasi kegagalan pengiriman laporan kepada petugas beserta kode
+     * penyebab (validation|conflict|not_found|server_error). Dide duplikasi:
+     * kegagalan identik pada rentang 5 menit tidak mengirim notifikasi baru
+     * agar retry otomatis tidak membanjiri pengguna.
+     *
+     * @param array<string, string> $errors Ringkasan per bidang (opsional)
+     */
+    public function notifySubmitFailureToOwner(
+        int $userId,
+        string $entity,
+        ?int $laporanId,
+        string $reasonCode,
+        string $reasonMessage,
+        array $errors = []
+    ): bool {
+        if (!$this->shouldSendFailure($userId, $entity, $laporanId, $reasonCode)) {
+            return false;
+        }
+
+        $title = 'Laporan gagal dikirim';
+        $body = $this->truncateBody('Pengiriman gagal (' . $reasonCode . '): ' . $reasonMessage);
+
+        $this->notifyUser(
+            $userId,
+            'laporan_submit_failed',
+            $title,
+            $body,
+            [
+                'entity' => $entity,
+                'laporan_id' => $laporanId,
+                'reason_code' => $reasonCode,
+                'reason_message' => mb_substr($reasonMessage, 0, 300),
+                'errors' => array_slice($errors, 0, 10, true),
+            ]
+        );
+
+        return true;
+    }
+
+    private function shouldSendFailure(
+        int $userId,
+        string $entity,
+        ?int $laporanId,
+        string $reasonCode
+    ): bool {
+        try {
+            $stmt = $this->db->prepare(
+                "SELECT COUNT(*) FROM `notifications`
+                 WHERE `user_id` = ? AND `type` = 'laporan_submit_failed'
+                   AND `created_at` >= (NOW() - INTERVAL 5 MINUTE)
+                   AND `data_json` LIKE ?"
+            );
+            $needle = '%"reason_code":"' . $reasonCode . '"%';
+            if ($laporanId !== null) {
+                $needle = '%"entity":"' . $entity . '"%"laporan_id":' . (int) $laporanId . '%' . $needle;
+            }
+            $stmt->execute([$userId, $needle]);
+            return (int) $stmt->fetchColumn() === 0;
+        } catch (\Throwable) {
+            // Bila pemeriksaan dedupe gagal, tetap kirim (gagal aman).
+            return true;
+        }
+    }
+
     public function truncateBody(string $body, int $maxLength = 120): string
     {
         if (mb_strlen($body) <= $maxLength) {
