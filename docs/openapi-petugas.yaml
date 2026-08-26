@@ -164,6 +164,39 @@ paths:
   /laporan-hama/{id}/foto/delete:
     parameters: [{$ref: '#/components/parameters/ReportId'}]
     post: {$ref: '#/components/pathItems/PhotoDelete'}
+  /laporan-hama/{id}/video:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post:
+      summary: Upload video pendukung laporan hama (MP4/MOV ≤50 MB)
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [video]
+              properties:
+                video:
+                  type: string
+                  format: binary
+                  description: Berkas MP4 atau MOV maksimal 50 MB
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /laporan-hama/{id}/video/delete:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post:
+      summary: Hapus video pendukung laporan hama (status Draf/Ditolak)
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
   /laporan-irigasi:
     get: {$ref: '#/components/pathItems/ReportCollectionGet'}
     post: {$ref: '#/components/pathItems/ReportCollectionPost'}
@@ -517,6 +550,11 @@ components:
     ReportPut:
       tags: [Laporan]
       summary: Edit Draf/Ditolak milik Petugas
+      description: >-
+        Hanya petugas PEMILIK laporan (user_id dari JWT dibandingkan dengan
+        user_id di database). Status harus Draf atau Ditolak.
+        Non-pemilik/non-petugas menghasilkan 404; pemilik dengan status lain 409;
+        field user_id/status dari body diabaikan server.
       parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
       requestBody:
         required: true
@@ -526,6 +564,7 @@ components:
       responses:
         '200': {$ref: '#/components/responses/ObjectSuccess'}
         '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
         '409': {$ref: '#/components/responses/Conflict'}
         '422': {$ref: '#/components/responses/ValidationError'}
     ReportDelete:

@@ -105,6 +105,7 @@ backend/*.html
 
 # --- Local SQL dumps & backups ---
 database/jagapadi_local*.sql
+database/bpsjembe_*.sql
 docs/backup_*.sql
 *.sql.bak
 *.bak

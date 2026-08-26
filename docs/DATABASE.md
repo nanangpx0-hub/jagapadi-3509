@@ -314,6 +314,18 @@ CREATE TABLE `notifications` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
+### Migration `024_align_laporan_hama_media.sql` (Backend v1)
+
+Idempoten (guard `INFORMATION_SCHEMA`, no-op berupa `DO 1`) sehingga aman pada
+database target yang kolomnya sudah selaras maupun yang masih baseline
+migration `005`:
+
+- Kolom: `metode_pengukuran`, `persentase_serangan`, `luas_areal_diamati`,
+  `luas_serangan_estimasi`, `video_url`, `deleted_at`, `deleted_by`
+- Constraint CHECK: `ck_lh_persentase_serangan`, `ck_lh_luas_areal_diamati`,
+  `ck_lh_luas_estimasi`
+- Index: `idx_lh_deleted_at`
+
 ## Aturan `nomor_laporan`
 
 - **NULL** saat laporan masih `Draf`

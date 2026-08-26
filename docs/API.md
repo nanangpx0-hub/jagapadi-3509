@@ -20,6 +20,8 @@
 | Date format | ISO 8601 (`YYYY-MM-DD`, `YYYY-MM-DDTHH:MM:SSZ`) |
 | Error codes | `ValidationError`, `Unauthorized`, `Unauthenticated`, `Forbidden`, `NotFound`, `Conflict`, `ServerError`, `TooManyRequests`, `TokenInvalid` |
 | Rate limit | 60 req/min (auth), 20 req/min (guest); brute-force: 5 failed login / IP / 15 menit |
+| Idempotency | Header opsional `Idempotency-Key` pada endpoint mutasi: key sama + payload sama → replay respons tersimpan; key sama + payload beda → `409 Conflict`. Entry kedaluwarsa otomatis dihapus |
+| Edit laporan (PUT) | Hanya **petugas pemilik laporan** (`user_id` dari JWT vs DB, bukan input). Status terbatas `Draf`/`Ditolak`. Non-pemilik & non-petugas → `404`; pemilik dengan status lain → `409`; `user_id`/`status` dari body selalu diabaikan (whitelist server) |
 
 ---
 
@@ -311,9 +313,26 @@ route statis lain terdaftar eksplisit di `config/web_routes.php`.
 | GET | `/api/v1/laporan-hama` | JWT | List (filter: status, tanggal, wilayah, OPT, q, page, limit, include_draft) |
 | POST | `/api/v1/laporan-hama` | JWT | Create (action=draft|submit, default draft) |
 | GET | `/api/v1/laporan-hama/{id}` | JWT | Detail (owner/admin only) |
-| PUT | `/api/v1/laporan-hama/{id}` | JWT | Update Draf (owner only) |
+| PUT | `/api/v1/laporan-hama/{id}` | JWT | Update Draf/Ditolak — hanya petugas pemilik (lihat Otorisasi Edit) |
 | DELETE | `/api/v1/laporan-hama/{id}` | JWT | Delete Draf (owner only) |
 | POST | `/api/v1/laporan-hama/{id}/submit` | JWT | Submit Draf → Submitted |
+
+### Otorisasi Edit (PUT)
+
+Ditegakkan berlapis: query model ber-scope `user_id = ?` (context petugas
+dipaksa oleh service), divalidasi ulang oleh `App\Helpers\LaporanPolicy::editDenial()`
+di setiap service, dan menu edit pada UI disembunyikan untuk non-pemilik.
+
+| Aktor | Target laporan | Status | Hasil |
+|---|---|---|---|
+| Petugas A (pemilik) | milik A | Draf / Ditolak | `200` — boleh ubah field via whitelist |
+| Petugas B | milik A | apa pun | `404 NotFound` (anti-enumeration) |
+| Admin / Operator / Statistisi / Viewer | milik siapa pun | apa pun | `404 NotFound` (endpoint khusus pemilik) |
+| Petugas A (pemilik) | milik A | Submitted / Diverifikasi / Diarsipkan | `409 Conflict` |
+| Body berisi `user_id`/`status` ilegal | — | — | diabaikan server (whitelist); kepemilikan/status tak berubah |
+
+ID laporan hanya dari path (di-cast integer). Identitas pemilik tidak pernah
+diterima dari request body.
 
 **Request POST /api/v1/laporan-hama (buat Draf):**
 ```json
@@ -690,7 +709,49 @@ foto: <binary file>
   4. Ukuran file check
   5. Nama file random (bin2hex(random_bytes(16)))
   6. Sub-direktori per bulan (`YYYYMM`)
-- Gunakan `ImageCompressor` helper (GD library) untuk kompresi otomatis jika file > 2 MB (quality 75).
+- Gunakan `ImageCompressor` helper (GD library) untuk kompresi otomatis jika file > 2 MB: kualitas diturunkan bertahap (85→45) dan dimensi disesuaikan (1920→1600→1280 px sisi panjang) hingga ≤ 2 MB, dengan orientasi EXIF diterapkan dan penulisan atomik. Bila target tak tercapai, hasil kualitas terendah dipakai hanya jika ukurannya menyusut.
+
+---
+
+## Upload Video - API (Implemented)
+
+### Aturan Umum
+
+- Endpoint khusus laporan hama: `POST /api/v1/laporan-hama/{id}/video` dan `POST /api/v1/laporan-hama/{id}/video/delete`.
+- Format: MP4 atau MOV (`finfo` MIME `video/mp4`/`video/quicktime` + magic bytes box `ftyp`; MOV wajib brand `qt`).
+- Ukuran maksimal **50 MB** per berkas.
+- Field multipart: `video`.
+- Ownership: pemilik laporan atau admin. Status laporan harus `Draf` atau `Ditolak` untuk upload maupun hapus.
+- Nama file acak (`bin2hex(random_bytes(24))`) dengan ekstensi sesuai tipe terdeteksi; disimpan di `assets/uploads/laporan-hama/video/YYYYmm/`... (folder datar per modul).
+- Video lama diganti hanya setelah berkas baru tersimpan (gagal move tidak menghapus video lama).
+
+### POST /api/v1/laporan-hama/{id}/video
+
+```http
+POST /api/v1/laporan-hama/{id}/video
+Authorization: Bearer <access-token>
+Content-Type: multipart/form-data
+
+video=<file.mp4|file.mov>
+```
+
+```json
+{
+  "success": true,
+  "message": "Video berhasil diunggah.",
+  "data": { "id": 12, "video_url": "assets/uploads/laporan-hama/video/<random>.mp4" }
+}
+```
+
+Error umum: `422 ValidationError` (bukan MP4/MOV, >50 MB, kosong), `404 NotFound` (bukan pemilik), `409 Conflict` (status bukan Draf/Ditolak), `500 ServerError`.
+
+### POST /api/v1/laporan-hama/{id}/video/delete
+
+Menghapus `video_url` laporan beserta berkasnya. Respon sukses:
+
+```json
+{ "success": true, "message": "Video berhasil dihapus.", "data": { "id": 12 } }
+```
 
 ---
 

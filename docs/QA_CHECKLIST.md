@@ -205,3 +205,21 @@
 | `storage/logs/` | Writable |
 | `storage/tmp/` | Writable |
 | `public/assets/uploads/` | Writable |
+
+---
+
+## Otorisasi Edit Laporan (PUT)
+
+Backend: `LaporanPolicy::editDenial()` di semua `updateDraft()`; UI web/mobile
+menyembunyikan menu edit untuk non-pemilik.
+
+- [ ] Petugas A edit Draf milik A via API -> 200, data berubah, status tetap
+- [ ] Petugas B edit laporan milik A (IDOR) -> 404 NotFound, data tidak berubah
+- [ ] Admin PUT endpoint petugas -> 404 (endpoint khusus pemilik)
+- [ ] Pemilik edit status Submitted/Diverifikasi/Diarsipkan -> 409 Conflict
+- [ ] Body berisi `user_id`/`status` ilegal -> diabaikan server
+- [ ] ID 0 / negatif / non-numerik -> 404 tanpa error SQL
+- [ ] Web: Petugas B membuka `/laporan-hama/{idA}/edit` -> redirect + flash error
+- [ ] Web: tombol Edit hanya tampil untuk pemilik pada baris Draf/Ditolak sendiri
+- [ ] Mobile: tombol Edit/Kirim disembunyikan bila `l.userId != auth.user.id`
+      (widget/unit test `report_edit_access_test.dart`)
