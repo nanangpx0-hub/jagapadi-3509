@@ -196,6 +196,49 @@
                     <div class="form-group"><label>Video Pendukung</label><video controls preload="metadata" class="d-block" style="max-width:100%;max-height:420px"><source src="<?= BASE_URL . htmlspecialchars($laporan['video_url']) ?>" type="video/mp4">Browser tidak mendukung video.</video></div>
                     <?php endif; ?>
                 </table>
+
+                <?php if(($laporan['status'] ?? '') === 'Submitted' && in_array($_SESSION['role'] ?? '', ['admin', 'operator'], true)): ?>
+                <hr>
+                <h5><i class="fas fa-clipboard-check"></i> Verifikasi Laporan</h5>
+                <p class="text-muted small">Setujui atau tolak laporan agar petugas dapat memperbaiki data yang salah.</p>
+                <div class="row">
+                    <div class="col-md-6">
+                        <form method="POST" action="<?= BASE_URL ?>laporan/verify/<?= $laporan['id'] ?>">
+                            <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
+                            <input type="hidden" name="status" value="Diverifikasi">
+                            <div class="form-group">
+                                <label>Catatan Verifikasi (opsional)</label>
+                                <textarea name="catatan_verifikasi" class="form-control" rows="2" placeholder="Catatan untuk pelapor (opsional)"></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-success btn-block">
+                                <i class="fas fa-check"></i> Verifikasi
+                            </button>
+                        </form>
+                    </div>
+                    <div class="col-md-6">
+                        <form method="POST" action="<?= BASE_URL ?>laporan/verify/<?= $laporan['id'] ?>">
+                            <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
+                            <input type="hidden" name="status" value="Ditolak">
+                            <div class="form-group">
+                                <label>Alasan Penolakan <span class="text-danger">*</span></label>
+                                <textarea name="catatan_verifikasi" class="form-control" rows="2" required placeholder="Alasan penolakan wajib diisi"></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-danger btn-block">
+                                <i class="fas fa-times"></i> Tolak
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                <?php endif; ?>
+
+                <?php if(($laporan['status'] ?? '') === 'Ditolak' && (in_array($_SESSION['role'] ?? '', ['admin', 'operator'], true) || (($laporan['user_id'] ?? 0) == ($_SESSION['user_id'] ?? 0) && ($_SESSION['role'] ?? '') === 'petugas'))): ?>
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i> Laporan ini <strong>ditolak</strong>. Silakan perbaiki data yang salah.
+                    <a href="<?= BASE_URL ?>laporan/edit/<?= $laporan['id'] ?>" class="btn btn-warning btn-sm ml-2">
+                        <i class="fas fa-edit"></i> Edit Laporan
+                    </a>
+                </div>
+                <?php endif; ?>
                 
                 <?php if(!empty($laporan['rekomendasi'])): ?>
                 <div class="alert alert-info">

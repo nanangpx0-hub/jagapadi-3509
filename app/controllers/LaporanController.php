@@ -893,15 +893,6 @@ class LaporanController extends Controller {
     public function verify($id) {
         $this->checkRole(['admin', 'operator']);
 
-        http_response_code(410);
-        if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
-            $this->json(['success' => false, 'message' => 'Approval laporan hama sudah dinonaktifkan. Edit laporan jika ada koreksi.'], 410);
-        }
-
-        $_SESSION['error'] = 'Approval laporan hama sudah dinonaktifkan. Edit laporan jika ada koreksi.';
-        $this->redirect('laporan/detail/' . $id);
-        return;
-
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Handle AJAX request
             $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
