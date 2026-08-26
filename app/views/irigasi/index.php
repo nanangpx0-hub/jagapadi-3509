@@ -863,6 +863,7 @@ $errorMsg = ErrorMessage::flash();
                                                     <div class="form-group">
                                                         <label>Catatan</label>
                                                         <textarea name="catatan_verifikasi" class="form-control" rows="3" placeholder="Tambahkan catatan verifikasi..."></textarea>
+                                                        <small class="form-text text-danger d-none" data-catatan-hint>Alasan penolakan wajib diisi.</small>
                                                     </div>
                                                 </div>
                                                 <div class="modal-footer">
@@ -1189,17 +1190,60 @@ const IrigasiActionController = (function() {
             elements.btnCancel.addEventListener('click', cancelAutoRun);
         }
         
-        // Handle reject button click to pre-select "Ditolak" in modal
-        document.querySelectorAll('.btn-reject').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                const targetModal = this.getAttribute('data-target');
-                const modalId = targetModal.replace('#verifyModal', '');
-                const selectElement = document.getElementById('verifyStatus' + modalId);
-                if (selectElement) {
-                    selectElement.value = 'Ditolak';
+        // Delegasi fase-CAPTURE untuk tombol Verifikasi/Tolak:
+        // - kebal render-ulang baris (binding per-elemen bisa hilang),
+        // - stopPropagation() mencegah handler generik lain menutup modal
+        //   pada event klik yang sama (akar bug "Tolak tidak bisa").
+        document.addEventListener('click', function(e) {
+            const rejectBtn = e.target.closest('.btn-reject');
+            const verifyBtn = !rejectBtn
+                ? e.target.closest('.btn-action-success[data-toggle="modal"]')
+                : null;
+            if (!rejectBtn && !verifyBtn) return;
+
+            // Serahkan ke alur auto-approve bila fitur aktif (perilaku lama)
+            if (verifyBtn && window.IrigasiActionController
+                && window.IrigasiActionController.isAutoApproveEnabled()
+                && !window.IrigasiActionController.isAutoRunning()) {
+                return;
+            }
+
+            const targetSel = (rejectBtn || verifyBtn).getAttribute('data-target');
+            const modalEl = targetSel ? document.querySelector(targetSel) : null;
+            if (!modalEl) return;
+
+            // Blok semua handler lain untuk klik ini (mencegah modal ditutup)
+            e.stopPropagation();
+
+            const selectEl = modalEl.querySelector('select[name="status"]');
+            const ta = modalEl.querySelector('textarea[name="catatan_verifikasi"]');
+            const hint = modalEl.querySelector('[data-catatan-hint]');
+
+            if (rejectBtn) {
+                if (selectEl) selectEl.value = 'Ditolak';
+                if (ta) {
+                    ta.required = true;
+                    ta.placeholder = 'Alasan penolakan (wajib)...';
                 }
-            });
-        });
+                if (hint) hint.classList.remove('d-none');
+            } else {
+                if (selectEl) selectEl.value = 'Diverifikasi';
+                if (ta) {
+                    ta.required = false;
+                    ta.placeholder = 'Tambahkan catatan verifikasi...';
+                }
+                if (hint) hint.classList.add('d-none');
+            }
+
+            if (window.$ && window.$.fn && window.$.fn.modal) {
+                window.$(modalEl).modal('show');
+            } else {
+                modalEl.classList.add('show');
+                modalEl.style.display = 'block';
+                modalEl.setAttribute('aria-hidden', 'false');
+                document.body.classList.add('modal-open');
+            }
+        }, true);
         
         // Enhanced verification button handlers
         document.querySelectorAll('.btn-action-success[data-toggle="modal"]').forEach(btn => {
