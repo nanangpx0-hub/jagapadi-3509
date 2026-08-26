@@ -1,5 +1,26 @@
 <?php include ROOT_PATH . '/app/views/layouts/header.php'; ?>
 
+<?php
+// Old input: dipakai ulang setelah validasi server gagal (anti data hilang)
+$oldInput = $_SESSION['form_data'] ?? [];
+unset($_SESSION['form_data']);
+$oldVal = static function (string $key, string $default = '') use ($oldInput): string {
+    $v = $oldInput[$key] ?? null;
+    return ($v === null || $v === '') ? htmlspecialchars($default, ENT_QUOTES, 'UTF-8') : htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+};
+$oldSel = static function (string $key, string $value) use ($oldInput): string {
+    return (string) ($oldInput[$key] ?? '') === $value ? ' selected' : '';
+};
+?>
+<script>
+// Seed pemulihan pilihan wilayah setelah validasi server gagal
+window.__wilayahAwal = {
+    kab: '<?= $oldVal('kabupaten_id') ?>',
+    kec: '<?= $oldVal('kecamatan_id') ?>',
+    desa: '<?= $oldVal('desa_id') ?>'
+};
+</script>
+
 <style>
 /* Validation styles for luas serangan vs populasi */
 .form-control.is-invalid {
@@ -250,7 +271,7 @@
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label>Tanggal Kejadian/Pengamatan <span class="text-danger">*</span></label>
-                                <input type="date" name="tanggal" class="form-control" value="<?= date('Y-m-d') ?>" max="<?= date('Y-m-d') ?>" required>
+                                <input type="date" name="tanggal" class="form-control" value="<?= $oldVal('tanggal', date('Y-m-d')) ?>" max="<?= date('Y-m-d') ?>" required>
                                 <small class="text-muted">Boleh tanggal sebelumnya; waktu pengisian dicatat otomatis.</small>
                             </div>
                         </div>
@@ -262,6 +283,7 @@
                                     <option value="">-- Pilih OPT --</option>
                                     <?php foreach($data_opt as $opt): ?>
                                     <option value="<?= $opt['id'] ?>"
+                                            <?= $oldSel('master_opt_id', (string) $opt['id']) ?>
                                             data-search="<?= htmlspecialchars(strtolower(($opt['nama_opt'] ?? '') . ' ' . ($opt['nama_lokal'] ?? '') . ' ' . ($opt['nama_ilmiah'] ?? ''))) ?>"
                                             data-photo="<?= htmlspecialchars($opt['foto_url'] ?? '') ?>"><?= htmlspecialchars($opt['nama_opt']) ?><?= !empty($opt['nama_lokal']) ? ' (' . htmlspecialchars($opt['nama_lokal']) . ')' : '' ?></option>
                                     <?php endforeach; ?>
@@ -283,8 +305,8 @@
                     <div class="form-group">
                         <label>Metode Pengukuran Serangan</label>
                         <select name="metode_pengukuran" id="metodePengukuran" class="form-control">
-                            <option value="absolut">Luas absolut (Ha)</option>
-                            <option value="persentase">Persentase (%)</option>
+                            <option value="absolut" <?= $oldSel('metode_pengukuran', 'absolut') ?>>Luas absolut (Ha)</option>
+                            <option value="persentase" <?= $oldSel('metode_pengukuran', 'persentase') ?>>Persentase (%)</option>
                         </select>
                     </div>
                     <div class="row">
@@ -325,6 +347,7 @@
                                 <input type="text"
                                        name="alamat_lengkap"
                                        class="form-control"
+                                       value="<?= $oldVal('alamat_lengkap') ?>"
                                        placeholder="Contoh: Blok Kedawung No.12 RT 02 RW 03"
                                        minlength="<?= $alamatMinLength ?>"
                                        data-validation-label="Alamat Lengkap"
@@ -375,6 +398,7 @@
                                                        name="latitude" 
                                                        id="latitudeInput" 
                                                        class="form-control" 
+                                                       value="<?= $oldVal('latitude') ?>"
                                                        placeholder="Contoh: -8.174381" 
                                                        step="any"
                                                        min="-90"
@@ -391,6 +415,7 @@
                                                        name="longitude" 
                                                        id="longitudeInput" 
                                                        class="form-control" 
+                                                       value="<?= $oldVal('longitude') ?>"
                                                        placeholder="Contoh: 113.701399" 
                                                        step="any"
                                                        min="-180"
@@ -485,16 +510,16 @@
                                 <label>Tingkat Keparahan <span class="text-danger">*</span></label>
                                 <select name="tingkat_keparahan" class="form-control" required>
                                     <option value="">-- Pilih --</option>
-                                    <option value="Ringan">Ringan</option>
-                                    <option value="Sedang">Sedang</option>
-                                    <option value="Berat">Berat</option>
+                                    <option value="Ringan" <?= $oldSel('tingkat_keparahan', 'Ringan') ?>>Ringan</option>
+                                    <option value="Sedang" <?= $oldSel('tingkat_keparahan', 'Sedang') ?>>Sedang</option>
+                                    <option value="Berat" <?= $oldSel('tingkat_keparahan', 'Berat') ?>>Berat</option>
                                 </select>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="form-group">
                                 <label>Populasi/Intensitas</label>
-                                <input type="number" name="populasi" id="populasiInput" class="form-control" value="0" min="0" step="0.01" inputmode="numeric" pattern="[0-9]*\.?[0-9]*">
+                                <input type="number" name="populasi" id="populasiInput" class="form-control" value="<?= $oldVal('populasi', '0') ?>" min="0" step="0.01" inputmode="numeric" pattern="[0-9]*\.?[0-9]*">
                                 <small class="text-muted">Jumlah individu per area</small>
                                 <div class="invalid-feedback" id="populasiError"></div>
                             </div>
@@ -502,7 +527,7 @@
                         <div class="col-md-4">
                             <div class="form-group">
                                 <label>Luas Serangan (Ha)</label>
-                                <input type="number" name="luas_serangan" id="luasSeranganInput" class="form-control" value="0" min="0" step="0.01" inputmode="numeric" pattern="[0-9]*\.?[0-9]*">
+                                <input type="number" name="luas_serangan" id="luasSeranganInput" class="form-control" value="<?= $oldVal('luas_serangan', '0') ?>" min="0" step="0.01" inputmode="numeric" pattern="[0-9]*\.?[0-9]*">
                                 <small class="text-muted">Tidak boleh melebihi Populasi/Intensitas</small>
                                 <div class="invalid-feedback" id="luasSeranganError"></div>
                             </div>
@@ -513,13 +538,13 @@
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label>Persentase Serangan (%)</label>
-                                <input type="number" name="persentase_serangan" class="form-control" min="0" max="100" step="0.01">
+                                <input type="number" name="persentase_serangan" class="form-control" min="0" max="100" step="0.01" value="<?= $oldVal('persentase_serangan') ?>">
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label>Luas Areal Diamati (Ha)</label>
-                                <input type="number" name="luas_areal_diamati" class="form-control" min="0" step="0.01">
+                                <input type="number" name="luas_areal_diamati" class="form-control" min="0" step="0.01" value="<?= $oldVal('luas_areal_diamati') ?>">
                                 <small class="text-muted">Opsional; dipakai menghitung estimasi luas.</small>
                             </div>
                         </div>
@@ -527,7 +552,7 @@
 
                     <div class="form-group">
                         <label>Catatan</label>
-                        <textarea name="catatan" id="catatanTextarea" class="form-control" rows="3" placeholder="Deskripsi kondisi, gejala, atau informasi tambahan"></textarea>
+                        <textarea name="catatan" id="catatanTextarea" class="form-control" rows="3" placeholder="Deskripsi kondisi, gejala, atau informasi tambahan"><?= $oldVal('catatan') ?></textarea>
                     </div>
                     
                     <div class="row align-items-start">
@@ -950,6 +975,20 @@ document.getElementById('formCreateLaporan').addEventListener('submit', function
             input.focus();
             return false;
         }
+    }
+
+    // Aturan bisnis: keparahan Berat wajib disertai Populasi (> 0)
+    const keparahanValue = document.querySelector('[name="tingkat_keparahan"]')?.value || '';
+    const populasiBeratInput = document.getElementById('populasiInput');
+    if (keparahanValue === 'Berat' && populasiBeratInput &&
+        (populasiBeratInput.value === '' || Number(populasiBeratInput.value) <= 0)) {
+        e.preventDefault();
+        populasiBeratInput.classList.add('is-invalid');
+        const populasiErr = document.getElementById('populasiError');
+        if (populasiErr) populasiErr.textContent = 'Populasi wajib diisi untuk tingkat keparahan Berat.';
+        alert('Populasi wajib diisi untuk tingkat keparahan Berat.');
+        populasiBeratInput.focus();
+        return false;
     }
 
     const selectedPhoto = fotoInput.files && fotoInput.files.length > 0
@@ -1831,17 +1870,41 @@ async function initializeWilayahDropdowns() {
         return;
     }
 
-    const selectedKabupatenId = await loadKabupaten();
-    const kabupatenId = normalizeKabupatenId(selectedKabupatenId || kabupatenSelect.value);
+    const awal = window.__wilayahAwal || {};
+    let baseKab = normalizeKabupatenId(await loadKabupaten() || kabupatenSelect.value);
 
-    if (kabupatenId) {
-        if (selectDefaultKabupatenJember()) {
-            await loadKecamatan(DEFAULT_KABUPATEN_JEMBER_ID);
-        } else {
-            syncSelectPlugin(kabupatenSelect);
-            resetSelectOptions(kecamatanSelect, '-- Pilih Kecamatan --');
-            resetSelectOptions(desaSelect, '-- Pilih Desa --');
+    if (awal.kab) {
+        const normAwal = normalizeKabupatenId(awal.kab);
+        const adaOpsi = Array.from(kabupatenSelect.options).some(o => o.value === String(normAwal));
+        if (normAwal && adaOpsi) {
+            kabupatenSelect.value = String(normAwal);
+            baseKab = normAwal;
         }
+    }
+
+    if (baseKab) {
+        await loadKecamatan(baseKab);
+        if (!awal.kec) {
+            if (!awal.kab) {
+                selectDefaultKabupatenJember();
+                await loadKecamatan(DEFAULT_KABUPATEN_JEMBER_ID);
+            }
+        } else {
+            const kecNorm = normalizeKabupatenId(awal.kec);
+            const adaKec = Array.from(kecamatanSelect.options).some(o => o.value === String(kecNorm));
+            if (kecNorm && adaKec) {
+                kecamatanSelect.value = String(kecNorm);
+                await loadDesa(kecNorm);
+                if (awal.desa) {
+                    const desaNorm = normalizeKabupatenId(awal.desa);
+                    const adaDesa = Array.from(desaSelect.options).some(o => o.value === String(desaNorm));
+                    if (desaNorm && adaDesa) desaSelect.value = String(desaNorm);
+                }
+            }
+        }
+        syncSelectPlugin(kabupatenSelect);
+        syncSelectPlugin(kecamatanSelect);
+        syncSelectPlugin(desaSelect);
     } else {
         resetSelectOptions(kecamatanSelect, '-- Pilih Kecamatan --');
         resetSelectOptions(desaSelect, '-- Pilih Desa --');

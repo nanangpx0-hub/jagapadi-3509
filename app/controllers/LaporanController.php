@@ -177,6 +177,10 @@ class LaporanController extends Controller {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $this->validateCsrfToken();
 
+            // Simpan old input: isian tidak boleh hilang saat validasi/redirect
+            // gagal (dibersihkan setelah laporan sukses dibuat).
+            $_SESSION['form_data'] = $_POST;
+
             // ==============================================
             // PHASE 1 SECURITY: Honeypot anti-bot detection
             // ==============================================
@@ -542,6 +546,9 @@ class LaporanController extends Controller {
 
                 $_SESSION['success'] = $successMessage;
                 $_SESSION['created_laporan_id'] = $id; // Store ID for confirmation page
+
+                // Old input selesai dipakai — jangan bocor ke form berikutnya
+                unset($_SESSION['form_data']);
 
                 // Redirect to detail page for confirmation
                 $this->redirect('laporan/detail/' . $id);
