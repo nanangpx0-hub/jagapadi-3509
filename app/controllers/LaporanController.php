@@ -617,6 +617,18 @@ class LaporanController extends Controller {
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $this->validateCsrfToken();
+
+            // Pertahankan wilayah existing bila dikirim kosong (anti-hilang
+            // tak sengaja); validasi relasi tetap berjalan atas nilai efektif.
+            foreach (['kabupaten_id', 'kecamatan_id', 'desa_id'] as $wilayahField) {
+                $val = $_POST[$wilayahField] ?? '';
+                if ($val === '' || $val === 'unknown' || $val === null) {
+                    if (!empty($laporan[$wilayahField])) {
+                        $_POST[$wilayahField] = (string) $laporan[$wilayahField];
+                    }
+                }
+            }
+
             $editMethod = $_POST['metode_pengukuran'] ?? 'absolut';
             $editPercentage = $_POST['persentase_serangan'] ?? null;
             $editObservedArea = $_POST['luas_areal_diamati'] ?? null;

@@ -549,6 +549,15 @@ class LaporanLainnyaController extends Controller {
         }
 
         $data = $this->sanitizeRequestData();
+
+        // Pertahankan wilayah existing bila dikirim kosong (anti-hilang
+        // tak sengaja); validasi relasi tetap berjalan atas nilai efektif.
+        foreach (['kabupaten_id', 'kecamatan_id', 'desa_id'] as $wilayahField) {
+            if (empty($data[$wilayahField]) && !empty($laporan[$wilayahField])) {
+                $data[$wilayahField] = $laporan[$wilayahField];
+            }
+        }
+
         $jenisId = (int)($data['jenis_id'] ?? $laporan['jenis_id']);
         $jenis = $this->jenisModel->findById($jenisId);
 
