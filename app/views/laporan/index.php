@@ -756,6 +756,7 @@ tbody tr:hover {
                         </thead>
                         <tbody id="tableBody"><!-- populated by AJAX --></tbody>
                     </table>
+                    <div id="verifyModals"><!-- verifikasi/tolak modals --></div>
                 </div>
 
                 <!-- Pagination Controls -->
@@ -839,6 +840,11 @@ tbody tr:hover {
     function qs(sel) { return document.querySelector(sel); }
     function qsa(sel) { return document.querySelectorAll(sel); }
 
+    const CURRENT_ROLE = '<?= $_SESSION['role'] ?? '' ?>';
+    const isAdmin = CURRENT_ROLE === 'admin';
+    const isOperator = CURRENT_ROLE === 'operator';
+    const isPetugas = CURRENT_ROLE === 'petugas';
+
     function buildURL() {
         const params = new URLSearchParams({
             page: state.page,
@@ -901,9 +907,6 @@ tbody tr:hover {
     }
 
     function buildTableRow(r, idx) {
-        const isAdmin = '<?= $_SESSION['role'] ?? '' ?>' === 'admin';
-        const isOperator = '<?= $_SESSION['role'] ?? '' ?>' === 'operator';
-        const isPetugas = '<?= $_SESSION['role'] ?? '' ?>' === 'petugas';
         const canEdit = isAdmin || isOperator || isPetugas;
         const canDelete = isAdmin || (isPetugas && (r.status === 'Draf' || r.status === 'Ditolak'));
         const rowNo = state.perPage < 0 ? idx + 1 : (state.page - 1) * state.perPage + idx + 1;
@@ -933,40 +936,6 @@ tbody tr:hover {
         const verifyBtns = (isAdmin || isOperator) && r.status === 'Submitted' ? `
             <button type="button" class="btn-action btn-action-success" data-toggle="modal" data-target="#verifyModal${r.id}" title="Verifikasi"><i class="fas fa-check"></i></button>
             <button type="button" class="btn-action btn-action-danger btn-reject" data-toggle="modal" data-target="#verifyModal${r.id}" data-action="reject" title="Tolak"><i class="fas fa-times"></i></button>
-        ` : '';
-
-        const verifyModal = (isAdmin || isOperator) && r.status === 'Submitted' ? `
-            <div class="modal" id="verifyModal${r.id}" tabindex="-1" role="dialog">
-                <div class="modal-dialog" role="document">
-                    <div class="modal-content">
-                        <form action="${BASE_URL}laporan/verify/${r.id}" method="POST">
-                            <div class="modal-header">
-                                <h5 class="modal-title">Verifikasi Laporan #${r.id}</h5>
-                                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                            </div>
-                            <div class="modal-body">
-                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
-                                <div class="form-group">
-                                    <label>Aksi</label>
-                                    <select name="status" class="form-control" id="verifyStatus${r.id}">
-                                        <option value="Diverifikasi">Terima (Verifikasi)</option>
-                                        <option value="Ditolak">Tolak</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label>Catatan</label>
-                                    <textarea name="catatan_verifikasi" class="form-control" rows="3" placeholder="Tambahkan catatan verifikasi..."></textarea>
-                                    <small class="form-text text-danger d-none" data-catatan-hint>Alasan penolakan wajib diisi.</small>
-                                </div>
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
-                                <button type="submit" class="btn btn-primary">Simpan</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
         ` : '';
 
         const deleteBtn = canDelete ? `
@@ -1004,7 +973,43 @@ tbody tr:hover {
                     ${deleteBtn}
                 </div>
             </td>
-        </tr>${verifyModal}`;
+        </tr>`;
+    }
+
+    function buildVerifyModal(r) {
+        if (!((isAdmin || isOperator) && r.status === 'Submitted')) return '';
+        return `
+            <div class="modal" id="verifyModal${r.id}" tabindex="-1" role="dialog">
+                <div class="modal-dialog" role="document">
+                    <div class="modal-content">
+                        <form action="${BASE_URL}laporan/verify/${r.id}" method="POST">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Verifikasi Laporan #${r.id}</h5>
+                                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                            </div>
+                            <div class="modal-body">
+                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                                <div class="form-group">
+                                    <label>Aksi</label>
+                                    <select name="status" class="form-control" id="verifyStatus${r.id}">
+                                        <option value="Diverifikasi">Terima (Verifikasi)</option>
+                                        <option value="Ditolak">Tolak</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Catatan</label>
+                                    <textarea name="catatan_verifikasi" class="form-control" rows="3" placeholder="Tambahkan catatan verifikasi..."></textarea>
+                                    <small class="form-text text-danger d-none" data-catatan-hint>Alasan penolakan wajib diisi.</small>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
+                                <button type="submit" class="btn btn-primary">Simpan</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>`;
     }
 
     function buildPaginationHTML() {
@@ -1125,6 +1130,11 @@ tbody tr:hover {
                 tbody.innerHTML = `<tr><td colspan="${colCount}" class="text-center text-muted py-4">Tidak ada data laporan</td></tr>`;
             } else {
                 tbody.innerHTML = d.rows.map((r, i) => buildTableRow(r, i)).join('');
+            }
+
+            const modalsContainer = qs('#verifyModals');
+            if (modalsContainer) {
+                modalsContainer.innerHTML = d.rows.map(r => buildVerifyModal(r)).join('');
             }
 
             updateSortHeaders();
