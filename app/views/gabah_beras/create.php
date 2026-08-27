@@ -7,7 +7,8 @@
 require_once ROOT_PATH . '/app/views/layouts/header.php';
 ?>
 
-<div class="container-fluid">
+
+<link rel="stylesheet" href="<?= BASE_URL ?>public/css/hover-disabled.css"><div class="container-fluid">
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
         <h1 class="h3 mb-0 text-gray-800">
             <i class="fas fa-plus-circle text-success"></i> Input Data Produksi Gabah

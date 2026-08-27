@@ -5,7 +5,8 @@ $desa = $data['desa'];
 $old = $data['old'];
 ?>
 
-<div class="content-wrapper">
+
+<link rel="stylesheet" href="<?= BASE_URL ?>public/css/hover-disabled.css"><div class="content-wrapper">
     <section class="content-header">
         <div class="container-fluid">
             <div class="row mb-2">

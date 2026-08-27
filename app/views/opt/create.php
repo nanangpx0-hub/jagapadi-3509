@@ -1,4 +1,5 @@
 <?php include ROOT_PATH . '/app/views/layouts/header.php'; ?>
+<link rel="stylesheet" href="<?= BASE_URL ?>public/css/hover-disabled.css">
 
 <style>
 .form-section {

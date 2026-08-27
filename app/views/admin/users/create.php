@@ -1,4 +1,5 @@
 <?php include ROOT_PATH . '/app/views/layouts/header.php'; ?>
+<link rel="stylesheet" href="<?= BASE_URL ?>public/css/hover-disabled.css">
 
 <div class="row">
     <div class="col-md-8 offset-md-2">

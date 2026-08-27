@@ -3,7 +3,8 @@ $pageTitle = $data['page_title'] ?? 'Tambah Data Curah Hujan';
 require_once ROOT_PATH . '/app/views/layouts/header.php';
 ?>
 
-<div class="container-fluid py-4">
+
+<link rel="stylesheet" href="<?= BASE_URL ?>public/css/hover-disabled.css"><div class="container-fluid py-4">
     <div class="row justify-content-center">
         <div class="col-lg-6">
             <div class="card shadow">

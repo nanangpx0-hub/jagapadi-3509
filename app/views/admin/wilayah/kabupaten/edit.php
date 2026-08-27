@@ -7,7 +7,8 @@ $kab = $data['kabupaten'];
 $old = $data['old'];
 ?>
 
-<!-- Content Wrapper -->
+
+<link rel="stylesheet" href="<?= BASE_URL ?>public/css/hover-disabled.css"><!-- Content Wrapper -->
 <div class="content-wrapper">
     <!-- Content Header -->
     <section class="content-header">

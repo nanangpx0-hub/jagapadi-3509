@@ -182,6 +182,15 @@ th:hover {
     box-shadow: none !important;
 }
 
+/* Nonaktifkan efek timbul-tenggelam (naik + bayangan) pada card & tombol */
+.card:hover,
+.btn:hover,
+.btn:focus,
+.btn:active {
+    transform: none !important;
+    box-shadow: none !important;
+}
+
 /* Nonaktifkan hover pada semua elemen secara umum */
 *:hover {
     transform: none !important;

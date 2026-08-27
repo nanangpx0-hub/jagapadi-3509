@@ -5,7 +5,8 @@ $actionUrl = BASE_URL . 'usulan-opt/update';
 include ROOT_PATH . '/app/views/layouts/header.php';
 ?>
 
-<div class="row">
+
+<link rel="stylesheet" href="<?= BASE_URL ?>public/css/hover-disabled.css"><div class="row">
     <div class="col-lg-10 col-xl-8">
         <div class="card">
             <div class="card-header d-flex flex-wrap justify-content-between align-items-center">
