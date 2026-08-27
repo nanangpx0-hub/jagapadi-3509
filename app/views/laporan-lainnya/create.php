@@ -1196,6 +1196,9 @@ const DEFAULT_KABUPATEN_JEMBER_KODE = '3509';
 
 let userChangedKabupaten = false;
 
+// Input dari submit gagal (diisi oleh controller bila validasi store() gagal).
+const OLD_INPUT = <?= json_encode(!empty($oldInput) ? $oldInput : new stdClass()) ?>;
+
 function normalizeKabupatenId(kabupatenId) {
     const value = String(kabupatenId ?? '').trim();
     return /^\d$/.test(value) ? value.padStart(2, '0') : value;
@@ -1515,7 +1518,7 @@ function bindWilayahDropdownEvents() {
     }
 }
 
-async function initializeWilayahDropdowns() {
+async function initializeWilayahDropdowns(oldInput) {
     const kabupatenSelect = document.getElementById('kabupatenSelect');
     const kecamatanSelect = document.getElementById('kecamatanSelect');
     const desaSelect = document.getElementById('desaSelect');
@@ -1527,6 +1530,31 @@ async function initializeWilayahDropdowns() {
 
     const selectedKabupatenId = await loadKabupaten();
     const kabupatenId = normalizeKabupatenId(selectedKabupatenId || kabupatenSelect.value);
+
+    // Repopulasi wilayah dari submit gagal (prioritas utama).
+    const oldKab = oldInput && oldInput.kabupaten_id ? normalizeKabupatenId(oldInput.kabupaten_id) : null;
+    const oldKec = oldInput && oldInput.kecamatan_id ? oldInput.kecamatan_id : null;
+    const oldDesa = oldInput && oldInput.desa_id ? oldInput.desa_id : null;
+
+    if (oldKab) {
+        // Cegah enforce default Jember menimpa pilihan user.
+        userChangedKabupaten = true;
+        selectOptionIfExists(kabupatenSelect, oldKab);
+        syncSelectPlugin(kabupatenSelect);
+        await loadKecamatan(oldKab);
+
+        if (oldKec) {
+            selectOptionIfExists(kecamatanSelect, oldKec);
+            syncSelectPlugin(kecamatanSelect);
+            await loadDesa(oldKec);
+
+            if (oldDesa) {
+                selectOptionIfExists(desaSelect, oldDesa);
+                syncSelectPlugin(desaSelect);
+            }
+        }
+        return;
+    }
 
     if (kabupatenId) {
         if (selectDefaultKabupatenJember()) {
@@ -1542,8 +1570,60 @@ async function initializeWilayahDropdowns() {
     }
 }
 
+// ============================================================================
+// REPOPULASI INPUT GAGAL VALIDASI (store() melewatkan OLD_INPUT)
+// ============================================================================
+function repopulateStaticAndDynamic(oldInput) {
+    if (!oldInput || typeof oldInput !== 'object' || Array.isArray(oldInput) || Object.keys(oldInput).length === 0) {
+        return;
+    }
+
+    // Jenis laporan -> render field dinamis -> isi nilai lama.
+    const jenisSelect = document.getElementById('jenisSelect');
+    if (jenisSelect && oldInput.jenis_id) {
+        jenisSelect.value = oldInput.jenis_id;
+        if (typeof renderDynamicFields === 'function') {
+            renderDynamicFields();
+        }
+        const dynamicContainer = document.getElementById('dynamicFieldsContainer');
+        if (dynamicContainer) {
+            dynamicContainer.querySelectorAll('input, select, textarea').forEach(function(el) {
+                if (el.name && oldInput[el.name] !== undefined && oldInput[el.name] !== null && oldInput[el.name] !== '') {
+                    el.value = oldInput[el.name];
+                }
+            });
+        }
+    }
+
+    // Field statis (text/textarea/number/date).
+    const setVal = function(name, val) {
+        if (val === undefined || val === null || val === '') {
+            return;
+        }
+        const el = document.querySelector('[name="' + name + '"]');
+        if (el && (el.tagName === 'TEXTAREA' || el.type === 'text' || el.type === 'number' || el.type === 'date')) {
+            el.value = val;
+        }
+    };
+    setVal('alamat_lengkap', oldInput.alamat_lengkap);
+    setVal('tanggal_kejadian', oldInput.tanggal_kejadian);
+    setVal('deskripsi', oldInput.deskripsi);
+    setVal('latitude', oldInput.latitude);
+    setVal('longitude', oldInput.longitude);
+    setVal('target_user_id', oldInput.target_user_id);
+
+    // Mode koordinat (radio).
+    if (oldInput.coordMode) {
+        const radio = document.querySelector('input[name="coordMode"][value="' + oldInput.coordMode + '"]');
+        if (radio) {
+            radio.checked = true;
+        }
+    }
+}
+
 bindWilayahDropdownEvents();
-initializeWilayahDropdowns();
+repopulateStaticAndDynamic(OLD_INPUT);
+initializeWilayahDropdowns(OLD_INPUT);
 scheduleDefaultKabupatenJemberEnforcement();
 (function() {
     'use strict';

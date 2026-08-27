@@ -133,11 +133,19 @@ class LaporanLainnyaController extends Controller {
             $users = $userModel->getAllUsers(1, 500, '', '', '', true);
         }
 
+        // Repopulasi input yang gagal divalidasi (store() menyimpannya ke session).
+        $oldInput = [];
+        if (!empty($_SESSION['old_input']) && is_array($_SESSION['old_input'])) {
+            $oldInput = $_SESSION['old_input'];
+        }
+        unset($_SESSION['old_input']);
+
         $this->view('laporan-lainnya/create', [
             'title' => 'Buat Laporan Lainnya',
             'jenisList' => $jenisList,
             'currentUser' => $currentUser,
             'users' => $users,
+            'oldInput' => $oldInput,
             'tanggalHariIni' => (new DateTimeImmutable(
                 'now',
                 new DateTimeZone('Asia/Jakarta')
@@ -176,6 +184,10 @@ class LaporanLainnyaController extends Controller {
             $this->redirect('laporan-lainnya/create');
             return;
         }
+
+        // Simpan input mentah agar tidak hilang saat validasi gagal (repopulasi di create).
+        // Dibersihkan pada redirect sukses (lihat bawah).
+        $_SESSION['old_input'] = $_POST;
 
         $userRole = $user['role'];
 
@@ -461,6 +473,7 @@ class LaporanLainnyaController extends Controller {
                 }
 
                 $_SESSION['success'] = $successMessage;
+                unset($_SESSION['old_input']);
                 $this->redirect('laporan-lainnya/show/' . $reportId);
             } else {
                 $_SESSION['error'] = 'Gagal menyimpan laporan';
