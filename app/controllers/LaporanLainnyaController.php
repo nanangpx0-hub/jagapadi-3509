@@ -536,11 +536,19 @@ class LaporanLainnyaController extends Controller {
         $jenisFields = $this->jenisModel->getFields($laporan['jenis_id']);
         $dataJson = json_decode($laporan['data_json'], true) ?? [];
 
+        // Repopulasi input yang gagal divalidasi saat update (store di session oleh update()).
+        $oldInput = [];
+        if (!empty($_SESSION['old_input']) && is_array($_SESSION['old_input'])) {
+            $oldInput = $_SESSION['old_input'];
+        }
+        unset($_SESSION['old_input']);
+
         $this->view('laporan-lainnya/edit', [
             'laporan' => $laporan,
             'jenisList' => $jenisList,
             'jenisFields' => $jenisFields,
             'dataJson' => $dataJson,
+            'oldInput' => $oldInput,
         ]);
     }
 
@@ -562,6 +570,10 @@ class LaporanLainnyaController extends Controller {
         }
 
         $data = $this->sanitizeRequestData();
+
+        // Simpan input mentah agar tidak hilang saat validasi update gagal (repopulasi di edit).
+        // Dibersihkan pada redirect sukses / gagal simpan (lihat bawah).
+        $_SESSION['old_input'] = $_POST;
 
         // Pertahankan wilayah existing bila dikirim kosong (anti-hilang
         // tak sengaja); validasi relasi tetap berjalan atas nilai efektif.
@@ -879,6 +891,7 @@ class LaporanLainnyaController extends Controller {
             $_SESSION['error'] = 'Gagal memperbarui laporan';
         }
 
+        unset($_SESSION['old_input']);
         $this->redirect('laporan-lainnya');
     }
 

@@ -166,6 +166,31 @@
     const savedKecId     = <?= json_encode((string)($laporan['kecamatan_id'] ?? '')) ?>;
     const savedDesaId    = <?= json_encode((string)($laporan['desa_id'] ?? '')) ?>;
 
+    // Input dari update() yang gagal divalidasi (controller menyimpannya ke session).
+    const OLD_INPUT = <?= json_encode(!empty($oldInput) ? $oldInput : new stdClass()) ?>;
+
+    // Timpa nilai field statis & dinamis dengan input user bila update gagal,
+    // agar edit yang belum tersimpan tidak hilang.
+    (function repopulateOldInput(oldInput) {
+        if (!oldInput || typeof oldInput !== 'object' || Array.isArray(oldInput) || !Object.keys(oldInput).length) {
+            return;
+        }
+        ['alamat_lengkap', 'tanggal_kejadian', 'deskripsi', 'latitude', 'longitude'].forEach(function (name) {
+            if (oldInput[name] === undefined || oldInput[name] === null || oldInput[name] === '') {
+                return;
+            }
+            const el = document.querySelector('[name="' + name + '"]');
+            if (el) {
+                el.value = oldInput[name];
+            }
+        });
+        document.querySelectorAll('#dynamicFieldsContainer input').forEach(function (el) {
+            if (el.name && oldInput[el.name] !== undefined && oldInput[el.name] !== null && oldInput[el.name] !== '') {
+                el.value = oldInput[el.name];
+            }
+        });
+    })(OLD_INPUT);
+
     async function fetchJSON(url) {
         try {
             const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
@@ -243,12 +268,17 @@
     }
 
     (async () => {
-        await loadKabupaten(savedKabId);
-        if (savedKabId) {
-            await loadKecamatan(savedKabId, savedKecId);
+        // Prioritaskan input user dari update gagal (OLD_INPUT) di atas nilai tersimpan.
+        const effKab = (OLD_INPUT && OLD_INPUT.kabupaten_id) ? String(OLD_INPUT.kabupaten_id) : savedKabId;
+        const effKec = (OLD_INPUT && OLD_INPUT.kecamatan_id) ? String(OLD_INPUT.kecamatan_id) : savedKecId;
+        const effDesa = (OLD_INPUT && OLD_INPUT.desa_id) ? String(OLD_INPUT.desa_id) : savedDesaId;
+
+        await loadKabupaten(effKab);
+        if (effKab) {
+            await loadKecamatan(effKab, effKec);
         }
-        if (savedKecId) {
-            await loadDesa(savedKecId, savedDesaId);
+        if (effKec) {
+            await loadDesa(effKec, effDesa);
         }
     })();
 
