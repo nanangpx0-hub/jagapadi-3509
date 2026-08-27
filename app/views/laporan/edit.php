@@ -1,6 +1,23 @@
 <?php include ROOT_PATH . '/app/views/layouts/header.php'; ?>
 
-<div class="row">
+<style>
+/* Nonaktifkan efek timbul-tenggelam (hover-lift / transisi / animasi) agar
+   halaman edit stabil, selaras dengan halaman laporan lainnya. */
+.laporan-edit-page,
+.laporan-edit-page *,
+.laporan-edit-page *::before,
+.laporan-edit-page *::after {
+    animation: none !important;
+    transition: none !important;
+}
+.laporan-edit-page *:hover,
+.laporan-edit-page *:focus,
+.laporan-edit-page *:active {
+    transform: none !important;
+}
+</style>
+
+<div class="row laporan-edit-page">
     <div class="col-md-10 offset-md-1">
         <div class="card">
             <div class="card-header">
@@ -383,6 +400,16 @@ if (statusButtons.length > 0 && statusInput) {
         if (savedKecId) {
             await loadDesa(savedKecId, savedDesaId);
         }
+
+        // Re-assert saved selections once all options are populated. This
+        // guarantees no wilayah data is lost on load even if the API response
+        // omits a saved id or string matching behaves unexpectedly.
+        const kabSel = document.getElementById('kabupatenSelect');
+        const kecSel = document.getElementById('kecamatanSelect');
+        const desaSel = document.getElementById('desaSelect');
+        if (kabSel && savedKabId) kabSel.value = String(savedKabId);
+        if (kecSel && savedKecId) kecSel.value = String(savedKecId);
+        if (desaSel && savedDesaId) desaSel.value = String(savedDesaId);
     })();
 
 })();
