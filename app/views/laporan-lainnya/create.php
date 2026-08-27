@@ -181,7 +181,7 @@
     justify-content: center;
 }
 
-/* Role petugas: tampilan statis tanpa efek timbul-tenggelam. */
+/* Tampilan statis tanpa efek timbul-tenggelam untuk seluruh role. */
 .petugas-no-motion .card,
 .petugas-no-motion .card:hover,
 .petugas-no-motion .btn,
@@ -207,7 +207,7 @@
 }
 </style>
 
-<div class="row <?= (($_SESSION['role'] ?? '') === 'petugas') ? 'petugas-no-motion' : '' ?>">
+<div class="row petugas-no-motion">
     <div class="col-md-10 offset-md-1">
         <div class="card">
             <div class="card-header">

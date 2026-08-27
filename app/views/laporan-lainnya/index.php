@@ -2,8 +2,8 @@
 
 <!-- Disable Fade In/Out and Hover Animations -->
 <style>
-<?php if (($_SESSION['role'] ?? '') === 'admin'): ?>
-/* Nonaktifkan semua animasi fade-in, fade-out, bounce, dan transisi lambat */
+/* Nonaktifkan semua animasi fade-in, fade-out, bounce, dan transisi lambat
+   untuk SELURUH role (hilangkan efek timbul-tenggelam / hover-lift). */
 *, *::before, *::after {
     transition: none !important;
     animation: none !important;
@@ -70,7 +70,6 @@
 #laporanTable tbody tr:hover {
     box-shadow: none !important;
 }
-<?php endif; ?>
 </style>
 
 <div class="row">
