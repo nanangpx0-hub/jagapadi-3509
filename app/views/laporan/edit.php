@@ -1,5 +1,26 @@
 <?php include ROOT_PATH . '/app/views/layouts/header.php'; ?>
 
+<?php
+// Old input: dipakai ulang setelah validasi server gagal (anti data hilang)
+$oldInput = $_SESSION['form_data'] ?? [];
+unset($_SESSION['form_data']);
+$oldVal = static function (string $key, string $default = '') use ($oldInput): string {
+    $v = $oldInput[$key] ?? null;
+    return ($v === null || $v === '') ? htmlspecialchars($default, ENT_QUOTES, 'UTF-8') : htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+};
+$oldSel = static function (string $key, string $value) use ($oldInput): string {
+    return (string) ($oldInput[$key] ?? '') === $value ? ' selected' : '';
+};
+?>
+<script>
+// Seed pemulihan pilihan wilayah setelah validasi server gagal
+window.__wilayahAwal = {
+    kab: '<?= $oldVal('kabupaten_id') ?>',
+    kec: '<?= $oldVal('kecamatan_id') ?>',
+    desa: '<?= $oldVal('desa_id') ?>'
+};
+</script>
+
 <style>
 /* Nonaktifkan efek timbul-tenggelam (hover-lift / transisi / animasi) agar
    halaman edit stabil, selaras dengan halaman laporan lainnya. */
@@ -31,7 +52,7 @@
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label>Tanggal Kejadian/Pengamatan <span class="text-danger">*</span></label>
-                                <input type="date" name="tanggal" class="form-control" value="<?= $laporan['tanggal'] ?>" max="<?= date('Y-m-d') ?>" required>
+                                <input type="date" name="tanggal" class="form-control" value="<?= $oldVal('tanggal', (string)($laporan['tanggal'] ?? '')) ?>" max="<?= date('Y-m-d') ?>" required>
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -40,7 +61,7 @@
                                 <select name="master_opt_id" class="form-control" required>
                                     <option value="">-- Pilih OPT --</option>
                                     <?php foreach($data_opt as $opt): ?>
-                                    <option value="<?= $opt['id'] ?>" <?= $opt['id'] == $laporan['master_opt_id'] ? 'selected' : '' ?>>
+                                    <option value="<?= $opt['id'] ?>" <?= $oldSel('master_opt_id', (string)$opt['id']) ?>>
                                         <?= htmlspecialchars($opt['nama_opt'] ?? '') ?> (<?= $opt['jenis'] ?>)
                                     </option>
                                     <?php endforeach; ?>
@@ -49,7 +70,7 @@
                         </div>
                     </div>
                     
-                    <div class="form-group"><label>Metode Pengukuran</label><select name="metode_pengukuran" class="form-control"><option value="absolut" <?= ($laporan['metode_pengukuran'] ?? 'absolut') === 'absolut' ? 'selected' : '' ?>>Luas absolut (Ha)</option><option value="persentase" <?= ($laporan['metode_pengukuran'] ?? '') === 'persentase' ? 'selected' : '' ?>>Persentase (%)</option></select></div>
+                    <div class="form-group"><label>Metode Pengukuran</label><select name="metode_pengukuran" class="form-control"><option value="absolut" <?= $oldSel('metode_pengukuran', 'absolut') ?>>Luas absolut (Ha)</option><option value="persentase" <?= $oldSel('metode_pengukuran', 'persentase') ?>>Persentase (%)</option></select></div>
                     <div class="row">
                         <div class="col-md-4">
                             <div class="form-group">
@@ -69,8 +90,8 @@
                                 <?php endif; ?>
                             </div>
                         </div>
-                        <div class="col-md-4"><div class="form-group"><label>Persentase Serangan (%)</label><input type="number" name="persentase_serangan" class="form-control" min="0" max="100" step="0.01" value="<?= htmlspecialchars((string) ($laporan['persentase_serangan'] ?? '')) ?>"></div></div>
-                        <div class="col-md-4"><div class="form-group"><label>Luas Areal Diamati (Ha)</label><input type="number" name="luas_areal_diamati" class="form-control" min="0" step="0.01" value="<?= htmlspecialchars((string) ($laporan['luas_areal_diamati'] ?? '')) ?>"></div></div>
+                        <div class="col-md-4"><div class="form-group"><label>Persentase Serangan (%)</label><input type="number" name="persentase_serangan" class="form-control" min="0" max="100" step="0.01" value="<?= $oldVal('persentase_serangan', (string)($laporan['persentase_serangan'] ?? '')) ?>"></div></div>
+                        <div class="col-md-4"><div class="form-group"><label>Luas Areal Diamati (Ha)</label><input type="number" name="luas_areal_diamati" class="form-control" min="0" step="0.01" value="<?= $oldVal('luas_areal_diamati', (string)($laporan['luas_areal_diamati'] ?? '')) ?>"></div></div>
                         <div class="col-md-4">
                             <div class="form-group">
                                 <label>Kecamatan <?= $requiredMark ?></label>
@@ -98,7 +119,7 @@
                         <div class="col-md-4">
                             <div class="form-group">
                                 <label>Alamat Lengkap <?= $requiredMark ?></label>
-                                <input type="text" name="alamat_lengkap" class="form-control" value="<?= htmlspecialchars($laporan['alamat_lengkap'] ?? ($laporan['lokasi'] ?? '')) ?>" <?= $requiredAttr ?>>
+                                <input type="text" name="alamat_lengkap" class="form-control" value="<?= $oldVal('alamat_lengkap', (string)($laporan['alamat_lengkap'] ?? ($laporan['lokasi'] ?? ''))) ?>" <?= $requiredAttr ?>>
                                 <?php if($isRequired): ?>
                                 <div class="invalid-feedback">Alamat lengkap wajib diisi</div>
                                 <?php endif; ?>
@@ -111,13 +132,13 @@
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label>Latitude</label>
-                                <input type="text" name="latitude" class="form-control" value="<?= $laporan['latitude'] ?>" step="any">
+                                <input type="text" name="latitude" class="form-control" value="<?= $oldVal('latitude', (string)($laporan['latitude'] ?? '')) ?>" step="any">
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label>Longitude</label>
-                                <input type="text" name="longitude" class="form-control" value="<?= $laporan['longitude'] ?>" step="any">
+                                <input type="text" name="longitude" class="form-control" value="<?= $oldVal('longitude', (string)($laporan['longitude'] ?? '')) ?>" step="any">
                             </div>
                         </div>
                     </div>
@@ -127,29 +148,29 @@
                             <div class="form-group">
                                 <label>Tingkat Keparahan <span class="text-danger">*</span></label>
                                 <select name="tingkat_keparahan" class="form-control" required>
-                                    <option value="Ringan" <?= $laporan['tingkat_keparahan'] == 'Ringan' ? 'selected' : '' ?>>Ringan</option>
-                                    <option value="Sedang" <?= $laporan['tingkat_keparahan'] == 'Sedang' ? 'selected' : '' ?>>Sedang</option>
-                                    <option value="Berat" <?= $laporan['tingkat_keparahan'] == 'Berat' ? 'selected' : '' ?>>Berat</option>
+                                    <option value="Ringan" <?= $oldSel('tingkat_keparahan', 'Ringan') ?>>Ringan</option>
+                                    <option value="Sedang" <?= $oldSel('tingkat_keparahan', 'Sedang') ?>>Sedang</option>
+                                    <option value="Berat" <?= $oldSel('tingkat_keparahan', 'Berat') ?>>Berat</option>
                                 </select>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="form-group">
                                 <label>Populasi/Intensitas</label>
-                                <input type="number" name="populasi" class="form-control" value="<?= $laporan['populasi'] ?>" min="0">
+                                <input type="number" name="populasi" class="form-control" value="<?= $oldVal('populasi', (string)($laporan['populasi'] ?? '0')) ?>" min="0">
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="form-group">
                                 <label>Luas Serangan (Ha)</label>
-                                <input type="number" name="luas_serangan" class="form-control" value="<?= $laporan['luas_serangan'] ?>" min="0" step="0.01">
+                                <input type="number" name="luas_serangan" class="form-control" value="<?= $oldVal('luas_serangan', (string)($laporan['luas_serangan'] ?? '0')) ?>" min="0" step="0.01">
                             </div>
                         </div>
                     </div>
                     
                     <div class="form-group">
                         <label>Catatan</label>
-                        <textarea name="catatan" class="form-control" rows="3"><?= htmlspecialchars($laporan['catatan'] ?? '') ?></textarea>
+                        <textarea name="catatan" class="form-control" rows="3"><?= $oldVal('catatan', (string)($laporan['catatan'] ?? '')) ?></textarea>
                     </div>
                     
                     <div class="form-group">
@@ -391,25 +412,31 @@ if (statusButtons.length > 0 && statusInput) {
         });
     }
 
-    // Init: load kabupaten, then pre-select saved values
+    // Init: load kabupaten, then pre-select saved values (atau input user bila
+    // update gagal — window.__wilayahAwal diprioritaskan di atas nilai tersimpan).
+    const awal = window.__wilayahAwal || {};
+    const effKab = awal.kab || savedKabId;
+    const effKec = awal.kec || savedKecId;
+    const effDesa = awal.desa || savedDesaId;
+
     (async () => {
-        await loadKabupaten(savedKabId);
-        if (savedKabId) {
-            await loadKecamatan(savedKabId, savedKecId);
+        await loadKabupaten(effKab);
+        if (effKab) {
+            await loadKecamatan(effKab, effKec);
         }
-        if (savedKecId) {
-            await loadDesa(savedKecId, savedDesaId);
+        if (effKec) {
+            await loadDesa(effKec, effDesa);
         }
 
-        // Re-assert saved selections once all options are populated. This
+        // Re-assert selections once all options are populated. This
         // guarantees no wilayah data is lost on load even if the API response
         // omits a saved id or string matching behaves unexpectedly.
         const kabSel = document.getElementById('kabupatenSelect');
         const kecSel = document.getElementById('kecamatanSelect');
         const desaSel = document.getElementById('desaSelect');
-        if (kabSel && savedKabId) kabSel.value = String(savedKabId);
-        if (kecSel && savedKecId) kecSel.value = String(savedKecId);
-        if (desaSel && savedDesaId) desaSel.value = String(savedDesaId);
+        if (kabSel && effKab) kabSel.value = String(effKab);
+        if (kecSel && effKec) kecSel.value = String(effKec);
+        if (desaSel && effDesa) desaSel.value = String(effDesa);
     })();
 
 })();

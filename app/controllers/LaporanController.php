@@ -625,6 +625,10 @@ class LaporanController extends Controller {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $this->validateCsrfToken();
 
+            // Simpan old input: isian tidak boleh hilang saat validasi/redirect gagal
+            // (dibersihkan setelah laporan sukses diupdate — lihat bawah).
+            $_SESSION['form_data'] = $_POST;
+
             // Pertahankan wilayah existing bila dikirim kosong (anti-hilang
             // tak sengaja); validasi relasi tetap berjalan atas nilai efektif.
             foreach (['kabupaten_id', 'kecamatan_id', 'desa_id'] as $wilayahField) {
@@ -818,6 +822,7 @@ class LaporanController extends Controller {
             }
 
             $_SESSION['success'] = 'Laporan berhasil diupdate';
+            unset($_SESSION['form_data']);
             $this->redirect('laporan');
         }
 
