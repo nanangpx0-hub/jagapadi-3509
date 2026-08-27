@@ -1,6 +1,33 @@
 <?php include ROOT_PATH . '/app/views/layouts/header.php'; ?>
 
-<div class="row">
+<style>
+/* Tampilan statis tanpa efek timbul-tenggelam untuk seluruh role. */
+.petugas-no-motion .card,
+.petugas-no-motion .card:hover,
+.petugas-no-motion .btn,
+.petugas-no-motion .btn:hover,
+.petugas-no-motion .btn:focus,
+.petugas-no-motion .btn:active,
+.petugas-no-motion .form-control,
+.petugas-no-motion .custom-select,
+.petugas-no-motion .alert,
+.petugas-no-motion .badge,
+.petugas-no-motion .skeleton-loading,
+.petugas-no-motion #autoSaveIndicator {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+}
+
+.petugas-no-motion .card:hover,
+.petugas-no-motion .btn:hover,
+.petugas-no-motion .btn:focus,
+.petugas-no-motion .btn:active {
+    box-shadow: none !important;
+}
+</style>
+
+<div class="row petugas-no-motion">
     <div class="col-md-10 offset-md-1">
         <div class="card">
             <div class="card-header">
