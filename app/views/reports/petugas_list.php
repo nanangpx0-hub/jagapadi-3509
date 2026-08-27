@@ -1,5 +1,24 @@
 <?php
 $reportType = $petugasReportType ?? '';
+
+// Nonaktifkan efek timbul-tenggelam (hover-lift / transisi / animasi) agar
+// tampilan petugas stabil, sejalan dengan halaman laporan lainnya.
+?>
+<style>
+.petugas-laporan-page,
+.petugas-laporan-page *,
+.petugas-laporan-page *::before,
+.petugas-laporan-page *::after {
+    animation: none !important;
+    transition: none !important;
+}
+.petugas-laporan-page *:hover,
+.petugas-laporan-page *:focus,
+.petugas-laporan-page *:active {
+    transform: none !important;
+}
+</style>
+<?php
 $isHama = $reportType === 'hama';
 $basePath = $isHama ? 'laporan' : 'irigasi';
 $heading = $isHama ? 'Laporan Hama' : 'Laporan Irigasi';
@@ -21,7 +40,7 @@ $statusStyles = [
 ];
 ?>
 
-<div class="row">
+<div class="row petugas-laporan-page">
   <div class="col-12">
     <div class="card">
       <div class="card-header">
