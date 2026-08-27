@@ -930,6 +930,45 @@ tbody tr:hover {
                 </button>
             </form>` : '';
 
+        const verifyBtns = (isAdmin || isOperator) && r.status === 'Submitted' ? `
+            <button type="button" class="btn-action btn-action-success" data-toggle="modal" data-target="#verifyModal${r.id}" title="Verifikasi"><i class="fas fa-check"></i></button>
+            <button type="button" class="btn-action btn-action-danger btn-reject" data-toggle="modal" data-target="#verifyModal${r.id}" data-action="reject" title="Tolak"><i class="fas fa-times"></i></button>
+        ` : '';
+
+        const verifyModal = (isAdmin || isOperator) && r.status === 'Submitted' ? `
+            <div class="modal" id="verifyModal${r.id}" tabindex="-1" role="dialog">
+                <div class="modal-dialog" role="document">
+                    <div class="modal-content">
+                        <form action="${BASE_URL}laporan/verify/${r.id}" method="POST">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Verifikasi Laporan #${r.id}</h5>
+                                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                            </div>
+                            <div class="modal-body">
+                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                                <div class="form-group">
+                                    <label>Aksi</label>
+                                    <select name="status" class="form-control" id="verifyStatus${r.id}">
+                                        <option value="Diverifikasi">Terima (Verifikasi)</option>
+                                        <option value="Ditolak">Tolak</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Catatan</label>
+                                    <textarea name="catatan_verifikasi" class="form-control" rows="3" placeholder="Tambahkan catatan verifikasi..."></textarea>
+                                    <small class="form-text text-danger d-none" data-catatan-hint>Alasan penolakan wajib diisi.</small>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
+                                <button type="submit" class="btn btn-primary">Simpan</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        ` : '';
+
         const deleteBtn = canDelete ? `
             <form action="${BASE_URL}laporan/delete/${r.id}" method="POST" class="d-inline">
                 <?= Security::getCsrfField() ?>
@@ -960,11 +999,12 @@ tbody tr:hover {
                 <div class="btn-action-group">
                     <a href="${BASE_URL}laporan/detail/${r.id}" class="btn-action btn-action-info" title="Lihat"><i class="fas fa-eye"></i></a>
                     ${editBtn}
+                    ${verifyBtns}
                     ${archiveBtn}
                     ${deleteBtn}
                 </div>
             </td>
-        </tr>`;
+        </tr>${verifyModal}`;
     }
 
     function buildPaginationHTML() {
@@ -1361,6 +1401,39 @@ tbody tr:hover {
     });
 
 })();
+</script>
+
+<script>
+// Delegasi fase-CAPTURE untuk Verifikasi/Tolak (kebal render-ulang & modal race, seperti irigasi)
+document.addEventListener('click', function(e) {
+    const rejectBtn = e.target.closest('.btn-reject');
+    const verifyBtn = !rejectBtn ? e.target.closest('.btn-action-success[data-toggle="modal"]') : null;
+    if (!rejectBtn && !verifyBtn) return;
+    const targetSel = (rejectBtn || verifyBtn).getAttribute('data-target');
+    const modalEl = targetSel ? document.querySelector(targetSel) : null;
+    if (!modalEl) return;
+    e.stopPropagation();
+    const selectEl = modalEl.querySelector('select[name="status"]');
+    const ta = modalEl.querySelector('textarea[name="catatan_verifikasi"]');
+    const hint = modalEl.querySelector('[data-catatan-hint]');
+    if (rejectBtn) {
+        if (selectEl) selectEl.value = 'Ditolak';
+        if (ta) { ta.required = true; ta.placeholder = 'Alasan penolakan (wajib)...'; }
+        if (hint) hint.classList.remove('d-none');
+    } else {
+        if (selectEl) selectEl.value = 'Diverifikasi';
+        if (ta) { ta.required = false; ta.placeholder = 'Tambahkan catatan verifikasi...'; }
+        if (hint) hint.classList.add('d-none');
+    }
+    if (window.$ && window.$.fn && window.$.fn.modal) {
+        window.$(modalEl).modal('show');
+    } else {
+        modalEl.classList.add('show');
+        modalEl.style.display = 'block';
+        modalEl.removeAttribute('aria-hidden');
+        document.body.classList.add('modal-open');
+    }
+}, true);
 </script>
 <?php endif; ?>
 
