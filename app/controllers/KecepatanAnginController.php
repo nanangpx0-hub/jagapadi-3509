@@ -92,6 +92,62 @@ class KecepatanAnginController extends Controller {
             'limit' => 10,
             'offset' => 0
         ]));
+
+        // --- Data lintas tahun untuk perbandingan (Grafik, Distribusi, Tabel) ---
+        $sourceOnlyFilters = $this->getSourceFilter($selectedSource);
+        $sourceMonthFilters = $sourceOnlyFilters;
+        if ($selectedMonth !== null) {
+            $sourceMonthFilters['month'] = $selectedMonth;
+        }
+        $allYears = $data['availableYears'];
+        if (empty($allYears)) {
+            $allYears = [$selectedYear];
+        }
+        sort($allYears);
+        $minYear = min($allYears);
+        $maxYear = max($allYears);
+        $trendRows = $this->model->getTrendAnalysis($minYear, $maxYear, $sourceOnlyFilters);
+        $allMonthlyByYear = [];
+        foreach ($allYears as $y) {
+            $allMonthlyByYear[$y] = array_fill(1, 12, 0);
+        }
+        foreach ($trendRows as $row) {
+            $y = (int) ($row['tahun'] ?? 0);
+            $m = (int) ($row['bulan'] ?? 0);
+            if ($y && $m >= 1 && $m <= 12) {
+                if (!isset($allMonthlyByYear[$y])) {
+                    $allMonthlyByYear[$y] = array_fill(1, 12, 0);
+                }
+                $allMonthlyByYear[$y][$m] = (float) ($row['rata_rata'] ?? 0);
+            }
+        }
+        // Hapus tahun tanpa data untuk sumber terpilih agar grafik tidak menampilkan garis nol
+        foreach ($allMonthlyByYear as $y => $months) {
+            if (array_sum($months) == 0) {
+                unset($allMonthlyByYear[$y]);
+            }
+        }
+        ksort($allMonthlyByYear);
+        $data['allMonthlyByYear'] = $allMonthlyByYear;
+        $data['allYearsList'] = array_keys($allMonthlyByYear);
+        $windRose = $this->model->getDirectionDistribution($sourceMonthFilters);
+        $windRoseTotal = array_sum(array_column($windRose, 'count'));
+        if ($windRoseTotal === 0) {
+            // NASA tidak menyimpan arah — fallback ke semua sumber agar radar tetap tampil
+            $fallbackFilters = $selectedMonth !== null ? ['month' => $selectedMonth] : [];
+            $windRose = $this->model->getDirectionDistribution($fallbackFilters);
+            $data['windRoseFallback'] = true;
+        } else {
+            $data['windRoseFallback'] = false;
+        }
+        $data['windRoseAll'] = $windRose;
+        $data['tableAllYears'] = $this->model->getAll(array_merge($sourceMonthFilters, [
+            'limit' => 100,
+            'offset' => 0
+        ]));
+        $data['tableAllYearsTotal'] = $this->model->countAll($sourceMonthFilters);
+        // Yearly summary untuk header ringkas perbandingan
+        $data['yearlySummaryAll'] = $this->model->getYearlySummary(count($allYears), $sourceOnlyFilters);
         
         // Get logs for admin
         if ($_SESSION['role'] === 'admin') {

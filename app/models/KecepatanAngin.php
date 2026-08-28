@@ -290,6 +290,52 @@ class KecepatanAngin {
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         return $row['y'] !== null ? (int) $row['y'] : null;
     }
+
+    /**
+     * Agregat distribusi arah angin (8 mata angin) untuk semua tahun.
+     * Dipakai untuk wind rose perbandingan lintas tahun.
+     */
+    public function getDirectionDistribution(array $filters = []): array {
+        $sql = "SELECT
+                    CASE
+                        WHEN arah_angin IS NULL THEN 'Unknown'
+                        WHEN arah_angin >= 337.5 OR arah_angin < 22.5 THEN 'N'
+                        WHEN arah_angin >= 22.5 AND arah_angin < 67.5 THEN 'NE'
+                        WHEN arah_angin >= 67.5 AND arah_angin < 112.5 THEN 'E'
+                        WHEN arah_angin >= 112.5 AND arah_angin < 157.5 THEN 'SE'
+                        WHEN arah_angin >= 157.5 AND arah_angin < 202.5 THEN 'S'
+                        WHEN arah_angin >= 202.5 AND arah_angin < 247.5 THEN 'SW'
+                        WHEN arah_angin >= 247.5 AND arah_angin < 292.5 THEN 'W'
+                        ELSE 'NW'
+                    END as direction,
+                    COUNT(*) as count,
+                    ROUND(AVG(kecepatan_angin), 2) as avg_speed,
+                    MAX(kecepatan_angin) as max_speed
+                FROM {$this->table} WHERE arah_angin IS NOT NULL";
+        $params = [];
+        if (!empty($filters['sumber_data_like'])) {
+            $sql .= " AND sumber_data LIKE ?";
+            $params[] = $filters['sumber_data_like'];
+        }
+        if (!empty($filters['month'])) {
+            $sql .= " AND MONTH(tanggal) = ?";
+            $params[] = (int) $filters['month'];
+        }
+        $sql .= " GROUP BY direction";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $map = [];
+        foreach ($rows as $r) {
+            $map[$r['direction']] = $r;
+        }
+        $order = ['N','NE','E','SE','S','SW','W','NW'];
+        $result = [];
+        foreach ($order as $dir) {
+            $result[] = $map[$dir] ?? ['direction' => $dir, 'count' => 0, 'avg_speed' => 0, 'max_speed' => 0];
+        }
+        return $result;
+    }
     
     /**
      * Get yearly summary

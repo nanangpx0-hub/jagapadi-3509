@@ -3,6 +3,8 @@ $pageTitle = $data['page_title'] ?? 'Data Kecepatan Angin';
 require_once ROOT_PATH . '/app/views/layouts/header.php';
 ?>
 <link rel="stylesheet" href="<?= BASE_URL ?>public/css/hover-disabled.css">
+<link rel="stylesheet" href="<?= BASE_URL ?>public/vendor/css/dataTables.bootstrap4.min.css">
+<link rel="stylesheet" href="<?= BASE_URL ?>public/vendor/css/responsive.bootstrap4.min.css">
 
 <div class="container-fluid py-4">
     <style>
@@ -189,33 +191,51 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
         </div>
     </div>
 
-    <!-- Charts Row -->
+    <!-- Charts Row — perbandingan lintas tahun -->
     <div class="row mb-4">
         <div class="col-xl-8 col-lg-7">
             <div class="card shadow mb-4">
                 <div class="card-header py-3 d-flex justify-content-between align-items-center">
                     <h6 class="m-0 font-weight-bold text-primary">
                         <i class="fas fa-chart-line"></i> Grafik Kecepatan Angin
+                        <small class="text-muted font-weight-normal ml-2">Perbandingan Semua Tahun</small>
                     </h6>
+                    <span class="badge badge-info"><?= count($data['allYearsList'] ?? []) ?> tahun</span>
                 </div>
                 <div class="card-body">
                     <div class="chart-area" style="height: 320px;">
                         <canvas id="windChart"></canvas>
                     </div>
+                    <?php if (!empty($data['yearlySummaryAll'])): ?>
+                    <div class="mt-3 table-responsive">
+                        <table class="table table-sm table-bordered mb-0 text-center">
+                            <thead class="thead-light"><tr><th>Tahun</th><th>Rata-rata (km/h)</th><th>Maksimum (km/h)</th><th>Jumlah Data</th></tr></thead>
+                            <tbody>
+                            <?php foreach ($data['yearlySummaryAll'] as $ys): ?>
+                                <tr><td><span class="badge badge-primary"><?= htmlspecialchars((string)$ys['tahun']) ?></span></td><td><?= number_format((float)$ys['rata_rata'], 2) ?></td><td><?= number_format((float)($ys['maksimum'] ?? 0), 2) ?></td><td><?= (int)$ys['jumlah_data'] ?></td></tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
         <div class="col-xl-4 col-lg-5">
             <div class="card shadow mb-4">
-                <div class="card-header py-3">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
                     <h6 class="m-0 font-weight-bold text-primary">
                         <i class="fas fa-compass"></i> Distribusi Arah
                     </h6>
+                    <span class="badge badge-success">Semua Tahun</span>
                 </div>
                 <div class="card-body">
                     <div class="chart-pie" style="height: 320px;">
                         <canvas id="windRoseChart"></canvas>
                     </div>
+                    <?php if (!empty($data['windRoseFallback'])): ?>
+                    <small class="text-muted d-block text-center mt-2"><i class="fas fa-info-circle"></i> Arah tidak tersedia untuk sumber terpilih — menampilkan semua sumber</small>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -332,12 +352,14 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
         </div>
     </div>
 
-    <!-- Data Table -->
+    <!-- Data Table — lintas tahun (100 terbaru, semua tahun) -->
     <div class="card shadow mb-4">
-        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap">
             <h6 class="m-0 font-weight-bold text-primary">
                 <i class="fas fa-table"></i> Data Kecepatan Angin
+                <small class="text-muted font-weight-normal ml-2">Semua Tahun — perbandingan (<?= (int)($data['tableAllYearsTotal'] ?? 0) ?> total, 100 terbaru)</small>
             </h6>
+            <span class="badge badge-primary">Semua Tahun</span>
         </div>
         <div class="card-body">
             <div class="table-responsive">
@@ -357,16 +379,19 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                         </tr>
                     </thead>
                     <tbody>
-                        <?php if (!empty($data['recentData'])): 
+                        <?php
+                        $tableRows = $data['tableAllYears'] ?? $data['recentData'] ?? [];
+                        ?>
+                        <?php if (!empty($tableRows)): 
                             $namaBulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
                         ?>
-                        <?php foreach ($data['recentData'] as $row): 
+                        <?php foreach ($tableRows as $row): 
                             $date = strtotime($row['tanggal']);
                         ?>
                         <tr>
                             <td><?= date('d/m/Y', $date) ?></td>
                             <td><?= $namaBulan[date('n', $date) - 1] ?></td>
-                            <td><?= date('Y', $date) ?></td>
+                            <td><span class="badge badge-primary"><?= date('Y', $date) ?></span></td>
                             <td>Jember</td>
                             <td>
                                 <span class="font-weight-bold <?= $row['kecepatan_angin'] > 20 ? 'text-danger' : 'text-dark' ?>">
@@ -696,52 +721,86 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
 
 <?php require_once ROOT_PATH . '/app/views/layouts/footer.php'; ?>
 
+<script src="<?= BASE_URL ?>public/vendor/js/dataTables-1.13.6.min.js"></script>
+<script src="<?= BASE_URL ?>public/vendor/js/dataTables.bootstrap4.min.js"></script>
+<script src="<?= BASE_URL ?>public/vendor/js/dataTables.responsive.min.js"></script>
+<script src="<?= BASE_URL ?>public/vendor/js/responsive.bootstrap4.min.js"></script>
+
 <script>
 document.addEventListener("DOMContentLoaded", function() {
-    // --- Wind Chart (Line) ---
+    // --- Wind Chart — perbandingan semua tahun (satu garis per tahun) ---
     const ctxWind = document.getElementById('windChart').getContext('2d');
-    const monthlyData = <?= json_encode($data['monthlyData'] ?? []) ?>;
-    
-    // Process data for chart
+    const allMonthlyByYear = <?= json_encode($data['allMonthlyByYear'] ?? []) ?>;
+    const allYearsList = <?= json_encode($data['allYearsList'] ?? []) ?>;
     const labels = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"];
-    const speeds = new Array(12).fill(0);
-    
-    monthlyData.forEach(item => {
-        if(item.bulan >= 1 && item.bulan <= 12) {
-            speeds[item.bulan - 1] = item.rata_rata;
-        }
-    });
+    const palette = ['#36b9cc','#1cc88a','#4e73df','#f6c23e','#e74a3b','#858796','#5a5c69','#2e59d9','#17a673','#36b9cc'];
+    let windDatasets = [];
+    if (allYearsList.length > 0 && Object.keys(allMonthlyByYear).length > 0) {
+        windDatasets = allYearsList.map((year, idx) => {
+            const yearData = allMonthlyByYear[year] || {};
+            const data = [];
+            for (let m = 1; m <= 12; m++) {
+                const v = yearData[m] ?? yearData[String(m)] ?? 0;
+                data.push(parseFloat(v) || 0);
+            }
+            const color = palette[idx % palette.length];
+            return {
+                label: String(year),
+                data: data,
+                borderColor: color,
+                backgroundColor: color + '20',
+                pointRadius: 3,
+                pointBackgroundColor: color,
+                pointBorderColor: color,
+                pointHoverRadius: 5,
+                pointHitRadius: 10,
+                pointBorderWidth: 2,
+                fill: false,
+                tension: 0.35
+            };
+        });
+    } else {
+        // fallback single tahun (kompatibilitas)
+        const monthlyData = <?= json_encode($data['monthlyData'] ?? []) ?>;
+        const speeds = new Array(12).fill(0);
+        monthlyData.forEach(item => {
+            if(item.bulan >= 1 && item.bulan <= 12) {
+                speeds[item.bulan - 1] = parseFloat(item.rata_rata) || 0;
+            }
+        });
+        windDatasets = [{
+            label: 'Kecepatan Rata-rata (km/h)',
+            data: speeds,
+            borderColor: '#36b9cc',
+            backgroundColor: 'rgba(54, 185, 204, 0.05)',
+            pointRadius: 3,
+            pointBackgroundColor: '#36b9cc',
+            pointBorderColor: '#36b9cc',
+            pointHoverRadius: 3,
+            pointHoverBackgroundColor: '#36b9cc',
+            pointHoverBorderColor: '#36b9cc',
+            pointHitRadius: 10,
+            pointBorderWidth: 2,
+            fill: true,
+            tension: 0.4
+        }];
+    }
 
     new Chart(ctxWind, {
         type: 'line',
         data: {
             labels: labels,
-            datasets: [{
-                label: 'Kecepatan Rata-rata (km/h)',
-                data: speeds,
-                borderColor: '#36b9cc',
-                backgroundColor: 'rgba(54, 185, 204, 0.05)',
-                pointRadius: 3,
-                pointBackgroundColor: '#36b9cc',
-                pointBorderColor: '#36b9cc',
-                pointHoverRadius: 3,
-                pointHoverBackgroundColor: '#36b9cc',
-                pointHoverBorderColor: '#36b9cc',
-                pointHitRadius: 10,
-                pointBorderWidth: 2,
-                fill: true,
-                tension: 0.4
-            }]
+            datasets: windDatasets
         },
         options: {
             maintainAspectRatio: false,
             layout: { padding: { left: 10, right: 25, top: 25, bottom: 0 } },
             scales: {
-                x: { grid: { display: false, drawBorder: false }, ticks: { maxTicksLimit: 7 } },
+                x: { grid: { display: false, drawBorder: false }, ticks: { maxTicksLimit: 12 } },
                 y: { ticks: { maxTicksLimit: 5, padding: 10, callback: function(value) { return value + ' km/h'; } }, grid: { color: "rgb(234, 236, 244)", zeroLineColor: "rgb(234, 236, 244)", drawBorder: false, borderDash: [2], zeroLineBorderDash: [2] } }
             },
             plugins: {
-                legend: { display: false },
+                legend: { display: true, position: 'bottom', labels: { usePointStyle: true, boxWidth: 12, padding: 16 } },
                 tooltip: {
                     backgroundColor: "rgb(255,255,255)",
                     bodyColor: "#858796",
@@ -752,7 +811,7 @@ document.addEventListener("DOMContentLoaded", function() {
                     borderWidth: 1,
                     xPadding: 15,
                     yPadding: 15,
-                    displayColors: false,
+                    displayColors: true,
                     intersect: false,
                     mode: 'index',
                     caretPadding: 10
@@ -761,32 +820,56 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     });
 
-    // --- Wind Rose (Simple Radar for demonstration of direction) ---
-    // Since we don't have exact directional data in 'monthlyData' easily mapped to Rose without more logic, 
-    // we will simulate a distribution or use a Radar chart if data allows. 
-    // For visual consistency requested, used a polar area or radar.
+    // --- Wind Rose — agregat semua tahun (real data) ---
+    const windRoseRaw = <?= json_encode($data['windRoseAll'] ?? []) ?>;
+    const roseLabels = ['U', 'TL', 'T', 'TG', 'S', 'BD', 'B', 'BL'];
+    let roseCounts = [0,0,0,0,0,0,0,0];
+    let roseAvgs = [0,0,0,0,0,0,0,0];
+    if (Array.isArray(windRoseRaw) && windRoseRaw.length === 8) {
+        roseCounts = windRoseRaw.map(r => parseInt(r.count) || 0);
+        roseAvgs = windRoseRaw.map(r => parseFloat(r.avg_speed) || 0);
+    }
     const ctxRose = document.getElementById('windRoseChart').getContext('2d');
     new Chart(ctxRose, {
         type: 'radar',
         data: {
-            labels: ['U', 'TL', 'T', 'TG', 'S', 'BD', 'B', 'BL'],
+            labels: roseLabels,
             datasets: [{
-                label: 'Frekuensi Arah',
-                data: [15, 10, 20, 15, 10, 5, 15, 10], // Mock distribution if real not available
-                backgroundColor: 'rgba(28, 200, 138, 0.2)',
+                label: 'Jumlah Observasi (semua tahun)',
+                data: roseCounts,
+                backgroundColor: 'rgba(28, 200, 138, 0.25)',
                 borderColor: '#1cc88a',
                 pointBackgroundColor: '#1cc88a',
+                borderWidth: 2
             }]
         },
         options: {
             maintainAspectRatio: false,
-            scale: { ticks: { beginAtZero: true, display: false } }
+            scales: { r: { beginAtZero: true, ticks: { display: false } } },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        afterLabel: function(ctx) {
+                            const idx = ctx.dataIndex;
+                            return 'Rata-rata: ' + (roseAvgs[idx] || 0) + ' km/h';
+                        }
+                    }
+                },
+                legend: { display: true, position: 'bottom' }
+            }
         }
     });
 
-    // --- Spray Recommendation Logic (Mocked visual update) ---
+    // --- Spray Recommendation Logic (pakai dataset tahun terbaru) ---
     setTimeout(() => {
-        const lastSpeed = speeds[new Date().getMonth()] || 12.5; // Use current month avg or default
+        const curMonthIdx = new Date().getMonth();
+        let lastSpeed = 12.5;
+        if (typeof windDatasets !== 'undefined' && windDatasets.length) {
+            const latest = windDatasets[windDatasets.length - 1];
+            if (latest && latest.data && typeof latest.data[curMonthIdx] !== 'undefined') {
+                lastSpeed = parseFloat(latest.data[curMonthIdx]) || 12.5;
+            }
+        }
         const isSafe = lastSpeed < 15;
         
         document.getElementById('sprayIcon').className = isSafe ? 'fas fa-check-circle fa-3x text-success' : 'fas fa-exclamation-circle fa-3x text-danger';
@@ -1278,6 +1361,26 @@ document.addEventListener("DOMContentLoaded", function() {
         })
         .catch(error => alert('Error: ' + error.message));
     });
+
+    // --- DataTable perbandingan semua tahun ---
+    if (window.jQuery && $.fn.DataTable) {
+        const dt = $('#dataTable');
+        if (dt.length && !$.fn.DataTable.isDataTable('#dataTable')) {
+            dt.DataTable({
+                pageLength: 25,
+                lengthMenu: [10, 25, 50, 100],
+                order: [[2, 'desc'], [0, 'desc']],
+                responsive: true,
+                autoWidth: false,
+                language: { url: '<?= BASE_URL ?>public/vendor/js/id-1.13.6.json' },
+                columnDefs: [
+                    { targets: 2, type: 'num' },
+                    { responsivePriority: 1, targets: 0 },
+                    { responsivePriority: 2, targets: 4 }
+                ]
+            });
+        }
+    }
 });
 
 // Global functions for edit and delete buttons
