@@ -273,6 +273,23 @@ class KecepatanAngin {
         $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
+
+    /**
+     * Mendapatkan tahun terakhir yang memiliki data untuk filter tertentu.
+     * Digunakan agar dashboard tidak tampil kosong secara default.
+     */
+    public function getLatestYearWithData(array $filters = []): ?int {
+        $sql = "SELECT MAX(YEAR(tanggal)) as y FROM {$this->table} WHERE 1=1";
+        $params = [];
+        if (!empty($filters['sumber_data_like'])) {
+            $sql .= " AND sumber_data LIKE ?";
+            $params[] = $filters['sumber_data_like'];
+        }
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row['y'] !== null ? (int) $row['y'] : null;
+    }
     
     /**
      * Get yearly summary

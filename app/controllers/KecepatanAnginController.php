@@ -56,17 +56,20 @@ class KecepatanAnginController extends Controller {
     public function index() {
         $this->checkAuth();
 
-        $selectedYear = filter_var($_GET['year'] ?? date('Y'), FILTER_VALIDATE_INT);
-        $selectedYear = $selectedYear && $selectedYear >= 2000 && $selectedYear <= (int) date('Y')
-            ? $selectedYear
-            : (int) date('Y');
+        $selectedSource = in_array($_GET['data_source'] ?? 'nasa', ['nasa', 'openmeteo', 'simulation', 'all'], true)
+            ? ($_GET['data_source'] ?? 'nasa')
+            : 'nasa';
+
+        $maxYear = (int) date('Y');
+        $requestedYear = filter_var($_GET['year'] ?? null, FILTER_VALIDATE_INT);
+        $selectedYear = ($requestedYear !== false && $requestedYear !== null && $requestedYear >= 2000 && $requestedYear <= $maxYear)
+            ? $requestedYear
+            : ($this->model->getLatestYearWithData($this->getSourceFilter($selectedSource)) ?: $maxYear);
+
         $selectedMonth = filter_var($_GET['month'] ?? null, FILTER_VALIDATE_INT);
         $selectedMonth = $selectedMonth && $selectedMonth >= 1 && $selectedMonth <= 12
             ? $selectedMonth
             : null;
-        $selectedSource = in_array($_GET['data_source'] ?? 'nasa', ['nasa', 'openmeteo', 'simulation', 'all'], true)
-            ? ($_GET['data_source'] ?? 'nasa')
-            : 'nasa';
         $filters = array_merge(['year' => $selectedYear], $this->getSourceFilter($selectedSource));
         if ($selectedMonth !== null) {
             $filters['month'] = $selectedMonth;

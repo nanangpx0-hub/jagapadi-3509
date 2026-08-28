@@ -2,22 +2,10 @@
 $pageTitle = $data['page_title'] ?? 'Data Kecepatan Angin';
 require_once ROOT_PATH . '/app/views/layouts/header.php';
 ?>
+<link rel="stylesheet" href="<?= BASE_URL ?>public/css/hover-disabled.css">
 
 <div class="container-fluid py-4">
     <style>
-        /* Custom Hover Effects from Curah Hujan */
-        #filterForm .btn {
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        #filterForm .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-        }
-        #filterForm .btn:active {
-            transform: translateY(0);
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
         /* Additional Wind Specific Styles */
         .wind-direction-arrow {
             display: inline-block;
@@ -720,7 +708,7 @@ document.addEventListener("DOMContentLoaded", function() {
     
     monthlyData.forEach(item => {
         if(item.bulan >= 1 && item.bulan <= 12) {
-            speeds[item.bulan - 1] = item.avg_speed;
+            speeds[item.bulan - 1] = item.rata_rata;
         }
     });
 
