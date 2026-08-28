@@ -393,6 +393,7 @@ class KecepatanAnginController extends Controller {
                 'success' => $result['success'],
                 'message' => $result['message'],
                 'source' => $result['source'],
+                'no_data' => $result['no_data'] ?? false,
                 'records_success' => $result['records_success'],
                 'records_failed' => $result['records_failed'],
                 'execution_time' => $result['execution_time']

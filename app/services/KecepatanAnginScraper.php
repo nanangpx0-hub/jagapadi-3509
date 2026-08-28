@@ -48,11 +48,23 @@ class KecepatanAnginScraper {
             'success' => false,
             'message' => '',
             'source' => '',
+            'no_data' => false,
             'records_success' => 0,
             'records_failed' => 0,
             'execution_time' => 0
         ];
         
+        // Periode masa depan belum memiliki data; jangan dihitung sebagai kegagalan.
+        $currentYear = (int) date('Y');
+        $currentMonth = (int) date('n');
+        if ($year > $currentYear || ($year === $currentYear && $month > $currentMonth)) {
+            $result['no_data'] = true;
+            $result['message'] = "Data angin untuk bulan {$month} {$year} belum tersedia (periode masa depan)";
+            $result['source'] = $source;
+            $result['execution_time'] = round(microtime(true) - $startTime, 2);
+            return $result;
+        }
+
         try {
             $this->assertValidPeriod($year, $month);
             if (!in_array($source, ['nasa', 'nasa_power', 'openmeteo', 'simulation'], true)) {

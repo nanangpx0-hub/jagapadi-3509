@@ -1038,6 +1038,9 @@ document.addEventListener("DOMContentLoaded", function() {
                         Record berhasil: ${data.records_success}<br>
                         Waktu: ${data.execution_time}s`;
                     setTimeout(() => location.reload(), 1500);
+                } else if (data.no_data) {
+                    resultDiv.className = 'alert alert-info';
+                    resultDiv.innerHTML = `<strong><i class="fas fa-info-circle"></i> Info:</strong><br>${data.message || 'Data belum tersedia untuk periode tersebut'}`;
                 } else {
                     resultDiv.className = 'alert alert-danger';
                     resultDiv.innerHTML = `<strong><i class="fas fa-times-circle"></i> Gagal!</strong><br>${data.error || data.message}`;
