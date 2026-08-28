@@ -827,8 +827,8 @@ $errorMsg = ErrorMessage::flash();
                                     </a>
                                     <?php endif; ?>
                                     
-                                    <?php if($userRole == 'admin'): ?>
-                                    <!-- Delete button - admin only -->
+                                    <?php if($userRole === 'admin' || ($userRole === 'petugas' && in_array($item['status'], ['Draf', 'Ditolak'], true))): ?>
+                                    <!-- Delete button for admin, or petugas on Draf/Ditolak -->
                                     <form action="<?= BASE_URL ?>irigasi/delete/<?= (int) $item['id'] ?>" method="POST" class="d-inline">
                                         <?= Security::getCsrfField() ?>
                                         <button type="submit"

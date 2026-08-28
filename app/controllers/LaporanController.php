@@ -1079,14 +1079,26 @@ class LaporanController extends Controller {
     }
 
     public function delete($id) {
-        $this->checkRole(['admin'], 'Hanya admin yang dapat memindahkan laporan ke recycle bin.');
-
+        $this->checkAuth();
         $this->requireStateChangingRequest(['POST', 'DELETE']);
 
         $laporan = $this->laporanModel->find($id);
         if (!$laporan) {
             $_SESSION['error'] = 'Laporan tidak ditemukan';
             $this->redirect('laporan');
+            return;
+        }
+
+        $role = $_SESSION['role'] ?? '';
+        if ($role !== 'admin') {
+            $status = $laporan['status'] ?? '';
+            $ownerId = (int) ($laporan['user_id'] ?? 0);
+            $currentId = (int) ($_SESSION['user_id'] ?? 0);
+            if ($role !== 'petugas' || !in_array($status, ['Draf', 'Ditolak'], true) || $ownerId !== $currentId) {
+                $_SESSION['error'] = 'Anda hanya dapat menghapus laporan Draf/Ditolak milik Anda.';
+                $this->redirect('laporan');
+                return;
+            }
         }
 
         $db = Database::getInstance()->getConnection();

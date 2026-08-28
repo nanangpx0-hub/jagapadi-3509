@@ -733,18 +733,31 @@ public function edit($id) {
      */
     public function delete($id) {
         $this->checkAuth();
-        $this->checkRole(['admin'], 'Hanya admin yang dapat menghapus data.');
         $this->requireStateChangingRequest(['POST', 'DELETE']);
         $id = $this->resolveId($id);
-        
+
+        $role = $_SESSION['role'] ?? '';
+        $isAdmin = $role === 'admin';
+
         try {
             $db = Database::getInstance()->getConnection();
             $data = $this->model->find($id);
-            
+
             if (!$data) {
                 ErrorMessage::set('Data irigasi tidak ditemukan');
                 $this->redirect('irigasi/index');
                 return;
+            }
+
+            if (!$isAdmin) {
+                $status = $data['status'] ?? '';
+                $ownerId = (int) ($data['user_id'] ?? 0);
+                $currentId = (int) ($_SESSION['user_id'] ?? 0);
+                if ($role !== 'petugas' || !in_array($status, ['Draf', 'Ditolak'], true) || $ownerId !== $currentId) {
+                    ErrorMessage::set('Anda hanya dapat menghapus data Draf/Ditolak milik Anda.');
+                    $this->redirect('irigasi/index');
+                    return;
+                }
             }
             
             $db->beginTransaction();

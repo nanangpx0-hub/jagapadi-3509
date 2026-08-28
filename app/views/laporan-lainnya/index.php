@@ -221,6 +221,12 @@
                                                 <i class="fas fa-paper-plane"></i>
                                             </button>
                                         </form>
+                                        <form action="<?= BASE_URL ?>laporan-lainnya/destroy/<?= $item['id'] ?>" method="POST" class="d-inline">
+                                            <?= Security::getCsrfField() ?>
+                                            <button type="submit" class="btn btn-danger btn-sm" title="Hapus" onclick="return confirm('Yakin ingin menghapus laporan ini?')">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </form>
                                         <?php endif; ?>
                                     </div>
                                 </td>

@@ -1072,8 +1072,9 @@ class LaporanLainnyaController extends Controller {
         $this->checkAuth();
         $this->requireStateChangingRequest();
 
-        if (($_SESSION['role'] ?? '') !== 'admin') {
-            $_SESSION['error'] = 'Hanya admin yang dapat menghapus laporan';
+        $role = $_SESSION['role'] ?? '';
+        if ($role !== 'admin' && $role !== 'petugas') {
+            $_SESSION['error'] = 'Anda tidak memiliki akses untuk menghapus laporan';
             $this->redirect("laporan-lainnya/show/{$id}");
             return;
         }
@@ -1083,6 +1084,17 @@ class LaporanLainnyaController extends Controller {
             $_SESSION['error'] = 'Laporan tidak ditemukan';
             $this->redirect('laporan-lainnya');
             return;
+        }
+
+        if ($role === 'petugas') {
+            $status = $laporan['status'] ?? '';
+            $ownerId = (int) ($laporan['user_id'] ?? 0);
+            $currentId = (int) ($_SESSION['user_id'] ?? 0);
+            if (!in_array($status, ['draft', 'rejected'], true) || $ownerId !== $currentId) {
+                $_SESSION['error'] = 'Anda hanya dapat menghapus laporan Draf/Rejected milik Anda';
+                $this->redirect("laporan-lainnya/show/{$id}");
+                return;
+            }
         }
 
         $success = $this->laporanModel->softDelete($id, (int) $_SESSION['user_id']);
