@@ -145,6 +145,41 @@ final class DataStoryServiceDatabaseTest extends TestCase
         self::assertNotEmpty($saved['source_snapshot']);
     }
 
+    public function testRegencyWideAggregateAnalysisCanBeExecutedAndSaved(): void
+    {
+        $bulan = 4;
+        $tahun = 2024;
+        $wilayahId = 0;
+
+        $analysis = $this->service->analyzeCauses($bulan, $tahun, $wilayahId);
+        self::assertTrue($analysis['success']);
+        self::assertSame('Kabupaten Jember (Seluruh Kecamatan)', $analysis['periode']['nama_kecamatan']);
+        self::assertGreaterThan(0.0, $analysis['produksi_data']['total_produksi']);
+        self::assertSame('kabupaten_bulanan', $analysis['produksi_data']['grain']);
+
+        $chart = $this->service->getChartData($bulan, $tahun, $wilayahId, 6);
+        self::assertCount(6, $chart['labels']);
+        self::assertCount(6, $chart['datasets'][0]['data']);
+
+        $userId = (int) $this->db->query('SELECT id FROM users ORDER BY id LIMIT 1')->fetchColumn();
+        if ($userId > 0) {
+            $payload = [
+                'periode' => [
+                    'bulan' => $bulan,
+                    'tahun' => $tahun,
+                    'wilayah_id' => 0,
+                ],
+                'narasi_final' => 'Narasi final tingkat kabupaten jember.',
+            ];
+            $saved = $this->service->saveAnalysis($payload, $userId);
+            self::assertTrue($saved['success']);
+
+            $detail = $this->service->getAnalysisById($saved['id']);
+            self::assertNotNull($detail);
+            self::assertSame('Kabupaten Jember (Seluruh Kecamatan)', $detail['nama_kecamatan']);
+        }
+    }
+
     private function findRainFixture(): ?array
     {
         $stmt = $this->db->query(

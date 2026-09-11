@@ -230,7 +230,7 @@ class DataStoryService
         if ($tahun === false || $tahun < 2000 || $tahun > ((int) date('Y') + 1)) {
             throw new InvalidArgumentException('Tahun analisis tidak valid.');
         }
-        if ($wilayahId === false || $wilayahId <= 0) {
+        if ($wilayahId === false || $wilayahId < 0) {
             throw new InvalidArgumentException('Wilayah analisis tidak valid.');
         }
 
@@ -338,7 +338,7 @@ class DataStoryService
     public function getAnalysisById(int $analysisId): ?array
     {
         $stmt = $this->db->prepare(
-            'SELECT apb.*, mk.nama_kecamatan, u.nama_lengkap AS created_by_name
+            'SELECT apb.*, COALESCE(mk.nama_kecamatan, \'Kabupaten Jember (Seluruh Kecamatan)\') AS nama_kecamatan, u.nama_lengkap AS created_by_name
              FROM analisis_produksi_bulanan apb
              LEFT JOIN master_kecamatan mk ON apb.wilayah_id = mk.id
              LEFT JOIN users u ON apb.created_by = u.id
@@ -406,6 +406,8 @@ class DataStoryService
 
     private function fetchProductionPeriod(int $bulan, int $tahun, int $wilayahId): array
     {
+        $whereKecamatan = $wilayahId === 0 ? '' : 'AND kecamatan_id = ?';
+        $params = $wilayahId === 0 ? [$tahun, $bulan] : [$tahun, $bulan, $wilayahId];
         $stmt = $this->db->prepare(
             "SELECT SUM(luas_panen) AS total_luas_panen,
                     SUM(produksi_total) AS total_produksi,
@@ -418,10 +420,10 @@ class DataStoryService
                     MIN(created_at) AS tanggal_panen_awal,
                     MAX(updated_at) AS tanggal_panen_akhir
              FROM produksi_gabah
-             WHERE tahun = ? AND bulan = ? AND kecamatan_id = ?
+             WHERE tahun = ? AND bulan = ? {$whereKecamatan}
                AND status = 'verified'"
         );
-        $stmt->execute([$tahun, $bulan, $wilayahId]);
+        $stmt->execute($params);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
 
         $hasData = $result
@@ -439,7 +441,7 @@ class DataStoryService
             'tanggal_panen_akhir' => $hasData ? $result['tanggal_panen_akhir'] : null,
             'has_data' => $hasData,
             'source_status' => 'verified',
-            'grain' => 'kecamatan_bulanan',
+            'grain' => $wilayahId === 0 ? 'kabupaten_bulanan' : 'kecamatan_bulanan',
         ];
     }
 
@@ -472,6 +474,11 @@ class DataStoryService
         $end = $start->modify('+1 month');
         $expectedDays = (int) $start->format('t');
 
+        $whereKecamatan = $wilayahId === 0 ? '' : 'AND kecamatan_id = ?';
+        $params = $wilayahId === 0
+            ? [$start->format('Y-m-d'), $end->format('Y-m-d')]
+            : [$start->format('Y-m-d'), $end->format('Y-m-d'), $wilayahId];
+
         $stmt = $this->db->prepare(
             "SELECT SUM(daily_rain) AS total_curah_hujan,
                     AVG(daily_rain) AS avg_harian,
@@ -482,12 +489,12 @@ class DataStoryService
              FROM (
                  SELECT tanggal, AVG(curah_hujan) AS daily_rain
                  FROM curah_hujan
-                 WHERE tanggal >= ? AND tanggal < ? AND kecamatan_id = ?
+                 WHERE tanggal >= ? AND tanggal < ? {$whereKecamatan}
                    AND (satuan IS NULL OR LOWER(satuan) = 'mm')
                  GROUP BY tanggal
              ) daily"
         );
-        $stmt->execute([$start->format('Y-m-d'), $end->format('Y-m-d'), $wilayahId]);
+        $stmt->execute($params);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
 
         $days = (int) ($result['jumlah_hari'] ?? 0);
@@ -520,6 +527,11 @@ class DataStoryService
         $start = $this->periodStart($bulan, $tahun);
         $end = $start->modify('+1 month');
 
+        $whereKecamatan = $wilayahId === 0 ? '' : 'AND lh.kecamatan_id = ?';
+        $params = $wilayahId === 0
+            ? [$start->format('Y-m-d'), $end->format('Y-m-d')]
+            : [$start->format('Y-m-d'), $end->format('Y-m-d'), $wilayahId];
+
         $stmt = $this->db->prepare(
             "SELECT COUNT(*) AS total_laporan_hama,
                     SUM(lh.tingkat_keparahan = 'Berat') AS laporan_hama_berat,
@@ -536,11 +548,11 @@ class DataStoryService
                         AS jenis_hama_list
              FROM laporan_hama lh
              LEFT JOIN master_opt mo ON lh.master_opt_id = mo.id
-             WHERE lh.tanggal >= ? AND lh.tanggal < ? AND lh.kecamatan_id = ?
+             WHERE lh.tanggal >= ? AND lh.tanggal < ? {$whereKecamatan}
                AND lh.deleted_at IS NULL
                AND lh.status IN ('Submitted', 'Diverifikasi')"
         );
-        $stmt->execute([$start->format('Y-m-d'), $end->format('Y-m-d'), $wilayahId]);
+        $stmt->execute($params);
         $result = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
         $total = (int) ($result['total_laporan_hama'] ?? 0);
@@ -662,8 +674,12 @@ class DataStoryService
         $lagName = $lagData['lag_periode']['nama_bulan'];
         $lagYear = $lagData['lag_periode']['tahun'];
 
+        $wilayahLabel = $namaKecamatan === 'Kabupaten Jember (Seluruh Kecamatan)'
+            ? 'Kabupaten Jember (Seluruh Kecamatan)'
+            : "Kecamatan {$namaKecamatan}";
+
         $narrative = "Pada {$this->getMonthName($bulan)} {$tahun}, produksi terverifikasi "
-            . "di Kecamatan {$namaKecamatan} tercatat {$output} ton dari luas panen {$area} Ha.";
+            . "di {$wilayahLabel} tercatat {$output} ton dari luas panen {$area} Ha.";
 
         if ($change !== null) {
             $absChange = number_format(abs((float) $change), 2, ',', '.');
@@ -853,14 +869,16 @@ class DataStoryService
 
     private function fetchProductionSeries(int $startYear, int $endYear, int $wilayahId): array
     {
+        $whereKecamatan = $wilayahId === 0 ? '' : 'kecamatan_id = ? AND ';
+        $params = $wilayahId === 0 ? [$startYear, $endYear] : [$wilayahId, $startYear, $endYear];
         $stmt = $this->db->prepare(
             "SELECT tahun, bulan, SUM(luas_panen) AS luas_panen
              FROM produksi_gabah
-             WHERE kecamatan_id = ? AND tahun BETWEEN ? AND ?
+             WHERE {$whereKecamatan}tahun BETWEEN ? AND ?
                AND bulan IS NOT NULL AND status = 'verified'
              GROUP BY tahun, bulan"
         );
-        $stmt->execute([$wilayahId, $startYear, $endYear]);
+        $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -869,19 +887,24 @@ class DataStoryService
         DateTimeImmutable $end,
         int $wilayahId
     ): array {
+        $whereKecamatan = $wilayahId === 0 ? '' : 'AND kecamatan_id = ?';
+        $params = $wilayahId === 0
+            ? [$start->format('Y-m-d'), $end->format('Y-m-d')]
+            : [$start->format('Y-m-d'), $end->format('Y-m-d'), $wilayahId];
+
         $stmt = $this->db->prepare(
             "SELECT YEAR(tanggal) AS tahun, MONTH(tanggal) AS bulan,
                     SUM(daily_rain) AS total_curah_hujan
              FROM (
                  SELECT tanggal, AVG(curah_hujan) AS daily_rain
                  FROM curah_hujan
-                 WHERE tanggal >= ? AND tanggal < ? AND kecamatan_id = ?
+                 WHERE tanggal >= ? AND tanggal < ? {$whereKecamatan}
                    AND (satuan IS NULL OR LOWER(satuan) = 'mm')
                  GROUP BY tanggal
              ) daily
              GROUP BY YEAR(tanggal), MONTH(tanggal)"
         );
-        $stmt->execute([$start->format('Y-m-d'), $end->format('Y-m-d'), $wilayahId]);
+        $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -890,15 +913,20 @@ class DataStoryService
         DateTimeImmutable $end,
         int $wilayahId
     ): array {
+        $whereKecamatan = $wilayahId === 0 ? '' : 'AND kecamatan_id = ?';
+        $params = $wilayahId === 0
+            ? [$start->format('Y-m-d'), $end->format('Y-m-d')]
+            : [$start->format('Y-m-d'), $end->format('Y-m-d'), $wilayahId];
+
         $stmt = $this->db->prepare(
             "SELECT YEAR(tanggal) AS tahun, MONTH(tanggal) AS bulan, COUNT(*) AS total_laporan
              FROM laporan_hama
-             WHERE tanggal >= ? AND tanggal < ? AND kecamatan_id = ?
+             WHERE tanggal >= ? AND tanggal < ? {$whereKecamatan}
                AND deleted_at IS NULL
                AND status IN ('Submitted', 'Diverifikasi')
              GROUP BY YEAR(tanggal), MONTH(tanggal)"
         );
-        $stmt->execute([$start->format('Y-m-d'), $end->format('Y-m-d'), $wilayahId]);
+        $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -946,6 +974,13 @@ class DataStoryService
 
     private function getKecamatanInfo(int $kecamatanId): ?array
     {
+        if ($kecamatanId === 0) {
+            return [
+                'nama_kecamatan' => 'Kabupaten Jember (Seluruh Kecamatan)',
+                'kode_wilayah' => '3509',
+            ];
+        }
+
         $stmt = $this->db->prepare(
             'SELECT nama_kecamatan, kode AS kode_wilayah FROM master_kecamatan WHERE id = ?'
         );

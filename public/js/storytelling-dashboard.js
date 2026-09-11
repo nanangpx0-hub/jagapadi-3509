@@ -247,7 +247,7 @@ const StorytellingDashboard = (function() {
             return;
         }
         const wilayahId = elements.filterKecamatan.value;
-        if (!wilayahId) {
+        if (wilayahId === '' || wilayahId === null || wilayahId === undefined) {
             showAlert('Pilih kecamatan terlebih dahulu', 'warning');
             return;
         }
@@ -413,7 +413,7 @@ async function handleAnalyze() {
         const tahun = elements.filterTahun.value;
         const wilayahId = elements.filterKecamatan.value;
 
-        if (!wilayahId) {
+        if (wilayahId === '' || wilayahId === null || wilayahId === undefined) {
             showAlert('Pilih kecamatan terlebih dahulu', 'warning');
             return;
         }
@@ -730,7 +730,7 @@ async function handleAnalyze() {
             elements.btnPreview.disabled = true;
         }
         
-        if (bulan && tahun && wilayahId) {
+        if (bulan && tahun && (wilayahId !== '' && wilayahId !== null && wilayahId !== undefined)) {
             updateChartData(bulan, tahun, wilayahId);
         }
     }

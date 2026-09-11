@@ -162,6 +162,7 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                     <label class="form-label font-weight-bold">Kecamatan</label>
                     <select class="form-control" name="kecamatan_id" id="filter-kecamatan">
                         <option value="">Pilih Kecamatan...</option>
+                        <option value="0">Seluruh Kecamatan (Kabupaten Jember)</option>
                         <?php if (!empty($kecamatan_list)): ?>
                             <?php foreach ($kecamatan_list as $kec): ?>
                                 <option value="<?= (int) $kec['id'] ?>"><?= htmlspecialchars((string) $kec['nama_kecamatan'], ENT_QUOTES, 'UTF-8') ?></option>
@@ -169,7 +170,7 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                         <?php endif; ?>
                     </select>
                     <small class="form-text text-muted">
-                        <i class="fas fa-info-circle"></i> Pilih kecamatan untuk analisis spesifik
+                        <i class="fas fa-info-circle"></i> Pilih kecamatan atau seluruh kabupaten
                     </small>
                 </div>
                 

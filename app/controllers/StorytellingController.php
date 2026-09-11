@@ -282,7 +282,7 @@ class StorytellingController extends Controller
         if ($tahun === false || $tahun < 2000 || $tahun > ((int) date('Y') + 1)) {
             throw new InvalidArgumentException('Tahun tidak valid.');
         }
-        if ($wilayahId === false || $wilayahId <= 0) {
+        if ($wilayahId === false || $wilayahId < 0) {
             throw new InvalidArgumentException('Wilayah harus dipilih.');
         }
 
@@ -291,6 +291,10 @@ class StorytellingController extends Controller
 
     private function assertKecamatanExists(int $wilayahId): void
     {
+        if ($wilayahId === 0) {
+            return;
+        }
+
         if ($this->wilayahModel->getById($wilayahId) === null) {
             throw new InvalidArgumentException('Kecamatan tidak ditemukan.');
         }
@@ -375,7 +379,7 @@ class StorytellingController extends Controller
     {
         try {
             $stmt = Database::getInstance()->getConnection()->prepare(
-                'SELECT apb.*, mk.nama_kecamatan, u.nama_lengkap AS created_by_name
+                'SELECT apb.*, COALESCE(mk.nama_kecamatan, \'Kabupaten Jember (Seluruh Kecamatan)\') AS nama_kecamatan, u.nama_lengkap AS created_by_name
                  FROM analisis_produksi_bulanan apb
                  LEFT JOIN master_kecamatan mk ON apb.wilayah_id = mk.id
                  LEFT JOIN users u ON apb.created_by = u.id
