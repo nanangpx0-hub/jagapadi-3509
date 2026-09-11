@@ -25,9 +25,9 @@ final class RootCompatibilityTest extends TestCase
 
     public function testRootRouteCountFrozen(): void
     {
-        // Baseline 2026-08-30: 115 route unik eksplisit (setelah deduplikasi key). Penambahan rute root wajib ADR-011.
+        // Baseline diperbarui: 136 route unik eksplisit (sinkronisasi fitur jenis-laporan, bulk-delete, scraper tools). Penambahan rute root wajib ADR-011.
         // Rentang toleransi nol — setiap penambahan/penghapusan harus mengupdate test ini + ADR.
-        $expectedCount = 115;
+        $expectedCount = 136;
         // Hitung unik key (case-insensitive fallback di index.php)
         $count = count($this->routes);
         $this->assertSame(
@@ -73,17 +73,18 @@ final class RootCompatibilityTest extends TestCase
             'login','logout','auth/login','auth/do-login','auth/logout','auth/change-password','auth/update-password','auth/forgot-password',
             'dashboard','dashboard/charts-lainnya','dashboard/map','dashboard/charts','admin/health','dashboard-padi','dashboardPadi',
             'laporan','laporan/create','laporan/store','laporan/detail','laporan/fetch','laporan/bulk-delete','laporan/hama',
-            'laporan-lainnya','laporan-lainnya/create','laporan-lainnya/store','laporan-lainnya/summary','laporan-lainnya/report','laporan-lainnya/export','laporan-lainnya/bulk-delete','laporan-lainnya/delete-all',
+            'laporan-lainnya','laporan-lainnya/create','laporan-lainnya/store','laporan-lainnya/jenis-list','laporan-lainnya/summary','laporan-lainnya/report','laporan-lainnya/export','laporan-lainnya/bulk-delete','laporan-lainnya/delete-all',
             'irigasi','irigasi/create','irigasi/store','irigasi/monitoring','irigasi/bulk-delete',
             'recycle-bin','recycle-bin/restore','recycle-bin/bulk-restore','recycle-bin/bulk-delete',
             'irigasiScraper','irigasiScraper/runScraper','irigasiScraper/export',
-            'curahHujan','curahHujan/runScraper','curahHujan/getChartData','curahHujan/getStatistics','curahHujan/export',
-            'kecepatanAngin','kecepatanAngin/runScraper','kecepatanAngin/getChartData','kecepatanAngin/getStatistics','kecepatanAngin/export',
-            'hargaKomoditas','hargaKomoditas/runScraper','hargaKomoditas/getChartData','hargaKomoditas/getStatistics','hargaKomoditas/export',
+            'curahHujan','curahHujan/runScraper','curahHujan/getChartData','curahHujan/getStatistics','curahHujan/export','curahHujan/runYearScraper','curahHujan/runRangeScraper','curahHujan/getFailureReport','curahHujan/exportFailureLog',
+            'kecepatanAngin','kecepatanAngin/runScraper','kecepatanAngin/getChartData','kecepatanAngin/getStatistics','kecepatanAngin/export','kecepatanAngin/runYearScraper','kecepatanAngin/runRangeScraper','kecepatanAngin/getFailureReport','kecepatanAngin/exportFailureLog',
+            'hargaKomoditas','hargaKomoditas/runScraper','hargaKomoditas/getChartData','hargaKomoditas/getStatistics','hargaKomoditas/export','hargaKomoditas/runMonthScraper','hargaKomoditas/runRangeScraper','hargaKomoditas/getFailureReport','hargaKomoditas/exportFailureLog',
             'bpsScraper','bpsScraper/runScraper','bpsScraper/runScraperBackground','bpsScraper/getScraperStatus','bpsScraper/getChartData','bpsScraper/getStatistics','bpsScraper/getMonthlyHarvestArea','bpsScraper/getMonthlyHarvestChart','bpsScraper/export',
             'evaluasi','storytelling','storytelling/generateAnalysis','storytelling/store','storytelling/getChartData','storytelling/runMethod','storytelling/getRecent','storytelling/getAnalysis','storytelling/publish',
             'feedback','feedback/create','feedback/admin-summary','feedback/report',
-            'opt','opttambahkan','opt/bulk-delete','opt/delete-all','opt/auto-fill-photos',
+            'jenis-laporan','jenis-laporan/create','jenis-laporan/store','jenis-laporan/edit','jenis-laporan/update','jenis-laporan/toggle','jenis-laporan/delete',
+            'opt','opt/list-json','opttambahkan','opt/bulk-delete','opt/delete-all','opt/auto-fill-photos',
             'usulan-opt','usulan-opt/create','usulan-opt/store','usulan-opt/update','usulan-opt/submit','usulan-opt/resubmit','usulan-opt/delete-draft','usulan-opt/delete-photo','usulan-opt/request-revision','usulan-opt/review','usulan-opt/approve-new','usulan-opt/bulk-approve','usulan-opt/search-master','usulan-opt/bulk-delete','usulan-opt/import','usulan-opt/export','usulan-opt/template',
             'optsaya','optsaya/import','optsaya/export','optsaya/template',
             'user','user/exportCsv','user/exportExcel',

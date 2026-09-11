@@ -28,8 +28,8 @@ Big-bang rewrite akan mematikan fitur produksi (scraper, storytelling, usulan-op
    - Tahap 3: Data — canonical migration runner = `backend/scripts/migrate.php` + tabel `backend.schema_migrations`. Legacy `migrations/` & `database/migrations/` didokumentasikan sebagai `legacy` di `docs/DATABASE.md` & `docs/ADR/ADR-011` appdx, baseline diverifikasi tanpa `ALTER` migration yang sudah tercatat.
    - Tahap 4: Decommission — root route dialihkan 301 ke Backend v1 equivalent setelah 2 rilis stabil + contract test hijau.
 4. **Batas kompatibilitas root** (frozen scope):
-   - Tetap melayani: `/laporan*`, `/irigasi`, `/curahHujan`, `/kecepatanAngin`, `/hargaKomoditas`, `/bpsScraper`, `/storytelling`, `/feedback`, `/usulan-opt`, `/optsaya`, `/export/*`, `/bps/*`, `/adminWilayah/*`, `/recycle-bin`.
-   - Wajib lulus `tests/Compatibility/RootCompatibilityTest.php` (route existence, status code, role guard) — fail-closed bila behaviour drift.
+    - Tetap melayani: `/laporan*`, `/irigasi`, `/curahHujan`, `/kecepatanAngin`, `/hargaKomoditas`, `/bpsScraper`, `/storytelling`, `/feedback`, `/usulan-opt`, `/optsaya`, `/export/*`, `/bps/*`, `/adminWilayah/*`, `/recycle-bin`, `/jenis-laporan*`.
+    - Wajib lulus `tests/Compatibility/RootCompatibilityTest.php` (route existence, status code, role guard; batas beku diperbarui 136 rute unik per September 2026) — fail-closed bila behaviour drift.
 5. **Inventaris belum termigrasi (vs Backend v1 342 routes)**:
    | Fitur root belum di Backend v1 | Status | Rencana |
    |-------------------------------|------|---------|

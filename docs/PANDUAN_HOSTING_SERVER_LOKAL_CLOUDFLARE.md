@@ -1,8 +1,9 @@
 # Panduan Operasional & Dokumentasi Hosting Server Lokal JAGAPADI via Cloudflare Tunnel
 
-> **Tanggal Konfigurasi:** 29 Agustus 2026  
-> **Domain Utama:** [https://jagapadi.my.id](https://jagapadi.my.id)  
-> **Domain Alternatif:** [https://www.jagapadi.my.id](https://www.jagapadi.my.id)  
+> **Tanggal Konfigurasi:** 29 Agustus 2026
+> **Terverifikasi Ulang:** 11 September 2026 (tunnel `jagapadi-server` Online, 4 koneksi SIN aktif)
+> **Domain Utama:** [https://jagapadi.my.id](https://jagapadi.my.id)
+> **Domain Alternatif:** [https://www.jagapadi.my.id](https://www.jagapadi.my.id)
 > **Status:** Online & Produksi
 
 ---
@@ -45,7 +46,7 @@ flowchart LR
     User -->|HTTPS| CF_Edge
     App -->|HTTPS API v1| CF_Edge
     CF_Edge <==>|Terkoneksi Aman via QUIC/HTTP2| CFTunnel
-    CFTunnel -->|Internal HTTP| Apache
+    CFTunnel -->|Internal HTTPS 127.0.0.1:443 (noTLSVerify)| Apache
     Apache --> PHP
     PHP --> MySQL
 ```
@@ -61,28 +62,63 @@ flowchart LR
 - **Lokasi Kredensial:** `C:\Users\IPDS\.cloudflared\168ca50f-e89f-4c18-8d70-c5427121dbe6.json`
 - **Lokasi Sertifikat Asal:** `C:\Users\IPDS\.cloudflared\cert.pem`
 
-**Isi file `config.yml`:**
+**Isi file `config.yml` (aktual, terverifikasi 2026-09-11):**
 ```yaml
 tunnel: 168ca50f-e89f-4c18-8d70-c5427121dbe6
 credentials-file: C:\Users\IPDS\.cloudflared\168ca50f-e89f-4c18-8d70-c5427121dbe6.json
 
 ingress:
   - hostname: jagapadi.my.id
-    service: http://127.0.0.1:80
+    service: https://127.0.0.1:443
+    originRequest:
+      noTLSVerify: true
+      httpHostHeader: jagapadi.my.id
   - hostname: www.jagapadi.my.id
-    service: http://127.0.0.1:80
+    service: https://127.0.0.1:443
+    originRequest:
+      noTLSVerify: true
+      httpHostHeader: www.jagapadi.my.id
   - service: http_status:404
 ```
 
-### B. Konfigurasi VirtualHost Apache (Laragon)
+> Catatan: versi lama dokumen memakai `http://127.0.0.1:80`. Konfigurasi aktif
+> saat ini memakai `https://127.0.0.1:443` dengan `noTLSVerify: true` karena
+> Apache lokal memakai sertifikat self-signed Laragon. Jangan ubah ke HTTP
+> tanpa verifikasi ulang `curl -I https://jagapadi.my.id`.
+
+### B. Konfigurasi VirtualHost Apache (Laragon, aktual)
 - **File:** `C:\laragon\etc\apache2\sites-enabled\auto.jagapadi-3509.test.conf`
-- **Isi Konfigurasi:**
+- **Isi Konfigurasi (ringkas, terverifikasi 2026-09-11):**
 ```apache
-<VirtualHost *:80> 
+<VirtualHost *:80>
     DocumentRoot "C:/laragon/www/jagapadi-3509"
     ServerName jagapadi-3509.test
     ServerAlias *.jagapadi-3509.test jagapadi.my.id *.jagapadi.my.id
+
+    # Backend v1: /api/v1/* diarahkan ke backend/public (JWT mobile API)
+    Alias /api/v1 "C:/laragon/www/jagapadi-3509/backend/public"
+    <Directory "C:/laragon/www/jagapadi-3509/backend/public">
+        AllowOverride All
+        Require all granted
+    </Directory>
+
     <Directory "C:/laragon/www/jagapadi-3509">
+        AllowOverride All
+        Require all granted
+    </Directory>
+</VirtualHost>
+
+<VirtualHost *:443>
+    DocumentRoot "C:/laragon/www/jagapadi-3509"
+    ServerName jagapadi-3509.test
+    ServerAlias *.jagapadi-3509.test jagapadi.my.id *.jagapadi.my.id
+    SSLEngine on
+    SSLCertificateFile "C:/laragon/etc/ssl/laragon.crt"
+    SSLCertificateKeyFile "C:/laragon/etc/ssl/laragon.key"
+
+    # Backend v1: /api/v1/* diarahkan ke backend/public (JWT mobile API)
+    Alias /api/v1 "C:/laragon/www/jagapadi-3509/backend/public"
+    <Directory "C:/laragon/www/jagapadi-3509/backend/public">
         AllowOverride All
         Require all granted
     </Directory>
@@ -104,8 +140,30 @@ RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 ```
 
 ### D. Mekanisme Auto-Start (Otomatis Aktif Saat PC Dinyalakan)
-- **Lokasi Skrip:** `C:\Users\IPDS\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\start_cloudflare_tunnel.vbs`
-- Skrip ini akan otomatis dijalankan oleh Windows saat user login, memicu `cloudflared` berjalan di latar belakang tanpa memunculkan jendela hitam terminal.
+Aktif berlapis (terverifikasi 2026-09-11). Urutan prioritas:
+
+1. **VBS Startup (aktif, tanpa jendela terminal):**
+   - **Lokasi Skrip:** `C:\Users\IPDS\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\start_cloudflare_tunnel.vbs`
+   - **Isi:**
+     ```vbs
+     Set WshShell = CreateObject("WScript.Shell")
+     WshShell.Run """C:\Program Files (x86)\cloudflared\cloudflared.exe"" tunnel --config ""C:\Users\IPDS\.cloudflared\config.yml"" run jagapadi-server", 0, False
+     ```
+   - Dijalankan Windows saat user login.
+2. **Scheduled Task `Cloudflared-Jagapadi` (aktif, `Ready`, dibuat 2026-09-11):**
+   - Trigger `AtLogOn`, auto-retry 3x tiap 1 menit, `StartWhenAvailable`.
+   - Action sama: `cloudflared.exe tunnel --config "...config.yml" run jagapadi-server`.
+   - Cek: `Get-ScheduledTask -TaskName "Cloudflared-Jagapadi"`.
+   - Dibuat tanpa hak Admin via `Register-ScheduledTask`, cocok untuk perangkat kasir/server non-admin.
+3. **Windows Service `Cloudflared` (opsional, butuh Admin):**
+   - Belum terpasang per 2026-09-11 (`sc query Cloudflared` = tidak ada).
+   - Pasang sekali via PowerShell **Run as Administrator**:
+     ```powershell
+     & "C:\Program Files (x86)\cloudflared\cloudflared.exe" service install
+     sc.exe config Cloudflared start= auto
+     sc.exe start Cloudflared
+     ```
+   - Wajib untuk skenario headless (jalan tanpa user login).
 
 ---
 
@@ -123,11 +181,23 @@ Buka PowerShell dan jalankan:
 ```powershell
 # Cek apakah proses cloudflared sedang berjalan
 Get-Process cloudflared -ErrorAction SilentlyContinue
+Get-CimInstance Win32_Process -Filter "Name='cloudflared.exe'" | Select-Object ProcessId, CommandLine
 
-# Uji respons domain dari server lokal
+# Daftar tunnel + jumlah koneksi edge (sehat = 4 koneksi SIN)
+& "C:\Program Files (x86)\cloudflared\cloudflared.exe" tunnel list
+& "C:\Program Files (x86)\cloudflared\cloudflared.exe" tunnel info jagapadi-server
+
+# Uji respons publik + API backend
 curl.exe -I https://jagapadi.my.id
+curl.exe -s https://jagapadi.my.id/api/v1/health
+
+# Cek auto-start
+Get-ScheduledTask -TaskName "Cloudflared-Jagapadi"
+sc.exe query Cloudflared
 ```
-Jika respons menghasilkan `HTTP/1.1 200 OK`, server bekerja dengan sempurna.
+Jika `curl -I` menghasilkan `HTTP/1.1 200 OK` dengan header `Server: cloudflare`
+dan `/api/v1/health` mengembalikan `{"success":true,"database":"connected"}`, server bekerja sempurna.
+Status rujukan 2026-09-11: `200 OK`, `CF-RAY ...-SIN`, health `environment: local`.
 
 ### 3. Menjalankan / Menghentikan Tunnel Manual (Opsional)
 Jika sewaktu-waktu ingin menjalankan tunnel secara manual di jendela terminal:
@@ -138,6 +208,19 @@ Stop-Process -Name cloudflared -Force
 # Jalankan manual untuk memantau trafik langsung
 & "C:\Program Files (x86)\cloudflared\cloudflared.exe" tunnel --config "C:\Users\IPDS\.cloudflared\config.yml" run jagapadi-server
 ```
+
+### 4. Troubleshooting Cepat
+| Gejala | Penyebab umum | Perintah / aksi |
+|---|---|---|
+| `service install` → `Access denied` | Shell bukan Administrator | Ulangi di PowerShell **Run as Administrator**, atau pakai Scheduled Task/VBS yang sudah aktif |
+| `tunnel list` kosong / `cert.pem` invalid | Login Cloudflare kedaluwarsa | `cloudflared.exe tunnel login`, lalu `tunnel list` |
+| Publik `1033` / `404` | Ingress hostname salah | Samakan `config.yml` dengan DNS Cloudflare (`jagapadi.my.id`, `www`) |
+| Publik `526` / TLS error origin | Apache 443 mati / sertifikat berubah | `curl.exe -k -sI https://127.0.0.1/`, restart Laragon Apache |
+| Loop redirect HTTP→HTTPS | `X-Forwarded-Proto` tidak diteruskan | Pastikan blok force-HTTPS `.htaccess` mengecualikan header Cloudflare (lihat §3C) |
+| Site hidup tapi API 404 | `Alias /api/v1` hilang di vhost | Cek `auto.jagapadi-3509.test.conf` blok `:80` dan `:443` |
+
+> Keamanan dokumen: jangan pernah menempel isi `*.json` kredensial tunnel,
+> `cert.pem`, `.env`, atau password DB ke dokumen ini. Cukup tulis path filenya.
 
 ---
 
