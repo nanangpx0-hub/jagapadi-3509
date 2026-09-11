@@ -172,3 +172,6 @@ docs/backup_*.sql
 
 # --- But keep out analysis output ---
 scripts/hasil_analisis_wind.txt
+
+# --- Database dump for quick setup (exception to SQL exclusion) ---
+!backend/database/jagapadi_local_dump.sql
