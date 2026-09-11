@@ -152,10 +152,11 @@ class _IrigasiFormScreenState extends State<IrigasiFormScreen> {
     if (_foto != null) {
       final err = _validateFoto(_foto!);
       if (err != null) {
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(err), backgroundColor: Colors.red.shade700),
           );
+        }
         return null;
       }
     }
@@ -258,11 +259,12 @@ class _IrigasiFormScreenState extends State<IrigasiFormScreen> {
       }
     } else {
       setState(() => _loading = false);
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
               content: Text('Mode Offline â€” Draf tersimpan aman di perangkat')),
         );
+      }
       return _localDraftId != null ? -1 : null;
     }
 
@@ -433,7 +435,7 @@ class _IrigasiFormScreenState extends State<IrigasiFormScreen> {
                 decoration: InputDecoration(
                     labelText: 'Kondisi Fisik Saluran',
                     errorText: _fe('kondisi_fisik')),
-                value: _kondisiFisik,
+                initialValue: _kondisiFisik,
                 items: ['Bagus', 'Sedang', 'Tidak Bagus', 'Rusak']
                     .map((k) => DropdownMenuItem(value: k, child: Text(k)))
                     .toList(),
@@ -446,7 +448,7 @@ class _IrigasiFormScreenState extends State<IrigasiFormScreen> {
               DropdownButtonFormField<String>(
                 decoration: InputDecoration(
                     labelText: 'Debit Air', errorText: _fe('debit_air')),
-                value: _debitAir,
+                initialValue: _debitAir,
                 items: ['Cukup', 'Kurang', 'Kering']
                     .map((k) => DropdownMenuItem(value: k, child: Text(k)))
                     .toList(),

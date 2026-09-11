@@ -115,7 +115,7 @@ final class KecepatanAnginFallbackDatabaseTest extends TestCase
     /**
      * @return list<array<int>>
      */
-    public function provideYearRange(): array
+    public static function provideYearRange(): array
     {
         $years = range(2020, (int) date('Y'));
         $cases = [];
@@ -160,15 +160,15 @@ final class KecepatanAnginFallbackProbe extends KecepatanAnginScraper
         parent::__construct();
     }
 
-    /** Simulasi NASA POWER mengembalikan data kosong. */
-    public function fetch_nasa_kecepatan_angin(int $year, int $month): array
+    /** Simulasi NASA POWER mengembalikan data kosong. Signature kompatibel nullable. */
+    public function fetch_nasa_kecepatan_angin(?int $year = null, ?int $month = null): array
     {
         $this->log('Probe: NASA POWER mengembalikan data kosong (simulasi network failure)');
         return [];
     }
 
     /** Simulasi Open-Meteo mengembalikan data kosong. */
-    public function fetchFromOpenMeteo(int $year, int $month): array
+    protected function fetchFromOpenMeteo(?int $year = null, ?int $month = null): array
     {
         $this->log('Probe: Open-Meteo mengembalikan data kosong (simulasi network failure)');
         return [];
@@ -180,5 +180,11 @@ final class KecepatanAnginFallbackProbe extends KecepatanAnginScraper
         $count = count($data);
         $this->inserted += $count;
         return [$count, 0];
+    }
+
+    // expose log for probe (parent private -> protected? gunakan public wrapper)
+    public function log($message, $level = 'INFO'): void
+    {
+        parent::log($message, $level);
     }
 }

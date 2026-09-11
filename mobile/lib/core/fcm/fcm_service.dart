@@ -73,8 +73,8 @@ class FcmService {
     final laporanIdStr = data['laporan_id']?.toString();
 
     // Whitelist entity yang diizinkan — tolak nilai lain
-    const _allowedEntities = {'hama', 'irigasi', 'pupuk', 'panen', 'cuaca', 'alat_sarana'};
-    if (entity == null || !_allowedEntities.contains(entity)) {
+    const allowedEntities = {'hama', 'irigasi', 'pupuk', 'panen', 'cuaca', 'alat_sarana'};
+    if (entity == null || !allowedEntities.contains(entity)) {
       debugPrint('[FcmService] Entity tidak valid atau tidak dikenal: "$entity" — navigasi dibatalkan');
       return;
     }

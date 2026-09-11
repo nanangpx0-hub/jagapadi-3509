@@ -17,17 +17,27 @@ class ExportService
     private const VALID_STATUSES = ['Draf', 'Submitted', 'Diverifikasi', 'Ditolak', 'Diarsipkan'];
     private const VALID_FORMATS = ['csv', 'xlsx'];
 
-    private PDO $db;
+    private ?PDO $db = null;
     private string $role;
     private ?int $userId;
     private bool $includeDraft = false;
 
     public function __construct(string $role, ?int $userId, bool $includeDraft = false)
     {
-        $this->db = Database::connect();
         $this->role = $role;
         $this->userId = $role === 'petugas' ? $userId : null;
-        $this->includeDraft = $includeDraft;
+        $this->includeDraft = $includeDraft && in_array($role, ['admin', 'petugas'], true);
+    }
+
+    /**
+     * Lazy database connection agar validasi murni hijau tanpa MySQL.
+     */
+    private function db(): PDO
+    {
+        if ($this->db === null) {
+            $this->db = Database::connect();
+        }
+        return $this->db;
     }
 
     public static function validateFiltersStatic(array $input): array
@@ -229,7 +239,7 @@ class ExportService
             $sql .= ' WHERE ' . implode(' AND ', $conditions);
         }
 
-        $stmt = $this->db->prepare($sql);
+        $stmt = $this->db()->prepare($sql);
         $stmt->execute($params);
         return (int) $stmt->fetchColumn();
     }
@@ -268,7 +278,7 @@ class ExportService
 
         $sql .= ' ORDER BY lh.tanggal DESC, lh.id DESC';
 
-        $stmt = $this->db->prepare($sql);
+        $stmt = $this->db()->prepare($sql);
         $stmt->execute($params);
 
         $rows = [];
@@ -335,7 +345,7 @@ class ExportService
 
         $sql .= ' ORDER BY li.tanggal DESC, li.id DESC';
 
-        $stmt = $this->db->prepare($sql);
+        $stmt = $this->db()->prepare($sql);
         $stmt->execute($params);
 
         $rows = [];
@@ -393,11 +403,18 @@ class ExportService
     {
         $status = $filters['status'] ?? null;
         if ($status !== null && $status !== '') {
-            $statuses = explode(',', $status);
+            $statuses = array_map('trim', explode(',', $status));
+            if (!in_array($this->role, ['admin', 'petugas'], true)) {
+                $statuses = array_values(array_intersect($statuses, ['Submitted', 'Diverifikasi']));
+            }
+            if ($statuses === []) {
+                $conditions[] = '1 = 0';
+                return;
+            }
             $placeholders = implode(',', array_fill(0, count($statuses), '?'));
             $conditions[] = "{$alias}.status IN ({$placeholders})";
             foreach ($statuses as $s) {
-                $params[] = trim($s);
+                $params[] = $s;
             }
         } elseif (!$this->includeDraft) {
             $conditions[] = "{$alias}.status IN ('Submitted','Diverifikasi')";

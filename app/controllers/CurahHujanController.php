@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Curah Hujan Controller
  * Controller untuk dashboard dan API curah hujan
@@ -496,6 +497,248 @@ class CurahHujanController extends Controller {
             ]);
         }
         exit;
+    }
+
+    /**
+     * Eksekusi scrape satu tahun penuh NASA POWER (idempoten via UPSERT).
+     * POST year — dipakai loop client per-tahun agar progres real-time.
+     */
+    public function runYearScraper() {
+        $this->checkAuth();
+        $this->checkAdmin();
+        $this->requireRequestMethod(['POST']);
+
+        ob_start();
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (!isset($_POST['csrf_token']) || !Security::validateCsrfToken($_POST['csrf_token'])) {
+            ob_end_clean();
+            echo json_encode(['success' => false, 'error' => 'Token keamanan tidak valid']);
+            exit;
+        }
+
+        try {
+            require_once ROOT_PATH . '/app/services/CurahHujanScraper.php';
+            $year = isset($_POST['year']) ? (int)$_POST['year'] : (int)date('Y');
+            $rangeErrors = CurahHujanScraper::validateRange($year, $year);
+            if ($rangeErrors !== []) {
+                throw new InvalidArgumentException(implode(' ', $rangeErrors));
+            }
+
+            @set_time_limit(180);
+            $scraper = new CurahHujanScraper();
+            $result = $scraper->runSingleYear($year);
+
+            $cacheInvalidator = CacheManager::getInstance();
+            if ($cacheInvalidator->isAvailable()) {
+                $cacheInvalidator->clearPrefix('stats_curah_hujan_');
+            }
+
+            $jsonOutput = json_encode([
+                'success' => $result['status'] !== 'failed',
+                'status' => $result['status'],
+                'message' => "Tahun {$year}: {$result['records']} tersimpan, {$result['failed']} gagal, {$result['skipped']} dilewati",
+                'source' => 'NASA POWER (PRECTOTCORR)',
+                'records_success' => $result['records'],
+                'records_failed' => $result['failed'],
+                'skipped_future' => $result['skipped'],
+                'failures' => $result['failures'],
+                'execution_time' => $result['execution_time'],
+            ]);
+
+            if (ob_get_length()) {
+                ob_end_clean();
+            }
+            echo $jsonOutput;
+        } catch (Throwable $e) {
+            error_log('CurahHujanController::runYearScraper failed: ' . $e->getMessage());
+            try {
+                $this->model->logActivity('scrape_year', 'failed', $e->getMessage(), ['processed' => 0, 'failed' => 1]);
+            } catch (Throwable $logError) {
+                error_log('CurahHujanController::runYearScraper log failed: ' . $logError->getMessage());
+            }
+            if (ob_get_length()) {
+                ob_end_clean();
+            }
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    /**
+     * Eksekusi scrape rentang multi-tahun NASA POWER (mis. 2020–2026).
+     * POST start_year, end_year — berjalan server-side penuh.
+     */
+    public function runRangeScraper() {
+        $this->checkAuth();
+        $this->checkAdmin();
+        $this->requireRequestMethod(['POST']);
+
+        ob_start();
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (!isset($_POST['csrf_token']) || !Security::validateCsrfToken($_POST['csrf_token'])) {
+            ob_end_clean();
+            echo json_encode(['success' => false, 'error' => 'Token keamanan tidak valid']);
+            exit;
+        }
+
+        try {
+            require_once ROOT_PATH . '/app/services/CurahHujanScraper.php';
+            $startYear = isset($_POST['start_year']) ? (int)$_POST['start_year'] : 2020;
+            $endYear = isset($_POST['end_year']) ? (int)$_POST['end_year'] : (int)date('Y');
+            $rangeErrors = CurahHujanScraper::validateRange($startYear, $endYear);
+            if ($rangeErrors !== []) {
+                throw new InvalidArgumentException(implode(' ', $rangeErrors));
+            }
+
+            @set_time_limit(0);
+            $scraper = new CurahHujanScraper();
+            $report = $scraper->runBatchRange($startYear, $endYear);
+
+            $cacheInvalidator = CacheManager::getInstance();
+            if ($cacheInvalidator->isAvailable()) {
+                $cacheInvalidator->clearPrefix('stats_curah_hujan_');
+            }
+
+            $jsonOutput = json_encode([
+                'success' => $report['success'],
+                'message' => "Rentang {$startYear}-{$endYear}: {$report['total_records_saved']} tersimpan, "
+                    . "{$report['total_records_failed']} gagal, {$report['total_skipped_future']} dilewati",
+                'source' => 'NASA POWER (PRECTOTCORR)',
+                'report' => $report,
+            ]);
+
+            if (ob_get_length()) {
+                ob_end_clean();
+            }
+            echo $jsonOutput;
+        } catch (Throwable $e) {
+            error_log('CurahHujanController::runRangeScraper failed: ' . $e->getMessage());
+            try {
+                $this->model->logActivity('scrape_range', 'failed', $e->getMessage(), ['processed' => 0, 'failed' => 1]);
+            } catch (Throwable $logError) {
+                error_log('CurahHujanController::runRangeScraper log failed: ' . $logError->getMessage());
+            }
+            if (ob_get_length()) {
+                ob_end_clean();
+            }
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    /**
+     * Daftar kegagalan scrape terbaru (JSON untuk modal UI).
+     * GET — Admin only.
+     */
+    public function getFailureReport() {
+        $this->checkAuth();
+        $this->checkAdmin();
+        header('Content-Type: application/json; charset=utf-8');
+
+        try {
+            require_once ROOT_PATH . '/app/services/CurahHujanScraper.php';
+            $limit = isset($_GET['limit']) ? max(1, min(200, (int)$_GET['limit'])) : 50;
+            $logs = $this->model->getFailedLogs($limit);
+            $data = [];
+            foreach ($logs as $log) {
+                $data[] = [
+                    'id' => (int)($log['id'] ?? 0),
+                    'created_at' => $log['created_at'] ?? null,
+                    'action' => $log['action'] ?? '',
+                    'status' => $log['status'] ?? '',
+                    'summary' => CurahHujanScraper::summarizeLogMessage((string)($log['message'] ?? '')),
+                    'failures' => CurahHujanScraper::extractFailuresFromMessage((string)($log['message'] ?? '')),
+                    'records_success' => (int)($log['records_success'] ?? 0),
+                    'records_failed' => (int)($log['records_failed'] ?? 0),
+                ];
+            }
+            echo json_encode(['success' => true, 'data' => $data]);
+        } catch (Throwable $e) {
+            error_log('CurahHujanController::getFailureReport failed: ' . $e->getMessage());
+            echo json_encode(['success' => false, 'error' => 'Gagal mengambil laporan kegagalan']);
+        }
+        exit;
+    }
+
+    /**
+     * Unduh CSV laporan kegagalan scrape (waktu, tahun-bulan, kecamatan, alasan).
+     * GET — Admin only.
+     */
+    public function exportFailureLog() {
+        $this->checkAuth();
+        $this->checkAdmin();
+
+        try {
+            require_once ROOT_PATH . '/app/services/CurahHujanScraper.php';
+            $logs = $this->model->getFailedLogs(500);
+
+            $rows = [];
+            foreach ($logs as $log) {
+                $failures = CurahHujanScraper::extractFailuresFromMessage((string)($log['message'] ?? ''));
+                if ($failures === []) {
+                    $rows[] = [
+                        $log['created_at'] ?? '',
+                        $log['action'] ?? '',
+                        $log['status'] ?? '',
+                        '', '', '', '',
+                        CurahHujanScraper::summarizeLogMessage((string)($log['message'] ?? '')),
+                    ];
+                    continue;
+                }
+                foreach ($failures as $failure) {
+                    if (!is_array($failure)) {
+                        continue;
+                    }
+                    $rows[] = [
+                        $log['created_at'] ?? '',
+                        $log['action'] ?? '',
+                        $log['status'] ?? '',
+                        isset($failure['year']) ? (string)$failure['year'] : '',
+                        isset($failure['month']) && $failure['month'] !== null ? (string)$failure['month'] : '',
+                        isset($failure['kecamatan']) ? (string)$failure['kecamatan'] : '',
+                        isset($failure['http_code']) ? (string)$failure['http_code'] : '',
+                        isset($failure['error']) ? (string)$failure['error'] : '',
+                    ];
+                }
+            }
+
+            $filename = 'laporan-kegagalan-curah-hujan-' . date('Ymd-His') . '.csv';
+            header('Content-Type: text/csv; charset=UTF-8');
+            header('Content-Disposition: attachment; filename="' . $filename . '"');
+            header('Cache-Control: no-store, no-cache, must-revalidate');
+            header('Pragma: no-cache');
+
+            $output = fopen('php://output', 'w');
+            if ($output === false) {
+                throw new RuntimeException('Tidak dapat membuka stream unduhan');
+            }
+            fwrite($output, "\xEF\xBB\xBF");
+            fputcsv($output, ['Waktu', 'Aksi', 'Status', 'Tahun', 'Bulan', 'Kecamatan', 'HTTP', 'Alasan Gagal']);
+            foreach ($rows as $row) {
+                fputcsv($output, array_map([$this, 'sanitizeCsvCell'], $row));
+            }
+            fclose($output);
+        } catch (Throwable $e) {
+            error_log('CurahHujanController::exportFailureLog failed: ' . $e->getMessage());
+            http_response_code(500);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'error' => 'Gagal mengekspor laporan kegagalan']);
+        }
+        exit;
+    }
+
+    /**
+     * Cegah formula injection pada sel CSV (awali apostrof bila
+     * diawali karakter berbahaya).
+     */
+    private function sanitizeCsvCell($cell): string {
+        $value = (string)$cell;
+        if ($value !== '' && str_contains('=+-@' . "\t\r", mb_substr($value, 0, 1))) {
+            return "'" . $value;
+        }
+        return $value;
     }
     
     /**

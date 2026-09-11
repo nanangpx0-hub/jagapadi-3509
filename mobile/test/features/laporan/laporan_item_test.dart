@@ -131,71 +131,71 @@ void main() {
 
   // ── Computed properties ──────────────────────────────────────────────────
   group('LaporanItem computed properties', () {
-    LaporanItem _make(String status) => LaporanItem(
+    LaporanItem make(String status) => LaporanItem(
           id: 1,
           jenis: JenisLaporan.hama,
           status: status,
         );
 
     group('statusLabel', () {
-      test('Draf → Draf', () => expect(_make('Draf').statusLabel, 'Draf'));
-      test('Submitted → Dikirim', () => expect(_make('Submitted').statusLabel, 'Dikirim'));
-      test('Diverifikasi → Diverifikasi', () => expect(_make('Diverifikasi').statusLabel, 'Diverifikasi'));
-      test('Ditolak → Ditolak', () => expect(_make('Ditolak').statusLabel, 'Ditolak'));
-      test('Diarsipkan → Diarsipkan', () => expect(_make('Diarsipkan').statusLabel, 'Diarsipkan'));
-      test('unknown → raw status', () => expect(_make('Unknown').statusLabel, 'Unknown'));
+      test('Draf → Draf', () => expect(make('Draf').statusLabel, 'Draf'));
+      test('Submitted → Dikirim', () => expect(make('Submitted').statusLabel, 'Dikirim'));
+      test('Diverifikasi → Diverifikasi', () => expect(make('Diverifikasi').statusLabel, 'Diverifikasi'));
+      test('Ditolak → Ditolak', () => expect(make('Ditolak').statusLabel, 'Ditolak'));
+      test('Diarsipkan → Diarsipkan', () => expect(make('Diarsipkan').statusLabel, 'Diarsipkan'));
+      test('unknown → raw status', () => expect(make('Unknown').statusLabel, 'Unknown'));
     });
 
     group('isEditable', () {
-      test('Draf is editable', () => expect(_make('Draf').isEditable, isTrue));
-      test('Ditolak is editable', () => expect(_make('Ditolak').isEditable, isTrue));
-      test('Submitted is NOT editable', () => expect(_make('Submitted').isEditable, isFalse));
-      test('Diverifikasi is NOT editable', () => expect(_make('Diverifikasi').isEditable, isFalse));
-      test('Diarsipkan is NOT editable', () => expect(_make('Diarsipkan').isEditable, isFalse));
+      test('Draf is editable', () => expect(make('Draf').isEditable, isTrue));
+      test('Ditolak is editable', () => expect(make('Ditolak').isEditable, isTrue));
+      test('Submitted is NOT editable', () => expect(make('Submitted').isEditable, isFalse));
+      test('Diverifikasi is NOT editable', () => expect(make('Diverifikasi').isEditable, isFalse));
+      test('Diarsipkan is NOT editable', () => expect(make('Diarsipkan').isEditable, isFalse));
     });
 
     group('isDraf / isDitolak', () {
       test('isDraf true only for Draf', () {
-        expect(_make('Draf').isDraf, isTrue);
-        expect(_make('Submitted').isDraf, isFalse);
+        expect(make('Draf').isDraf, isTrue);
+        expect(make('Submitted').isDraf, isFalse);
       });
       test('isDitolak true only for Ditolak', () {
-        expect(_make('Ditolak').isDitolak, isTrue);
-        expect(_make('Submitted').isDitolak, isFalse);
+        expect(make('Ditolak').isDitolak, isTrue);
+        expect(make('Submitted').isDitolak, isFalse);
       });
     });
 
     group('judulRingkas', () {
       test('hama uses namaOpt', () {
-        final item = LaporanItem(
+        const item = LaporanItem(
           id: 1, jenis: JenisLaporan.hama, status: 'Draf', namaOpt: 'Wereng',
         );
         expect(item.judulRingkas, 'Wereng');
       });
       test('hama fallback when namaOpt null', () {
-        final item = LaporanItem(id: 1, jenis: JenisLaporan.hama, status: 'Draf');
+        const item = LaporanItem(id: 1, jenis: JenisLaporan.hama, status: 'Draf');
         expect(item.judulRingkas, 'Laporan Hama');
       });
       test('irigasi uses namaSaluran', () {
-        final item = LaporanItem(
+        const item = LaporanItem(
           id: 2, jenis: JenisLaporan.irigasi, status: 'Draf',
           namaSaluran: 'Saluran Primer',
         );
         expect(item.judulRingkas, 'Saluran Primer');
       });
       test('irigasi fallback when namaSaluran null', () {
-        final item = LaporanItem(id: 2, jenis: JenisLaporan.irigasi, status: 'Draf');
+        const item = LaporanItem(id: 2, jenis: JenisLaporan.irigasi, status: 'Draf');
         expect(item.judulRingkas, 'Laporan Irigasi');
       });
     });
 
     group('jenisLabel', () {
       test('hama → Hama/OPT', () {
-        final item = LaporanItem(id: 1, jenis: JenisLaporan.hama, status: 'Draf');
+        const item = LaporanItem(id: 1, jenis: JenisLaporan.hama, status: 'Draf');
         expect(item.jenisLabel, 'Hama/OPT');
       });
       test('irigasi → Irigasi', () {
-        final item = LaporanItem(id: 2, jenis: JenisLaporan.irigasi, status: 'Draf');
+        const item = LaporanItem(id: 2, jenis: JenisLaporan.irigasi, status: 'Draf');
         expect(item.jenisLabel, 'Irigasi');
       });
     });

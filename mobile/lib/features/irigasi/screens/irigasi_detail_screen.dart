@@ -35,10 +35,9 @@ class _IrigasiDetailScreenState extends State<IrigasiDetailScreen> {
     if (url.startsWith('http')) return url;
     final uri = Uri.tryParse(AppConfig.baseUrl);
     final origin = uri != null
-        ? '${uri.scheme}://${uri.host}' +
-            (uri.hasPort && uri.port != 80 && uri.port != 443
+        ? '${uri.scheme}://${uri.host}${uri.hasPort && uri.port != 80 && uri.port != 443
                 ? ':${uri.port}'
-                : '')
+                : ''}'
         : '';
     return '$origin/$url';
   }
@@ -289,7 +288,7 @@ class _IrigasiDetailScreenState extends State<IrigasiDetailScreen> {
 
                       // Explicit Action Buttons for Field Officer (Petugas)
                       if (ReportEditAccess.canShowEditActions(
-                        reportUserId: l?.userId,
+                        reportUserId: l.userId,
                         currentUserId: auth.user?.id,
                         hasCapability:
                             auth.user?.can(ReportCapability.canSubmitReport) ?? false,

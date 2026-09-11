@@ -129,7 +129,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
       appBar: AppBar(
         title: Semantics(
           header: true,
-          child: Text('Notifikasi'),
+          child: const Text('Notifikasi'),
         ),
         actions: [
           if (p.hasUnread)

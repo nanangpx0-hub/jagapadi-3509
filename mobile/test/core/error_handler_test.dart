@@ -5,7 +5,7 @@ import 'package:jagapadi_mobile/core/error_handler.dart';
 void main() {
   // ── getErrorMessage ───────────────────────────────────────────────────────
   group('ErrorHandler.getErrorMessage', () {
-    ApiResponse<Map<String, dynamic>> _make({
+    ApiResponse<Map<String, dynamic>> make({
       bool success = false,
       String? error,
       String? message,
@@ -23,50 +23,50 @@ void main() {
     group('network errors', () {
       test('NetworkError mengembalikan pesan koneksi', () {
         final msg = ErrorHandler.getErrorMessage(
-          _make(error: 'NetworkError', statusCode: 0),
+          make(error: 'NetworkError', statusCode: 0),
         );
         expect(msg.toLowerCase(), contains('server'));
       });
 
       test('TimeoutError mengembalikan pesan timeout', () {
         final msg = ErrorHandler.getErrorMessage(
-          _make(error: 'TimeoutError', statusCode: 0),
+          make(error: 'TimeoutError', statusCode: 0),
         );
         expect(msg.toLowerCase(), anyOf(contains('timeout'), contains('lambat')));
       });
 
       test('SslError mengembalikan pesan SSL', () {
         final msg = ErrorHandler.getErrorMessage(
-          _make(error: 'SslError', statusCode: 0),
+          make(error: 'SslError', statusCode: 0),
         );
         expect(msg.toLowerCase(), contains('ssl'));
       });
 
       test('statusCode=0 tanpa error field mengembalikan pesan koneksi', () {
-        final msg = ErrorHandler.getErrorMessage(_make(statusCode: 0));
+        final msg = ErrorHandler.getErrorMessage(make(statusCode: 0));
         expect(msg, isNotEmpty);
       });
     });
 
     group('HTTP status codes', () {
       test('401 → pesan sesi berakhir', () {
-        final msg = ErrorHandler.getErrorMessage(_make(statusCode: 401));
+        final msg = ErrorHandler.getErrorMessage(make(statusCode: 401));
         expect(msg.toLowerCase(), contains('sesi'));
       });
 
       test('403 → pesan tidak diizinkan', () {
-        final msg = ErrorHandler.getErrorMessage(_make(statusCode: 403));
+        final msg = ErrorHandler.getErrorMessage(make(statusCode: 403));
         expect(msg.toLowerCase(), contains('izin'));
       });
 
       test('404 → pesan tidak ditemukan', () {
-        final msg = ErrorHandler.getErrorMessage(_make(statusCode: 404));
+        final msg = ErrorHandler.getErrorMessage(make(statusCode: 404));
         expect(msg.toLowerCase(), contains('tidak ditemukan'));
       });
 
       test('422 dengan errors map → gabung semua pesan field', () {
         final msg = ErrorHandler.getErrorMessage(
-          _make(
+          make(
             statusCode: 422,
             errors: {
               'tanggal': 'Tanggal wajib diisi',
@@ -80,23 +80,23 @@ void main() {
 
       test('422 tanpa errors → gunakan message', () {
         final msg = ErrorHandler.getErrorMessage(
-          _make(statusCode: 422, message: 'Data laporan tidak valid'),
+          make(statusCode: 422, message: 'Data laporan tidak valid'),
         );
         expect(msg, 'Data laporan tidak valid');
       });
 
       test('429 → pesan rate limit', () {
-        final msg = ErrorHandler.getErrorMessage(_make(statusCode: 429));
+        final msg = ErrorHandler.getErrorMessage(make(statusCode: 429));
         expect(msg.toLowerCase(), anyOf(contains('permintaan'), contains('menit')));
       });
 
       test('500 → pesan server error', () {
-        final msg = ErrorHandler.getErrorMessage(_make(statusCode: 500));
+        final msg = ErrorHandler.getErrorMessage(make(statusCode: 500));
         expect(msg.toLowerCase(), contains('server'));
       });
 
       test('503 → pesan maintenance', () {
-        final msg = ErrorHandler.getErrorMessage(_make(statusCode: 503));
+        final msg = ErrorHandler.getErrorMessage(make(statusCode: 503));
         expect(msg.toLowerCase(), anyOf(contains('server'), contains('tersedia')));
       });
     });
@@ -104,13 +104,13 @@ void main() {
     group('message fallback', () {
       test('status tidak dikenal dengan message → gunakan message', () {
         final msg = ErrorHandler.getErrorMessage(
-          _make(statusCode: 418, message: 'I am a teapot'),
+          make(statusCode: 418, message: 'I am a teapot'),
         );
         expect(msg, contains('I am a teapot'));
       });
 
       test('status tidak dikenal tanpa message → ada fallback', () {
-        final msg = ErrorHandler.getErrorMessage(_make(statusCode: 599));
+        final msg = ErrorHandler.getErrorMessage(make(statusCode: 599));
         expect(msg, isNotEmpty);
       });
     });

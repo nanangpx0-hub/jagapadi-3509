@@ -36,16 +36,25 @@ class EvaluasiController extends Controller {
             $this->redirect('dashboard');
         }
     }
+
+    /** Statistisi memperoleh akses baca global; mutasi tetap khusus Admin. */
+    protected function checkEvaluationReadAccess(): void {
+        $this->checkAuth();
+        if (!in_array($_SESSION['role'] ?? '', ['admin', 'statistisi'], true)) {
+            $_SESSION['error'] = 'Anda tidak memiliki akses ke evaluasi statistik';
+            $this->redirect('dashboard');
+        }
+    }
     
     /**
      * Index - Dashboard evaluasi akurasi
      */
     public function index() {
-        $this->checkAdmin();
+        $this->checkEvaluationReadAccess();
         
         // Get filter parameters
-        $tahun = $_GET['tahun'] ?? date('Y');
-        $bulan = $_GET['bulan'] ?? null;
+        $tahun = $this->validatedYear($_GET['tahun'] ?? date('Y'));
+        $bulan = $this->validatedMonth($_GET['bulan'] ?? null);
         
         // Get data
         $filters = ['tahun' => $tahun];
@@ -77,7 +86,8 @@ class EvaluasiController extends Controller {
             'currentMonth' => $currentMonth,
             'currentYear' => $currentYear,
             'currentDay' => $currentDay,
-            'csrfToken' => $_SESSION['csrf_token'] ?? ''
+            'csrfToken' => $_SESSION['csrf_token'] ?? '',
+            'canManageEvaluation' => ($_SESSION['role'] ?? '') === 'admin'
         ]);
     }
     
@@ -179,10 +189,10 @@ class EvaluasiController extends Controller {
      * Get Data - API endpoint for AJAX
      */
     public function getData() {
-        $this->checkAdmin();
+        $this->checkEvaluationReadAccess();
         
-        $tahun = $_GET['tahun'] ?? date('Y');
-        $bulan = $_GET['bulan'] ?? null;
+        $tahun = $this->validatedYear($_GET['tahun'] ?? date('Y'));
+        $bulan = $this->validatedMonth($_GET['bulan'] ?? null);
         
         $filters = ['tahun' => $tahun];
         if ($bulan) {
@@ -200,9 +210,9 @@ class EvaluasiController extends Controller {
      * Get Chart Data - API endpoint
      */
     public function getChartData() {
-        $this->checkAdmin();
+        $this->checkEvaluationReadAccess();
         
-        $tahun = $_GET['tahun'] ?? date('Y');
+        $tahun = $this->validatedYear($_GET['tahun'] ?? date('Y'));
         $chartData = $this->model->getChartData($tahun);
         
         $this->json([
@@ -215,9 +225,9 @@ class EvaluasiController extends Controller {
      * Get Statistics - API endpoint
      */
     public function getStatistics() {
-        $this->checkAdmin();
+        $this->checkEvaluationReadAccess();
         
-        $tahun = $_GET['tahun'] ?? date('Y');
+        $tahun = $this->validatedYear($_GET['tahun'] ?? date('Y'));
         $statistics = $this->model->getStatistics($tahun);
         
         $this->json([
@@ -230,7 +240,7 @@ class EvaluasiController extends Controller {
      * Get single record by ID - API
      */
     public function getRecord($id = null) {
-        $this->checkAdmin();
+        $this->checkEvaluationReadAccess();
         
         if (!$id) {
             $this->json(['success' => false, 'message' => 'ID diperlukan'], 400);
@@ -252,10 +262,10 @@ class EvaluasiController extends Controller {
      * Get logs - API endpoint
      */
     public function getLogs() {
-        $this->checkAdmin();
+        $this->checkEvaluationReadAccess();
         
-        $limit = $_GET['limit'] ?? 10;
-        $logs = $this->model->getRecentLogs((int) $limit);
+        $limit = max(1, min(100, (int) ($_GET['limit'] ?? 10)));
+        $logs = $this->model->getRecentLogs($limit);
         
         $this->json([
             'success' => true,
@@ -489,5 +499,22 @@ class EvaluasiController extends Controller {
         
         echo $csv;
         exit;
+    }
+
+    private function validatedYear(mixed $value): int {
+        $year = filter_var($value, FILTER_VALIDATE_INT);
+        $maxYear = (int) date('Y') + 1;
+        return $year !== false && $year >= 2000 && $year <= $maxYear
+            ? $year
+            : (int) date('Y');
+    }
+
+    private function validatedMonth(mixed $value): ?int {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $month = filter_var($value, FILTER_VALIDATE_INT);
+        return $month !== false && $month >= 1 && $month <= 12 ? $month : null;
     }
 }

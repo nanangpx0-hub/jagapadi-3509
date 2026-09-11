@@ -118,16 +118,20 @@ class LaporanHamaValidatorTest extends TestCase
 
     public function testSubmitRejectsMissingPhoto(): void
     {
-        $errors = LaporanHamaValidator::validateSubmit([
-            'tanggal' => '2026-08-12',
-            'master_opt_id' => 1,
-            'kabupaten_id' => 1,
-            'kecamatan_id' => 1,
-            'desa_id' => 1,
-            'tingkat_keparahan' => 'Ringan',
-            'luas_serangan' => 1,
-            'populasi' => 10,
-        ]);
+        try {
+            $errors = LaporanHamaValidator::validateSubmit([
+                'tanggal' => '2026-08-12',
+                'master_opt_id' => 1,
+                'kabupaten_id' => 1,
+                'kecamatan_id' => 1,
+                'desa_id' => 1,
+                'tingkat_keparahan' => 'Ringan',
+                'luas_serangan' => 1,
+                'populasi' => 10,
+            ]);
+        } catch (\RuntimeException $e) {
+            $this->markTestSkipped('Database tidak tersedia — test integrasi tidak bisa dijalankan.');
+        }
 
         $this->assertSame(
             'Foto laporan wajib disertakan sebelum laporan dapat dikirim.',

@@ -660,6 +660,10 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                                 <input type="radio" name="scrapeMode" id="modeYearly" value="yearly">
                                 <i class="fas fa-calendar-alt mr-1"></i> Tahunan (Jan-Des)
                             </label>
+                            <label class="btn btn-outline-info flex-fill" id="labelModeRange">
+                                <input type="radio" name="scrapeMode" id="modeRange" value="range">
+                                <i class="fas fa-calendar-week mr-1"></i> Rentang Tahun (2020-2026)
+                            </label>
                         </div>
                     </div>
                     
@@ -675,9 +679,9 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                         </select>
                     </div>
                     
-                    <!-- Yearly Progress (only for yearly mode) -->
+                    <!-- Yearly Progress (only for yearly/range mode) -->
                     <div id="yearlyProgressGroup" style="display: none;">
-                        <span class="d-block mb-2 font-weight-normal">Progress Pengambilan Data Tahunan</span>
+                        <span class="d-block mb-2 font-weight-normal">Progress Pengambilan Data</span>
                         <div class="progress mb-2" style="height: 25px;">
                             <div class="progress-bar progress-bar-striped progress-bar-animated" id="yearlyProgressBar" 
                                  role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
@@ -691,13 +695,46 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                             </div>
                             <?php endforeach; ?>
                         </div>
+                        <div class="d-flex flex-wrap mb-2" id="rangeYearBadges" style="display: none;">
+                            <?php for ($y = 2020; $y <= 2026; $y++): ?>
+                            <div class="mr-2 mb-2" id="rangeYearStatus<?= $y ?>">
+                                <span class="badge badge-secondary"><?= $y ?></span>
+                            </div>
+                            <?php endfor; ?>
+                        </div>
                         <div id="yearlyStatusText" class="text-muted small mb-2">
                             Siap mengambil data untuk 12 bulan...
                         </div>
                     </div>
+
+                    <!-- Range Year Selection (only for range mode) -->
+                    <div class="form-group" id="rangeSelectGroup" style="display: none;">
+                        <div class="row">
+                            <div class="col-6">
+                                <label for="rangeStartYear">Tahun Awal</label>
+                                <select class="form-control" id="rangeStartYear">
+                                    <?php for ($y = 2020; $y <= 2026; $y++): ?>
+                                    <option value="<?= $y ?>" <?= $y === 2020 ? 'selected' : '' ?>><?= $y ?></option>
+                                    <?php endfor; ?>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label for="rangeEndYear">Tahun Akhir</label>
+                                <select class="form-control" id="rangeEndYear">
+                                    <?php for ($y = 2020; $y <= 2026; $y++): ?>
+                                    <option value="<?= $y ?>" <?= $y === 2026 ? 'selected' : '' ?>><?= $y ?></option>
+                                    <?php endfor; ?>
+                                </select>
+                            </div>
+                        </div>
+                        <small class="form-text text-muted">Data diambil per tahun (2020–2026); re-scrape aman karena idempoten (UPSERT).</small>
+                    </div>
                     
                     <!-- Result Display -->
                     <div id="scraperResult" class="mt-3" style="display: none;"></div>
+
+                    <!-- Laporan ringkasan pasca-update rentang tahun -->
+                    <div id="scraperSummaryReport" class="mt-3" style="display: none;"></div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Tutup</button>
@@ -2352,10 +2389,20 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
     const btnCancelScraper = document.getElementById('btnCancelScraper');
     
     if (modeMonthly && modeYearly) {
+        const modeRangeEl = document.getElementById('modeRange');
+        const rangeSelectGroupEl = document.getElementById('rangeSelectGroup');
+        const rangeBadgesEl = document.getElementById('rangeYearBadges');
+        const monthGridEl = document.getElementById('monthStatusGrid');
+        const showRangeUI = (show) => {
+            if (rangeSelectGroupEl) rangeSelectGroupEl.style.display = show ? 'block' : 'none';
+            if (rangeBadgesEl) rangeBadgesEl.style.display = show ? 'flex' : 'none';
+            if (monthGridEl) monthGridEl.style.display = show ? 'none' : 'flex';
+        };
         modeMonthly.addEventListener('change', function() {
             if (this.checked) {
                 monthSelectGroup.style.display = 'block';
                 yearlyProgressGroup.style.display = 'none';
+                showRangeUI(false);
                 document.getElementById('scraperBtnText').textContent = 'Jalankan Scraper';
             }
         });
@@ -2364,10 +2411,25 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
             if (this.checked) {
                 monthSelectGroup.style.display = 'none';
                 yearlyProgressGroup.style.display = 'block';
+                showRangeUI(false);
                 document.getElementById('scraperBtnText').textContent = 'Ambil Data Tahunan';
                 resetYearlyProgress();
             }
         });
+
+        if (modeRangeEl) {
+            modeRangeEl.addEventListener('change', function() {
+                if (this.checked) {
+                    monthSelectGroup.style.display = 'none';
+                    yearlyProgressGroup.style.display = 'block';
+                    showRangeUI(true);
+                    document.getElementById('scraperBtnText').textContent = 'Ambil Rentang Tahun';
+                    resetYearlyProgress();
+                    resetRangeYearBadges();
+                    document.getElementById('yearlyStatusText').textContent = 'Siap mengambil data rentang tahun...';
+                }
+            });
+        }
     }
     
     // Cancel button handler
@@ -2428,9 +2490,12 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
     function runScraper() {
         const btn = document.getElementById('btnRunScraper');
         const resultDiv = document.getElementById('scraperResult');
+        const isRangeMode = document.getElementById('modeRange')?.checked;
         const isYearlyMode = document.getElementById('modeYearly')?.checked;
         
-        if (isYearlyMode) {
+        if (isRangeMode) {
+            runRangeScraperUI();
+        } else if (isYearlyMode) {
             runYearlyScraper();
         } else {
             runMonthlyScraper();
@@ -2687,6 +2752,253 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
             }
         }
     }
+    // ================================================================
+    // MODE RENTANG TAHUN (2020-2026) — loop per tahun via runYearScraper
+    // ================================================================
+    let lastRangeFailures = [];
+
+    function resetRangeYearBadges() {
+        for (let y = 2020; y <= 2026; y++) {
+            updateRangeYearStatus(y, 'idle');
+        }
+    }
+
+    function updateRangeYearStatus(year, status) {
+        const badge = document.querySelector(`#rangeYearStatus${year} span`);
+        if (!badge) return;
+        if (status === 'loading') {
+            badge.className = 'badge badge-warning';
+        } else if (status === 'success') {
+            badge.className = 'badge badge-success';
+        } else if (status === 'failed') {
+            badge.className = 'badge badge-danger';
+        } else {
+            badge.className = 'badge badge-secondary';
+        }
+    }
+
+    function updateRangeProgress(completed, total, currentYear) {
+        const progressBar = document.getElementById('yearlyProgressBar');
+        const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+        if (progressBar) {
+            progressBar.style.width = percentage + '%';
+            progressBar.textContent = percentage + '%';
+        }
+        const statusText = document.getElementById('yearlyStatusText');
+        if (statusText && currentYear) {
+            statusText.textContent = `Mengambil data tahun ${currentYear}... (${completed}/${total})`;
+        }
+    }
+
+    async function runRangeScraperUI(retryYears) {
+        const btn = document.getElementById('btnRunScraper');
+        const resultDiv = document.getElementById('scraperResult');
+        const summaryDiv = document.getElementById('scraperSummaryReport');
+        const cancelBtn = document.getElementById('btnCancelScraper');
+        const statusText = document.getElementById('yearlyStatusText');
+
+        const startYear = parseInt(document.getElementById('rangeStartYear').value, 10);
+        const endYear = parseInt(document.getElementById('rangeEndYear').value, 10);
+        const currentYear = new Date().getFullYear();
+
+        if (!(startYear >= 2020) || !(endYear <= currentYear) || startYear > endYear) {
+            showToast('Rentang tahun tidak valid (2020 hingga tahun berjalan, awal ≤ akhir).', 'danger');
+            return;
+        }
+
+        let years = [];
+        for (let y = startYear; y <= endYear; y++) years.push(y);
+        if (Array.isArray(retryYears) && retryYears.length > 0) {
+            const wanted = new Set(retryYears.filter(y => Number.isInteger(y) && y >= startYear && y <= endYear));
+            years = years.filter(y => wanted.has(y));
+            if (years.length === 0) {
+                showToast('Tidak ada tahun gagal dalam rentang ini untuk diulang.', 'info');
+                return;
+            }
+        } else {
+            lastRangeFailures = [];
+        }
+
+        scraperCancelled = false;
+        if (btn) btn.disabled = true;
+        const btnIcon = document.getElementById('scraperBtnIcon');
+        const btnText = document.getElementById('scraperBtnText');
+        if (btnIcon) btnIcon.className = 'fas fa-spinner fa-spin';
+        if (btnText) btnText.textContent = 'Mengambil Rentang...';
+        if (cancelBtn) {
+            cancelBtn.style.display = 'inline-block';
+            cancelBtn.disabled = false;
+            cancelBtn.innerHTML = '<i class="fas fa-stop"></i> Batalkan';
+        }
+        if (resultDiv) resultDiv.style.display = 'none';
+        if (summaryDiv) summaryDiv.style.display = 'none';
+        resetRangeYearBadges();
+        updateRangeProgress(0, years.length, years[0]);
+
+        const totals = { saved: 0, failed: 0, skipped: 0 };
+        const failures = [];
+        let completed = 0;
+
+        for (const year of years) {
+            if (scraperCancelled) {
+                updateRangeYearStatus(year, 'idle');
+                if (statusText) statusText.textContent = `Proses dibatalkan pada tahun ${year}`;
+                continue;
+            }
+            updateRangeYearStatus(year, 'loading');
+            updateRangeProgress(completed, years.length, year);
+
+            try {
+                const formData = new FormData();
+                formData.append('csrf_token', csrfToken);
+                formData.append('year', year);
+
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 300000);
+
+                const response = await fetch('<?= BASE_URL ?>/curahHujan/runYearScraper', {
+                    method: 'POST',
+                    body: formData,
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    updateRangeYearStatus(year, 'success');
+                    totals.saved += data.records_success || 0;
+                    totals.skipped += data.skipped_future || 0;
+                    totals.failed += data.records_failed || 0;
+                    (data.failures || []).forEach(f => failures.push(Object.assign({ year }, f)));
+                } else {
+                    updateRangeYearStatus(year, 'failed');
+                    totals.failed++;
+                    failures.push({ year, month: null, kecamatan: '-', error: data.error || data.message || 'Gagal memproses tahun', http_code: 0 });
+                }
+            } catch (err) {
+                updateRangeYearStatus(year, 'failed');
+                totals.failed++;
+                const msg = err.name === 'AbortError' ? 'Request timeout (300s)' : err.message;
+                failures.push({ year, month: null, kecamatan: '-', error: msg, http_code: 0 });
+            }
+
+            completed++;
+            updateRangeProgress(completed, years.length, year);
+            if (!scraperCancelled) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+
+        lastRangeFailures = failures;
+        renderSummaryReport(totals, failures, years, scraperCancelled);
+
+        const progressBar = document.getElementById('yearlyProgressBar');
+        if (progressBar) {
+            progressBar.className = 'progress-bar ' + (totals.failed === 0 && !scraperCancelled ? 'bg-success' : (totals.saved > 0 ? 'bg-warning' : 'bg-danger'));
+        }
+        if (statusText) statusText.textContent = scraperCancelled ? 'Proses dibatalkan' : 'Selesai!';
+
+        if (btn) btn.disabled = false;
+        if (btnIcon) btnIcon.className = 'fas fa-play';
+        if (btnText) btnText.textContent = 'Ambil Rentang Tahun';
+        if (cancelBtn) cancelBtn.style.display = 'none';
+
+        try {
+            const filterYear = document.getElementById('filterYear');
+            if (filterYear) {
+                [startYear, endYear].forEach(yy => {
+                    let exists = false;
+                    for (let i = 0; i < filterYear.options.length; i++) {
+                        if (String(filterYear.options[i].value) === String(yy)) { exists = true; break; }
+                    }
+                    if (!exists) {
+                        const option = document.createElement('option');
+                        option.value = String(yy);
+                        option.textContent = String(yy);
+                        filterYear.appendChild(option);
+                    }
+                });
+                filterYear.value = String(endYear);
+            }
+            loadData();
+            loadCharts();
+            if (typeof refreshLogs === 'function') refreshLogs();
+        } catch (e) {
+            console.error('Error reloading data:', e);
+        }
+
+        if (!scraperCancelled) {
+            showToast(
+                totals.failed === 0 ? 'Rentang tahun berhasil diperbarui!' : `Selesai dengan ${totals.failed} kegagalan.`,
+                totals.failed === 0 ? 'success' : 'warning'
+            );
+        }
+    }
+
+    function renderSummaryReport(totals, failures, years, cancelled) {
+        const summaryDiv = document.getElementById('scraperSummaryReport');
+        if (!summaryDiv) return;
+        summaryDiv.style.display = 'block';
+
+        const maxShown = 50;
+        const shown = failures.slice(0, maxShown);
+        let failRows = '';
+        shown.forEach(f => {
+            const when = 'Tahun ' + escapeHtml(String(f.year ?? '-'))
+                + (f.month ? ' • Bulan ' + escapeHtml(String(f.month)) : '');
+            const where = escapeHtml(String(f.kecamatan || '-'));
+            const why = escapeHtml(String(f.error || 'Tidak diketahui'))
+                + (f.http_code ? ' (HTTP ' + escapeHtml(String(f.http_code)) + ')' : '');
+            failRows += `<li class="mb-1">${when} • ${where} — ${why}</li>`;
+        });
+        if (failures.length > maxShown) {
+            failRows += `<li class="text-muted">... dan ${failures.length - maxShown} kegagalan lainnya.</li>`;
+        }
+
+        const statusAlert = cancelled
+            ? `<div class="alert alert-warning"><strong><i class="fas fa-exclamation-triangle"></i> Dibatalkan.</strong> Tahun diproses: ${years.length}.</div>`
+            : (failures.length === 0
+                ? `<div class="alert alert-success"><strong><i class="fas fa-check-circle"></i> Semua tahun berhasil.</strong></div>`
+                : `<div class="alert alert-danger"><strong><i class="fas fa-times-circle"></i> ${failures.length} kegagalan.</strong><ul class="mb-0 mt-2">${failRows}</ul></div>`);
+
+        const retryBtn = failures.length > 0
+            ? `<button type="button" class="btn btn-warning mr-2" id="btnRetryFailed"><i class="fas fa-redo"></i> Coba Lagi Data Gagal (${failures.length})</button>`
+            : '';
+        const csvBtn = failures.length > 0
+            ? `<a class="btn btn-outline-danger" href="<?= BASE_URL ?>/curahHujan/exportFailureLog"><i class="fas fa-download"></i> Unduh Laporan Kegagalan (.csv)</a>`
+            : '';
+
+        summaryDiv.innerHTML = `
+            <div class="card border-info">
+                <div class="card-header bg-info text-white"><strong><i class="fas fa-clipboard-check"></i> Laporan Hasil Update (${escapeHtml(String(years[0] ?? ''))}–${escapeHtml(String(years[years.length - 1] ?? ''))})</strong></div>
+                <div class="card-body">
+                    <div class="row text-center mb-3">
+                        <div class="col-4"><div class="h4 text-success mb-0">${totals.saved.toLocaleString('id-ID')}</div><small class="text-muted">Berhasil Disimpan</small></div>
+                        <div class="col-4"><div class="h4 text-info mb-0">${totals.skipped.toLocaleString('id-ID')}</div><small class="text-muted">Dilewati (Masa Depan)</small></div>
+                        <div class="col-4"><div class="h4 text-danger mb-0">${totals.failed.toLocaleString('id-ID')}</div><small class="text-muted">Kegagalan</small></div>
+                    </div>
+                    ${statusAlert}
+                    <div class="mt-2">${retryBtn}${csvBtn}</div>
+                </div>
+            </div>`;
+
+        const retryEl = document.getElementById('btnRetryFailed');
+        if (retryEl) {
+            retryEl.addEventListener('click', function () {
+                const yearsToRetry = [...new Set(lastRangeFailures
+                    .map(f => parseInt(f.year, 10))
+                    .filter(y => Number.isInteger(y)))];
+                if (yearsToRetry.length === 0) {
+                    showToast('Tidak ada tahun gagal untuk diulang.', 'info');
+                    return;
+                }
+                runRangeScraperUI(yearsToRetry);
+            });
+        }
+    }
+
     } // End of initCurahHujan function
     
     // Execute initialization based on document ready state

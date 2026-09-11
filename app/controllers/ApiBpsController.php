@@ -44,7 +44,7 @@ class ApiBpsController {
      * Get paginated BPS agricultural data
      */
     public function data() {
-        $cacheKey = 'api_bps_data_' . md5(serialize($_GET));
+        $cacheKey = 'api_bps_data_' . md5(json_encode($_GET, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         if ($this->cache->isAvailable() && ($cached = $this->cache->get($cacheKey)) !== null) {
             $this->respond(200, $cached);
         }

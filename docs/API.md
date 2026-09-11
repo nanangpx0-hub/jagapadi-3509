@@ -251,6 +251,47 @@ Master wilayah berjenjang: Kabupaten → Kecamatan → Desa.
 - DELETE: hard delete jika tidak ada referensi laporan; soft deactivate (`aktif=0`) jika masih dirujuk
 - Validasi: nama_opt unique, jenis enum wajib, etl_acuan >= 0
 
+### Dropdown JSON — Web Endpoints (Session, runtime root)
+
+Dipakai browser untuk mengisi dropdown tanpa reload halaman. Disajikan runtime
+root (session) agar tetap satu origin dengan halaman web pada semua topologi
+deployment — path `/api/*` pada sebagian produksi dilayani runtime Backend v1.
+Klien mencoba endpoint web dulu, lalu endpoint `/api/*` sebagai cadangan.
+Envelope: `{ "status": "success"|"error", "data": [...], "message"? }`.
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/laporan-lainnya/jenis-list` | Session; admin/operator/petugas | List jenis laporan aktif (`id`, `kode`, `nama`, `fields_json`) |
+| GET | `/opt/list-json` | Session (semua role login) | List OPT (`id`, `nama_opt`, `nama_lokal`, `nama_ilmiah`, `jenis`, `foto_url`); filter opsional `search`, `jenis=hama\|penyakit\|gulma` |
+
+**Aturan:**
+- Guest → `401`; role di luar izin → `403`; gagal server → `500` (semua JSON, tanpa HTML)
+- `GET` tanpa CSRF; tidak ada mutasi pada endpoint ini
+- Set data paritas dengan `<option>` server-render form (fallback no-JS tetap valid)
+
+### Jenis Laporan — Web Endpoints (Session, Admin, runtime root)
+
+Kelola master `master_jenis_laporan` yang mengisi dropdown Jenis Laporan.
+Hanya Admin; semua mutasi POST + CSRF + anti double-submit.
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/jenis-laporan` | Session; admin | Daftar semua jenis (aktif + nonaktif) + jumlah pemakaian laporan |
+| GET | `/jenis-laporan/create` | Session; admin | Form tambah jenis |
+| POST | `/jenis-laporan/store` | Session + CSRF; admin | Simpan jenis baru (validasi kode unik, `fields_json` valid) |
+| GET | `/jenis-laporan/edit/{id}` | Session; admin | Form edit jenis |
+| POST | `/jenis-laporan/update/{id}` | Session + CSRF; admin | Perbarui jenis (kode unik kecuali milik sendiri) |
+| POST | `/jenis-laporan/toggle/{id}` | Session + CSRF; admin | Aktif/nonaktif (nonaktif disembunyikan dari dropdown) |
+| POST | `/jenis-laporan/delete/{id}` | Session + CSRF; admin | Hapus lunak ke recycle bin; diblokir bila masih dipakai laporan |
+
+**Aturan:**
+- `kode`: huruf kecil/angka/underscore 2-60, unik (`uk_kode`)
+- `nama`: wajib, maksimal 150 karakter; `deskripsi` maksimal 2000 karakter
+- `fields_json`: array JSON maksimal 50 field; tiap field `{name,label,type,required}` dengan `type` salah satu `text|textarea|number|integer|date` dan `name` unik
+- Hapus: hapus lunak ke recycle bin (`deleted_at`/`deleted_by`, migrasi `2026_09_05_add_soft_delete_master_jenis_laporan`); pulihkan/hapus permanen via Recycle Bin (`?module=jenis-laporan`); pre-check pemakaian + FK `RESTRICT` sebagai backstop; nonaktifkan jenis yang masih dipakai agar histori utuh
+- Urutan deploy: jalankan migrasi (`php migrations/2026_09_05_add_soft_delete_master_jenis_laporan.php`) SEBELUM kode ini tayang, karena query baca memfilter `deleted_at`
+- Setiap mutasi membersihkan cache `jenis_laporan:active` dan tercatat di `activity_log`
+
 ### Usulan OPT — Web Endpoints (Session, runtime root)
 
 Modul usulan & review master OPT dari Petugas. Workflow status:
@@ -304,6 +345,7 @@ route statis lain terdaftar eksplisit di `config/web_routes.php`.
 - **Submitted**: nomor_laporan diisi (LH-YYYYMMDD-XXXX), read-only, tidak bisa diedit/dihapus.
 - **Petugas** hanya melihat dan mengelola laporan sendiri.
 - **Admin** dapat melihat semua laporan.
+- **Statistisi** memperoleh akses global baca-saja hanya untuk data resmi (`Submitted` dan `Diverifikasi`); Draf tetap dikecualikan walaupun `include_draft=true` atau `status=Draf` diminta.
 - Nomor laporan hanya dibuat saat Submit, atomic via `nomor_laporan_counter`.
 - Foto bersifat opsional selama status masih Draf, tetapi wajib tersedia sebelum laporan dapat dikirim atau dikirim ulang.
 - Alur API yang direkomendasikan: buat Draf, upload foto melalui endpoint `/foto`, lalu panggil endpoint `/submit`.
@@ -312,7 +354,7 @@ route statis lain terdaftar eksplisit di `config/web_routes.php`.
 |--------|----------|------|-------------|
 | GET | `/api/v1/laporan-hama` | JWT | List (filter: status, tanggal, wilayah, OPT, q, page, limit, include_draft) |
 | POST | `/api/v1/laporan-hama` | JWT | Create (action=draft|submit, default draft) |
-| GET | `/api/v1/laporan-hama/{id}` | JWT | Detail (owner/admin only) |
+| GET | `/api/v1/laporan-hama/{id}` | JWT | Detail (petugas pemilik, admin, atau statistisi untuk data resmi) |
 | PUT | `/api/v1/laporan-hama/{id}` | JWT | Update Draf/Ditolak — hanya petugas pemilik (lihat Otorisasi Edit) |
 | DELETE | `/api/v1/laporan-hama/{id}` | JWT | Delete Draf (owner only) |
 | POST | `/api/v1/laporan-hama/{id}/submit` | JWT | Submit Draf → Submitted |
@@ -415,7 +457,7 @@ diterima dari request body.
 |--------|----------|------|-------------|
 | GET | `/api/v1/laporan-irigasi` | JWT | List (filter: status, tanggal, wilayah, kondisi_fisik, debit_air, q, page, limit, include_draft) |
 | POST | `/api/v1/laporan-irigasi` | JWT | Create (action=draft|submit, default draft) |
-| GET | `/api/v1/laporan-irigasi/{id}` | JWT | Detail (owner/admin only) |
+| GET | `/api/v1/laporan-irigasi/{id}` | JWT | Detail (petugas pemilik, admin, atau statistisi untuk data resmi) |
 | PUT | `/api/v1/laporan-irigasi/{id}` | JWT | Update Draf (owner only) |
 | DELETE | `/api/v1/laporan-irigasi/{id}` | JWT | Delete Draf (owner only) |
 | POST | `/api/v1/laporan-irigasi/{id}/submit` | JWT | Submit Draf → Submitted |
@@ -797,7 +839,7 @@ Menghapus `video_url` laporan beserta berkasnya. Respon sukses:
 | `desa_id` | int | No | (all) | Filter desa |
 | `tanggal_dari` | date | No | (all) | Filter tanggal awal (YYYY-MM-DD) |
 | `tanggal_sampai` | date | No | (all) | Filter tanggal akhir (YYYY-MM-DD) |
-| `include_draft` | bool | No | `false` | Sertakan laporan `Draf` (hanya berlaku bila `status` tidak diisi; bila `status` diisi, gunakan nilai tersebuat) |
+| `include_draft` | bool | No | `false` | Sertakan laporan `Draf` untuk Admin/Petugas. Untuk Statistisi parameter ini dipaksa `false`; filter status nonresmi menghasilkan data kosong. |
 
 ### GET /api/v1/export/hama?format=csv&status=Submitted,Diverifikasi
 
@@ -992,6 +1034,8 @@ curl -c cookies.txt -b cookies.txt \
 
 > **Rule**: Semua endpoint yang menampilkan data agregat/statistik/visualisasi **wajib** support parameter `include_draft`.
 
+Untuk role `statistisi`, cakupan tetap global tetapi hanya data resmi (`Submitted`, `Diverifikasi`). Permintaan `include_draft=true` tidak mengubah hasil. Hal yang sama berlaku pada list laporan, detail, dashboard, peta, analisis, dan ekspor.
+
 ---
 
 ## JWT Token Structure
@@ -1020,7 +1064,7 @@ curl -c cookies.txt -b cookies.txt \
 ### Aturan Umum
 
 - Semua endpoint dashboard: **authenticated** (JWT atau Session).
-- **Admin**: agregat global. **Petugas**: hanya data miliknya (`user_id = current`).
+- **Admin**: agregat global. **Petugas**: hanya data miliknya (`user_id = current`). **Statistisi**: agregat global baca-saja tanpa Draf.
 - Statistik aktif = **Submitted + Diverifikasi** (Draf, Ditolak, Diarsipkan tidak masuk).
 - Cache file TTL 5 menit di `storage/cache/`. Cache diinvalidate otomatis saat laporan dibuat/diverifikasi/ditolak/diarsipkan.
 - Filter `tahun` (YYYY, default tahun berjalan). Range: 2020..(current+1).
@@ -1454,6 +1498,54 @@ Contoh `GET /api/feedback/summary?year=2026&month=8`:
   "timestamp": "2026-08-20 04:50:00"
 }
 ```
+
+## Curah Hujan Batch & Failure Report (Implemented)
+
+Endpoint web session khusus `admin` untuk pembaruan multi-tahun
+(2020–tahun berjalan) dari NASA POWER (`PRECTOTCORR`) dengan UPSERT
+idempoten (`tanggal`, `lokasi`, `sumber_data`) dan pencatatan kegagalan
+terstruktur di `curah_hujan_logs` (`failed`/`partial` + blok
+`---FAILURES_JSON---` pada `message`). Tanpa CSRF valid → JSON
+`{success: false}`; validasi rentang gagal → `InvalidArgumentException`
+ditangkap menjadi JSON error (kegagalan juga dicatat ke log).
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/curahHujan/runYearScraper` | Session Admin + CSRF | Scrape 1 tahun penuh (`year`); idempoten; log `scrape_year` |
+| POST | `/curahHujan/runRangeScraper` | Session Admin + CSRF | Scrape rentang (`start_year`, `end_year`); tahun gagal tidak menghentikan tahun lain; log `scrape_range` |
+| GET | `/curahHujan/getFailureReport` | Session Admin | 50 log gagal/parsial terbaru + rincian failures terparse |
+| GET | `/curahHujan/exportFailureLog` | Session Admin | Unduh CSV kegagalan (waktu, aksi, status, tahun, bulan, kecamatan, HTTP, alasan; anti formula-injection) |
+
+Aturan rentang: `2020 <= start_year <= end_year <= tahun berjalan`.
+Tanggal > hari ini dilewati sebagai `skipped_future` (bukan error).
+CLI pendamping: `php scripts/fetch_nasa_curah_hujan.php
+[--start-year=2020] [--end-year=2026] [--retry-failed]`; rekap kegagalan
+ditulis ke `logs/curah_hujan_failures.json` untuk audit/retry.
+
+## Angin & Harga Batch (Implemented)
+
+Pola yang sama untuk Kecepatan Angin (NASA POWER `WS10M`/`WS2M`,
+UPSERT idempoten `tanggal`+`lokasi`) dan Harga Gabah/Beras (SISKAPERBAPO
+Jatim per bulan + estimasi gabah turunan, UPSERT idempoten
+`tanggal`+`jenis_komoditas`+`lokasi`+`sumber_data`). Kegagalan tercatat
+di `kecepatan_angin_logs` / `harga_komoditas_logs` (`failed`/`partial`,
+rincian `failures` di kolom `details` JSON). Bulan masa depan dilewati
+sebagai `skipped` (harga, granularitas bulan) atau `skipped_future`.
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/kecepatanAngin/runYearScraper` | Session Admin + CSRF | Scrape angin 1 tahun (`year`) |
+| POST | `/kecepatanAngin/runRangeScraper` | Session Admin + CSRF | Scrape angin rentang (`start_year`, `end_year`) |
+| GET | `/kecepatanAngin/getFailureReport` | Session Admin | 50 log gagal/parsial + failures terparse |
+| GET | `/kecepatanAngin/exportFailureLog` | Session Admin | CSV kegagalan angin |
+| POST | `/hargaKomoditas/runMonthScraper` | Session Admin + CSRF | Scrape harga 1 bulan (`year`, `month`, `source`) |
+| POST | `/hargaKomoditas/runRangeScraper` | Session Admin + CSRF | Scrape harga rentang (per bulan) |
+| GET | `/hargaKomoditas/getFailureReport` | Session Admin | 50 log gagal/parsial + failures terparse |
+| GET | `/hargaKomoditas/exportFailureLog` | Session Admin | CSV kegagalan harga (kolom tanggal & komoditas) |
+
+CLI batch generik: `php scripts/scrape_range.php --module=angin|harga
+[--start-year] [--end-year] [--source] [--retry-failed]`; rekap ke
+`logs/angin_failures.json` / `logs/harga_failures.json`.
 
 ### Web Feedback (server-rendered)
 

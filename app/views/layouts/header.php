@@ -18,6 +18,7 @@ $wilayahMenuActive = SidebarState::matches($sidebarRoute, 'adminWilayah');
 $kabupatenMenuActive = SidebarState::matches($sidebarRoute, 'adminWilayah/kabupaten');
 $kecamatanMenuActive = SidebarState::matches($sidebarRoute, 'adminWilayah/kecamatan');
 $desaMenuActive = SidebarState::matches($sidebarRoute, 'adminWilayah/desa');
+$jenisMenuActive = SidebarState::matches($sidebarRoute, 'jenis-laporan');
 $recycleBinMenuActive = SidebarState::matches($sidebarRoute, 'recycle-bin');
 ?>
 <!DOCTYPE html>
@@ -229,6 +230,8 @@ $recycleBinMenuActive = SidebarState::matches($sidebarRoute, 'recycle-bin');
     </style>
 </head>
 <body class="hold-transition sidebar-mini layout-fixed">
+<a href="#main-content" class="sr-only sr-only-focusable p-2 bg-success text-white position-absolute" style="z-index:9999; top:5px; left:5px;">Lewati ke konten utama</a>
+<div id="accessibility-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 <div class="wrapper">
 
     <!-- Navbar -->
@@ -404,7 +407,22 @@ $recycleBinMenuActive = SidebarState::matches($sidebarRoute, 'recycle-bin');
                         </a>
                     </li>
                     <?php endif; ?>
-                    
+
+                    <?php if(in_array($_SESSION['role'] ?? '', ['admin', 'statistisi'], true)): ?>
+                    <li class="nav-item">
+                        <a href="<?= BASE_URL ?>evaluasi" class="nav-link <?= (strpos($_SERVER['REQUEST_URI'], '/evaluasi') !== false) ? 'active' : '' ?>">
+                            <i class="nav-icon fas fa-chart-line"></i>
+                            <p>Evaluasi Akurasi</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="<?= BASE_URL ?>storytelling" class="nav-link <?= (strpos($_SERVER['REQUEST_URI'], '/storytelling') !== false) ? 'active' : '' ?>">
+                            <i class="nav-icon fas fa-book-open"></i>
+                            <p>Data Storytelling</p>
+                        </a>
+                    </li>
+                    <?php endif; ?>
+
                     <?php if(in_array($_SESSION['role'] ?? '', ['admin'])): ?>
                     <li class="nav-item">
                         <a href="<?= BASE_URL ?>curahHujan" class="nav-link <?= (strpos($_SERVER['REQUEST_URI'], '/curahHujan') !== false) ? 'active' : '' ?>">
@@ -428,18 +446,6 @@ $recycleBinMenuActive = SidebarState::matches($sidebarRoute, 'recycle-bin');
                         <a href="<?= BASE_URL ?>bpsScraper" class="nav-link <?= (strpos($_SERVER['REQUEST_URI'], '/bpsScraper') !== false) ? 'active' : '' ?>">
                             <i class="nav-icon fas fa-database"></i>
                             <p>Data BPS Pertanian</p>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="<?= BASE_URL ?>evaluasi" class="nav-link <?= (strpos($_SERVER['REQUEST_URI'], '/evaluasi') !== false) ? 'active' : '' ?>">
-                            <i class="nav-icon fas fa-chart-line"></i>
-                            <p>Evaluasi Akurasi</p>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="<?= BASE_URL ?>storytelling" class="nav-link <?= (strpos($_SERVER['REQUEST_URI'], '/storytelling') !== false) ? 'active' : '' ?>">
-                            <i class="nav-icon fas fa-book-open"></i>
-                            <p>Data Storytelling</p>
                         </a>
                     </li>
                     <li class="nav-item">
@@ -488,6 +494,15 @@ $recycleBinMenuActive = SidebarState::matches($sidebarRoute, 'recycle-bin');
                         </ul>
                     </li>
                     <li class="nav-item">
+                        <a href="<?= BASE_URL ?>jenis-laporan"
+                           class="nav-link <?= $jenisMenuActive ? 'active' : '' ?>"
+                           data-sidebar-menu="master-jenis-laporan"
+                           <?= $jenisMenuActive ? 'aria-current="page"' : '' ?>>
+                            <i class="nav-icon fas fa-list-alt"></i>
+                            <p>Jenis Laporan</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="<?= BASE_URL ?>user"
                            class="nav-link <?= $userMenuActive ? 'active' : '' ?>"
                            data-sidebar-menu="manajemen-user"
@@ -533,7 +548,7 @@ $recycleBinMenuActive = SidebarState::matches($sidebarRoute, 'recycle-bin');
     </aside>
 
     <!-- Content Wrapper -->
-    <div class="content-wrapper">
+    <div class="content-wrapper" id="main-content" tabindex="-1">
         <!-- Content Header -->
         <div class="content-header">
             <div class="container-fluid">

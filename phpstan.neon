@@ -1,0 +1,13 @@
+parameters:
+  level: 2
+  paths:
+    - app
+    - config
+  excludePaths:
+    - vendor
+    - storage
+    - backend
+  ignoreErrors:
+    - '#Access to an undefined property#'
+    - '#Function.*not found#'
+  reportUnmatchedIgnoredErrors: false

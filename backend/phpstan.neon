@@ -1,0 +1,18 @@
+parameters:
+  level: 2
+  paths:
+    - app
+    - config
+    - public
+  excludePaths:
+    - vendor
+    - storage
+  ignoreErrors:
+    # Baseline bertahap — dinaikkan tiap sprint (target level 6)
+    - '#Access to an undefined property#'
+    - '#Call to an undefined method#'
+  reportUnmatchedIgnoredErrors: false
+  checkMissingIterableValueType: false
+  checkGenericClassInNonGenericObjectType: false
+includes:
+  - phpstan-baseline.neon

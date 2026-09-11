@@ -244,7 +244,7 @@ class _PupukDetailScreenState extends State<PupukDetailScreen> {
 
                       // Explicit Action Buttons for Field Officer (Petugas)
                       if (ReportEditAccess.canShowEditActions(
-                        reportUserId: l?.userId,
+                        reportUserId: l.userId,
                         currentUserId: auth.user?.id,
                         hasCapability:
                             auth.user?.can(ReportCapability.canSubmitReport) ?? false,

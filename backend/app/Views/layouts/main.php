@@ -56,6 +56,16 @@
         }
         .btn-primary { background: #1a73e8; color: #fff; }
         .btn-primary:hover { background: #1557b0; }
+        /* Skip link aksesibilitas (kompatibel tanpa Bootstrap). */
+        .sr-only {
+            position: absolute; width: 1px; height: 1px;
+            margin: -1px; padding: 0; overflow: hidden;
+            clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+        }
+        .sr-only-focusable:active, .sr-only-focusable:focus {
+            position: absolute; width: auto; height: auto;
+            margin: 0; overflow: visible; clip: auto; white-space: normal;
+        }
         @media (max-width: 640px) {
             .info-grid { grid-template-columns: 1fr; }
             .container { padding: 16px; }
@@ -63,6 +73,8 @@
     </style>
 </head>
 <body>
+    <a href="#main-content" class="sr-only sr-only-focusable p-2 bg-success text-white position-absolute" style="z-index:9999; top:5px; left:5px;">Lewati ke konten utama</a>
+    <div id="accessibility-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
     <nav class="navbar">
         <a href="/dashboard" class="navbar-brand">JAGAPADI</a>
         <div class="navbar-menu">
@@ -87,7 +99,7 @@
         </div>
     </nav>
 
-    <div class="container">
+    <div class="container" id="main-content" tabindex="-1">
         <?php if (!empty($_SESSION['flash_error'])): ?>
             <div class="flash-message flash-error"><?= \App\Core\Security::e($_SESSION['flash_error']) ?></div>
             <?php unset($_SESSION['flash_error']); ?>

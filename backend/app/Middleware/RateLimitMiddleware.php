@@ -30,6 +30,9 @@ class RateLimitMiddleware
         header("X-RateLimit-Limit: $maxAttempts");
         header("X-RateLimit-Remaining: $remaining");
         header("X-RateLimit-Reset: $resetIn");
+        if (!$allowed) {
+            header("Retry-After: $resetIn");
+        }
 
         if (!$allowed) {
             http_response_code(429);
@@ -62,26 +65,36 @@ class RateLimitMiddleware
 
     private function resolveConfig(string $uri): array
     {
+        // Login brute force: 5 / 15 menit per IP — ditangani juga di Security::checkBruteForce
+        if (str_contains($uri, '/auth/login')) {
+            return ['prefix' => 'login', 'max' => 5, 'decay' => 900];
+        }
+        // Export: 20 / jam (batas ketat, data berat)
         if (str_contains($uri, '/export')) {
             return ['prefix' => 'export', 'max' => 20, 'decay' => 3600];
         }
-
+        // Upload foto/video: 30 / jam per user (hindari spam storage)
+        if (str_contains($uri, '/foto') || str_contains($uri, '/video')) {
+            return ['prefix' => 'upload', 'max' => 30, 'decay' => 3600];
+        }
+        // Polling notifikasi: 120 / jam
         if (str_contains($uri, '/notifications/unread-count')
             || str_contains($uri, '/notifications/recent')) {
             return ['prefix' => 'notif_poll', 'max' => 120, 'decay' => 3600];
         }
-
-        if (str_contains($uri, '/laporan-hama/submit')
-            || str_contains($uri, '/laporan-irigasi/submit')
-            || preg_match('#submit|store#', $uri)) {
-            return ['prefix' => 'submit', 'max' => 60, 'decay' => 3600];
+        // Scraper: 10 / jam
+        if (str_contains($uri, 'Scraper') || str_contains($uri, '/scraper') || str_contains($uri, '/bpsScraper') || str_contains($uri, '/kecepatanAngin')) {
+            return ['prefix' => 'scraper', 'max' => 10, 'decay' => 3600];
         }
-
+        // API authenticated vs guest — dibedakan via identifier (user vs ip)
         if (str_starts_with($uri, '/api/')) {
-            return ['prefix' => 'api', 'max' => 1000, 'decay' => 3600];
+            $isAuthenticated = isset($_SESSION['user_id']) || isset($GLOBALS['auth_user']);
+            if ($isAuthenticated) {
+                return ['prefix' => 'api_auth', 'max' => 60, 'decay' => 60];
+            }
+            return ['prefix' => 'api_guest', 'max' => 20, 'decay' => 60];
         }
-
-        return ['prefix' => 'web', 'max' => 500, 'decay' => 3600];
+        return ['prefix' => 'web', 'max' => 60, 'decay' => 60];
     }
 
     private function resolveIdentifier(): string

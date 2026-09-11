@@ -446,6 +446,10 @@
                                 <input type="radio" name="scrapeMode" id="modeYearly" value="yearly">
                                 <i class="fas fa-calendar-alt mr-1"></i> Tahunan (Jan-Des)
                             </label>
+                            <label class="btn btn-outline-info flex-fill" id="labelModeRange">
+                                <input type="radio" name="scrapeMode" id="modeRange" value="range">
+                                <i class="fas fa-calendar-week mr-1"></i> Rentang Tahun (2020-2026)
+                            </label>
                         </div>
                     </div>
                     
@@ -477,13 +481,46 @@
                             </div>
                             <?php endforeach; ?>
                         </div>
+                        <div class="d-flex flex-wrap mb-2" id="rangeYearBadges" style="display: none;">
+                            <?php for ($y = 2020; $y <= 2026; $y++): ?>
+                            <div class="mr-2 mb-2" id="rangeYearStatus<?= $y ?>">
+                                <span class="badge badge-secondary"><?= $y ?></span>
+                            </div>
+                            <?php endfor; ?>
+                        </div>
                         <div id="yearlyStatusText" class="text-muted small mb-2">
                             Siap mengambil data untuk 12 bulan...
                         </div>
                     </div>
                     
+                    <!-- Range Year Selection (only for range mode) -->
+                    <div class="form-group" id="rangeSelectGroup" style="display: none;">
+                        <div class="row">
+                            <div class="col-6">
+                                <label for="rangeStartYear">Tahun Awal</label>
+                                <select class="form-control" id="rangeStartYear">
+                                    <?php for ($y = 2020; $y <= 2026; $y++): ?>
+                                    <option value="<?= $y ?>" <?= $y === 2020 ? 'selected' : '' ?>><?= $y ?></option>
+                                    <?php endfor; ?>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label for="rangeEndYear">Tahun Akhir</label>
+                                <select class="form-control" id="rangeEndYear">
+                                    <?php for ($y = 2020; $y <= 2026; $y++): ?>
+                                    <option value="<?= $y ?>" <?= $y === 2026 ? 'selected' : '' ?>><?= $y ?></option>
+                                    <?php endfor; ?>
+                                </select>
+                            </div>
+                        </div>
+                        <small class="form-text text-muted">Data diambil per bulan (2020–2026); re-scrape aman karena idempoten (UPSERT).</small>
+                    </div>
+                    
                     <!-- Result Display -->
                     <div id="scraperResult" class="mt-3" style="display: none;"></div>
+
+                    <!-- Laporan ringkasan pasca-update rentang tahun -->
+                    <div id="scraperSummaryReport" class="mt-3" style="display: none;"></div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Tutup</button>
@@ -1136,10 +1173,20 @@
     const btnCancelScraper = document.getElementById('btnCancelScraper');
 
     if (modeMonthly && modeYearly) {
+        const modeRangeEl = document.getElementById('modeRange');
+        const rangeSelectGroupEl = document.getElementById('rangeSelectGroup');
+        const rangeBadgesEl = document.getElementById('rangeYearBadges');
+        const monthGridEl = document.getElementById('monthStatusGrid');
+        const showRangeUI = (show) => {
+            if (rangeSelectGroupEl) rangeSelectGroupEl.style.display = show ? 'block' : 'none';
+            if (rangeBadgesEl) rangeBadgesEl.style.display = show ? 'flex' : 'none';
+            if (monthGridEl) monthGridEl.style.display = show ? 'none' : 'flex';
+        };
         modeMonthly.addEventListener('change', function() {
             if (this.checked) {
                 if (monthSelectGroup) monthSelectGroup.style.display = 'block';
                 if (yearlyProgressGroup) yearlyProgressGroup.style.display = 'none';
+                showRangeUI(false);
                 if (scraperBtnText) scraperBtnText.textContent = 'Jalankan Scraper';
             }
         });
@@ -1148,9 +1195,25 @@
             if (this.checked) {
                 if (monthSelectGroup) monthSelectGroup.style.display = 'none';
                 if (yearlyProgressGroup) yearlyProgressGroup.style.display = 'block';
+                showRangeUI(false);
                 if (scraperBtnText) scraperBtnText.textContent = 'Ambil Data Tahunan';
             }
         });
+
+        if (modeRangeEl) {
+            modeRangeEl.addEventListener('change', function() {
+                if (this.checked) {
+                    if (monthSelectGroup) monthSelectGroup.style.display = 'none';
+                    if (yearlyProgressGroup) yearlyProgressGroup.style.display = 'block';
+                    showRangeUI(true);
+                    if (scraperBtnText) scraperBtnText.textContent = 'Ambil Rentang Tahun';
+                    resetYearlyProgress();
+                    resetRangeYearBadgesHarga();
+                    const st = document.getElementById('yearlyStatusText');
+                    if (st) st.textContent = 'Siap mengambil data rentang tahun...';
+                }
+            });
+        }
     }
 
     if (btnCancelScraper) {
@@ -1215,6 +1278,10 @@
     if (scraperForm) {
         scraperForm.addEventListener('submit', function(e) {
             e.preventDefault();
+            if (document.getElementById('modeRange')?.checked) {
+                runRangeScraperUIHarga();
+                return;
+            }
             const isYearlyMode = document.getElementById('modeYearly')?.checked;
             if (isYearlyMode) {
                 runYearlyScraper();
@@ -1459,6 +1526,288 @@
         }
     }
     
+    // ================================================================
+    // MODE RENTANG TAHUN HARGA (2020-2026) — loop per bulan
+    // ================================================================
+    let lastRangeFailuresHarga = [];
+    let lastRangeSourceHarga = 'siskaperbapo';
+
+    function resetRangeYearBadgesHarga() {
+        for (let y = 2020; y <= 2026; y++) {
+            const badge = document.querySelector(`#rangeYearStatus${y} span`);
+            if (badge) badge.className = 'badge badge-secondary';
+        }
+    }
+
+    function updateRangeYearStatusHarga(year, status) {
+        const badge = document.querySelector(`#rangeYearStatus${year} span`);
+        if (!badge) return;
+        if (status === 'loading') {
+            badge.className = 'badge badge-warning';
+        } else if (status === 'success') {
+            badge.className = 'badge badge-success';
+        } else if (status === 'failed') {
+            badge.className = 'badge badge-danger';
+        } else {
+            badge.className = 'badge badge-secondary';
+        }
+    }
+
+    function buildRangePeriods(startYear, endYear) {
+        const periods = [];
+        let skipped = 0;
+        const now = new Date();
+        const cy = now.getFullYear();
+        const cm = now.getMonth() + 1;
+        for (let y = startYear; y <= endYear; y++) {
+            for (let m = 1; m <= 12; m++) {
+                if (y === cy && m > cm) {
+                    skipped++;
+                    continue;
+                }
+                periods.push([y, m]);
+            }
+        }
+        return { periods, skipped };
+    }
+
+    async function runRangeScraperUIHarga(retryPeriods) {
+        const btn = document.getElementById('btnRunScraper');
+        const resultDiv = document.getElementById('scraperResult');
+        const summaryDiv = document.getElementById('scraperSummaryReport');
+        const cancelBtn = document.getElementById('btnCancelScraper');
+        const statusText = document.getElementById('yearlyStatusText');
+        const progressBar = document.getElementById('yearlyProgressBar');
+
+        const startYear = parseInt(document.getElementById('rangeStartYear').value, 10);
+        const endYear = parseInt(document.getElementById('rangeEndYear').value, 10);
+        const currentYear = new Date().getFullYear();
+        const sourceSel = document.getElementById('scraperSource');
+        const source = sourceSel ? sourceSel.value : 'siskaperbapo';
+
+        if (!(startYear >= 2020) || !(endYear <= currentYear) || startYear > endYear) {
+            if (resultDiv) {
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'alert alert-danger';
+                resultDiv.textContent = 'Rentang tahun tidak valid (2020 hingga tahun berjalan, awal ≤ akhir).';
+            }
+            return;
+        }
+
+        let { periods, skipped } = buildRangePeriods(startYear, endYear);
+        if (Array.isArray(retryPeriods) && retryPeriods.length > 0) {
+            const wanted = new Set(retryPeriods
+                .filter(p => Array.isArray(p) && Number.isInteger(p[0]) && Number.isInteger(p[1]))
+                .map(p => p[0] + '-' + p[1]));
+            periods = periods.filter(([y, m]) => wanted.has(y + '-' + m));
+            skipped = 0;
+            if (periods.length === 0) {
+                if (resultDiv) {
+                    resultDiv.style.display = 'block';
+                    resultDiv.className = 'alert alert-info';
+                    resultDiv.textContent = 'Tidak ada periode gagal dalam rentang ini untuk diulang.';
+                }
+                return;
+            }
+        } else {
+            lastRangeFailuresHarga = [];
+        }
+        lastRangeSourceHarga = source;
+
+        scraperCancelled = false;
+        if (btn) btn.disabled = true;
+        const btnIcon = document.getElementById('scraperBtnIcon');
+        const btnText = document.getElementById('scraperBtnText');
+        if (btnIcon) btnIcon.className = 'fas fa-spinner fa-spin';
+        if (btnText) btnText.textContent = 'Mengambil Rentang...';
+        if (cancelBtn) {
+            cancelBtn.style.display = 'inline-block';
+            cancelBtn.disabled = false;
+            cancelBtn.innerHTML = '<i class="fas fa-stop"></i> Batalkan';
+        }
+        if (resultDiv) resultDiv.style.display = 'none';
+        if (summaryDiv) summaryDiv.style.display = 'none';
+        resetRangeYearBadgesHarga();
+
+        const totals = { saved: 0, failed: 0, skipped };
+        const failures = [];
+        const yearStatus = {};
+        let completed = 0;
+
+        const paintProgress = (year, month) => {
+            const pct = periods.length > 0 ? Math.round((completed / periods.length) * 100) : 0;
+            if (progressBar) {
+                progressBar.style.width = pct + '%';
+                progressBar.textContent = pct + '%';
+            }
+            if (statusText) {
+                statusText.textContent = year
+                    ? `Mengambil harga ${String(month).padStart(2, '0')}/${year}... (${completed}/${periods.length})`
+                    : 'Selesai!';
+            }
+        };
+        paintProgress(null, null);
+
+        for (const [year, month] of periods) {
+            if (scraperCancelled) {
+                if (statusText) statusText.textContent = `Proses dibatalkan pada ${String(month).padStart(2, '0')}/${year}`;
+                continue;
+            }
+            updateRangeYearStatusHarga(year, 'loading');
+            paintProgress(year, month);
+
+            try {
+                const formData = new FormData();
+                formData.append('csrf_token', csrfTokenScraper);
+                formData.append('year', year);
+                formData.append('month', month);
+                formData.append('source', source);
+
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 180000);
+
+                const response = await fetch(`${BASE_URL}hargaKomoditas/runMonthScraper`, {
+                    method: 'POST',
+                    body: formData,
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    totals.saved += data.records_success || 0;
+                    totals.failed += data.records_failed || 0;
+                    (data.failures || []).forEach(f => failures.push(Object.assign({ year, month }, f)));
+                    yearStatus[year] = yearStatus[year] || { saved: 0, failed: 0 };
+                    yearStatus[year].saved += data.records_success || 0;
+                    yearStatus[year].failed += data.records_failed || 0;
+                    updateRangeYearStatusHarga(year, (data.records_failed || 0) > 0 ? 'failed' : 'success');
+                } else {
+                    totals.failed++;
+                    failures.push({ year, month, kecamatan: 'Jember', error: data.error || data.message || 'Gagal memproses periode', http_code: 0 });
+                    yearStatus[year] = yearStatus[year] || { saved: 0, failed: 0 };
+                    yearStatus[year].failed++;
+                    updateRangeYearStatusHarga(year, 'failed');
+                }
+            } catch (err) {
+                totals.failed++;
+                failures.push({ year, month, kecamatan: 'Jember', error: err.name === 'AbortError' ? 'Request timeout (180s)' : err.message, http_code: 0 });
+                yearStatus[year] = yearStatus[year] || { saved: 0, failed: 0 };
+                yearStatus[year].failed++;
+                updateRangeYearStatusHarga(year, 'failed');
+            }
+
+            completed++;
+            paintProgress(year, month);
+            if (!scraperCancelled) {
+                await new Promise(resolve => setTimeout(resolve, 300));
+            }
+        }
+
+        // Finalisasi badge tahun dari agregat.
+        Object.keys(yearStatus).forEach(y => {
+            const s = yearStatus[y];
+            updateRangeYearStatusHarga(
+                parseInt(y, 10),
+                s.failed === 0 ? 'success' : (s.saved > 0 ? 'failed' : 'failed')
+            );
+        });
+
+        lastRangeFailuresHarga = failures;
+        renderHargaSummaryReport(totals, failures, startYear, endYear, scraperCancelled);
+
+        if (progressBar) {
+            progressBar.className = 'progress-bar progress-bar-striped ' + (totals.failed === 0 && !scraperCancelled ? 'bg-success' : (totals.saved > 0 ? 'bg-warning' : 'bg-danger'));
+        }
+        if (statusText) statusText.textContent = scraperCancelled ? 'Proses dibatalkan' : 'Selesai!';
+
+        if (btn) btn.disabled = false;
+        if (btnIcon) btnIcon.className = 'fas fa-play';
+        if (btnText) btnText.textContent = 'Ambil Rentang Tahun';
+        if (cancelBtn) cancelBtn.style.display = 'none';
+
+        try {
+            if (typeof loadData === 'function') loadData();
+            if (typeof loadCharts === 'function') loadCharts();
+            if (typeof loadAlerts === 'function') loadAlerts();
+        } catch (e) {
+            console.error('Error reloading data:', e);
+        }
+    }
+
+    function renderHargaSummaryReport(totals, failures, startYear, endYear, cancelled) {
+        const summaryDiv = document.getElementById('scraperSummaryReport');
+        if (!summaryDiv) return;
+        summaryDiv.style.display = 'block';
+
+        const maxShown = 50;
+        let failRows = '';
+        failures.slice(0, maxShown).forEach(f => {
+            const when = 'Tahun ' + escapeHtml(String(f.year ?? '-'))
+                + (f.month ? ' • Bulan ' + escapeHtml(String(f.month)) : '')
+                + (f.tanggal ? ' • ' + escapeHtml(String(f.tanggal)) : '');
+            const what = escapeHtml(String(f.komoditas || f.kecamatan || '-'));
+            failRows += `<li class="mb-1">${when} • ${what} — ${escapeHtml(String(f.error || 'Tidak diketahui'))}${f.http_code ? ' (HTTP ' + escapeHtml(String(f.http_code)) + ')' : ''}</li>`;
+        });
+        if (failures.length > maxShown) {
+            failRows += `<li class="text-muted">... dan ${failures.length - maxShown} kegagalan lainnya.</li>`;
+        }
+
+        const statusAlert = cancelled
+            ? `<div class="alert alert-warning"><strong><i class="fas fa-exclamation-triangle"></i> Dibatalkan.</strong></div>`
+            : (failures.length === 0
+                ? `<div class="alert alert-success"><strong><i class="fas fa-check-circle"></i> Semua periode berhasil.</strong></div>`
+                : `<div class="alert alert-danger"><strong><i class="fas fa-times-circle"></i> ${failures.length} kegagalan.</strong><ul class="mb-0 mt-2">${failRows}</ul></div>`);
+
+        summaryDiv.innerHTML = `
+            <div class="card border-warning">
+                <div class="card-header bg-warning text-dark"><strong><i class="fas fa-clipboard-check"></i> Laporan Hasil Update (${escapeHtml(String(startYear))}–${escapeHtml(String(endYear))})</strong></div>
+                <div class="card-body">
+                    <div class="row text-center mb-3">
+                        <div class="col-4"><div class="h4 text-success mb-0">${totals.saved.toLocaleString('id-ID')}</div><small class="text-muted">Berhasil Disimpan</small></div>
+                        <div class="col-4"><div class="h4 text-info mb-0">${totals.skipped.toLocaleString('id-ID')}</div><small class="text-muted">Dilewati (Masa Depan)</small></div>
+                        <div class="col-4"><div class="h4 text-danger mb-0">${totals.failed.toLocaleString('id-ID')}</div><small class="text-muted">Kegagalan</small></div>
+                    </div>
+                    ${statusAlert}
+                    <div class="mt-2">
+                        ${failures.length > 0 ? `<button type="button" class="btn btn-warning mr-2" id="btnRetryFailedHarga"><i class="fas fa-redo"></i> Coba Lagi Data Gagal (${failures.length})</button>` : ''}
+                        ${failures.length > 0 ? `<a class="btn btn-outline-danger" href="${BASE_URL}hargaKomoditas/exportFailureLog"><i class="fas fa-download"></i> Unduh Laporan Kegagalan (.csv)</a>` : ''}
+                    </div>
+                </div>
+            </div>`;
+
+        const retryEl = document.getElementById('btnRetryFailedHarga');
+        if (retryEl) {
+            retryEl.addEventListener('click', function () {
+                const seen = new Set();
+                const periodsToRetry = [];
+                lastRangeFailuresHarga.forEach(f => {
+                    const y = parseInt(f.year, 10);
+                    const m = parseInt(f.month, 10);
+                    if (Number.isInteger(y) && Number.isInteger(m)) {
+                        const key = y + '-' + m;
+                        if (!seen.has(key)) {
+                            seen.add(key);
+                            periodsToRetry.push([y, m]);
+                        }
+                    }
+                });
+                if (periodsToRetry.length === 0) {
+                    const resultDiv = document.getElementById('scraperResult');
+                    if (resultDiv) {
+                        resultDiv.style.display = 'block';
+                        resultDiv.className = 'alert alert-info';
+                        resultDiv.textContent = 'Tidak ada periode gagal untuk diulang.';
+                    }
+                    return;
+                }
+                runRangeScraperUIHarga(periodsToRetry);
+            });
+        }
+    }
+
     function openEditModal(id) {
         fetch(`${BASE_URL}hargaKomoditas/getRecord/${id}`)
             .then(r => r.json())

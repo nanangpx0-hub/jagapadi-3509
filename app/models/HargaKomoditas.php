@@ -573,6 +573,20 @@ class HargaKomoditas
         )->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Ambil riwayat log berstatus gagal/parsial beserta rincian kegagalannya.
+     * Rincian failures tersimpan terstruktur di kolom details (JSON).
+     */
+    public function getFailedLogs(int $limit = 50): array
+    {
+        $limit = max(1, min(500, $limit));
+        $stmt = $this->db->prepare(
+            "SELECT * FROM {$this->logTable} WHERE status IN ('failed', 'partial') ORDER BY created_at DESC LIMIT {$limit}"
+        );
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
     private function normalizeRecord(array $data): array
     {
         $date = DateTimeImmutable::createFromFormat('!Y-m-d', (string) ($data['tanggal'] ?? ''));

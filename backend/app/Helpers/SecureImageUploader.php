@@ -15,6 +15,24 @@ class SecureImageUploader
     private const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
     private const MAGIC_BYTES_LENGTH = 12;
 
+    /**
+     * Hook pemindaian malware — override via Env MALWARE_SCAN_CMD atau subclass.
+     * Return true = bersih, false = terinfeksi (akan ditolak).
+     */
+    public static function scanForMalware(string $filePath): bool
+    {
+        $cmd = \App\Core\Env::get('MALWARE_SCAN_CMD', '');
+        if ($cmd === '' || trim($cmd) === '') {
+            return true;
+        }
+        // Contoh: clamscan --no-summary --stdout {file}
+        $escaped = escapeshellarg($filePath);
+        $out = [];
+        $ret = 0;
+        @exec(str_replace('{file}', $escaped, $cmd) . ' 2>&1', $out, $ret);
+        return $ret === 0;
+    }
+
     public static function validateAndStore(array $file, array $options): array
     {
         $maxBytes = $options['max_bytes'] ?? 10485760;
@@ -90,6 +108,12 @@ class SecureImageUploader
             }
         } elseif (!move_uploaded_file($file['tmp_name'], $destPath)) {
             throw new \RuntimeException('Gagal memindahkan file.');
+        }
+
+        // Malware scan hook (best-effort, fail-closed bila terdeteksi)
+        if (!self::scanForMalware($destPath)) {
+            @unlink($destPath);
+            throw new \DomainException('File terdeteksi mengandung malware.');
         }
 
         $finalSize = filesize($destPath);

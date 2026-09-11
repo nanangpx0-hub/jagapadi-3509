@@ -9,6 +9,7 @@ class RecycleBinController extends Controller
         'laporan' => ['table' => 'laporan_hama', 'name' => 'Laporan Hama', 'icon' => 'fa-bug', 'label' => "COALESCE(NULLIF(t.nomor_laporan, ''), t.lokasi)"],
         'irigasi' => ['table' => 'laporan_irigasi', 'name' => 'Laporan Irigasi', 'icon' => 'fa-water', 'label' => "COALESCE(NULLIF(t.nomor_laporan, ''), CONCAT('Irigasi #', t.id))"],
         'laporan-lainnya' => ['table' => 'laporan_lainnya', 'name' => 'Laporan Lainnya', 'icon' => 'fa-clipboard-list', 'label' => "COALESCE(NULLIF(t.kode_laporan, ''), t.deskripsi)"],
+        'jenis-laporan' => ['table' => 'master_jenis_laporan', 'name' => 'Jenis Laporan', 'icon' => 'fa-list-alt', 'label' => "COALESCE(NULLIF(t.nama, ''), t.kode)"],
     ];
 
     public function index(): void

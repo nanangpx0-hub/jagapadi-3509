@@ -18,7 +18,7 @@ class _StubApiClient extends ApiClient {
     Map<String, dynamic>? queryParams,
   }) async {
     return onGet?.call(path, queryParams) ??
-        ApiResponse(
+        const ApiResponse(
           success: false,
           message: 'Stub tidak dikonfigurasi',
           statusCode: 500,
@@ -346,13 +346,13 @@ void main() {
     });
 
     test('copyWith clearSearch removes searchQuery', () {
-      final f = const LaporanFilter(searchQuery: 'wereng');
+      const f = LaporanFilter(searchQuery: 'wereng');
       final cleared = f.copyWith(clearSearch: true);
       expect(cleared.searchQuery, isNull);
     });
 
     test('copyWith clearTanggal removes tanggal range', () {
-      final f = const LaporanFilter(
+      const f = LaporanFilter(
         tanggalDari: '2026-01-01',
         tanggalSampai: '2026-12-31',
       );

@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Curah Hujan Scraper Service
  * Service untuk mengambil data curah hujan dari sumber eksternal
@@ -13,6 +14,12 @@ class CurahHujanScraper {
     private $logFile;
     private $config;
     private $bmkgService;
+
+    /** Rincian kegagalan per kecamatan dari fetch NASA terakhir (tidak menghentikan loop). */
+    private $lastFailedDetails = [];
+
+    /** Jumlah record tanggal masa depan yang dilewati pada fetch NASA terakhir. */
+    private $lastSkippedFuture = 0;
     
     // Konfigurasi sumber data (ordered by priority)
     private $sources = [
@@ -792,8 +799,8 @@ class CurahHujanScraper {
         $year = $year ? (int)$year : (int)date('Y');
         $month = $month !== null ? (int) $month : null;
 
-        if (($month !== null && ($month < 1 || $month > 12)) || $year < 2000 || $year > (int) date('Y')) {
-            throw new InvalidArgumentException('Periode NASA POWER tidak valid');
+        if (($month !== null && ($month < 1 || $month > 12)) || $year < 2020 || $year > (int) date('Y')) {
+            throw new InvalidArgumentException('Periode NASA POWER tidak valid (rentang didukung 2020 hingga tahun berjalan)');
         }
         if ($month !== null && $year === (int) date('Y') && $month > (int) date('n')) {
             throw new InvalidArgumentException('Data curah hujan bulan masa depan belum tersedia');
@@ -813,6 +820,11 @@ class CurahHujanScraper {
         if ($endDate > $today) {
             $endDate = $today;
         }
+
+        // Reset pelacakan kegagalan & tanggal-masa-depan untuk pemanggilan ini.
+        $this->lastFailedDetails = [];
+        $this->lastSkippedFuture = 0;
+        $todayDash = date('Y-m-d');
 
         $this->log("Fetching from NASA POWER API for {$startDate} - {$endDate}...");
 
@@ -880,6 +892,11 @@ class CurahHujanScraper {
                 $cachedJson = json_decode($cachedContent, true);
                 if (is_array($cachedJson) && !empty($cachedJson)) {
                     foreach ($cachedJson as $rec) {
+                        // Jangan pakai cache untuk tanggal masa depan.
+                        if (isset($rec['tanggal']) && (string)$rec['tanggal'] > $todayDash) {
+                            $this->lastSkippedFuture++;
+                            continue;
+                        }
                         $allData[] = $rec;
                     }
                     continue;
@@ -959,13 +976,28 @@ class CurahHujanScraper {
             curl_close($ch);
 
             if ($curlErrno !== 0 || $httpCode !== 200 || empty($response)) {
-                $this->log("NASA POWER API Error for {$namaKecamatan}: HTTP status {$httpCode}, cURL error ({$curlErrno}): {$curlError}");
+                $errorMsg = $curlErrno !== 0
+                    ? "cURL error ({$curlErrno}): {$curlError}"
+                    : "HTTP status {$httpCode}";
+                $this->log("NASA POWER API Error for {$namaKecamatan}: {$errorMsg}");
+                // Kumpulkan rincian; loop kecamatan lain tetap berjalan.
+                $this->lastFailedDetails[] = [
+                    'kecamatan' => $namaKecamatan,
+                    'error' => $errorMsg,
+                    'http_code' => (int)$httpCode,
+                ];
                 continue;
             }
 
             $jsonData = json_decode($response, true);
             if (json_last_error() !== JSON_ERROR_NONE || !isset($jsonData['properties']['parameter']['PRECTOTCORR'])) {
+                $errorMsg = 'Format JSON tidak valid atau PRECTOTCORR hilang';
                 $this->log("NASA POWER API Invalid JSON format or missing PRECTOTCORR for {$namaKecamatan}");
+                $this->lastFailedDetails[] = [
+                    'kecamatan' => $namaKecamatan,
+                    'error' => $errorMsg,
+                    'http_code' => (int)$httpCode,
+                ];
                 continue;
             }
 
@@ -983,6 +1015,12 @@ class CurahHujanScraper {
                 } else {
                     $dt = DateTime::createFromFormat('Ymd', $rawDateStr);
                     $formattedDate = $dt ? $dt->format('Y-m-d') : $rawDateStr;
+                }
+
+                // Tanggal masa depan dilewati elegan (bukan error).
+                if ($formattedDate > $todayDash) {
+                    $this->lastSkippedFuture++;
+                    continue;
                 }
 
                 $rec = [
@@ -1011,5 +1049,255 @@ class CurahHujanScraper {
 
         curl_multi_close($mh);
         return $allData;
+    }
+
+    /**
+     * Rincian kegagalan per kecamatan dari fetch NASA terakhir.
+     *
+     * @return array [['kecamatan'=>string,'error'=>string,'http_code'=>int], ...]
+     */
+    public function getLastFailedDetails(): array
+    {
+        return $this->lastFailedDetails;
+    }
+
+    /**
+     * Jumlah record tanggal masa depan yang dilewati pada fetch terakhir.
+     */
+    public function getLastSkippedFuture(): int
+    {
+        return $this->lastSkippedFuture;
+    }
+
+    /**
+     * Validasi rentang tahun batch (2020 hingga tahun berjalan).
+     *
+     * @return string[] daftar pesan error; kosong berarti valid.
+     */
+    public static function validateRange($startYear, $endYear): array
+    {
+        $errors = [];
+        $startYear = (int)$startYear;
+        $endYear = (int)$endYear;
+        $currentYear = (int)date('Y');
+        if ($startYear < 2020) {
+            $errors[] = 'Tahun awal minimal 2020.';
+        }
+        if ($endYear > $currentYear) {
+            $errors[] = "Tahun akhir maksimal {$currentYear}.";
+        }
+        if ($startYear > $endYear) {
+            $errors[] = 'Tahun awal tidak boleh melebihi tahun akhir.';
+        }
+        return $errors;
+    }
+
+    /**
+     * Jalankan scrape+upsert untuk SATU tahun penuh (idempoten via UPSERT).
+     * Mencatat log per tahun ke curah_hujan_logs (success/partial/failed).
+     *
+     * @param int $year
+     * @return array ['year'=>int,'status'=>string,'records'=>int,'failed'=>int,'skipped'=>int,'failures'=>array,'execution_time'=>float]
+     */
+    public function runSingleYear($year): array
+    {
+        $t0 = microtime(true);
+        $year = (int)$year;
+        $rangeErrors = self::validateRange($year, $year);
+        if ($rangeErrors !== []) {
+            throw new InvalidArgumentException(implode(' ', $rangeErrors));
+        }
+
+        $records = $this->fetch_nasa_curah_hujan($year);
+        $upsert = $this->model->bulkUpsertNasaData($records);
+
+        $failures = [];
+        foreach ($this->getLastFailedDetails() as $detail) {
+            $failures[] = [
+                'year' => $year,
+                'month' => null,
+                'kecamatan' => $detail['kecamatan'],
+                'error' => $detail['error'],
+                'http_code' => $detail['http_code'] ?? 0,
+            ];
+        }
+
+        $saved = (int)($upsert['success'] ?? 0);
+        $failed = (int)($upsert['failed'] ?? 0) + count($this->getLastFailedDetails());
+        $skipped = (int)($upsert['skipped_future'] ?? 0);
+        $status = 'success';
+        if ($saved === 0 && ($failed > 0 || count($records) === 0)) {
+            $status = count($records) === 0 && $failed === 0 ? 'success' : 'failed';
+        } elseif ($failed > 0) {
+            $status = 'partial';
+        }
+
+        $summary = "Scrape tahun {$year}: {$saved} tersimpan, {$failed} gagal, {$skipped} dilewati (masa depan)";
+        $execTime = round(microtime(true) - $t0, 4);
+        try {
+            $this->model->logActivity('scrape_year', $status, self::composeLogMessage($summary, $failures), [
+                'processed' => count($records),
+                'success' => $saved,
+                'failed' => $failed,
+                'execution_time' => $execTime,
+            ]);
+        } catch (Throwable $e) {
+            error_log('runSingleYear logActivity failed: ' . $e->getMessage());
+        }
+
+        return [
+            'year' => $year,
+            'status' => $status,
+            'records' => $saved,
+            'failed' => $failed,
+            'skipped' => $skipped,
+            'failures' => $failures,
+            'execution_time' => $execTime,
+        ];
+    }
+
+    /**
+     * Jalankan scrape+upsert untuk RENTANG tahun (mis. 2020–2026).
+     * Tahun yang gagal tidak menghentikan tahun berikutnya.
+     *
+     * @param int $startYear
+     * @param int $endYear
+     * @param callable|null $progressCallback dipanggil per tahun: fn(int $year, array $result, int $done, int $total)
+     * @return array laporan ringkasan komprehensif
+     */
+    public function runBatchRange($startYear, $endYear, $progressCallback = null): array
+    {
+        $t0 = microtime(true);
+        $startYear = (int)$startYear;
+        $endYear = (int)$endYear;
+        $rangeErrors = self::validateRange($startYear, $endYear);
+        if ($rangeErrors !== []) {
+            throw new InvalidArgumentException(implode(' ', $rangeErrors));
+        }
+
+        $total = $endYear - $startYear + 1;
+        $done = 0;
+        $totalSaved = 0;
+        $totalFailed = 0;
+        $totalSkipped = 0;
+        $yearsSummary = [];
+        $allFailures = [];
+
+        foreach (range($startYear, $endYear) as $year) {
+            try {
+                $result = $this->runSingleYear($year);
+            } catch (Throwable $e) {
+                error_log("runBatchRange year {$year} failed: " . $e->getMessage());
+                $result = [
+                    'year' => $year,
+                    'status' => 'failed',
+                    'records' => 0,
+                    'failed' => 1,
+                    'skipped' => 0,
+                    'failures' => [
+                        ['year' => $year, 'month' => null, 'kecamatan' => '-', 'error' => $e->getMessage(), 'http_code' => 0],
+                    ],
+                    'execution_time' => 0.0,
+                ];
+                try {
+                    $this->model->logActivity('scrape_year', 'failed', self::composeLogMessage("Scrape tahun {$year} gagal: {$e->getMessage()}", $result['failures']), [
+                        'processed' => 0,
+                        'success' => 0,
+                        'failed' => 1,
+                        'execution_time' => 0,
+                    ]);
+                } catch (Throwable $logError) {
+                    error_log('runBatchRange logActivity failed: ' . $logError->getMessage());
+                }
+            }
+
+            $done++;
+            $totalSaved += (int)$result['records'];
+            $totalFailed += (int)$result['failed'];
+            $totalSkipped += (int)$result['skipped'];
+            $summaryEntry = [
+                'status' => $result['status'],
+                'records' => (int)$result['records'],
+                'failed' => (int)$result['failed'],
+            ];
+            if ((int)$result['skipped'] > 0) {
+                $summaryEntry['skipped'] = (int)$result['skipped'];
+            }
+            $yearsSummary[$year] = $summaryEntry;
+            foreach ($result['failures'] as $failure) {
+                $allFailures[] = $failure;
+            }
+
+            if (is_callable($progressCallback)) {
+                try {
+                    $progressCallback($year, $result, $done, $total);
+                } catch (Throwable $e) {
+                    error_log('runBatchRange progressCallback failed: ' . $e->getMessage());
+                }
+            }
+        }
+
+        $finalStatus = $totalFailed === 0 ? 'success' : ($totalSaved > 0 ? 'partial' : 'failed');
+        $execTime = round(microtime(true) - $t0, 4);
+        $summary = "Scrape rentang {$startYear}-{$endYear}: {$totalSaved} tersimpan, {$totalFailed} gagal, {$totalSkipped} dilewati (masa depan)";
+        try {
+            $this->model->logActivity('scrape_range', $finalStatus, self::composeLogMessage($summary, $allFailures), [
+                'processed' => $totalSaved + $totalFailed,
+                'success' => $totalSaved,
+                'failed' => $totalFailed,
+                'execution_time' => $execTime,
+            ]);
+        } catch (Throwable $e) {
+            error_log('runBatchRange summary logActivity failed: ' . $e->getMessage());
+        }
+
+        return [
+            'success' => $totalFailed === 0,
+            'start_year' => $startYear,
+            'end_year' => $endYear,
+            'total_records_saved' => $totalSaved,
+            'total_records_failed' => $totalFailed,
+            'total_skipped_future' => $totalSkipped,
+            'years_summary' => $yearsSummary,
+            'failures' => $allFailures,
+            'execution_time' => $execTime,
+        ];
+    }
+
+    /**
+     * Susun pesan log: ringkasan manusiawi + blok JSON failures terstruktur.
+     * Penanda FAILURES_JSON dipakai parser laporan/export agar deterministik.
+     */
+    public static function composeLogMessage(string $summary, array $failures): string
+    {
+        if ($failures === []) {
+            return $summary;
+        }
+        return $summary . "\n---FAILURES_JSON---\n" . json_encode($failures, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
+     * Ekstrak daftar failures dari pesan log (kebalikan composeLogMessage).
+     */
+    public static function extractFailuresFromMessage(string $message): array
+    {
+        $marker = '---FAILURES_JSON---';
+        $pos = strpos($message, $marker);
+        if ($pos === false) {
+            return [];
+        }
+        $decoded = json_decode(trim(substr($message, $pos + strlen($marker))), true);
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * Ringkasan satu baris (tanpa blok JSON) untuk tampilan tabel log.
+     */
+    public static function summarizeLogMessage(string $message): string
+    {
+        $marker = '---FAILURES_JSON---';
+        $pos = strpos($message, $marker);
+        $summary = $pos === false ? $message : substr($message, 0, $pos);
+        return trim($summary);
     }
 }

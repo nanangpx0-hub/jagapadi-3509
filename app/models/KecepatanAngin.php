@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Kecepatan Angin Model
  * Model untuk data kecepatan angin Kabupaten Jember
@@ -674,6 +675,115 @@ class KecepatanAngin {
         ]);
     }
     
+    /**
+     * Ambil riwayat log berstatus gagal/parsial beserta rincian kegagalannya.
+     */
+    public function getFailedLogs($limit = 50) {
+        $sql = "SELECT * FROM {$this->logTable} WHERE status IN ('failed', 'partial') ORDER BY created_at DESC LIMIT " . (int)$limit;
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * UPSERT massal data angin NASA dalam SATU statement per chunk di dalam
+     * transaksi atomik. Idempoten: re-scrape rentang yang sama tidak
+     * menduplikasi (unique key tanggal+lokasi).
+     *
+     * Tanggal > hari ini dilewati sebagai 'skipped_future' (bukan error).
+     *
+     * @param array $records
+     * @return array ['success' => int, 'failed' => int, 'skipped_future' => int]
+     */
+    public function bulkUpsertWindData(array $records) {
+        $success = 0;
+        $failed = 0;
+        $skippedFuture = 0;
+        $today = date('Y-m-d');
+
+        $valid = [];
+        foreach ($records as $record) {
+            if (!is_array($record)) {
+                $failed++;
+                continue;
+            }
+            $tanggal = (string)($record['tanggal'] ?? '');
+            $d = DateTime::createFromFormat('Y-m-d', $tanggal);
+            if (!$d || $d->format('Y-m-d') !== $tanggal) {
+                $failed++;
+                continue;
+            }
+            if (!isset($record['kecepatan_angin']) || !is_numeric($record['kecepatan_angin']) || (float)$record['kecepatan_angin'] < 0) {
+                $failed++;
+                continue;
+            }
+            if ($tanggal > $today) {
+                $skippedFuture++;
+                continue;
+            }
+            $valid[] = [
+                $tanggal,
+                (string)($record['lokasi'] ?? 'Jember'),
+                (string)($record['kode_wilayah'] ?? '35.09'),
+                (float)$record['kecepatan_angin'],
+                isset($record['kecepatan_max']) && $record['kecepatan_max'] !== '' ? (float)$record['kecepatan_max'] : null,
+                isset($record['arah_angin']) && $record['arah_angin'] !== '' ? (int)$record['arah_angin'] : null,
+                isset($record['arah_angin_desc']) ? (string)$record['arah_angin_desc'] : null,
+                (string)($record['satuan'] ?? 'km/h'),
+                (string)($record['sumber_data'] ?? 'NASA POWER (WS10M/WS2M)'),
+                isset($record['keterangan']) ? (string)$record['keterangan'] : null,
+            ];
+        }
+
+        if ($valid === []) {
+            return ['success' => $success, 'failed' => $failed, 'skipped_future' => $skippedFuture];
+        }
+
+        $ownsTransaction = !$this->db->inTransaction();
+        if ($ownsTransaction) {
+            $this->db->beginTransaction();
+        }
+
+        try {
+            foreach (array_chunk($valid, 500) as $chunk) {
+                $placeholders = implode(',', array_fill(0, count($chunk), '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'));
+                $params = [];
+                foreach ($chunk as $row) {
+                    foreach ($row as $value) {
+                        $params[] = $value;
+                    }
+                }
+                $sql = "INSERT INTO {$this->table}
+                        (tanggal, lokasi, kode_wilayah, kecepatan_angin, kecepatan_max,
+                         arah_angin, arah_angin_desc, satuan, sumber_data, keterangan)
+                        VALUES {$placeholders}
+                        ON DUPLICATE KEY UPDATE
+                        kecepatan_angin = VALUES(kecepatan_angin),
+                        kecepatan_max = VALUES(kecepatan_max),
+                        satuan = VALUES(satuan),
+                        sumber_data = VALUES(sumber_data),
+                        keterangan = VALUES(keterangan),
+                        updated_at = NOW()";
+                $stmt = $this->db->prepare($sql);
+                $stmt->execute($params);
+                $success += count($chunk);
+            }
+
+            if ($ownsTransaction) {
+                $this->db->commit();
+            }
+        } catch (Throwable $e) {
+            if ($ownsTransaction && $this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            error_log('bulkUpsertWindData failed: ' . $e->getMessage());
+            $failed += count($valid);
+            $success = 0;
+        }
+
+        return ['success' => $success, 'failed' => $failed, 'skipped_future' => $skippedFuture];
+    }
+
     /**
      * Get recent logs
      */

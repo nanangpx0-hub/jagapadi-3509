@@ -37,13 +37,49 @@ final class UsulanOptService
         'wilayah' => 255,
     ];
 
-    private PDO $db;
-    public UsulanOpt $model;
+    private ?PDO $db = null;
+    /** @var UsulanOpt|null Model lazy; null bila socket DB offline (method murni tetap hijau). */
+    public $model = null;
 
     public function __construct(?PDO $db = null)
     {
-        $this->db = $db ?? Database::getInstance()->getConnection();
-        $this->model = new UsulanOpt();
+        if ($db !== null) {
+            $this->db = $db;
+        } else {
+            try {
+                $this->db = Database::getInstance()->getConnection();
+            } catch (\Throwable) {
+                $this->db = null;
+            }
+        }
+        try {
+            $this->model = new UsulanOpt();
+        } catch (\Throwable) {
+            $this->model = null;
+        }
+    }
+
+    /**
+     * Lazy database connection agar method murni (normalize/validate)
+     * hijau tanpa socket database hidup.
+     */
+    private function db(): PDO
+    {
+        if ($this->db === null) {
+            $this->db = Database::getInstance()->getConnection();
+        }
+        return $this->db;
+    }
+
+    /**
+     * Lazy model accessor untuk jalur yang membutuhkan database.
+     */
+    private function model(): UsulanOpt
+    {
+        if ($this->model === null) {
+            $this->model = new UsulanOpt();
+        }
+        return $this->model;
     }
 
     /**
@@ -201,21 +237,21 @@ final class UsulanOptService
      */
     public function resolveWilayah(int $kabupatenId, int $kecamatanId, int $desaId): array
     {
-        $stmt = $this->db->prepare('SELECT id, nama_kabupaten FROM master_kabupaten WHERE id = ? LIMIT 1');
+        $stmt = $this->db()->prepare('SELECT id, nama_kabupaten FROM master_kabupaten WHERE id = ? LIMIT 1');
         $stmt->execute([$kabupatenId]);
         $kab = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$kab) {
             return ['ok' => false, 'error' => 'Kabupaten tidak ditemukan'];
         }
 
-        $stmt = $this->db->prepare('SELECT id, nama_kecamatan, kabupaten_id FROM master_kecamatan WHERE id = ? LIMIT 1');
+        $stmt = $this->db()->prepare('SELECT id, nama_kecamatan, kabupaten_id FROM master_kecamatan WHERE id = ? LIMIT 1');
         $stmt->execute([$kecamatanId]);
         $kec = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$kec || (int) $kec['kabupaten_id'] !== $kabupatenId) {
             return ['ok' => false, 'error' => 'Kecamatan tidak ditemukan atau bukan bagian dari kabupaten yang dipilih'];
         }
 
-        $stmt = $this->db->prepare('SELECT id, nama_desa, kecamatan_id FROM master_desa WHERE id = ? LIMIT 1');
+        $stmt = $this->db()->prepare('SELECT id, nama_desa, kecamatan_id FROM master_desa WHERE id = ? LIMIT 1');
         $stmt->execute([$desaId]);
         $desa = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$desa || (int) $desa['kecamatan_id'] !== $kecamatanId) {
@@ -242,7 +278,7 @@ final class UsulanOptService
         $row = $this->buildRow($ownerId, $data, UsulanOpt::STATUS_DRAFT);
 
         $id = (int) $this->insertRow($row);
-        $this->model->addHistory($id, null, UsulanOpt::STATUS_DRAFT, $actorId, 'Draf dibuat');
+        $this->model()->addHistory($id, null, UsulanOpt::STATUS_DRAFT, $actorId, 'Draf dibuat');
         $this->writeAudit($actorId, 'create_draft', $id, 'Usulan OPT draf dibuat');
 
         return $id;
@@ -260,7 +296,7 @@ final class UsulanOptService
         $row['submitted_at'] = date('Y-m-d H:i:s');
 
         $id = (int) $this->insertRow($row);
-        $this->model->addHistory(
+        $this->model()->addHistory(
             $id,
             null,
             UsulanOpt::STATUS_PENDING,
@@ -288,7 +324,7 @@ final class UsulanOptService
         $row['submitted_at'] = date('Y-m-d H:i:s');
 
         $id = (int) $this->insertRow($row);
-        $this->model->addHistory($id, null, UsulanOpt::STATUS_PENDING, $actorId, 'Dibuat via API mobile');
+        $this->model()->addHistory($id, null, UsulanOpt::STATUS_PENDING, $actorId, 'Dibuat via API mobile');
         $this->notifyOwner($ownerId, $id, 'usulan_diterima', 'Usulan OPT terkirim', 'Usulan OPT Anda menunggu review Admin.');
         $this->writeAudit($actorId, 'create_pending_api', $id, 'Usulan OPT dibuat via API mobile');
 
@@ -298,7 +334,7 @@ final class UsulanOptService
     /** @param array<string,mixed> $data */
     public function importDuplicateExists(int $ownerId, array $data): bool
     {
-        $stmt = $this->db->prepare(
+        $stmt = $this->db()->prepare(
             'SELECT 1 FROM usulan_opt WHERE user_id = ? AND jenis = ? '
             . 'AND COALESCE(nama_lokal, \'\') = ? AND COALESCE(nama_nasional, \'\') = ? '
             . 'AND COALESCE(komoditas, \'\') = ? AND tanggal_ditemukan <=> ? '
@@ -327,7 +363,7 @@ final class UsulanOptService
         $row['ciri_ciri'] = $data['ciri_ciri'] ?? null;
 
         $id = (int) $this->insertRow($row);
-        $this->model->addHistory($id, null, UsulanOpt::STATUS_PENDING, $actorId, 'Dibuat dari Laporan Hama');
+        $this->model()->addHistory($id, null, UsulanOpt::STATUS_PENDING, $actorId, 'Dibuat dari Laporan Hama');
         $this->notifyOwner($ownerId, $id, 'usulan_diterima', 'Usulan OPT terkirim', 'Usulan dari Laporan Hama Anda menunggu review Admin.');
         $this->writeAudit($actorId, 'create_from_laporan', $id, 'Usulan OPT dibuat dari Laporan Hama');
 
@@ -342,7 +378,7 @@ final class UsulanOptService
      */
     public function updateProposal(int $proposalId, int $ownerId, string $expectedStatus, array $data, int $actorId): array
     {
-        $proposal = $this->model->findByIdDetailed($proposalId);
+        $proposal = $this->model()->findByIdDetailed($proposalId);
         if (!$proposal) {
             return ['ok' => false, 'reason' => self::REASON_NOT_FOUND];
         }
@@ -364,12 +400,12 @@ final class UsulanOptService
         $hierarchy = $this->resolveWilayahIfComplete($data);
         $fields = $this->buildUpdatableFields($data, $hierarchy);
 
-        $affected = $this->model->conditionalUpdateWithStatus($proposalId, $expectedStatus, $fields);
+        $affected = $this->model()->conditionalUpdateWithStatus($proposalId, $expectedStatus, $fields);
         if ($affected === 0) {
             return ['ok' => false, 'reason' => self::REASON_STATUS_CONFLICT];
         }
 
-        $this->model->addHistory($proposalId, $expectedStatus, $expectedStatus, $actorId, 'Data usulan diperbarui pemilik');
+        $this->model()->addHistory($proposalId, $expectedStatus, $expectedStatus, $actorId, 'Data usulan diperbarui pemilik');
         $this->writeAudit($actorId, 'update_draft', $proposalId, 'Usulan OPT diperbarui pemilik');
 
         return ['ok' => true];
@@ -397,7 +433,7 @@ final class UsulanOptService
 
     private function transitionToPending(int $proposalId, int $ownerId, string $fromStatus, int $actorId, string $auditAction, string $notifType, string $notifBody): array
     {
-        $proposal = $this->model->findByIdDetailed($proposalId);
+        $proposal = $this->model()->findByIdDetailed($proposalId);
         if (!$proposal) {
             return ['ok' => false, 'reason' => self::REASON_NOT_FOUND];
         }
@@ -409,14 +445,14 @@ final class UsulanOptService
         }
 
         $errors = $this->validate($this->proposalToData($proposal), true);
-        if ($this->model->countPhotos($proposalId) < 1) {
+        if ($this->model()->countPhotos($proposalId) < 1) {
             $errors[] = 'Minimal satu foto bukti wajib dilampirkan saat mengirim review';
         }
         if ($errors !== []) {
             return ['ok' => false, 'reason' => self::REASON_INVALID, 'errors' => $errors];
         }
 
-        $affected = $this->model->conditionalUpdateWithStatus($proposalId, $fromStatus, [
+        $affected = $this->model()->conditionalUpdateWithStatus($proposalId, $fromStatus, [
             'status' => UsulanOpt::STATUS_PENDING,
             'submitted_at' => date('Y-m-d H:i:s'),
             'catatan_review' => null,
@@ -425,7 +461,7 @@ final class UsulanOptService
             return ['ok' => false, 'reason' => self::REASON_STATUS_CONFLICT];
         }
 
-        $this->model->addHistory($proposalId, $fromStatus, UsulanOpt::STATUS_PENDING, $actorId, $auditAction === 'submit' ? 'Dikirim untuk review' : 'Dikirim ulang setelah perbaikan');
+        $this->model()->addHistory($proposalId, $fromStatus, UsulanOpt::STATUS_PENDING, $actorId, $auditAction === 'submit' ? 'Dikirim untuk review' : 'Dikirim ulang setelah perbaikan');
         $this->writeAudit($actorId, $auditAction, $proposalId, 'Usulan OPT menuju ' . UsulanOpt::STATUS_PENDING);
 
         $name = mb_substr((string) ($proposal['nama_nasional'] ?: $proposal['nama_lokal']), 0, 100);
@@ -444,7 +480,7 @@ final class UsulanOptService
      */
     public function deleteDraft(int $proposalId, int $ownerId, int $actorId): array
     {
-        $proposal = $this->model->findByIdDetailed($proposalId);
+        $proposal = $this->model()->findByIdDetailed($proposalId);
         if (!$proposal) {
             return ['ok' => false, 'reason' => self::REASON_NOT_FOUND];
         }
@@ -455,9 +491,9 @@ final class UsulanOptService
             return ['ok' => false, 'reason' => self::REASON_STATUS_CONFLICT];
         }
 
-        $photoRows = $this->model->getPhotos($proposalId);
+        $photoRows = $this->model()->getPhotos($proposalId);
 
-        $stmt = $this->db->prepare('DELETE FROM usulan_opt WHERE id = ? AND status = ?');
+        $stmt = $this->db()->prepare('DELETE FROM usulan_opt WHERE id = ? AND status = ?');
         $stmt->execute([$proposalId, UsulanOpt::STATUS_DRAFT]);
         if ($stmt->rowCount() === 0) {
             return ['ok' => false, 'reason' => self::REASON_STATUS_CONFLICT];
@@ -623,7 +659,7 @@ final class UsulanOptService
         $ids = array_slice($ids, 0, self::BULK_DELETE_MAX);
 
         $placeholders = implode(',', array_fill(0, count($ids), '?'));
-        $stmt = $this->db->prepare(
+        $stmt = $this->db()->prepare(
             "SELECT id, status FROM usulan_opt WHERE id IN ({$placeholders}) AND deleted_at IS NULL"
         );
         $stmt->execute($ids);
@@ -646,9 +682,9 @@ final class UsulanOptService
         }
 
         $ph = implode(',', array_fill(0, count($deletable), '?'));
-        $this->db->beginTransaction();
+        $this->db()->beginTransaction();
         try {
-            $del = $this->db->prepare(
+            $del = $this->db()->prepare(
                 "UPDATE usulan_opt SET deleted_at = NOW(), deleted_by = ? "
                 . "WHERE id IN ({$ph}) AND deleted_at IS NULL"
             );
@@ -664,10 +700,10 @@ final class UsulanOptService
                 sprintf('Hapus massal %d usulan OPT (ids: %s).', $deleted, $idPreview)
             );
 
-            $this->db->commit();
+            $this->db()->commit();
         } catch (Throwable $e) {
-            if ($this->db->inTransaction()) {
-                $this->db->rollBack();
+            if ($this->db()->inTransaction()) {
+                $this->db()->rollBack();
             }
             error_log('UsulanOptService::bulkDeleteForAdmin failed');
             throw new RuntimeException('Gagal menghapus usulan secara massal.');
@@ -687,10 +723,10 @@ final class UsulanOptService
         $columns = array_keys($row);
         $placeholders = implode(', ', array_fill(0, count($columns), '?'));
         $sql = 'INSERT INTO usulan_opt (`' . implode('`, `', $columns) . '`) VALUES (' . $placeholders . ')';
-        $stmt = $this->db->prepare($sql);
+        $stmt = $this->db()->prepare($sql);
         $stmt->execute(array_values($row));
 
-        return (int) $this->db->lastInsertId();
+        return (int) $this->db()->lastInsertId();
     }
 
     private function notifyOwner(int $ownerId, int $proposalId, string $type, string $title, string $body): void
@@ -701,7 +737,7 @@ final class UsulanOptService
     private function notifyAdmins(int $proposalId, string $type, string $title, string $body): void
     {
         try {
-            $stmt = $this->db->prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 3");
+            $stmt = $this->db()->prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 3");
             $stmt->execute();
             foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $adminId) {
                 $this->insertNotification((int) $adminId, $type, $title, $body, $proposalId);
@@ -714,7 +750,7 @@ final class UsulanOptService
     private function insertNotification(int $userId, string $type, string $title, string $body, int $proposalId): void
     {
         try {
-            $stmt = $this->db->prepare(
+            $stmt = $this->db()->prepare(
                 'INSERT INTO notifications (user_id, title, body, type, data_json) VALUES (?, ?, ?, ?, ?)'
             );
             $stmt->execute([
@@ -736,7 +772,7 @@ final class UsulanOptService
     private function writeAudit(int $actorId, string $action, int $recordId, string $description): void
     {
         try {
-            $stmt = $this->db->prepare(
+            $stmt = $this->db()->prepare(
                 'INSERT INTO activity_log (user_id, action, table_name, record_id, description, ip_address, user_agent, created_at)
                  VALUES (?, ?, ?, ?, ?, ?, ?, NOW())'
             );

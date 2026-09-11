@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Core\Model;
+use App\Policies\ReportAuthorizationPolicy;
 use PDO;
 
 class LaporanHama extends Model
@@ -37,14 +38,12 @@ class LaporanHama extends Model
                 LEFT JOIN `master_desa` md ON md.id = lh.desa_id
                 WHERE lh.id = ?";
 
-        if ($currentUser['role'] === 'petugas') {
-            $sql .= " AND lh.user_id = ?";
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute([$id, (int) $currentUser['id']]);
-        } else {
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute([$id]);
+        [$clause, $scopeParams] = ReportAuthorizationPolicy::accessibleCondition('lh', $currentUser);
+        if ($clause !== '') {
+            $sql .= ' AND ' . $clause;
         }
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$id, ...$scopeParams]);
 
         $result = $stmt->fetch();
         return $result ?: null;
@@ -219,12 +218,15 @@ class LaporanHama extends Model
             $where = ' WHERE ' . implode(' AND ', $conditions);
         }
 
-        $orderCol = in_array($filters['order_col'] ?? '', self::ALLOWED_ORDER_COLS, true)
-        ? $filters['order_col']
-        : 'lh.tanggal';
+        $orderColRaw = $filters['order_col'] ?? '';
+        $orderCol = in_array($orderColRaw, self::ALLOWED_ORDER_COLS, true)
+            ? $orderColRaw
+            : 'lh.tanggal';
 
-        $orderDir = in_array($filters['order_dir'] ?? 'DESC', ['ASC', 'DESC'], true)
-            ? $filters['order_dir']
+        $orderDirRaw = $filters['order_dir'] ?? 'DESC';
+        $orderDirRaw = is_string($orderDirRaw) ? strtoupper(trim($orderDirRaw)) : 'DESC';
+        $orderDir = in_array($orderDirRaw, ['ASC', 'DESC'], true)
+            ? $orderDirRaw
             : 'DESC';
 
         if (count($conditions) > 0) {

@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { BASE } from '../base-url';
 
 const ADMIN_USER = 'admin';
-const ADMIN_PASS = 'Jember3509';
+const ADMIN_PASS = 'Jember3509*';
 const PETUGAS_USER = 'petugas01';
 const PETUGAS_PASS = 'Jember3509';
 

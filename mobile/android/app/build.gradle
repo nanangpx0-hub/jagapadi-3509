@@ -51,8 +51,11 @@ android {
     }
 
     signingConfigs {
-        release {
-            if (keystorePropertiesFile.exists()) {
+        debug {
+            // Default debug keystore — dihasilkan otomatis oleh Android SDK
+        }
+        if (keystorePropertiesFile.exists()) {
+            release {
                 keyAlias keystoreProperties['keyAlias']
                 keyPassword keystoreProperties['keyPassword']
                 storeFile file(keystoreProperties['storeFile'])
@@ -62,16 +65,32 @@ android {
     }
 
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
-            if (keystorePropertiesFile.exists()) {
-                signingConfig signingConfigs.release
-            } else {
-                signingConfig signingConfigs.debug
-            }
+            // Gunakan release signing jika tersedia, fallback ke debug signing untuk CI/testing
+            signingConfig keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
+    }
+}
+
+// Validasi keystore hanya saat benar-benar menjalankan release task (bukan saat konfigurasi)
+gradle.taskGraph.whenReady { taskGraph ->
+    def isRelease = taskGraph.allTasks.any { task ->
+        task.name.contains('assembleRelease') || task.name.contains('bundleRelease')
+    }
+    if (isRelease && !keystorePropertiesFile.exists()) {
+        throw new GradleException(
+            "key.properties tidak ditemukan di android/.\n" +
+            "Release build membutuhkan keystore. Jalankan:\n" +
+            "  keytool -genkey -v -keystore android/jagapadi.jks -keyalg RSA -keysize 2048 -validity 10000 -alias jagapadi\n" +
+            "Lalu buat android/key.properties dengan isi:\n" +
+            "  storeFile=jagapadi.jks\n  storePassword=...\n  keyAlias=jagapadi\n  keyPassword=..."
+        )
     }
 }
 

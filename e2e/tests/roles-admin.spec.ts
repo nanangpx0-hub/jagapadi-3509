@@ -2,7 +2,7 @@ import { test, expect, type Page, type APIRequestContext } from '@playwright/tes
 
 const BASE = process.env.BASE_URL || 'http://localhost:8080';
 const ADMIN_USER = 'admin';
-const ADMIN_PASS = 'Jember3509';
+const ADMIN_PASS = 'Jember3509*';
 
 async function loginAs(page: Page, username: string, password: string) {
   await page.goto(`${BASE}/login`);

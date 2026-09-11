@@ -161,7 +161,7 @@ class _LaporanFilterSheetState extends State<LaporanFilterSheet> {
           const SizedBox(height: 12),
 
           // ── Jenis Laporan ────────────────────────────────────────────────
-          _SectionLabel('Jenis Laporan'),
+          const _SectionLabel('Jenis Laporan'),
           Wrap(
             spacing: 8,
             children: _jenisOptions.map((opt) {
@@ -183,7 +183,7 @@ class _LaporanFilterSheetState extends State<LaporanFilterSheet> {
           const SizedBox(height: 16),
 
           // ── Status ───────────────────────────────────────────────────────
-          _SectionLabel('Status Laporan'),
+          const _SectionLabel('Status Laporan'),
           Wrap(
             spacing: 8,
             runSpacing: 4,
@@ -206,7 +206,7 @@ class _LaporanFilterSheetState extends State<LaporanFilterSheet> {
           const SizedBox(height: 16),
 
           // ── Rentang Tanggal ──────────────────────────────────────────────
-          _SectionLabel('Rentang Tanggal'),
+          const _SectionLabel('Rentang Tanggal'),
           Row(
             children: [
               Expanded(

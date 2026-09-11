@@ -180,11 +180,12 @@ class _PupukFormScreenState extends State<PupukFormScreen> {
       }
       final res = await p.save(data, id: widget.id, headers: headers);
       setState(() => _loading = false);
-      if (res != null && mounted) {
+      if (res != null) {
         final newId =
             widget.id ?? (res['data']?['id'] as int? ?? res['id'] as int?);
         if (newId != null) {
           await LocalDb.instance.markSynced(localId, newId);
+          if (!mounted) return true;
           if (_foto != null) {
             final upload = await showUploadProgress(
               context,
@@ -294,9 +295,11 @@ class _PupukFormScreenState extends State<PupukFormScreen> {
     final targetId = widget.id ?? p.detail?.id;
     if (targetId != null) {
       final res = await p.submit(targetId);
-      if (res != null && mounted) {
+      if (!mounted) return;
+      if (res != null) {
         if (_localDraftId != null) {
           await LocalDb.instance.deleteDraft(_localDraftId!);
+          if (!mounted) return;
         }
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Laporan berhasil dikirim ke Admin')),
@@ -331,7 +334,7 @@ class _PupukFormScreenState extends State<PupukFormScreen> {
                   labelText: 'Jenis Pupuk',
                   errorText: _fe('jenis_pupuk'),
                 ),
-                value: _jenisPupuk,
+                initialValue: _jenisPupuk,
                 items: ['Urea', 'NPK', 'Organik', 'Kompos', 'Lainnya']
                     .map((k) => DropdownMenuItem(value: k, child: Text(k)))
                     .toList(),
@@ -377,7 +380,7 @@ class _PupukFormScreenState extends State<PupukFormScreen> {
                   labelText: 'Metode Aplikasi',
                   errorText: _fe('metode_aplikasi'),
                 ),
-                value: _metodeAplikasi,
+                initialValue: _metodeAplikasi,
                 items: ['Tabur', 'Kocor', 'Semprot', 'Injeksi']
                     .map((k) => DropdownMenuItem(value: k, child: Text(k)))
                     .toList(),

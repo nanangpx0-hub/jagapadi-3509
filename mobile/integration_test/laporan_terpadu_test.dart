@@ -21,7 +21,7 @@ void main() {
 
   // ── Helper ──────────────────────────────────────────────────────────────
 
-  Future<void> _login(WidgetTester tester) async {
+  Future<void> login(WidgetTester tester) async {
     await tester.pumpAndSettle();
 
     // Pastikan kita di login screen
@@ -39,7 +39,7 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  Future<void> _navigateToLaporan(WidgetTester tester) async {
+  Future<void> navigateToLaporan(WidgetTester tester) async {
     // Tap card "Semua Laporan" di HomeScreen
     final card = find.byKey(const Key('menu_semua_laporan'));
     if (card.evaluate().isNotEmpty) {
@@ -58,8 +58,8 @@ void main() {
       'A1 — Halaman terbuka dan menampilkan AppBar "Semua Laporan"',
       (tester) async {
         app.main();
-        await _login(tester);
-        await _navigateToLaporan(tester);
+        await login(tester);
+        await navigateToLaporan(tester);
 
         expect(find.text('Semua Laporan'), findsAtLeastNWidgets(1));
       },
@@ -69,8 +69,8 @@ void main() {
       'A2 — Menampilkan skeleton loader saat data sedang dimuat',
       (tester) async {
         app.main();
-        await _login(tester);
-        await _navigateToLaporan(tester);
+        await login(tester);
+        await navigateToLaporan(tester);
 
         // Skeleton tampil sesaat (pump sekali sebelum settle)
         await tester.pump(const Duration(milliseconds: 100));
@@ -87,8 +87,8 @@ void main() {
       'A3 — Tombol filter terbuka bottom sheet',
       (tester) async {
         app.main();
-        await _login(tester);
-        await _navigateToLaporan(tester);
+        await login(tester);
+        await navigateToLaporan(tester);
         await tester.pumpAndSettle();
 
         await tester.tap(find.byKey(const Key('btn_filter')));
@@ -103,8 +103,8 @@ void main() {
       'A4 — Filter jenis Hama menampilkan hanya laporan hama',
       (tester) async {
         app.main();
-        await _login(tester);
-        await _navigateToLaporan(tester);
+        await login(tester);
+        await navigateToLaporan(tester);
         await tester.pumpAndSettle();
 
         // Buka filter sheet
@@ -128,8 +128,8 @@ void main() {
       'A5 — Search field muncul saat tap ikon search',
       (tester) async {
         app.main();
-        await _login(tester);
-        await _navigateToLaporan(tester);
+        await login(tester);
+        await navigateToLaporan(tester);
         await tester.pumpAndSettle();
 
         await tester.tap(find.byKey(const Key('btn_search')));
@@ -145,8 +145,8 @@ void main() {
         // Catatan: test ini memerlukan mock connectivity.
         // Pada emulator tanpa jaringan, banner harus tampil.
         app.main();
-        await _login(tester);
-        await _navigateToLaporan(tester);
+        await login(tester);
+        await navigateToLaporan(tester);
         await tester.pumpAndSettle();
 
         // Verifikasi widget banner ada di tree (mungkin visible atau tidak tergantung koneksi)
@@ -159,8 +159,8 @@ void main() {
       'A7 — Tombol ekspor tidak crash saat tap dengan data kosong',
       (tester) async {
         app.main();
-        await _login(tester);
-        await _navigateToLaporan(tester);
+        await login(tester);
+        await navigateToLaporan(tester);
         await tester.pumpAndSettle();
 
         // Apply filter yang pasti kosong
@@ -185,8 +185,8 @@ void main() {
       'A8 — Pull-to-refresh bekerja tanpa crash',
       (tester) async {
         app.main();
-        await _login(tester);
-        await _navigateToLaporan(tester);
+        await login(tester);
+        await navigateToLaporan(tester);
         await tester.pumpAndSettle();
 
         // Fling ke bawah untuk trigger refresh indicator
@@ -204,8 +204,8 @@ void main() {
       'A9 — Tap item laporan hama navigasi ke detail hama',
       (tester) async {
         app.main();
-        await _login(tester);
-        await _navigateToLaporan(tester);
+        await login(tester);
+        await navigateToLaporan(tester);
         await tester.pumpAndSettle();
 
         // Filter ke hama agar lebih mudah dicari
@@ -234,8 +234,8 @@ void main() {
       'A10 — Reset filter bekerja: filter dihapus dan data reload',
       (tester) async {
         app.main();
-        await _login(tester);
-        await _navigateToLaporan(tester);
+        await login(tester);
+        await navigateToLaporan(tester);
         await tester.pumpAndSettle();
 
         // Terapkan filter status

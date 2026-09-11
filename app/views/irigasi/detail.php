@@ -102,7 +102,7 @@ $errorMsg = ErrorMessage::flash();
                         ?>
                         <span class="badge badge-<?= $cls ?> badge-lg">
                             <i class="fas fa-<?= $data['status'] == 'Diverifikasi' ? 'check-circle' : ($data['status'] == 'Ditolak' ? 'times-circle' : 'clock') ?>"></i>
-                            <?= htmlspecialchars($data['status'] ?? 'Draf') ?>
+                            <?= htmlspecialchars((($data['status'] ?? '') === 'Submitted' ? 'Dikirim' : ($data['status'] ?? 'Draf')), ENT_QUOTES, 'UTF-8') ?>
                         </span>
                         <?php 
                         $repairStatusClass = [

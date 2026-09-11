@@ -16,9 +16,9 @@ class AppSecureStorage {
   static const _offlineLockUntilKey = 'offline_lock_until';
 
   /// Policy lockout — dapat ditimpa di test.
-  static OfflineLockPolicy lockPolicy = OfflineLockPolicy(
+  static OfflineLockPolicy lockPolicy = const OfflineLockPolicy(
     maxAttempts: 5,
-    lockDuration: const Duration(minutes: 5),
+    lockDuration: Duration(minutes: 5),
     now: DateTime.now,
   );
 

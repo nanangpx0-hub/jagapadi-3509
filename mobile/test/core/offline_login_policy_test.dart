@@ -54,9 +54,9 @@ void main() {
     });
 
     test('maxAttempts khusus dihormati', () {
-      final policy = OfflineLockPolicy(
+      const policy = OfflineLockPolicy(
         maxAttempts: 2,
-        lockDuration: const Duration(minutes: 10),
+        lockDuration: Duration(minutes: 10),
         now: fixedNow,
       );
       final r = policy.registerFailure(failCount: 1, lockUntil: null);

@@ -17,6 +17,7 @@ Options -Indexes
 
 # ── Force HTTPS (skip localhost & LAN untuk development) ──────────────────────
 RewriteCond %{HTTPS} off
+RewriteCond %{HTTP:X-Forwarded-Proto} !https [NC]
 RewriteCond %{HTTP_HOST} !^localhost$ [NC]
 RewriteCond %{HTTP_HOST} !^127\.0\.0\.1$ [NC]
 RewriteCond %{HTTP_HOST} !^10\. [NC]

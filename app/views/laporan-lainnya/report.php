@@ -59,7 +59,7 @@
                     <div class="col-md-2">
                         <div class="card bg-info text-white">
                             <div class="card-body">
-                                <h5 class="card-title">Submitted</h5>
+                                <h5 class="card-title">Dikirim</h5>
                                 <h3 class="card-text"><?= number_format($performanceSummary['submitted']) ?></h3>
                             </div>
                         </div>
@@ -120,7 +120,7 @@
                                                 <th>Jenis Laporan</th>
                                                 <th>Total</th>
                                                 <th>Diverifikasi</th>
-                                                <th>Submitted</th>
+                                                <th>Dikirim</th>
                                                 <th>Draf</th>
                                             </tr>
                                         </thead>
@@ -163,7 +163,7 @@
                                             <select name="status" id="exportStatus" class="form-control">
                                                 <option value="">-- Semua Status --</option>
                                                 <option value="draft">Draf</option>
-                                                <option value="submitted">Submitted</option>
+                                                <option value="submitted">Dikirim</option>
                                                 <option value="verified">Diverifikasi</option>
                                                 <option value="rejected">Ditolak</option>
                                                 <option value="archived">Diarsipkan</option>
@@ -272,14 +272,14 @@
                                                     <?php
                                                     $statusMap = [
                                                         'draft' => ['secondary', 'Draf'],
-                                                        'submitted' => ['primary', 'Submitted'],
+                                                        'submitted' => ['primary', 'Dikirim'],
                                                         'verified' => ['success', 'Diverifikasi'],
                                                         'rejected' => ['danger', 'Ditolak'],
                                                         'archived' => ['dark', 'Diarsipkan'],
                                                     ];
                                                     $sts = $statusMap[$report['status']] ?? ['secondary', $report['status']];
                                                     ?>
-                                                    <span class="badge badge-<?= $sts[0] ?>"><?= $sts[1] ?></span>
+                                                    <span class="badge badge-<?= $sts[0] ?>"><?= htmlspecialchars((string) $sts[1], ENT_QUOTES, 'UTF-8') ?></span>
                                                 </td>
                                                 <td>
                                                     <a href="<?= BASE_URL ?>laporan-lainnya/show/<?= $report['id'] ?>" class="btn btn-info btn-sm" title="Lihat">

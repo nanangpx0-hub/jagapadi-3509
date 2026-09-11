@@ -14,7 +14,7 @@ class DashboardService
     private const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
     private const CACHE_TTL = 300;
 
-    private PDO $db;
+    private ?PDO $db = null;
     private string $role;
     private ?int $userId;
     private int $tahun;
@@ -22,11 +22,29 @@ class DashboardService
 
     public function __construct(string $role, ?int $userId, int $tahun, bool $includeDraft = false)
     {
-        $this->db = Database::connect();
         $this->role = $role;
         $this->userId = $role === 'petugas' ? $userId : null;
         $this->tahun = $tahun;
-        $this->includeDraft = $includeDraft;
+        // Draft adalah pekerjaan operasional, bukan data statistik resmi.
+        // Statistisi/operator/viewer selalu menerima agregat resmi tanpa Draf.
+        $this->includeDraft = $includeDraft && in_array($role, ['admin', 'petugas'], true);
+    }
+
+    /**
+     * Lazy database connection: konstruktor tidak menyentuh socket DB
+     * agar unit test murni (validasi, scope, cache-key) hijau tanpa MySQL.
+     */
+    private function db(): PDO
+    {
+        if ($this->db === null) {
+            $this->db = Database::connect();
+        }
+        return $this->db;
+    }
+
+    public static function scopeForRole(string $role): string
+    {
+        return $role === 'petugas' ? 'own_data' : 'all_data';
     }
 
     public static function validateTahun(int $tahun): int
@@ -230,8 +248,11 @@ class DashboardService
 
     private function countByStatus(string $table): array
     {
-        $sql = "SELECT status, COUNT(*) AS c FROM `{$table}`
-                WHERE tanggal >= :year_start AND tanggal < :year_end AND " . $this->statusInClause();
+        $allowedTables = ['laporan_hama', 'laporan_irigasi', 'laporan_pupuk', 'laporan_panen', 'laporan_cuaca', 'laporan_alat_sarana'];
+        if (!in_array($table, $allowedTables, true)) {
+            throw new \InvalidArgumentException("Table not allowed: {$table}");
+        }
+        $sql = "SELECT status, COUNT(*) AS c FROM `" . $table . "` WHERE tanggal >= :year_start AND tanggal < :year_end AND " . $this->statusInClause();
         $params = [
             'year_start' => $this->tahun . '-01-01',
             'year_end'   => ($this->tahun + 1) . '-01-01',
@@ -248,7 +269,7 @@ class DashboardService
         }
 
         $sql .= ' GROUP BY status';
-        $stmt = $this->db->prepare($sql);
+        $stmt = $this->db()->prepare($sql);
         $stmt->execute($params);
 
         $result = [];
@@ -277,7 +298,7 @@ class DashboardService
         $sql .= $this->userCondition();
         $params = array_merge($params, $this->userParam());
 
-        $stmt = $this->db->prepare($sql);
+        $stmt = $this->db()->prepare($sql);
         $stmt->execute($params);
         return (float) $stmt->fetchColumn();
     }
@@ -295,7 +316,7 @@ class DashboardService
         $params = array_merge($params, $this->userParam());
 
         $sql .= ' GROUP BY tingkat_keparahan';
-        $stmt = $this->db->prepare($sql);
+        $stmt = $this->db()->prepare($sql);
         $stmt->execute($params);
 
         $result = [];
@@ -327,7 +348,7 @@ class DashboardService
         $params = array_merge($params, $this->userParam());
 
         $sql .= ' GROUP BY o.id, o.nama_opt ORDER BY jumlah DESC LIMIT ' . (int) $limit;
-        $stmt = $this->db->prepare($sql);
+        $stmt = $this->db()->prepare($sql);
         $stmt->execute($params);
 
         return $stmt->fetchAll();
@@ -355,8 +376,24 @@ class DashboardService
 
     private function countByField(string $table, string $field): array
     {
-        $sql = "SELECT {$field}, COUNT(*) AS c FROM `{$table}`
-                WHERE tanggal >= :year_start AND tanggal < :year_end AND " . $this->statusInClause();
+        $allowedTables = ['laporan_hama', 'laporan_irigasi', 'laporan_pupuk', 'laporan_panen', 'laporan_cuaca', 'laporan_alat_sarana'];
+        $allowedFields = [
+            'laporan_hama' => ['kondisi_fisik', 'debit_air', 'tingkat_keparahan', 'status', 'master_opt_id'],
+            'laporan_irigasi' => ['kondisi_fisik', 'debit_air', 'status'],
+            'laporan_pupuk' => ['status'],
+            'laporan_panen' => ['status'],
+            'laporan_cuaca' => ['status'],
+            'laporan_alat_sarana' => ['status'],
+        ];
+        if (!in_array($table, $allowedTables, true)) {
+            throw new \InvalidArgumentException("Table not allowed: {$table}");
+        }
+        if (!isset($allowedFields[$table]) || !in_array($field, $allowedFields[$table], true)) {
+            throw new \InvalidArgumentException("Field not allowed: {$field} for {$table}");
+        }
+        // Quote field safely (already validated allowlist, but also quote)
+        $fieldQuoted = "`" . str_replace("`", "``", $field) . "`";
+        $sql = "SELECT {$fieldQuoted}, COUNT(*) AS c FROM `" . $table . "` WHERE tanggal >= :year_start AND tanggal < :year_end AND " . $this->statusInClause();
         $params = [
             'year_start' => $this->tahun . '-01-01',
             'year_end'   => ($this->tahun + 1) . '-01-01',
@@ -367,8 +404,8 @@ class DashboardService
             $params['userId'] = $this->userId;
         }
 
-        $sql .= " GROUP BY {$field}";
-        $stmt = $this->db->prepare($sql);
+        $sql .= " GROUP BY {$fieldQuoted}";
+        $stmt = $this->db()->prepare($sql);
         $stmt->execute($params);
 
         $result = [];
@@ -395,7 +432,7 @@ class DashboardService
         $params = array_merge($params, $this->userParam());
 
         $sql .= ' GROUP BY m, status';
-        $stmt = $this->db->prepare($sql);
+        $stmt = $this->db()->prepare($sql);
         $stmt->execute($params);
 
         $submitted = array_fill(0, 12, 0);
@@ -436,7 +473,7 @@ class DashboardService
         $params = array_merge($params, $this->userParam());
 
         $sql .= ' GROUP BY m, tingkat_keparahan';
-        $stmt = $this->db->prepare($sql);
+        $stmt = $this->db()->prepare($sql);
         $stmt->execute($params);
 
         $ringan = array_fill(0, 12, 0);
@@ -477,7 +514,7 @@ class DashboardService
         }
 
         $sql .= ' GROUP BY m, status';
-        $stmt = $this->db->prepare($sql);
+        $stmt = $this->db()->prepare($sql);
         $stmt->execute($params);
 
         $submitted = array_fill(0, 12, 0);
@@ -522,8 +559,18 @@ class DashboardService
         ?int $kecamatanId = null,
         ?int $desaId = null
     ): array {
-        $placeholders = implode(',', array_fill(0, count($statuses), '?'));
-$sql = "SELECT lh.id, lh.nomor_laporan, lh.status, lh.tanggal,
+        $statusPlaceholders = [];
+        $params = [
+            'year_start' => $this->tahun . '-01-01',
+            'year_end'   => ($this->tahun + 1) . '-01-01',
+        ];
+        foreach ($statuses as $idx => $status) {
+            $key = "status_{$idx}";
+            $statusPlaceholders[] = ":{$key}";
+            $params[$key] = $status;
+        }
+        $inClause = implode(', ', $statusPlaceholders);
+        $sql = "SELECT lh.id, lh.nomor_laporan, lh.status, lh.tanggal,
                        lh.latitude, lh.longitude, lh.tingkat_keparahan,
                        o.nama_opt, md.nama_desa, mkc.nama_kecamatan
                  FROM `laporan_hama` lh
@@ -533,36 +580,30 @@ $sql = "SELECT lh.id, lh.nomor_laporan, lh.status, lh.tanggal,
                  WHERE lh.latitude IS NOT NULL AND lh.longitude IS NOT NULL
                    AND lh.latitude != 0 AND lh.longitude != 0
                    AND lh.tanggal >= :year_start AND lh.tanggal < :year_end
-                   AND lh.status IN ({$placeholders})";
-
-        $params = [
-            'year_start' => $this->tahun . '-01-01',
-            'year_end'   => ($this->tahun + 1) . '-01-01',
-        ];
-        $params = array_merge($params, $statuses);
+                   AND lh.status IN ({$inClause})";
 
         if ($masterOptId !== null) {
-            $sql .= ' AND lh.master_opt_id = ?';
-            $params[] = $masterOptId;
+            $sql .= ' AND lh.master_opt_id = :masterOptId';
+            $params['masterOptId'] = $masterOptId;
         }
 
         if ($kecamatanId !== null) {
-            $sql .= ' AND lh.kecamatan_id = ?';
-            $params[] = $kecamatanId;
+            $sql .= ' AND lh.kecamatan_id = :kecamatanId';
+            $params['kecamatanId'] = $kecamatanId;
         }
 
         if ($desaId !== null) {
-            $sql .= ' AND lh.desa_id = ?';
-            $params[] = $desaId;
+            $sql .= ' AND lh.desa_id = :desaId';
+            $params['desaId'] = $desaId;
         }
 
         if ($this->userId !== null) {
-            $sql .= ' AND lh.user_id = ?';
-            $params[] = $this->userId;
+            $sql .= ' AND lh.user_id = :userId';
+            $params['userId'] = $this->userId;
         }
 
         $sql .= ' LIMIT ' . (int) $limit;
-        $stmt = $this->db->prepare($sql);
+        $stmt = $this->db()->prepare($sql);
         $stmt->execute($params);
 
         $features = [];
@@ -602,7 +643,17 @@ $sql = "SELECT lh.id, lh.nomor_laporan, lh.status, lh.tanggal,
         ?int $desaId = null,
         ?string $kondisiFisik = null
     ): array {
-        $placeholders = implode(',', array_fill(0, count($statuses), '?'));
+        $statusPlaceholders = [];
+        $params = [
+            'year_start' => $this->tahun . '-01-01',
+            'year_end'   => ($this->tahun + 1) . '-01-01',
+        ];
+        foreach ($statuses as $idx => $status) {
+            $key = "status_{$idx}";
+            $statusPlaceholders[] = ":{$key}";
+            $params[$key] = $status;
+        }
+        $inClause = implode(', ', $statusPlaceholders);
         $sql = "SELECT li.id, li.nomor_laporan, li.status, li.tanggal,
                        li.latitude, li.longitude, li.nama_saluran,
                        li.kondisi_fisik, li.debit_air,
@@ -613,36 +664,30 @@ $sql = "SELECT lh.id, lh.nomor_laporan, lh.status, lh.tanggal,
                 WHERE li.latitude IS NOT NULL AND li.longitude IS NOT NULL
                   AND li.latitude != 0 AND li.longitude != 0
                   AND li.tanggal >= :year_start AND li.tanggal < :year_end
-                  AND li.status IN ({$placeholders})";
-
-        $params = [
-            'year_start' => $this->tahun . '-01-01',
-            'year_end'   => ($this->tahun + 1) . '-01-01',
-        ];
-        $params = array_merge($params, $statuses);
+                  AND li.status IN ({$inClause})";
 
         if ($kecamatanId !== null) {
-            $sql .= ' AND li.kecamatan_id = ?';
-            $params[] = $kecamatanId;
+            $sql .= ' AND li.kecamatan_id = :kecamatanId';
+            $params['kecamatanId'] = $kecamatanId;
         }
 
         if ($desaId !== null) {
-            $sql .= ' AND li.desa_id = ?';
-            $params[] = $desaId;
+            $sql .= ' AND li.desa_id = :desaId';
+            $params['desaId'] = $desaId;
         }
 
         if ($kondisiFisik !== null && $kondisiFisik !== '') {
-            $sql .= ' AND li.kondisi_fisik = ?';
-            $params[] = $kondisiFisik;
+            $sql .= ' AND li.kondisi_fisik = :kondisiFisik';
+            $params['kondisiFisik'] = $kondisiFisik;
         }
 
         if ($this->userId !== null) {
-            $sql .= ' AND li.user_id = ?';
-            $params[] = $this->userId;
+            $sql .= ' AND li.user_id = :userId';
+            $params['userId'] = $this->userId;
         }
 
         $sql .= ' LIMIT ' . (int) $limit;
-        $stmt = $this->db->prepare($sql);
+        $stmt = $this->db()->prepare($sql);
         $stmt->execute($params);
 
         $features = [];

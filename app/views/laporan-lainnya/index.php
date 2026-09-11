@@ -112,7 +112,7 @@
                             <select name="status" class="form-control">
                                 <option value="">-- Semua Status --</option>
                                 <option value="draft" <?= ($status ?? '') === 'draft' ? 'selected' : '' ?>>Draf</option>
-                                <option value="submitted" <?= ($status ?? '') === 'submitted' ? 'selected' : '' ?>>Submitted</option>
+                                <option value="submitted" <?= ($status ?? '') === 'submitted' ? 'selected' : '' ?>>Dikirim</option>
                                 <option value="verified" <?= ($status ?? '') === 'verified' ? 'selected' : '' ?>>Diverifikasi</option>
                                 <option value="rejected" <?= ($status ?? '') === 'rejected' ? 'selected' : '' ?>>Ditolak</option>
                                 <option value="archived" <?= ($status ?? '') === 'archived' ? 'selected' : '' ?>>Diarsipkan</option>
@@ -195,14 +195,14 @@
                                     <?php
                                     $statusMap = [
                                         'draft' => ['secondary', 'Draf'],
-                                        'submitted' => ['primary', 'Submitted'],
+                                        'submitted' => ['primary', 'Dikirim'],
                                         'verified' => ['success', 'Diverifikasi'],
                                         'rejected' => ['danger', 'Ditolak'],
                                         'archived' => ['dark', 'Diarsipkan'],
                                     ];
                                     $sts = $statusMap[$item['status']] ?? ['secondary', $item['status']];
                                     ?>
-                                    <span class="badge badge-<?= $sts[0] ?>"><?= $sts[1] ?></span>
+                                    <span class="badge badge-<?= $sts[0] ?>"><?= htmlspecialchars((string) $sts[1], ENT_QUOTES, 'UTF-8') ?></span>
                                 </td>
                                 <td><?= htmlspecialchars($item['pelapor_nama'] ?? '-') ?></td>
                                 <td><small><?= htmlspecialchars($item['created_at'] ?? '-') ?></small></td>

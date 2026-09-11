@@ -36,19 +36,27 @@ class Cache {
      */
     public static function get($key) {
         $file = self::getCachePath($key);
-        
+
         if (!file_exists($file)) {
             return null;
         }
-        
-        $data = unserialize(file_get_contents($file));
-        
+
+        $raw = @file_get_contents($file);
+        if ($raw === false) {
+            return null;
+        }
+        $data = self::decodePayload($raw, $file);
+
+        if (!is_array($data) || !isset($data['expires'], $data['value'])) {
+            return null;
+        }
+
         // Check if expired
-        if (time() > $data['expires']) {
+        if (time() > (int) $data['expires']) {
             self::delete($key);
             return null;
         }
-        
+
         return $data['value'];
     }
     
@@ -67,12 +75,17 @@ class Cache {
         
         $file = self::getCachePath($key);
         $data = [
+            'v' => 2,
             'value' => $value,
             'expires' => time() + $ttl,
             'created' => time()
         ];
-        
-        return file_put_contents($file, serialize($data), LOCK_EX) !== false;
+
+        $encoded = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($encoded === false) {
+            return false;
+        }
+        return file_put_contents($file, $encoded, LOCK_EX) !== false;
     }
     
     /**
@@ -115,21 +128,32 @@ class Cache {
      * 
      * @return int Number of files deleted
      */
-    public static function clearExpired() {
+     public static function clearExpired() {
         self::init();
         $count = 0;
-        
+
         $files = glob(self::$cacheDir . '*.cache');
         foreach ($files as $file) {
-            $data = unserialize(file_get_contents($file));
-            
-            if (time() > $data['expires']) {
+            $raw = @file_get_contents($file);
+            if ($raw === false) {
+                continue;
+            }
+            $data = self::decodePayload($raw, $file);
+
+            if (!is_array($data) || !isset($data['expires'])) {
+                if (unlink($file)) {
+                    $count++;
+                }
+                continue;
+            }
+
+            if (time() > (int) $data['expires']) {
                 if (unlink($file)) {
                     $count++;
                 }
             }
         }
-        
+
         return $count;
     }
     
@@ -141,18 +165,27 @@ class Cache {
      */
     public static function has($key) {
         $file = self::getCachePath($key);
-        
+
         if (!file_exists($file)) {
             return false;
         }
-        
-        $data = unserialize(file_get_contents($file));
-        
-        if (time() > $data['expires']) {
+
+        $raw = @file_get_contents($file);
+        if ($raw === false) {
+            return false;
+        }
+        $data = self::decodePayload($raw, $file);
+
+        if (!is_array($data) || !isset($data['expires'])) {
             self::delete($key);
             return false;
         }
-        
+
+        if (time() > (int) $data['expires']) {
+            self::delete($key);
+            return false;
+        }
+
         return true;
     }
     
@@ -164,12 +197,19 @@ class Cache {
      */
     public static function info($key) {
         $file = self::getCachePath($key);
-        
+
         if (!file_exists($file)) {
             return null;
         }
-        
-        $data = unserialize(file_get_contents($file));
+
+        $raw = @file_get_contents($file);
+        if ($raw === false) {
+            return null;
+        }
+        $data = self::decodePayload($raw, $file);
+        if (!is_array($data) || !isset($data['expires'])) {
+            return null;
+        }
         
         return [
             'created' => $data['created'],
@@ -180,6 +220,29 @@ class Cache {
         ];
     }
     
+    /**
+     * Decode payload with JSON-first, legacy serialize fallback (allowed_classes=>false).
+     * Invalid legacy payloads are deleted to prevent object injection.
+     */
+    private static function decodePayload(string $raw, string $file): ?array {
+        $decoded = json_decode($raw, true);
+        if (is_array($decoded) && json_last_error() === JSON_ERROR_NONE) {
+            return $decoded;
+        }
+        // Legacy fallback: safely attempt unserialize without object instantiation
+        $legacy = @unserialize($raw, ['allowed_classes' => false]);
+        if (is_array($legacy) && isset($legacy['value'], $legacy['expires'])) {
+            // Migrate to JSON on next read path is lazy; invalid payloads deleted elsewhere
+            return $legacy;
+        }
+        // Corrupted or injected object payload — delete file
+        @unlink($file);
+        if (is_string($raw) && str_contains($raw, 'O:')) {
+            error_log('[Cache] rejected serialized object payload: ' . substr($raw, 0, 200));
+        }
+        return null;
+    }
+
     /**
      * Remember pattern: Get from cache or execute callback and cache result
      * 

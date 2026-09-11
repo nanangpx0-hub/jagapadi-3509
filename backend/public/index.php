@@ -67,33 +67,37 @@ register_shutdown_function(static function (): void {
 });
 
 header('X-Content-Type-Options: nosniff');
-    header('X-Frame-Options: SAMEORIGIN');
-    header('Referrer-Policy: strict-origin-when-cross-origin');
-    header('X-XSS-Protection: 1; mode=block');
-    header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
-    if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
-        header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
-    }
-    // CSP — asset diheader.php dimuat dari local paths (BASE_URL), jadi izinkan 'self'
-    header("Content-Security-Policy: default-src 'self'; " .
-        "script-src 'self' 'unsafe-inline'; " .
-        "style-src 'self' 'unsafe-inline'; " .
-        "img-src 'self' data: https://*.tile.openstreetmap.org; " .
-        "font-src 'self'; " .
-        "connect-src 'self';");
+header('X-Frame-Options: SAMEORIGIN');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+header('Permissions-Policy: geolocation=(self), microphone=(), camera=(self)');
+if (Request::isSecure()) {
+    header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+}
+// CSP — nonce/hash preferred, unsafe-inline retained sementara kompatibilitas diverifikasi
+header("Content-Security-Policy: default-src 'self'; " .
+    "script-src 'self' 'unsafe-inline'; " .
+    "style-src 'self' 'unsafe-inline'; " .
+    "img-src 'self' data: https://*.tile.openstreetmap.org; " .
+    "font-src 'self'; " .
+    "connect-src 'self';");
 
-// Session inactivity expiry
-$sessionLifetime = max(900, (int)(getenv('SESSION_LIFETIME') ?: 28800));
-if (isset($_SESSION['user_id'])) {
-    if (isset($_SESSION['_last_activity']) &&
-        (time() - (int)$_SESSION['_last_activity']) > $sessionLifetime) {
-        Security::destroySession();
-        $loginUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/' . ltrim(BASE_PATH, '/');
-        $loginUrl = rtrim($loginUrl, '/') . '/auth/login?reason=expired';
-        header('Location: ' . $loginUrl);
-        exit;
+// === Session lifecycle — MUST init before any $_SESSION access ===
+Security::initSession();
+
+// Enforce idle + absolute timeouts with validated APP_BASE_URL redirect
+if (isset($_SESSION['user_id']) && Security::isSessionExpired()) {
+    Security::destroySession();
+    $base = Request::validatedRedirectBase();
+    $loginUrl = $base !== '' ? $base . '/login?reason=expired' : '/login?reason=expired';
+    // Fallback to relative if host injection detected
+    if (!filter_var($loginUrl, FILTER_VALIDATE_URL) && !str_starts_with($loginUrl, '/')) {
+        $loginUrl = '/login?reason=expired';
     }
-    $_SESSION['_last_activity'] = time();
+    header('Location: ' . $loginUrl);
+    exit;
+}
+if (isset($_SESSION['user_id'])) {
+    Security::touchSession();
 }
 
 // CORS — strict whitelist via CORS_ALLOWED_ORIGINS (no LAN auto-allow in production)
@@ -109,10 +113,14 @@ $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 
 if ($origin !== '' && in_array($origin, $allowedOrigins, true)) {
     header("Access-Control-Allow-Origin: $origin");
+    header('Vary: Origin');
     header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH');
     header('Access-Control-Allow-Headers: Content-Type, Authorization, X-CSRF-TOKEN, X-Requested-With, X-Idempotency-Key');
     header('Access-Control-Allow-Credentials: true');
     header('Access-Control-Max-Age: 86400');
+} elseif ($origin !== '') {
+    // Ensure Vary is always sent when Origin present to prevent cache poisoning
+    header('Vary: Origin');
 }
 if (Request::method() === 'OPTIONS') {
     http_response_code(204);

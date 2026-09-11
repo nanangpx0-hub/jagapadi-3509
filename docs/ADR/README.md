@@ -43,6 +43,7 @@ Dampak positif & negatif, trade-offs.
 | ADR-008 | File Upload: Magic Bytes + MIME + Size + Random Name | Proposed | 2026-07-16 |
 | ADR-009 | Offline-First Mobile with SQLite Sync Queue | Proposed | 2026-07-16 |
 | ADR-010 | Deployment: cPanel with `backend/public` as Document Root | Proposed | 2026-07-16 |
+| ADR-011 | Canonical Runtime Backend v1 & Strangler Migration | Accepted | 2026-08-30 |
 
 ---
 

@@ -31,7 +31,7 @@ class DashboardController extends Controller
         $service = new DashboardService($role, $userId, $tahun);
         $stats = $service->getStats();
 
-        $scope = $role === 'admin' ? 'all_data' : 'own_data';
+        $scope = DashboardService::scopeForRole($role);
         $this->logDashboardAccess($userId, $role, 'web_dashboard_index', $scope, ['tahun' => $tahun]);
 
         $data = [
@@ -111,7 +111,7 @@ class DashboardController extends Controller
             $service = new DashboardService($role, $userId, $tahun);
             $data = $service->getMapHama($status, $limit, $masterOptId, $kecamatanId, $desaId);
 
-            $scope = $role === 'admin' ? 'all_data' : 'own_data';
+            $scope = DashboardService::scopeForRole($role);
             $this->logDashboardAccess($userId, $role, 'web_dashboard_map_hama', $scope, [
                 'tahun' => $tahun,
                 'status' => $status,
@@ -143,7 +143,7 @@ $kecamatanId = isset($_GET['kecamatan_id']) && $_GET['kecamatan_id'] !== '' ? (i
             $service = new DashboardService($role, $userId, $tahun);
             $data = $service->getMapIrigasi($status, $limit, $kecamatanId, $desaId, $kondisiFisik);
 
-            $scope = $role === 'admin' ? 'all_data' : 'own_data';
+            $scope = DashboardService::scopeForRole($role);
             $this->logDashboardAccess($userId, $role, 'web_dashboard_map_irigasi', $scope, [
                 'tahun' => $tahun,
                 'status' => $status,

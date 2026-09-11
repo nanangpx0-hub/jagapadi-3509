@@ -451,7 +451,7 @@ class ApiClient {
 
     // Klasifikasi berdasarkan tipe error Dio
     return switch (e.type) {
-      DioExceptionType.connectionTimeout => ApiResponse(
+      DioExceptionType.connectionTimeout => const ApiResponse(
           success: false,
           error: 'TimeoutError',
           message:
@@ -459,13 +459,13 @@ class ApiClient {
               'Periksa kecepatan jaringan Anda.',
           statusCode: 0,
         ),
-      DioExceptionType.receiveTimeout => ApiResponse(
+      DioExceptionType.receiveTimeout => const ApiResponse(
           success: false,
           error: 'TimeoutError',
           message: 'Server terlalu lama merespons. Coba lagi nanti.',
           statusCode: 0,
         ),
-      DioExceptionType.sendTimeout => ApiResponse(
+      DioExceptionType.sendTimeout => const ApiResponse(
           success: false,
           error: 'TimeoutError',
           message: 'Pengiriman data ke server timeout. '
@@ -478,14 +478,14 @@ class ApiClient {
           message: _buildConnectionErrorMessage(e),
           statusCode: 0,
         ),
-      DioExceptionType.badCertificate => ApiResponse(
+      DioExceptionType.badCertificate => const ApiResponse(
           success: false,
           error: 'SslError',
           message: 'Sertifikat SSL server tidak valid. '
               'Hubungi administrator untuk memeriksa konfigurasi HTTPS.',
           statusCode: 0,
         ),
-      DioExceptionType.cancel => ApiResponse(
+      DioExceptionType.cancel => const ApiResponse(
           success: false,
           error: 'Cancelled',
           message: 'Permintaan dibatalkan.',

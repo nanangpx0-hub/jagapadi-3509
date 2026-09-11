@@ -5,7 +5,7 @@ import 'package:jagapadi_mobile/features/home/providers/dashboard_provider.dart'
 void main() {
   test('berhasil memuat data → state success + lastUpdatedAt terisi', () async {
     final api = _StubDashboardApi((path, q) {
-      return ApiResponse(
+      return const ApiResponse(
         success: true,
         statusCode: 200,
         data: {
@@ -34,7 +34,7 @@ void main() {
 
   test('semua angka nol → state empty (bukan error)', () async {
     final api = _StubDashboardApi((path, q) {
-      return ApiResponse(
+      return const ApiResponse(
         success: true,
         statusCode: 200,
         data: {
@@ -53,7 +53,7 @@ void main() {
   test('gagal tanpa cache → state error dan data tetap kosong (bukan nol)',
       () async {
     final api = _StubDashboardApi((path, q) {
-      return ApiResponse(
+      return const ApiResponse(
         success: false,
         statusCode: 500,
         message: 'Server sibuk',
@@ -74,7 +74,7 @@ void main() {
     final api = _StubDashboardApi((path, q) {
       calls++;
       if (calls == 1) {
-        return ApiResponse(
+        return const ApiResponse(
           success: true,
           statusCode: 200,
           data: {
@@ -82,7 +82,7 @@ void main() {
           },
         );
       }
-      return ApiResponse(
+      return const ApiResponse(
         success: false,
         statusCode: 0,
         message: 'Tidak ada koneksi',
@@ -104,7 +104,7 @@ void main() {
     final api = _StubDashboardApi((path, q) {
       calls++;
       if (calls == 1) {
-        return ApiResponse(
+        return const ApiResponse(
           success: true,
           statusCode: 200,
           data: {
@@ -112,7 +112,7 @@ void main() {
           },
         );
       }
-      return ApiResponse(
+      return const ApiResponse(
         success: false,
         statusCode: 500,
         message: 'Server sibuk',
@@ -127,7 +127,7 @@ void main() {
 
   test('reset mengosongkan data dan kembali ke initial', () async {
     final api = _StubDashboardApi((path, q) {
-      return ApiResponse(
+      return const ApiResponse(
         success: true,
         statusCode: 200,
         data: {
@@ -149,7 +149,7 @@ void main() {
     String? sentYear;
     final api = _StubDashboardApi((path, q) {
       sentYear = q?['tahun'] as String?;
-      return ApiResponse(
+      return const ApiResponse(
         success: true,
         statusCode: 200,
         data: {
@@ -175,7 +175,7 @@ class _StubDashboardApi extends ApiClient {
     Map<String, dynamic>? queryParams,
   }) async {
     return onGet?.call(path, queryParams) ??
-        ApiResponse(
+        const ApiResponse(
           success: false,
           message: 'Stub tidak dikonfigurasi',
           statusCode: 500,

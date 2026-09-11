@@ -286,7 +286,7 @@ class _CuacaDetailScreenState extends State<CuacaDetailScreen> {
 
                       // Actions
                       if (ReportEditAccess.canShowEditActions(
-                        reportUserId: l?.userId,
+                        reportUserId: l.userId,
                         currentUserId: auth.user?.id,
                         hasCapability:
                             auth.user?.can(ReportCapability.canSubmitReport) ?? false,

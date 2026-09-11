@@ -209,7 +209,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                           Transform.translate(
-                            offset: Offset(0, -24),
+                            offset: const Offset(0, -24),
                             child: _SectionHeader(
                               syncing: _syncing,
                               onSync: _syncNow,
@@ -434,7 +434,7 @@ class _HeroHeader extends StatelessWidget {
                                 AppTheme.warningContainer.withValues(alpha: .9),
                             borderRadius: BorderRadius.circular(AppRadius.sm),
                           ),
-                          child: Row(
+                          child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
@@ -442,7 +442,7 @@ class _HeroHeader extends StatelessWidget {
                                 size: 14,
                                 color: AppTheme.onWarningContainer,
                               ),
-                              const SizedBox(width: 4),
+                              SizedBox(width: 4),
                               Text(
                                 'Mode Offline',
                                 style: TextStyle(
@@ -1086,7 +1086,7 @@ class _MenuGridState extends State<_MenuGrid>
     };
 
     final totalMs = _entranceController.duration!.inMilliseconds;
-    final stepMs = 50;
+    const stepMs = 50;
     const animMs = 350;
 
     Widget staggered(int index, Widget child) {

@@ -47,6 +47,9 @@ Migration yang ada di filesystem belum tentu sudah dijalankan. Verifikasi tabel
   `viewer`; izin efektif mengikuti middleware/policy route.
 - Petugas hanya dapat mengakses resource miliknya; Admin hanya memperoleh akses
   global pada route yang dilindungi policy Admin.
+- Statistisi merupakan konsumen analitik baca-saja: dashboard, grafik, peta,
+  evaluasi, laporan, dan ekspor bersifat global tetapi hanya memakai status resmi
+  `Submitted` dan `Diverifikasi`. Mutasi administratif dan akses Draf tidak diberikan.
 - Ownership berasal dari session/JWT, bukan `user_id` atau role kiriman client,
   dan harus diterapkan pada query serta diperiksa ulang pada policy/controller.
 

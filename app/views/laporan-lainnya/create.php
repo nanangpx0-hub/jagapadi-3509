@@ -253,9 +253,9 @@
                     <?php endif; ?>
                     <div class="row">
                         <div class="col-md-6">
-                            <div class="form-group">
-                                <label>Jenis Laporan <span class="text-danger">*</span></label>
-                                <select name="jenis_id" id="jenisSelect" class="form-control" required autocomplete="off">
+                            <div class="form-group jenis-dropdown-wrap">
+                                <label for="jenisSelect">Jenis Laporan <span class="text-danger">*</span></label>
+                                <select name="jenis_id" id="jenisSelect" class="form-control" required autocomplete="off" data-jenis-laporan-dropdown>
                                     <option value="">-- Pilih Jenis Laporan --</option>
                                     <?php foreach($jenisList as $jl): ?>
                                     <option value="<?= $jl['id'] ?>"
@@ -264,6 +264,13 @@
                                     </option>
                                     <?php endforeach; ?>
                                 </select>
+                                <div class="jenis-dropdown-error" data-jenis-error style="display:none"></div>
+                                <div class="jenis-dropdown-toolbar">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary btn-refresh" data-jenis-refresh>
+                                        <i class="fas fa-sync-alt"></i> Muat Ulang Daftar
+                                    </button>
+                                    <small class="text-muted">Daftar dimuat otomatis tanpa reload halaman.</small>
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -1157,6 +1164,66 @@ document.getElementById('formCreateLaporan').addEventListener('submit', function
 </script>
 
 <?php include ROOT_PATH . '/app/views/layouts/footer.php'; ?>
+<link rel="stylesheet" href="<?= BASE_URL ?>public/css/jenis-laporan-dropdown.css">
+<script>
+window.JAGAPADI_BASE_URL = <?= json_encode(BASE_URL) ?>;
+window.JAGAPADI_CSRF_TOKEN = <?= json_encode(Security::getCsrfToken()) ?>;
+</script>
+<script src="<?= BASE_URL ?>public/js/jenis-laporan-dropdown.js?v=1.2.0"></script>
+<script>
+// ============================================================================
+// BAGIAN OPT — inisialisasi dropdown dinamis Jenis Laporan (realtime).
+// Seluruh operasi data dropdown didelegasikan ke window.OPT agar terpusat.
+// ============================================================================
+document.addEventListener('DOMContentLoaded', function () {
+    if (!window.OPT || !window.OPT.JenisLaporanDropdown) return;
+    var JenisDropdown = window.OPT.JenisLaporanDropdown;
+    var select = document.getElementById('jenisSelect');
+    if (!select) return;
+
+    // Daftarkan penanganan pilihan: validasi + render field dinamis + event global.
+    JenisDropdown.on('change', function (detail) {
+        if (typeof renderDynamicFields === 'function') {
+            renderDynamicFields();
+        }
+    });
+
+    JenisDropdown.on('error', function (detail) {
+        console.warn('[Jenis Laporan] gagal dimuat:', detail && detail.message);
+    });
+
+    // Bind change listener tanpa auto-load ganda (modul auto-bind sudah
+    // menangani [data-jenis-laporan-dropdown]; panggil bind aman idempoten).
+    JenisDropdown.bind(select, {
+        onChange: function () {
+            if (typeof renderDynamicFields === 'function') {
+                renderDynamicFields();
+            }
+        },
+        autoLoad: true,
+    });
+
+    var refreshBtn = document.querySelector('[data-jenis-refresh]');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', function () {
+            JenisDropdown.refresh({ select: select, keepValue: select.value });
+        });
+    }
+
+    // Validasi pilihan saat submit (server tetap validator final).
+    var form = document.getElementById('formCreateLaporan');
+    if (form) {
+        form.addEventListener('submit', function (e) {
+            var check = JenisDropdown.validateSelection(select.value);
+            if (!check.valid) {
+                e.preventDefault();
+                JenisDropdown.handleError(check.errors[0], { select: select }, null);
+                select.focus();
+            }
+        });
+    }
+});
+</script>
 <script>
 // ============================================================================
 // CASCADING DROPDOWN WILAYAH - Default Kabupaten Jember
@@ -1365,6 +1432,14 @@ async function loadKabupaten() {
     return normalizeKabupatenId(kabupatenSelect.value);
 }
 
+/**
+ * Umumkan perubahan dropdown wilayah ke pembaca layar (live region).
+ */
+function announceWilayah(message) {
+    var announcer = document.getElementById('accessibility-announcer');
+    if (announcer) announcer.textContent = message;
+}
+
 async function loadKecamatan(kabupatenId) {
     const kecamatanSelect = document.getElementById('kecamatanSelect');
     const desaSelect = document.getElementById('desaSelect');
@@ -1414,13 +1489,16 @@ async function loadKecamatan(kabupatenId) {
                 count: data.data.length,
                 options: kecamatanSelect.options.length
             });
+            announceWilayah('Data kecamatan berhasil dimuat.');
         } else {
             resetSelectOptions(kecamatanSelect, '-- Pilih Kecamatan --');
             console.warn('Tidak ada data kecamatan untuk kabupaten ini:', data.message || 'Empty data');
+            announceWilayah('Data kecamatan tidak tersedia untuk kabupaten ini.');
         }
     } catch (error) {
         console.error('Error loading kecamatan:', error);
         resetSelectOptions(kecamatanSelect, '-- Pilih Kecamatan --');
+        announceWilayah('Gagal memuat data kecamatan.');
     } finally {
         kecamatanSelect.disabled = false;
         syncSelectPlugin(kecamatanSelect);
@@ -1468,13 +1546,16 @@ async function loadDesa(kecamatanId) {
                 count: data.data.length,
                 options: desaSelect.options.length
             });
+            announceWilayah('Data desa berhasil dimuat.');
         } else {
             resetSelectOptions(desaSelect, '-- Pilih Desa --');
             console.warn('Tidak ada data desa untuk kecamatan ini:', data.message || 'Empty data');
+            announceWilayah('Data desa tidak tersedia untuk kecamatan ini.');
         }
     } catch (error) {
         console.error('Error loading desa:', error);
         resetSelectOptions(desaSelect, '-- Pilih Desa --');
+        announceWilayah('Gagal memuat data desa.');
     } finally {
         desaSelect.disabled = false;
         syncSelectPlugin(desaSelect);

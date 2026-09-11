@@ -9,11 +9,23 @@ final class OtherReportImportService
 {
     public const ROUTABLE_TYPES = ['gangguan_sosial', 'faktor_abiotik'];
 
-    private PDO $db;
+    private ?PDO $db;
 
     public function __construct(?PDO $db = null)
     {
-        $this->db = $db ?? Database::getInstance()->getConnection();
+        $this->db = $db;
+    }
+
+    /**
+     * Lazy database connection agar method murni (supports/categoryCode)
+     * hijau tanpa socket database hidup.
+     */
+    private function db(): PDO
+    {
+        if ($this->db === null) {
+            $this->db = Database::getInstance()->getConnection();
+        }
+        return $this->db;
     }
 
     public function supports(string $jenis): bool
@@ -46,7 +58,7 @@ final class OtherReportImportService
     public function createDraft(int $ownerId, array $data, int $actorId): int
     {
         $categoryCode = $this->categoryCode($data);
-        $category = $this->db->prepare(
+        $category = $this->db()->prepare(
             'SELECT id FROM master_jenis_laporan WHERE kode = ? AND is_active = 1 LIMIT 1'
         );
         $category->execute([$categoryCode]);
@@ -84,7 +96,7 @@ final class OtherReportImportService
             throw new RuntimeException('Laporan Lainnya gagal disimpan');
         }
 
-        $audit = $this->db->prepare(
+        $audit = $this->db()->prepare(
             'INSERT INTO activity_log (user_id, action, table_name, record_id, description, ip_address, user_agent) '
             . 'VALUES (?, ?, ?, ?, ?, ?, ?)'
         );
@@ -110,7 +122,7 @@ final class OtherReportImportService
             default => 'nama_faktor',
         };
         $name = trim((string) (($data['nama_nasional'] ?? '') ?: ($data['nama_lokal'] ?? '')));
-        $stmt = $this->db->prepare(
+        $stmt = $this->db()->prepare(
             'SELECT 1 FROM laporan_lainnya ll '
             . 'JOIN master_jenis_laporan mjl ON mjl.id = ll.jenis_id '
             . 'WHERE ll.user_id = ? AND mjl.kode = ? AND ll.tanggal_kejadian <=> ? '

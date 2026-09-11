@@ -14,19 +14,29 @@ use PDO;
 
 class NotificationService
 {
-    private PDO $db;
+    private ?PDO $db = null;
     private PushNotifierInterface $pushNotifier;
     private bool $pushDisabled;
 
     public function __construct()
     {
-        $this->db = Database::connect();
         $this->pushDisabled = Env::get('FCM_ENABLED', 'false') !== 'true';
         if ($this->pushDisabled) {
             $this->pushNotifier = new NullPushNotifier();
         } else {
             $this->pushNotifier = $this->createFcmNotifier();
         }
+    }
+
+    /**
+     * Lazy database connection agar konstruktor aman tanpa MySQL hidup.
+     */
+    private function db(): PDO
+    {
+        if ($this->db === null) {
+            $this->db = Database::connect();
+        }
+        return $this->db;
     }
 
     public function notifyUser(int $userId, string $type, string $title, string $body, ?array $data = null): void
@@ -60,7 +70,7 @@ class NotificationService
             $params[] = $exceptUserId;
         }
 
-        $stmt = $this->db->prepare($sql);
+        $stmt = $this->db()->prepare($sql);
         $stmt->execute($params);
         $adminIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
@@ -199,7 +209,7 @@ class NotificationService
         string $reasonCode
     ): bool {
         try {
-            $stmt = $this->db->prepare(
+            $stmt = $this->db()->prepare(
                 "SELECT COUNT(*) FROM `notifications`
                  WHERE `user_id` = ? AND `type` = 'laporan_submit_failed'
                    AND `created_at` >= (NOW() - INTERVAL 5 MINUTE)

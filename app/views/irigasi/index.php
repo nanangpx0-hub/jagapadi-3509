@@ -787,7 +787,7 @@ $errorMsg = ErrorMessage::flash();
                                     ];
                                     $cls = $statusClass[$item['status']] ?? 'secondary';
                                 ?>
-                                <span class="badge badge-<?= $cls ?>"><?= htmlspecialchars((string) $item['status']) ?></span>
+                                <span class="badge badge-<?= $cls ?>"><?= htmlspecialchars((($item['status'] ?? '') === 'Submitted' ? 'Dikirim' : ($item['status'] ?? '-')), ENT_QUOTES, 'UTF-8') ?></span>
                             </td>
                             <td>
                                 <div class="btn-action-group" data-row-id="<?= (int) $item['id'] ?>">

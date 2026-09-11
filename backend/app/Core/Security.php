@@ -22,7 +22,9 @@ class Security
         ini_set('session.use_trans_sid', '0');
         ini_set('session.cookie_httponly', '1');
         ini_set('session.cookie_samesite', 'Lax');
-        ini_set('session.gc_maxlifetime', '28800');
+        // Lifetime from env, clamp to sane minimum
+        $gcLifetime = max(900, (int) Env::get('SESSION_ABSOLUTE_TIMEOUT', Env::get('SESSION_LIFETIME', '28800')));
+        ini_set('session.gc_maxlifetime', (string) $gcLifetime);
         ini_set('session.cookie_lifetime', '0');
 
         if ($isSecure) {
@@ -31,16 +33,66 @@ class Security
 
         session_start();
 
-        self::checkSessionIdle();
+        self::enforceSessionTimeouts();
+    }
+
+    /**
+     * Enforce idle + absolute timeouts. Called immediately after session_start.
+     * Idle: _last_activity ; Absolute: login_at .
+     * On expiry destroys session (caller may redirect with validated APP_BASE_URL).
+     */
+    public static function enforceSessionTimeouts(): void
+    {
+        if (!isset($_SESSION['user_id'])) {
+            return;
+        }
+        $now = time();
+        $idleMax = max(900, (int) Env::get('SESSION_IDLE_TIMEOUT', Env::get('SESSION_LIFETIME', '28800')));
+        $absoluteMax = max(900, (int) Env::get('SESSION_ABSOLUTE_TIMEOUT', '28800'));
+
+        $lastActivity = $_SESSION['_last_activity'] ?? null;
+        $loginAt = $_SESSION['login_at'] ?? null;
+
+        $expired = false;
+        if ($lastActivity !== null && ($now - (int) $lastActivity) > $idleMax) {
+            $expired = true;
+        }
+        if ($loginAt !== null && ($now - (int) $loginAt) > $absoluteMax) {
+            $expired = true;
+        }
+
+        if ($expired) {
+            self::destroySession();
+        }
     }
 
     public static function checkSessionIdle(): void
     {
-        $maxIdle = 28800;
-        $loginAt = $_SESSION['login_at'] ?? null;
-        if ($loginAt !== null && (time() - $loginAt) > $maxIdle) {
-            $_SESSION = [];
-            session_regenerate_id(true);
+        // Backward-compatible alias — now delegates to enforceSessionTimeouts
+        self::enforceSessionTimeouts();
+    }
+
+    public static function isSessionExpired(): bool
+    {
+        if (!isset($_SESSION['user_id'])) {
+            return false;
+        }
+        $now = time();
+        $idleMax = max(900, (int) Env::get('SESSION_IDLE_TIMEOUT', Env::get('SESSION_LIFETIME', '28800')));
+        $absoluteMax = max(900, (int) Env::get('SESSION_ABSOLUTE_TIMEOUT', '28800'));
+        if (isset($_SESSION['_last_activity']) && ($now - (int) $_SESSION['_last_activity']) > $idleMax) {
+            return true;
+        }
+        if (isset($_SESSION['login_at']) && ($now - (int) $_SESSION['login_at']) > $absoluteMax) {
+            return true;
+        }
+        return false;
+    }
+
+    public static function touchSession(): void
+    {
+        if (isset($_SESSION['user_id'])) {
+            $_SESSION['_last_activity'] = time();
         }
     }
 

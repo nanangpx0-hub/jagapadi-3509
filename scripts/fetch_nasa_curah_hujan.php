@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Skrip Pengambil & Pengimpor Data Curah Hujan Harian dari NASA POWER API
  * Halaman Target: Curah Hujan - JAGAPADI (http://localhost/jagapadi-3509/curahHujan)
@@ -44,13 +45,34 @@ function print_progress(string $message): void {
     flush();
 }
 
+// Bantuan CLI ditangani sebelum eksekusi agar keluarannya bersih.
+if (php_sapi_name() === 'cli' && in_array('--help', $argv ?? [], true)) {
+    echo "Penggunaan:\n";
+    echo "  php scripts/fetch_nasa_curah_hujan.php [--start-year=2020] [--end-year=2026] [--retry-failed]\n\n";
+    echo "  --start-year   Tahun awal (2020..tahun berjalan). Default: 2020.\n";
+    echo "  --end-year     Tahun akhir (2020..tahun berjalan). Default: 2026 (dibatasi hari ini).\n";
+    echo "  --retry-failed Hanya proses ulang kecamatan yang tercatat gagal di logs/curah_hujan_failures.json.\n";
+    echo "  --help         Tampilkan bantuan ini.\n";
+    exit(0);
+}
+
 print_progress("==========================================================================");
 print_progress("   SKRIP PENGAMBIL DATA CURAH HUJAN NASA POWER API - JAGAPADI SYSTEM");
 print_progress("==========================================================================");
 
-// 2. Periode pengambilan data (1 Januari 2021 hingga 31 Desember 2026)
-$startDate = '20210101';
-$endDate   = '20261231';
+// Periode pengambilan data. Default: 1 Januari 2020 s.d. hari ini
+// (dibatasi akhir 2026). Dapat dioverride via argumen CLI:
+//   php scripts/fetch_nasa_curah_hujan.php --start-year=2020 --end-year=2026 [--retry-failed]
+$cliOptions = php_sapi_name() === 'cli' ? getopt('', ['start-year::', 'end-year::', 'retry-failed']) : [];
+$cliStartYear = isset($cliOptions['start-year']) && $cliOptions['start-year'] !== false ? (int)$cliOptions['start-year'] : 2020;
+$cliEndYear = isset($cliOptions['end-year']) && $cliOptions['end-year'] !== false ? (int)$cliOptions['end-year'] : 2026;
+$currentYearCli = (int)date('Y');
+$cliStartYear = max(2020, $cliStartYear);
+$cliEndYear = min($currentYearCli, max($cliStartYear, $cliEndYear));
+$startDate = sprintf('%04d0101', $cliStartYear);
+$endDate = min(date('Ymd'), sprintf('%04d1231', $cliEndYear));
+$failuresLogPath = __DIR__ . '/../logs/curah_hujan_failures.json';
+$cliFailures = [];
 
 // 3. Array asosiatif 31 Kecamatan di Kabupaten Jember beserta koordinat pusatnya
 $kecamatanJember = [
@@ -87,6 +109,37 @@ $kecamatanJember = [
     'Wuluhan'     => ['lat' => -8.3475, 'lon' => 113.5469],
 ];
 
+// Mode --retry-failed: hanya proses ulang kecamatan yang tercatat gagal.
+// Rentang tanggal mengikuti file failures kecuali dioverride eksplisit via CLI.
+if (isset($cliOptions['retry-failed'])) {
+    $explicitStart = isset($cliOptions['start-year']) && $cliOptions['start-year'] !== false;
+    $explicitEnd = isset($cliOptions['end-year']) && $cliOptions['end-year'] !== false;
+    $retryRaw = @file_get_contents($failuresLogPath);
+    $retryData = is_string($retryRaw) ? json_decode($retryRaw, true) : null;
+    $retryKecamatan = [];
+    if (is_array($retryData) && !empty($retryData['failures']) && is_array($retryData['failures'])) {
+        foreach ($retryData['failures'] as $item) {
+            if (is_array($item) && !empty($item['kecamatan'])) {
+                $retryKecamatan[(string)$item['kecamatan']] = true;
+            }
+        }
+    }
+    if ($retryKecamatan === []) {
+        print_progress("Mode --retry-failed: tidak ada kegagalan tercatat di {$failuresLogPath}; lanjut mode normal.");
+    } else {
+        $kecamatanJember = array_intersect_key($kecamatanJember, $retryKecamatan);
+        if (!$explicitStart && !empty($retryData['start_year'])) {
+            $cliStartYear = max(2020, (int)$retryData['start_year']);
+        }
+        if (!$explicitEnd && !empty($retryData['end_year'])) {
+            $cliEndYear = min($currentYearCli, max($cliStartYear, (int)$retryData['end_year']));
+        }
+        $startDate = sprintf('%04d0101', $cliStartYear);
+        $endDate = min(date('Ymd'), sprintf('%04d1231', $cliEndYear));
+        print_progress("Mode --retry-failed: memproses ulang " . count($kecamatanJember) . " kecamatan.");
+    }
+}
+
 // Inisialisasi Koneksi Database JAGAPADI jika tersedia
 $db = null;
 $kecamatanMapDB = [];
@@ -111,8 +164,8 @@ try {
     print_progress("Status Database: ⚠️ Koneksi database dilewati ({$e->getMessage()}). Hanya membuat file CSV.");
 }
 
-// 8. File target CSV output
-$outputFile = __DIR__ . '/curah_hujan_jember_2021_2026.csv';
+// 8. File target CSV output (dinamis per rentang tahun)
+$outputFile = __DIR__ . "/curah_hujan_jember_{$cliStartYear}_{$cliEndYear}.csv";
 $fp = fopen($outputFile, 'w');
 
 if (!$fp) {
@@ -130,7 +183,7 @@ $totalRecordsDB = 0;
 $totalErrors = 0;
 
 print_progress("Jumlah Kecamatan: {$totalKecamatan}");
-print_progress("Periode Data    : 01-01-2021 s.d. 31-12-2026");
+print_progress(sprintf('Periode Data    : 01-01-%04d s.d. %s', $cliStartYear, DateTime::createFromFormat('Ymd', $endDate)->format('d-m-Y')));
 print_progress("File Output CSV : " . realpath($outputFile));
 print_progress("--------------------------------------------------------------------------");
 
@@ -189,14 +242,18 @@ foreach ($kecamatanJember as $namaKecamatan => $koordinat) {
 
     // 9. Error handling komprehensif jika koneksi cURL gagal
     if ($curlErrno !== 0) {
-        print_progress("   ❌ [ERROR] Koneksi cURL gagal untuk kecamatan {$namaKecamatan}: {$curlError} (ErrNo: {$curlErrno})");
+        $errMsg = "Koneksi cURL gagal: {$curlError} (ErrNo: {$curlErrno})";
+        print_progress("   ❌ [ERROR] {$errMsg} untuk kecamatan {$namaKecamatan}");
+        $cliFailures[] = ['kecamatan' => $namaKecamatan, 'error' => $errMsg, 'http_code' => 0];
         $totalErrors++;
         usleep(1500000); // 4. Jeda rate limit 1.5 detik
         continue;
     }
 
     if ($httpCode !== 200) {
-        print_progress("   ❌ [ERROR] Response error dari API NASA POWER untuk {$namaKecamatan}. HTTP Status: {$httpCode}");
+        $errMsg = "Response error dari API NASA POWER. HTTP Status: {$httpCode}";
+        print_progress("   ❌ [ERROR] {$errMsg} untuk {$namaKecamatan}");
+        $cliFailures[] = ['kecamatan' => $namaKecamatan, 'error' => $errMsg, 'http_code' => (int)$httpCode];
         $totalErrors++;
         usleep(1500000);
         continue;
@@ -205,14 +262,18 @@ foreach ($kecamatanJember as $namaKecamatan => $koordinat) {
     // 9. Decoding JSON & penanganan kesalahan format
     $jsonData = json_decode($response, true);
     if (json_last_error() !== JSON_ERROR_NONE) {
-        print_progress("   ❌ [ERROR] Format JSON tidak terurai dengan benar untuk {$namaKecamatan}: " . json_last_error_msg());
+        $errMsg = 'Format JSON tidak terurai: ' . json_last_error_msg();
+        print_progress("   ❌ [ERROR] {$errMsg} untuk {$namaKecamatan}");
+        $cliFailures[] = ['kecamatan' => $namaKecamatan, 'error' => $errMsg, 'http_code' => (int)$httpCode];
         $totalErrors++;
         usleep(1500000);
         continue;
     }
 
     if (!isset($jsonData['properties']['parameter']['PRECTOTCORR'])) {
-        print_progress("   ❌ [ERROR] Key PRECTOTCORR tidak ditemukan pada response API untuk {$namaKecamatan}.");
+        $errMsg = 'Key PRECTOTCORR tidak ditemukan pada response API';
+        print_progress("   ❌ [ERROR] {$errMsg} untuk {$namaKecamatan}.");
+        $cliFailures[] = ['kecamatan' => $namaKecamatan, 'error' => $errMsg, 'http_code' => (int)$httpCode];
         $totalErrors++;
         usleep(1500000);
         continue;
@@ -296,6 +357,25 @@ if ($db) {
 }
 print_progress("Total Kecamatan Error/Gagal    : {$totalErrors}");
 print_progress("Lokasi File CSV Output         : " . (realpath($outputFile) ?: $outputFile));
+
+// Rekap kegagalan terstruktur untuk audit & retry CLI (--retry-failed).
+$failuresPayload = [
+    'generated_at' => date('Y-m-d H:i:s'),
+    'start_year' => $cliStartYear,
+    'end_year' => $cliEndYear,
+    'start_date' => $startDate,
+    'end_date' => $endDate,
+    'failures' => array_values($cliFailures),
+];
+$failuresDir = dirname($failuresLogPath);
+if (!is_dir($failuresDir)) {
+    @mkdir($failuresDir, 0755, true);
+}
+if (@file_put_contents($failuresLogPath, json_encode($failuresPayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX) === false) {
+    print_progress("⚠️  Gagal menulis rekap kegagalan ke {$failuresLogPath}");
+} else {
+    print_progress("Rekap Kegagalan                : {$failuresLogPath} (" . count($cliFailures) . " item)");
+}
 print_progress("==========================================================================");
 
 if (php_sapi_name() !== 'cli') {

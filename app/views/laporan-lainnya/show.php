@@ -18,7 +18,7 @@
                     <?php endif; ?>
                     <?php if($_SESSION['role'] === 'admin' && in_array($laporan['status'], ['submitted', 'verified', 'rejected'], true)): ?>
                     <form method="POST" action="<?= BASE_URL ?>laporan-lainnya/archive/<?= (int)$laporan['id'] ?>" class="d-inline" onsubmit="return confirm('Arsipkan laporan ini?');">
-                        <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
+                        <?= Security::getCsrfField() ?>
                         <button type="submit" class="btn btn-sm btn-dark">
                             <i class="fas fa-archive"></i> Arsipkan
                         </button>
@@ -44,14 +44,14 @@
                                     <?php
                                     $statusMap = [
                                         'draft' => ['secondary', 'Draf'],
-                                        'submitted' => ['primary', 'Submitted'],
+                                        'submitted' => ['primary', 'Dikirim'],
                                         'verified' => ['success', 'Diverifikasi'],
                                         'rejected' => ['danger', 'Ditolak'],
                                         'archived' => ['dark', 'Diarsipkan'],
                                     ];
                                     $sts = $statusMap[$laporan['status']] ?? ['secondary', $laporan['status']];
                                     ?>
-                                    <span class="badge badge-<?= $sts[0] ?>"><?= $sts[1] ?></span>
+                                    <span class="badge badge-<?= $sts[0] ?>"><?= htmlspecialchars((string) $sts[1], ENT_QUOTES, 'UTF-8') ?></span>
                                 </td>
                             </tr>
                             <tr><th>Pelapor</th><td><?= htmlspecialchars($laporan['pelapor_nama'] ?? '-') ?></td></tr>
@@ -142,7 +142,7 @@
                 <div class="row">
                     <div class="col-md-6">
                         <form method="POST" action="<?= BASE_URL ?>laporan-lainnya/verify/<?= (int)$laporan['id'] ?>">
-                            <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
+                            <?= Security::getCsrfField() ?>
                             <div class="form-group">
                                 <label>Catatan Verifikasi (opsional)</label>
                                 <textarea name="catatan_verifikasi" class="form-control" rows="2" placeholder="Catatan untuk pelapor"></textarea>
@@ -154,7 +154,7 @@
                     </div>
                     <div class="col-md-6">
                         <form method="POST" action="<?= BASE_URL ?>laporan-lainnya/reject/<?= (int)$laporan['id'] ?>">
-                            <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
+                            <?= Security::getCsrfField() ?>
                             <div class="form-group">
                                 <label>Alasan Penolakan <span class="text-danger">*</span></label>
                                 <textarea name="catatan_verifikasi" class="form-control" rows="2" required placeholder="Alasan penolakan wajib diisi"></textarea>

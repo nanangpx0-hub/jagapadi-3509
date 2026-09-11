@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Kecepatan Angin Scraper
  * Service untuk mengambil data kecepatan angin dari Open-Meteo API
@@ -22,6 +23,12 @@ class KecepatanAnginScraper {
     private $locations = [];
     private $debug = false;
     private $logFile;
+
+    /** Rincian kegagalan per kecamatan dari fetch NASA terakhir (tidak menghentikan loop). */
+    private $lastFailedDetails = [];
+
+    /** Jumlah record tanggal masa depan yang dilewati pada fetch NASA terakhir. */
+    private $lastSkippedFuture = 0;
     
     public function __construct() {
         require_once ROOT_PATH . '/app/models/KecepatanAngin.php';
@@ -32,18 +39,21 @@ class KecepatanAnginScraper {
     }
     
     /**
-     * Run the scraper
+     * Run the scraper - kompatibel dengan test fallback & signature int strict.
+     * Mendukung allow_fallback untuk otomatis simulasi bila NASA/OpenMeteo kosong.
      */
-    public function run($options = []) {
+    public function run($options = []): array
+    {
         $startTime = microtime(true);
-        
+
         $year = (int) ($options['year'] ?? date('Y'));
         $month = (int) ($options['month'] ?? date('m'));
         $source = strtolower(trim((string) ($options['source'] ?? $options['data_source'] ?? 'nasa')));
         $forceSimulation = $options['force_simulation'] ?? false;
-        
+        $allowFallback = (bool) ($options['allow_fallback'] ?? false);
+
         $this->log("Starting wind speed scraper for {$year}-{$month} (source: {$source})");
-        
+
         $result = [
             'success' => false,
             'message' => '',
@@ -51,9 +61,11 @@ class KecepatanAnginScraper {
             'no_data' => false,
             'records_success' => 0,
             'records_failed' => 0,
-            'execution_time' => 0
+            'execution_time' => 0,
+            'fallback_used' => false,
+            'fallback_reason' => '',
         ];
-        
+
         // Periode masa depan belum memiliki data; jangan dihitung sebagai kegagalan.
         $currentYear = (int) date('Y');
         $currentMonth = (int) date('n');
@@ -77,34 +89,38 @@ class KecepatanAnginScraper {
             } elseif ($source === 'nasa' || $source === 'nasa_power') {
                 $data = $this->fetch_nasa_kecepatan_angin($year, $month);
                 if (empty($data)) {
-                    throw new RuntimeException('NASA POWER tidak mengembalikan data; tidak ada fallback otomatis ke simulasi');
+                    if ($allowFallback) {
+                        $result['fallback_used'] = true;
+                        $result['fallback_reason'] = 'NASA POWER tidak mengembalikan data; fallback ke simulasi';
+                        $data = $this->generateSimulatedData($year, $month);
+                        $result['source'] = 'Simulasi (fallback NASA POWER)';
+                    } else {
+                        throw new RuntimeException('NASA POWER tidak mengembalikan data; tidak ada fallback otomatis ke simulasi');
+                    }
                 } else {
                     $result['source'] = 'NASA POWER (WS10M/WS2M)';
                 }
             } else {
                 $data = $this->fetchFromOpenMeteo($year, $month);
                 if (empty($data)) {
-                    throw new RuntimeException('Open-Meteo tidak mengembalikan data; pilih simulasi secara eksplisit bila diperlukan');
+                    if ($allowFallback) {
+                        $result['fallback_used'] = true;
+                        $result['fallback_reason'] = 'Open-Meteo tidak mengembalikan data; fallback ke simulasi';
+                        $data = $this->generateSimulatedData($year, $month);
+                        $result['source'] = 'Simulasi (fallback Open-Meteo)';
+                    } else {
+                        throw new RuntimeException('Open-Meteo tidak mengembalikan data; pilih simulasi secara eksplisit bila diperlukan');
+                    }
                 } else {
                     $result['source'] = 'Open-Meteo';
                 }
             }
-            
-            // Save data using UPSERT to prevent duplicates
-            foreach ($data as $record) {
-                try {
-                    if (method_exists($this->model, 'insertUpsert')) {
-                        $this->model->insertUpsert($record);
-                    } else {
-                        $this->model->insert($record);
-                    }
-                    $result['records_success']++;
-                } catch (Exception $e) {
-                    $this->log("Failed to insert: " . $e->getMessage(), 'ERROR');
-                    $result['records_failed']++;
-                }
-            }
-            
+
+            // Persist via overridable method for test isolation
+            [$ok, $fail] = $this->persistRecords($data);
+            $result['records_success'] = $ok;
+            $result['records_failed'] = $fail;
+
             $result['execution_time'] = round(microtime(true) - $startTime, 2);
             $result['success'] = $result['records_success'] > 0;
             $result['message'] = sprintf(
@@ -112,7 +128,7 @@ class KecepatanAnginScraper {
                 $result['records_success'],
                 $result['source']
             );
-            
+
             // Log activity
             $this->model->logActivity('scrape', $result['success'] ? 'success' : 'failed', $result['message'], [
                 'year' => $year,
@@ -120,29 +136,56 @@ class KecepatanAnginScraper {
                 'source' => $result['source'],
                 'processed' => count($data),
                 'success' => $result['records_success'],
-                'failed' => $result['records_failed']
+                'failed' => $result['records_failed'],
+                'fallback_used' => $result['fallback_used'],
             ]);
-            
         } catch (Exception $e) {
             $result['message'] = "Error: " . $e->getMessage();
             $this->log($result['message'], 'ERROR');
-            
+
             $this->model->logActivity('scrape', 'failed', $result['message'], [
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
-        
+
         $result['execution_time'] = round(microtime(true) - $startTime, 2);
-        
+
         $this->log("Scraper completed in {$result['execution_time']}s");
-        
+
         return $result;
+    }
+
+    /**
+     * Persist records — overridable untuk test agar tidak menulis DB.
+     * @param array<int, array<string,mixed>> $data
+     * @return array{0:int,1:int} [success, failed]
+     */
+    protected function persistRecords(array $data): array
+    {
+        $ok = 0;
+        $fail = 0;
+        foreach ($data as $record) {
+            try {
+                if (method_exists($this->model, 'insertUpsert')) {
+                    $this->model->insertUpsert($record);
+                } else {
+                    $this->model->insert($record);
+                }
+                $ok++;
+            } catch (Exception $e) {
+                $this->log("Failed to insert: " . $e->getMessage(), 'ERROR');
+                $fail++;
+            }
+        }
+        return [$ok, $fail];
     }
     
     /**
-     * Fetch data from Open-Meteo API
+     * Fetch data from Open-Meteo API - protected agar dapat di-override test probe.
+     * Signature kompatibel dengan test: (?int $year, ?int $month) dan return array.
      */
-    private function fetchFromOpenMeteo($year, $month) {
+    protected function fetchFromOpenMeteo(?int $year = null, ?int $month = null): array
+    {
         $data = [];
         $targetDate = sprintf('%d-%02d-01', $year, $month);
         $endDate = date('Y-m-t', strtotime($targetDate));
@@ -229,7 +272,8 @@ class KecepatanAnginScraper {
     /**
      * Generate simulated data
      */
-    private function generateSimulatedData($year, $month) {
+    private function generateSimulatedData(int $year, int $month): array
+    {
         $data = [];
         $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $month, $year);
         if ($year === (int) date('Y') && $month === (int) date('n')) {
@@ -353,9 +397,10 @@ class KecepatanAnginScraper {
     }
     
     /**
-     * Log message
+     * Log message - protected agar test probe dapat memanggil.
      */
-    private function log($message, $level = 'INFO') {
+    protected function log($message, $level = 'INFO'): void
+    {
         $logEntry = sprintf(
             "[%s] [%s] %s\n",
             date('Y-m-d H:i:s'),
@@ -380,12 +425,12 @@ class KecepatanAnginScraper {
     /**
      * Fetch daily wind speed data from NASA POWER API (WS10M, WS2M)
      * Menggunakan cURL Multi (Parallel Requests) & Local Caching
+     * Signature kompatibel: ?int nullable agar tidak pecah saat dipanggil dengan null di test.
      *
-     * @param int|null $year
-     * @param int|null $month
      * @return array List of formatted records for model insertion
      */
-    public function fetch_nasa_kecepatan_angin($year = null, $month = null) {
+    public function fetch_nasa_kecepatan_angin(?int $year = null, ?int $month = null): array
+    {
         $year = $year ? (int)$year : (int)date('Y');
         $month = $month !== null ? (int) $month : null;
 
@@ -407,6 +452,11 @@ class KecepatanAnginScraper {
         if ($endDate > $today) {
             $endDate = $today;
         }
+
+        // Reset pelacakan kegagalan & tanggal-masa-depan untuk pemanggilan ini.
+        $this->lastFailedDetails = [];
+        $this->lastSkippedFuture = 0;
+        $todayDash = date('Y-m-d');
 
         $this->log("Fetching wind speed from NASA POWER API for {$startDate} - {$endDate}...");
 
@@ -462,6 +512,11 @@ class KecepatanAnginScraper {
                 $cachedJson = json_decode($cachedContent, true);
                 if (is_array($cachedJson) && !empty($cachedJson)) {
                     foreach ($cachedJson as $rec) {
+                        // Jangan pakai cache untuk tanggal masa depan.
+                        if (isset($rec['tanggal']) && (string)$rec['tanggal'] > $todayDash) {
+                            $this->lastSkippedFuture++;
+                            continue;
+                        }
                         $allData[] = $rec;
                     }
                     continue;
@@ -507,15 +562,29 @@ class KecepatanAnginScraper {
             $curlErrno = $result['errno'];
 
             if ($curlErrno !== 0 || $httpCode !== 200 || empty($response)) {
+                $errorMsg = $curlErrno !== 0
+                    ? "cURL error ({$curlErrno})"
+                    : "HTTP status {$httpCode}";
                 $this->log(
                     "NASA POWER request failed for {$namaKecamatan}: HTTP {$httpCode}, cURL {$curlErrno}",
                     'ERROR'
                 );
+                // Kumpulkan rincian; loop kecamatan lain tetap berjalan.
+                $this->lastFailedDetails[] = [
+                    'kecamatan' => $namaKecamatan,
+                    'error' => $errorMsg,
+                    'http_code' => (int)$httpCode,
+                ];
                 continue;
             }
 
             $jsonData = json_decode($response, true);
             if (json_last_error() !== JSON_ERROR_NONE || !isset($jsonData['properties']['parameter']['WS10M'])) {
+                $this->lastFailedDetails[] = [
+                    'kecamatan' => $namaKecamatan,
+                    'error' => 'Format JSON tidak valid atau WS10M hilang',
+                    'http_code' => (int)$httpCode,
+                ];
                 continue;
             }
 
@@ -542,6 +611,12 @@ class KecepatanAnginScraper {
                 } else {
                     $dt = DateTime::createFromFormat('Ymd', $rawDateStr);
                     $formattedDate = $dt ? $dt->format('Y-m-d') : $rawDateStr;
+                }
+
+                // Tanggal masa depan dilewati elegan (bukan error).
+                if ($formattedDate > $todayDash) {
+                    $this->lastSkippedFuture++;
+                    continue;
                 }
 
                 $rec = [
@@ -645,12 +720,232 @@ class KecepatanAnginScraper {
     }
 
     private function assertValidPeriod(int $year, int $month): void {
-        if ($month < 1 || $month > 12 || $year < 2000 || $year > (int) date('Y')) {
-            throw new InvalidArgumentException('Periode data angin tidak valid');
+        if ($month < 1 || $month > 12 || $year < 2020 || $year > (int) date('Y')) {
+            throw new InvalidArgumentException('Periode data angin tidak valid (rentang didukung 2020 hingga tahun berjalan)');
         }
 
         if ($year === (int) date('Y') && $month > (int) date('n')) {
             throw new InvalidArgumentException('Data angin untuk bulan masa depan belum tersedia');
         }
+    }
+
+    /**
+     * Rincian kegagalan per kecamatan dari fetch NASA terakhir.
+     *
+     * @return array [['kecamatan'=>string,'error'=>string,'http_code'=>int], ...]
+     */
+    public function getLastFailedDetails(): array
+    {
+        return $this->lastFailedDetails;
+    }
+
+    /**
+     * Jumlah record tanggal masa depan yang dilewati pada fetch terakhir.
+     */
+    public function getLastSkippedFuture(): int
+    {
+        return $this->lastSkippedFuture;
+    }
+
+    /**
+     * Validasi rentang tahun batch (2020 hingga tahun berjalan).
+     *
+     * @return string[] daftar pesan error; kosong berarti valid.
+     */
+    public static function validateRange($startYear, $endYear): array
+    {
+        $errors = [];
+        $startYear = (int)$startYear;
+        $endYear = (int)$endYear;
+        $currentYear = (int)date('Y');
+        if ($startYear < 2020) {
+            $errors[] = 'Tahun awal minimal 2020.';
+        }
+        if ($endYear > $currentYear) {
+            $errors[] = "Tahun akhir maksimal {$currentYear}.";
+        }
+        if ($startYear > $endYear) {
+            $errors[] = 'Tahun awal tidak boleh melebihi tahun akhir.';
+        }
+        return $errors;
+    }
+
+    /**
+     * Jalankan scrape+upsert untuk SATU tahun penuh (idempoten via UPSERT).
+     * Mencatat log per tahun ke kecepatan_angin_logs (success/partial/failed).
+     *
+     * @param int $year
+     * @return array ['year'=>int,'status'=>string,'records'=>int,'failed'=>int,'skipped'=>int,'failures'=>array,'execution_time'=>float]
+     */
+    public function runSingleYear($year): array
+    {
+        $t0 = microtime(true);
+        $year = (int)$year;
+        $rangeErrors = self::validateRange($year, $year);
+        if ($rangeErrors !== []) {
+            throw new InvalidArgumentException(implode(' ', $rangeErrors));
+        }
+
+        $records = $this->fetch_nasa_kecepatan_angin($year);
+        $upsert = $this->model->bulkUpsertWindData($records);
+
+        $failures = [];
+        foreach ($this->getLastFailedDetails() as $detail) {
+            $failures[] = [
+                'year' => $year,
+                'month' => null,
+                'kecamatan' => $detail['kecamatan'],
+                'error' => $detail['error'],
+                'http_code' => $detail['http_code'] ?? 0,
+            ];
+        }
+
+        $saved = (int)($upsert['success'] ?? 0);
+        $failed = (int)($upsert['failed'] ?? 0) + count($this->getLastFailedDetails());
+        $skipped = (int)($upsert['skipped_future'] ?? 0);
+        $status = 'success';
+        if ($saved === 0 && ($failed > 0 || count($records) === 0)) {
+            $status = count($records) === 0 && $failed === 0 ? 'success' : 'failed';
+        } elseif ($failed > 0) {
+            $status = 'partial';
+        }
+
+        $summary = "Scrape angin tahun {$year}: {$saved} tersimpan, {$failed} gagal, {$skipped} dilewati (masa depan)";
+        $execTime = round(microtime(true) - $t0, 4);
+        try {
+            $this->model->logActivity('scrape_year', $status, $summary, [
+                'year' => $year,
+                'processed' => count($records),
+                'success' => $saved,
+                'failed' => $failed,
+                'failures' => $failures,
+                'execution_time' => $execTime,
+            ]);
+        } catch (Throwable $e) {
+            error_log('runSingleYear angin logActivity failed: ' . $e->getMessage());
+        }
+
+        return [
+            'year' => $year,
+            'status' => $status,
+            'records' => $saved,
+            'failed' => $failed,
+            'skipped' => $skipped,
+            'failures' => $failures,
+            'execution_time' => $execTime,
+        ];
+    }
+
+    /**
+     * Jalankan scrape+upsert untuk RENTANG tahun (mis. 2020–2026).
+     * Tahun yang gagal tidak menghentikan tahun berikutnya.
+     *
+     * @param int $startYear
+     * @param int $endYear
+     * @param callable|null $progressCallback fn(int $year, array $result, int $done, int $total)
+     * @return array laporan ringkasan komprehensif
+     */
+    public function runBatchRange($startYear, $endYear, $progressCallback = null): array
+    {
+        $t0 = microtime(true);
+        $startYear = (int)$startYear;
+        $endYear = (int)$endYear;
+        $rangeErrors = self::validateRange($startYear, $endYear);
+        if ($rangeErrors !== []) {
+            throw new InvalidArgumentException(implode(' ', $rangeErrors));
+        }
+
+        $total = $endYear - $startYear + 1;
+        $done = 0;
+        $totalSaved = 0;
+        $totalFailed = 0;
+        $totalSkipped = 0;
+        $yearsSummary = [];
+        $allFailures = [];
+
+        foreach (range($startYear, $endYear) as $year) {
+            try {
+                $result = $this->runSingleYear($year);
+            } catch (Throwable $e) {
+                error_log("runBatchRange angin year {$year} failed: " . $e->getMessage());
+                $result = [
+                    'year' => $year,
+                    'status' => 'failed',
+                    'records' => 0,
+                    'failed' => 1,
+                    'skipped' => 0,
+                    'failures' => [
+                        ['year' => $year, 'month' => null, 'kecamatan' => '-', 'error' => $e->getMessage(), 'http_code' => 0],
+                    ],
+                    'execution_time' => 0.0,
+                ];
+                try {
+                    $this->model->logActivity('scrape_year', 'failed', "Scrape angin tahun {$year} gagal: {$e->getMessage()}", [
+                        'year' => $year,
+                        'processed' => 0,
+                        'success' => 0,
+                        'failed' => 1,
+                        'failures' => $result['failures'],
+                        'execution_time' => 0,
+                    ]);
+                } catch (Throwable $logError) {
+                    error_log('runBatchRange angin logActivity failed: ' . $logError->getMessage());
+                }
+            }
+
+            $done++;
+            $totalSaved += (int)$result['records'];
+            $totalFailed += (int)$result['failed'];
+            $totalSkipped += (int)$result['skipped'];
+            $summaryEntry = [
+                'status' => $result['status'],
+                'records' => (int)$result['records'],
+                'failed' => (int)$result['failed'],
+            ];
+            if ((int)$result['skipped'] > 0) {
+                $summaryEntry['skipped'] = (int)$result['skipped'];
+            }
+            $yearsSummary[$year] = $summaryEntry;
+            foreach ($result['failures'] as $failure) {
+                $allFailures[] = $failure;
+            }
+
+            if (is_callable($progressCallback)) {
+                try {
+                    $progressCallback($year, $result, $done, $total);
+                } catch (Throwable $e) {
+                    error_log('runBatchRange angin progressCallback failed: ' . $e->getMessage());
+                }
+            }
+        }
+
+        $finalStatus = $totalFailed === 0 ? 'success' : ($totalSaved > 0 ? 'partial' : 'failed');
+        $execTime = round(microtime(true) - $t0, 4);
+        $summary = "Scrape angin rentang {$startYear}-{$endYear}: {$totalSaved} tersimpan, {$totalFailed} gagal, {$totalSkipped} dilewati (masa depan)";
+        try {
+            $this->model->logActivity('scrape_range', $finalStatus, $summary, [
+                'start_year' => $startYear,
+                'end_year' => $endYear,
+                'processed' => $totalSaved + $totalFailed,
+                'success' => $totalSaved,
+                'failed' => $totalFailed,
+                'failures' => $allFailures,
+                'execution_time' => $execTime,
+            ]);
+        } catch (Throwable $e) {
+            error_log('runBatchRange angin summary logActivity failed: ' . $e->getMessage());
+        }
+
+        return [
+            'success' => $totalFailed === 0,
+            'start_year' => $startYear,
+            'end_year' => $endYear,
+            'total_records_saved' => $totalSaved,
+            'total_records_failed' => $totalFailed,
+            'total_skipped_future' => $totalSkipped,
+            'years_summary' => $yearsSummary,
+            'failures' => $allFailures,
+            'execution_time' => $execTime,
+        ];
     }
 }

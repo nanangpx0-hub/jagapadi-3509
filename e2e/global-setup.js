@@ -5,11 +5,14 @@ const BASE = process.env.BASE_URL || 'http://localhost/jagapadi-3509';
 
 async function loginAndSaveState(page, username, password, storagePath) {
   console.log(`Logging in as ${username}...`);
-  await page.goto(`${BASE}/login`);
+  await page.goto(`${BASE}/auth/login`);
+  await page.waitForSelector('input[name="username"]', { timeout: 10000 });
   await page.waitForLoadState('networkidle');
-  await page.context().clearCookies();
-  await page.reload();
-  await page.waitForLoadState('networkidle');
+  const csrfToken = await page.inputValue('input[name="csrf_token"]').catch(() => '');
+  console.log(`${username} CSRF token: ${csrfToken ? csrfToken.substring(0, 8) + '...' : 'MISSING'}`);
+  if (!csrfToken) {
+    throw new Error(`${username} CSRF token missing — cannot login`);
+  }
   console.log(`${username} navigated to login page, URL: ${page.url()}`);
 
   await page.fill('input[name="username"]', username);
@@ -55,7 +58,7 @@ async function runGlobalSetup() {
   console.log(process.env.REMOTE_WS_ENDPOINT ? 'REMOTE BROWSER CONNECTED' : 'LOCAL BROWSER LAUNCHED');
 
   const roles = [
-    { user: 'admin', pass: 'Jember3509', file: 'auth/admin.json' },
+    { user: 'admin', pass: 'Jember3509*', file: 'auth/admin.json' },
     { user: 'petugas01', pass: 'Jember3509', file: 'auth/petugas.json', retries: 2 },
     { user: 'operator01', pass: 'Jember3509', file: 'auth/operator.json' },
     { user: 'statistisi01', pass: 'Jember3509', file: 'auth/statistisi.json' },

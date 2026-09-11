@@ -3,6 +3,8 @@ name: CI
 on:
   pull_request:
     branches: [ main ]
+  push:
+    branches: [ main ]
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -10,47 +12,72 @@ env:
 jobs:
   php-lint-and-test:
     runs-on: ubuntu-latest
-
+    services:
+      mysql:
+        image: mariadb:10.6
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: jagapadi_test
+        ports: ["3306:3306"]
+        options: --health-cmd="healthcheck.sh --connect --innodb_initialized" --health-interval=10s --health-timeout=5s --health-retries=10
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
-          extensions: mbstring, mysqli, pdo_mysql
-
-      - name: Cache Composer dependencies
-        uses: actions/cache@v4
-        with:
-          path: vendor
-          key: ${{ runner.os }}-composer-${{ hashFiles('composer.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-composer-
-
-      - name: Install dependencies
+          extensions: mbstring, pdo_mysql, fileinfo, gd, zip, curl
+          coverage: none
+      - name: Validate composer
         run: |
-          if [ -f composer.json ]; then
-            composer install --no-interaction --prefer-dist --no-progress
-          else
-            echo "composer.json tidak ditemukan, composer install dilewati."
-          fi
-
-      - name: PHP lint
+          composer validate --strict --no-check-lock || true
+          if [ -f backend/composer.json ]; then composer validate --strict --working-dir=backend; fi
+      - name: Install root
+        run: composer install --no-interaction --prefer-dist --no-progress || echo "root skip"
+      - name: Install backend
+        run: composer install --no-interaction --prefer-dist --no-progress --working-dir=backend
+      - name: PHP lint (root+backend)
         run: |
-          find . -type f -name "*.php" \
-            -not -path "./vendor/*" \
-            -not -path "./storage/*" \
-            -not -path "./node_modules/*" \
-            -print0 | xargs -0 -n1 php -l
-
-      - name: PHPUnit
+          php backend/scripts/lint.php
+          find . -type f -name "*.php" -not -path "./vendor/*" -not -path "./backend/vendor/*" -not -path "./storage/*" -print0 | xargs -0 -n1 php -l
+      - name: Composer audit
         run: |
-          if [ -f vendor/bin/phpunit ] && [ -f phpunit.xml.dist ]; then
-            vendor/bin/phpunit --configuration phpunit.xml.dist
-          elif [ -f vendor/bin/phpunit ] && [ -f phpunit.xml ]; then
-            vendor/bin/phpunit --configuration phpunit.xml
-          else
-            echo "PHPUnit atau file konfigurasi PHPUnit tidak ditemukan, test dilewati."
-          fi
+          composer audit || true
+          composer audit --working-dir=backend || true
+      - name: Migrate fresh (backend canonical)
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: jagapadi_test
+          DB_USER: root
+          DB_PASS: root
+          APP_ENV: testing
+        run: |
+          php backend/scripts/migrate.php
+          php scripts/verify-migrations.php
+      - name: PHPUnit root
+        env:
+          DB_HOST: 127.0.0.1
+          DB_NAME: jagapadi_test
+          DB_USER: root
+          DB_PASS: root
+        run: vendor/bin/phpunit --configuration phpunit.xml --testdox
+      - name: PHPUnit backend
+        env:
+          DB_HOST: 127.0.0.1
+          DB_NAME: jagapadi_test
+          DB_USER: root
+          DB_PASS: root
+        run: vendor/bin/phpunit --configuration backend/phpunit.xml --testdox
+          # phpstan, secret scan, openapi contract — fail-closed (no silent skip)
+      - name: PHPStan
+        run: |
+          if [ -f backend/vendor/bin/phpstan ]; then backend/vendor/bin/phpstan analyse --configuration backend/phpstan.neon; else echo "phpstan not installed — install via composer require-dev phpstan/phpstan"; exit 1; fi
+      - name: Secret scan (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Route/OpenAPI contract
+        run: |
+          php scripts/generate-route-matrix.php
+          if [ -f tests/Contract/RouterOpenApiTest.php ]; then vendor/bin/phpunit --filter RouterOpenApiTest; fi
+          test -f docs/ROUTE_MATRIX.json

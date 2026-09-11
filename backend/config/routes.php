@@ -43,12 +43,11 @@ $router->addGlobalMiddleware(CsrfMiddleware::class);
 $router->addGlobalMiddleware(RateLimitMiddleware::class);
 
 // ====================
-// Web â€” Auth (public)
+// Web — Auth (public)
 // ====================
 $router->get('/login', [WebAuthController::class, 'showLoginForm']);
 $router->get('/', [WebAuthController::class, 'showLoginForm']);
 $router->post('/login', [WebAuthController::class, 'login']);
-$router->get('/logout', [WebAuthController::class, 'logout']);
 $router->post('/logout', [WebAuthController::class, 'logout']);
 
 // ========================
@@ -199,9 +198,17 @@ $router->get('/laporan-hama/create', [WebLaporanHamaController::class, 'create']
 $router->get('/laporan-hama/create-light', [\App\Controllers\Web\LaporanHamaLightController::class, 'create'], [WebAuthMiddleware::class, PetugasAdminMiddleware::class]);
 $router->post('/laporan-hama/light/store', [\App\Controllers\Web\LaporanHamaLightController::class, 'store'], [WebAuthMiddleware::class, PetugasAdminMiddleware::class]);
 $router->post('/laporan-hama', [WebLaporanHamaController::class, 'store'], [WebAuthMiddleware::class, PetugasAdminMiddleware::class]);
+$router->post('/laporan-hama/store', [WebLaporanHamaController::class, 'store'], [WebAuthMiddleware::class, PetugasAdminMiddleware::class]);
+$router->get('/laporan-hama/detail/{id}', [WebLaporanHamaController::class, 'show'], [WebAuthMiddleware::class]);
 $router->get('/laporan-hama/{id}', [WebLaporanHamaController::class, 'show'], [WebAuthMiddleware::class]);
-$router->get('/laporan-hama/{id}/edit', [WebLaporanHamaController::class, 'edit'], [WebAuthMiddleware::class]);
+$router->get('/laporan-hama/{id}/edit', [WebLaporanHamaController::class, 'edit'], [WebAuthMiddleware::class, PetugasAdminMiddleware::class]);
 $router->post('/laporan-hama/{id}', [WebLaporanHamaController::class, 'update'], [WebAuthMiddleware::class]);
+$router->post('/laporan-hama/update/{id}', [WebLaporanHamaController::class, 'update'], [WebAuthMiddleware::class, PetugasAdminMiddleware::class]);
+$router->post('/laporan-hama/delete/{id}', [WebLaporanHamaController::class, 'delete'], [WebAuthMiddleware::class, PetugasAdminMiddleware::class]);
+$router->post('/laporan-hama/submit/{id}', [WebLaporanHamaController::class, 'submit'], [WebAuthMiddleware::class, PetugasAdminMiddleware::class]);
+$router->post('/laporan-hama/verify/{id}', [WebLaporanHamaController::class, 'verify'], [WebAuthMiddleware::class, AdminMiddleware::class]);
+$router->post('/laporan-hama/reject/{id}', [WebLaporanHamaController::class, 'reject'], [WebAuthMiddleware::class, AdminMiddleware::class]);
+$router->post('/laporan-hama/archive/{id}', [WebLaporanHamaController::class, 'archive'], [WebAuthMiddleware::class, AdminMiddleware::class]);
 $router->post('/laporan-hama/{id}/submit', [WebLaporanHamaController::class, 'submit'], [WebAuthMiddleware::class]);
 $router->post('/laporan-hama/{id}/delete', [WebLaporanHamaController::class, 'delete'], [WebAuthMiddleware::class]);
 $router->post('/laporan-hama/{id}/verifikasi', [WebLaporanHamaController::class, 'verify'], [WebAuthMiddleware::class, AdminMiddleware::class]);
@@ -242,9 +249,17 @@ $router->post('/api/v1/laporan-hama/{id}/video/delete', [ApiLaporanVideoControll
 $router->get('/laporan-irigasi', [WebLaporanIrigasiController::class, 'index'], [WebAuthMiddleware::class]);
 $router->get('/laporan-irigasi/create', [WebLaporanIrigasiController::class, 'create'], [WebAuthMiddleware::class, PetugasAdminMiddleware::class]);
 $router->post('/laporan-irigasi', [WebLaporanIrigasiController::class, 'store'], [WebAuthMiddleware::class, PetugasAdminMiddleware::class]);
+$router->post('/laporan-irigasi/store', [WebLaporanIrigasiController::class, 'store'], [WebAuthMiddleware::class, PetugasAdminMiddleware::class]);
+$router->get('/laporan-irigasi/detail/{id}', [WebLaporanIrigasiController::class, 'show'], [WebAuthMiddleware::class]);
 $router->get('/laporan-irigasi/{id}', [WebLaporanIrigasiController::class, 'show'], [WebAuthMiddleware::class]);
-$router->get('/laporan-irigasi/{id}/edit', [WebLaporanIrigasiController::class, 'edit'], [WebAuthMiddleware::class]);
+$router->get('/laporan-irigasi/{id}/edit', [WebLaporanIrigasiController::class, 'edit'], [WebAuthMiddleware::class, PetugasAdminMiddleware::class]);
 $router->post('/laporan-irigasi/{id}', [WebLaporanIrigasiController::class, 'update'], [WebAuthMiddleware::class]);
+$router->post('/laporan-irigasi/update/{id}', [WebLaporanIrigasiController::class, 'update'], [WebAuthMiddleware::class, PetugasAdminMiddleware::class]);
+$router->post('/laporan-irigasi/delete/{id}', [WebLaporanIrigasiController::class, 'delete'], [WebAuthMiddleware::class, PetugasAdminMiddleware::class]);
+$router->post('/laporan-irigasi/submit/{id}', [WebLaporanIrigasiController::class, 'submit'], [WebAuthMiddleware::class, PetugasAdminMiddleware::class]);
+$router->post('/laporan-irigasi/verify/{id}', [WebLaporanIrigasiController::class, 'verify'], [WebAuthMiddleware::class, AdminMiddleware::class]);
+$router->post('/laporan-irigasi/reject/{id}', [WebLaporanIrigasiController::class, 'reject'], [WebAuthMiddleware::class, AdminMiddleware::class]);
+$router->post('/laporan-irigasi/archive/{id}', [WebLaporanIrigasiController::class, 'archive'], [WebAuthMiddleware::class, AdminMiddleware::class]);
 $router->post('/laporan-irigasi/{id}/submit', [WebLaporanIrigasiController::class, 'submit'], [WebAuthMiddleware::class]);
 $router->post('/laporan-irigasi/{id}/delete', [WebLaporanIrigasiController::class, 'delete'], [WebAuthMiddleware::class]);
 $router->post('/laporan-irigasi/{id}/verifikasi', [WebLaporanIrigasiController::class, 'verify'], [WebAuthMiddleware::class, AdminMiddleware::class]);

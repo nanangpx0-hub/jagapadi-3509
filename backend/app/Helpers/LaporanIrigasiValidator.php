@@ -10,6 +10,20 @@ use App\Models\MasterKecamatan;
 
 class LaporanIrigasiValidator
 {
+    /** Batas koordinat Kabupaten Jember (validasi geografis sisi server). */
+    public const JEMBER_LAT_MIN = -8.5500;
+    public const JEMBER_LAT_MAX = -7.9000;
+    public const JEMBER_LNG_MIN = 113.3000;
+    public const JEMBER_LNG_MAX = 114.1000;
+
+    public static function isWithinJemberBounds(float $latitude, float $longitude): bool
+    {
+        return $latitude >= self::JEMBER_LAT_MIN
+            && $latitude <= self::JEMBER_LAT_MAX
+            && $longitude >= self::JEMBER_LNG_MIN
+            && $longitude <= self::JEMBER_LNG_MAX;
+    }
+
     public static function validateDraft(array $input): array
     {
         $errors = [];
@@ -101,6 +115,8 @@ class LaporanIrigasiValidator
             $errors['catatan'] = 'Catatan maksimal 5000 karakter.';
         }
 
+        self::validateJemberBounds($input, $errors);
+
         return $errors;
     }
 
@@ -181,5 +197,28 @@ class LaporanIrigasiValidator
     {
         $d = \DateTime::createFromFormat('Y-m-d', $date);
         return $d && $d->format('Y-m-d') === $date;
+    }
+
+    /**
+     * Tolak koordinat lengkap yang berada di luar Kabupaten Jember.
+     * Hanya berjalan bila latitude+longitude terisi numerik dan lolos
+     * rentang global, agar pesan spesifik tidak menutupi error dasar.
+     */
+    private static function validateJemberBounds(array $input, array &$errors): void
+    {
+        $hasLat = isset($input['latitude']) && $input['latitude'] !== '';
+        $hasLng = isset($input['longitude']) && $input['longitude'] !== '';
+        if (!$hasLat || !$hasLng) {
+            return;
+        }
+        if (isset($errors['latitude']) || isset($errors['longitude'])) {
+            return;
+        }
+        if (!is_numeric($input['latitude']) || !is_numeric($input['longitude'])) {
+            return;
+        }
+        if (!self::isWithinJemberBounds((float) $input['latitude'], (float) $input['longitude'])) {
+            $errors['koordinat'] = 'Koordinat lokasi berada di luar wilayah Kabupaten Jember.';
+        }
     }
 }

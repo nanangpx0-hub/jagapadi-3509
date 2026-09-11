@@ -6,7 +6,16 @@ Sistem pelaporan pertanian (Hama/OPT & Kondisi Irigasi) untuk Kabupaten Jember.
 
 ## Status Proyek
 
-**v1.0.0 Production Ready** ✅
+**v1.1.3+6 — Staging Verified (2026-09-01)**
+Evidence-based, bukan klaim "Production Ready" tanpa gate:
+- Root PHPUnit: 277 tests, 2645 assertions, 0 failures (sebelumnya 2 failures KSA - diperbaiki 2026-09-01)
+- Backend v1 PHPUnit: 239 tests, 640 assertions, 0 failures
+- Flutter tests: 254 tests passed; mobile bukan placeholder (22k+ baris, FCM, offline DB, 6 domain laporan)
+- Cache: migrasi serialize→JSON (allowed_classes=>false fallback + invalidasi file lama)
+- KSA: data_ksa_bulanan 3952 records (2018-2025 tetap 3648 + 2026 bulanan 304), data_pertanian_bps 138 records (sinkron 2025)
+- Build APK release: validasi wajib `API_BASE_URL=https://<host>/api/v1` (Backend v1 canonical, tolak HTTP/empty/jagapadi-3509)
+- Lihat `docs/AUDIT_KODE_DAN_FUNGSI_2026-09-01.md` untuk matriks temuan P0-P3
+- Belum klaim production-ready hingga PHPStan, lint PSR-12, DAST, backup/restore drill lulus di staging
 
 ---
 
@@ -42,7 +51,7 @@ jagapadi/
 ├── .editorconfig
 ```
 
-> **Catatan**: Backend telah memiliki MVC lengkap (auth, master data wilayah & OPT, CRUD laporan hama & irigasi, workflow verifikasi admin, upload foto aman) dan skema database lengkap (11 tabel). Mobile masih placeholder.
+> **Catatan**: Backend telah memiliki MVC lengkap (auth, master data wilayah & OPT, CRUD 6 domain laporan + workflow verifikasi/admin + upload aman + dashboard/scraper) dan skema lengkap (38 kab/kota KSA, produksi_gabah,aporan_hama/irigasi dll). Mobile aktif: Flutter 1.1.3+6, JWT, offline-first draft, sync queue, FCM, 22k+ baris — bukan placeholder.
 
 ---
 

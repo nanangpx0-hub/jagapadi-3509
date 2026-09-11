@@ -22,9 +22,9 @@ if "%TARGET%"==""   set TARGET=lan
 if "%BUILDTYPE%"="" set BUILDTYPE=debug
 
 :: URL tanpa port (Laragon port 80)
-if "%TARGET%"=="emulator" set API_URL=http://10.0.2.2/jagapadi-3509/api/v1
-if "%TARGET%"=="lan"      set API_URL=http://192.168.10.5/jagapadi-3509/api/v1
-if "%TARGET%"=="prod"     set API_URL=https://jagapadi.example.go.id/api/v1
+if "%TARGET%"=="emulator" set API_URL=http://10.0.2.2:8080/api/v1
+if "%TARGET%"=="lan"      set API_URL=http://192.168.10.5:8080/api/v1
+if "%TARGET%"=="prod"     set API_URL=https://jagapadi.my.id/api/v1
 
 if "%API_URL%"=="" (
     echo Target tidak valid: %TARGET%
@@ -38,6 +38,33 @@ echo Target  : %TARGET%
 echo Type    : %BUILDTYPE%
 echo API URL : %API_URL%
 echo.
+
+if /i "%BUILDTYPE%"=="release" (
+    echo %API_URL% | findstr /b "https://" >nul
+    if errorlevel 1 (
+        echo.
+        echo === VALIDASI GAGAL: Release build wajib HTTPS Backend v1 ===
+        echo   API_URL saat ini: %API_URL%
+        echo   Syarat: https:// + mengandung /api/v1 + tanpa /jagapadi-3509
+        echo   Contoh: https://jagapadi.my.id/api/v1
+        echo   Build dibatalkan.
+        exit /b 1
+    )
+    echo %API_URL% | findstr "/api/v1" >nul
+    if errorlevel 1 (
+        echo.
+        echo === VALIDASI GAGAL: Release URL harus mengandung /api/v1 ===
+        echo   API_URL: %API_URL%
+        exit /b 1
+    )
+    echo %API_URL% | findstr "/jagapadi-3509" >nul
+    if not errorlevel 1 (
+        echo.
+        echo === VALIDASI GAGAL: Release URL dilarang mengandung /jagapadi-3509 ===
+        echo   API_URL: %API_URL%
+        exit /b 1
+    )
+)
 
 if "%TARGET%"=="prod" if "%BUILDTYPE%"=="release" (
     echo [PERHATIAN] Build RELEASE untuk PRODUKSI

@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Curah Hujan Model
  * Model untuk operasi CRUD data curah hujan
@@ -517,6 +518,116 @@ class CurahHujan {
         ]);
     }
     
+    /**
+     * Ambil riwayat log berstatus gagal/parsial beserta rincian pesannya.
+     *
+     * @param int $limit
+     * @return array
+     */
+    public function getFailedLogs($limit = 50) {
+        $sql = "SELECT * FROM {$this->logTable} WHERE status IN ('failed', 'partial') ORDER BY created_at DESC LIMIT " . (int)$limit;
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * UPSERT massal data NASA dalam SATU statement per chunk di dalam
+     * transaksi atomik. Idempoten: re-scrape rentang yang sama tidak
+     * menduplikasi (unique key tanggal+lokasi+sumber_data).
+     *
+     * Tanggal > hari ini dilewati sebagai 'skipped_future' (bukan error).
+     *
+     * @param array $records
+     * @return array ['success' => int, 'failed' => int, 'skipped_future' => int]
+     */
+    public function bulkUpsertNasaData(array $records) {
+        $success = 0;
+        $failed = 0;
+        $skippedFuture = 0;
+        $today = date('Y-m-d');
+
+        $valid = [];
+        foreach ($records as $record) {
+            if (!is_array($record)) {
+                $failed++;
+                continue;
+            }
+            $tanggal = (string)($record['tanggal'] ?? '');
+            $d = DateTime::createFromFormat('Y-m-d', $tanggal);
+            if (!$d || $d->format('Y-m-d') !== $tanggal) {
+                $failed++;
+                continue;
+            }
+            if (!isset($record['curah_hujan']) || !is_numeric($record['curah_hujan'])) {
+                $failed++;
+                continue;
+            }
+            if ($tanggal > $today) {
+                $skippedFuture++;
+                continue;
+            }
+            $valid[] = [
+                $tanggal,
+                (string)($record['lokasi'] ?? 'Jember'),
+                isset($record['kecamatan_id']) && $record['kecamatan_id'] !== '' ? (int)$record['kecamatan_id'] : null,
+                isset($record['kecamatan']) ? (string)$record['kecamatan'] : null,
+                isset($record['latitude']) && $record['latitude'] !== '' ? (float)$record['latitude'] : null,
+                isset($record['longitude']) && $record['longitude'] !== '' ? (float)$record['longitude'] : null,
+                (string)($record['kode_wilayah'] ?? '35.09'),
+                (float)$record['curah_hujan'],
+                (string)($record['satuan'] ?? 'mm'),
+                (string)($record['sumber_data'] ?? 'NASA POWER (PRECTOTCORR)'),
+                isset($record['keterangan']) ? (string)$record['keterangan'] : null,
+            ];
+        }
+
+        if ($valid === []) {
+            return ['success' => $success, 'failed' => $failed, 'skipped_future' => $skippedFuture];
+        }
+
+        $ownsTransaction = !$this->db->inTransaction();
+        if ($ownsTransaction) {
+            $this->db->beginTransaction();
+        }
+
+        try {
+            // Satu statement multi-baris per chunk (efisien untuk >10rb baris).
+            foreach (array_chunk($valid, 500) as $chunk) {
+                $placeholders = implode(',', array_fill(0, count($chunk), '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'));
+                $params = [];
+                foreach ($chunk as $row) {
+                    foreach ($row as $value) {
+                        $params[] = $value;
+                    }
+                }
+                $sql = "INSERT INTO {$this->table}
+                        (tanggal, lokasi, kecamatan_id, kecamatan, latitude, longitude, kode_wilayah,
+                         curah_hujan, satuan, sumber_data, keterangan)
+                        VALUES {$placeholders}
+                        ON DUPLICATE KEY UPDATE
+                        curah_hujan = VALUES(curah_hujan),
+                        updated_at = CURRENT_TIMESTAMP";
+                $stmt = $this->db->prepare($sql);
+                $stmt->execute($params);
+                $success += count($chunk);
+            }
+
+            if ($ownsTransaction) {
+                $this->db->commit();
+            }
+        } catch (Throwable $e) {
+            if ($ownsTransaction && $this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            error_log('bulkUpsertNasaData failed: ' . $e->getMessage());
+            $failed += count($valid);
+            $success = 0;
+        }
+
+        return ['success' => $success, 'failed' => $failed, 'skipped_future' => $skippedFuture];
+    }
+
     /**
      * Get recent logs
      * 

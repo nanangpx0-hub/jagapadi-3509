@@ -7,8 +7,8 @@ namespace App\Services;
 use App\Core\Database;
 use App\Core\Logger;
 use App\Helpers\LaporanCuacaValidator;
-use App\Helpers\LaporanPolicy;
 use App\Helpers\LaporanStatus;
+use App\Policies\ReportAuthorizationPolicy;
 use App\Helpers\NomorLaporanGenerator;
 use App\Models\ActivityLog;
 use App\Models\LaporanCuaca;
@@ -59,7 +59,7 @@ class LaporanCuacaService
             return ['success' => false, 'error' => 'NotFound', 'message' => 'Laporan tidak ditemukan.', 'code' => 404];
         }
 
-        $denial = LaporanPolicy::editDenial($existing, $userId);
+        $denial = ReportAuthorizationPolicy::editDenial($existing, $userId);
         if ($denial !== null) {
             return ['success' => false] + $denial;
         }
@@ -219,7 +219,7 @@ class LaporanCuacaService
     public static function getDetailForCurrentUser(int $id, array $currentUser): array
     {
         $laporan = LaporanCuaca::findAccessibleById($id, $currentUser);
-        if ($laporan === null) {
+        if ($laporan === null || !ReportAuthorizationPolicy::canViewRow($laporan, $currentUser)) {
             return ['success' => false, 'error' => 'NotFound', 'message' => 'Laporan tidak ditemukan.', 'code' => 404];
         }
 
@@ -231,22 +231,13 @@ class LaporanCuacaService
         $page = max(1, (int) ($filters['page'] ?? 1));
         $limit = min(100, max(1, (int) ($filters['limit'] ?? 20)));
 
-        $role = strtolower((string) ($currentUser['role'] ?? ''));
-        $isPetugas = $role === 'petugas';
+        $scope = ReportAuthorizationPolicy::resolveListScope($currentUser, $filters);
+        $queryFilters = $scope['queryFilters'];
 
-        $includeDraft = isset($filters['include_draft'])
-            ? filter_var($filters['include_draft'], FILTER_VALIDATE_BOOLEAN)
-            : $isPetugas;
-
-        $queryFilters = $filters;
-        if (!$includeDraft && !isset($queryFilters['status'])) {
-            $queryFilters['status'] = 'Submitted,Diverifikasi';
-        }
-
-        if ($role === 'admin') {
-            $result = LaporanCuaca::listForAdmin($queryFilters, $page, $limit);
+        if ($scope['mode'] === 'petugas') {
+            $result = LaporanCuaca::listForPetugas((int) $scope['ownerId'], $queryFilters, $page, $limit);
         } else {
-            $result = LaporanCuaca::listForPetugas((int) $currentUser['id'], $queryFilters, $page, $limit);
+            $result = LaporanCuaca::listForAdmin($queryFilters, $page, $limit);
         }
 
         $total = $result['total'];

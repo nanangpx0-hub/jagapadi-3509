@@ -705,7 +705,7 @@ class _HamaFormScreenState extends State<HamaFormScreen> {
                         labelText: 'Tingkat Keparahan',
                         errorText: _fe('tingkat_keparahan'),
                       ),
-                      value: _keparahan,
+                      initialValue: _keparahan,
                       items: ['Ringan', 'Sedang', 'Berat']
                           .map(
                               (k) => DropdownMenuItem(value: k, child: Text(k)))
@@ -724,7 +724,7 @@ class _HamaFormScreenState extends State<HamaFormScreen> {
                       decoration: const InputDecoration(
                         labelText: 'Metode Pengukuran Serangan',
                       ),
-                      value: _metodePengukuran,
+                      initialValue: _metodePengukuran,
                       items: const [
                         DropdownMenuItem(
                             value: 'absolut', child: Text('Luas absolut (Ha)')),
@@ -958,7 +958,7 @@ class _HamaFormScreenState extends State<HamaFormScreen> {
                                 width: double.infinity,
                                 child: OutlinedButton.icon(
                                   icon: _gettingLocation
-                                      ? SizedBox.square(
+                                      ? const SizedBox.square(
                                           dimension: 18,
                                           child: CircularProgressIndicator(
                                               strokeWidth: 2),
@@ -1140,12 +1140,12 @@ class _HamaFormScreenState extends State<HamaFormScreen> {
                             )
                           else if (_existingVideoUrl != null &&
                               _existingVideoUrl!.isNotEmpty)
-                            Row(
+                            const Row(
                               children: [
-                                const Icon(Icons.videocam,
+                                Icon(Icons.videocam,
                                     color: Colors.blue, size: 18),
-                                const SizedBox(width: 8),
-                                const Expanded(
+                                SizedBox(width: 8),
+                                Expanded(
                                   child: Text('Video sudah tersimpan di server',
                                       style: TextStyle(fontSize: 13)),
                                 ),

@@ -69,7 +69,10 @@ final class CacheManager {
 
             if ($this->driver === 'redis') {
                 $payload = $this->client->get($cacheKey);
-                return $payload === false ? null : unserialize($payload);
+                if ($payload === false || $payload === null) {
+                    return null;
+                }
+                return $this->decodeRedisPayload((string) $payload);
             }
 
             $value = $this->client->get($cacheKey);
@@ -99,7 +102,8 @@ final class CacheManager {
             }
 
             if ($this->driver === 'redis') {
-                return (bool)$this->client->setex($cacheKey, $ttl, serialize($value));
+                $encoded = $this->encodeValue($value);
+                return (bool)$this->client->setex($cacheKey, $ttl, $encoded);
             }
 
             return (bool)$this->client->set($cacheKey, $value, $ttl);
@@ -376,17 +380,62 @@ final class CacheManager {
 
     private function setFileValue(string $cacheKey, mixed $value, int $ttl): bool {
         $payload = [
+            'v' => 2,
             'key' => $cacheKey,
             'expires' => time() + $ttl,
             'value' => $value,
         ];
 
-        return file_put_contents($this->filePath($cacheKey), serialize($payload), LOCK_EX) !== false;
+        $encoded = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($encoded === false) {
+            return false;
+        }
+        return file_put_contents($this->filePath($cacheKey), $encoded, LOCK_EX) !== false;
     }
 
     private function readFilePayload(string $path): ?array {
-        $payload = @unserialize((string) file_get_contents($path), ['allowed_classes' => true]);
-        return is_array($payload) ? $payload : null;
+        $raw = @file_get_contents($path);
+        if ($raw === false || $raw === '') {
+            return null;
+        }
+        $decoded = json_decode($raw, true);
+        if (is_array($decoded) && json_last_error() === JSON_ERROR_NONE) {
+            return $decoded;
+        }
+        $legacy = @unserialize($raw, ['allowed_classes' => false]);
+        if (is_array($legacy) && isset($legacy['value'], $legacy['expires'])) {
+            return $legacy;
+        }
+        @unlink($path);
+        if (str_contains($raw, 'O:')) {
+            error_log('[CacheManager] rejected serialized object payload');
+        }
+        return null;
+    }
+
+    private function encodeValue(mixed $value): string {
+        $envelope = ['v' => 2, 'value' => $value];
+        $encoded = json_encode($envelope, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        return $encoded === false ? json_encode(['v' => 2, 'value' => null]) : $encoded;
+    }
+
+    private function decodeRedisPayload(string $payload): mixed {
+        $decoded = json_decode($payload, true);
+        if (is_array($decoded) && array_key_exists('value', $decoded) && json_last_error() === JSON_ERROR_NONE) {
+            return $decoded['value'];
+        }
+        // legacy serialize fallback (no object)
+        $legacy = @unserialize($payload, ['allowed_classes' => false]);
+        if ($legacy !== false) {
+            if (is_array($legacy) && array_key_exists('value', $legacy)) {
+                return $legacy['value'];
+            }
+            return $legacy;
+        }
+        if (str_contains($payload, 'O:')) {
+            error_log('[CacheManager] rejected Redis serialized object payload');
+        }
+        return null;
     }
 
     private function normalizeKey(string $key): string {

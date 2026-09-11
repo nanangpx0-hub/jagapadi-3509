@@ -348,7 +348,7 @@ class _LaporanCard extends StatelessWidget {
     return Semantics(
       button: true,
       label:
-          '${l.nomorLaporan ?? "Draf " + l.id.toString()}, status ${l.statusLabel}, tanggal ${l.tanggal ?? "-"}',
+          '${l.nomorLaporan ?? "Draf ${l.id}"}, status ${l.statusLabel}, tanggal ${l.tanggal ?? "-"}',
       child: Card(
         margin: const EdgeInsets.symmetric(
           horizontal: AppSpacing.md,

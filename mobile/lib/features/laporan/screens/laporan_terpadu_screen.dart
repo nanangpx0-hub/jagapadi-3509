@@ -87,9 +87,9 @@ class _LaporanTerpaduScreenState extends State<LaporanTerpaduScreen> {
     final p = context.read<LaporanTerpaduProvider>();
     if (p.list.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          key: const Key('snackbar_export_empty'),
-          content: const Text('Tidak ada data laporan untuk diekspor.'),
+        const SnackBar(
+          key: Key('snackbar_export_empty'),
+          content: Text('Tidak ada data laporan untuk diekspor.'),
         ),
       );
       return;
@@ -180,8 +180,7 @@ class _LaporanTerpaduScreenState extends State<LaporanTerpaduScreen> {
           // Filter
           Semantics(
             button: true,
-            label: 'Buka filter laporan' +
-                (hasActiveFilter ? ', filter aktif' : ''),
+            label: 'Buka filter laporan${hasActiveFilter ? ', filter aktif' : ''}',
             child: Tooltip(
               message: 'Filter laporan',
               child: Stack(
@@ -231,7 +230,7 @@ class _LaporanTerpaduScreenState extends State<LaporanTerpaduScreen> {
           child: Column(
             children: [
               if (!connectivity.isOnline)
-                _OfflineBanner(key: const Key('offline_banner')),
+                const _OfflineBanner(key: Key('offline_banner')),
               if (hasActiveFilter) _ActiveFilterBar(filter: p.filter),
               _QuickStatusFilter(
                 currentStatus: p.filter.statusKey,
@@ -365,18 +364,18 @@ class _OfflineBanner extends StatelessWidget {
         container: true,
         label:
             'Mode offline aktif. Menampilkan data laporan terakhir yang tersimpan.',
-        child: Row(
+        child: const Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.only(top: 2),
+              padding: EdgeInsets.only(top: 2),
               child: Icon(
                 Icons.wifi_off,
                 size: 18,
                 color: AppTheme.onWarningContainer,
               ),
             ),
-            const SizedBox(width: AppSpacing.sm),
+            SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Text(
                 'Tidak ada koneksi internet. Menampilkan data terakhir.',
@@ -448,8 +447,8 @@ class _ActiveFilterBar extends StatelessWidget {
           vertical: AppSpacing.sm,
         ),
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
+          const Padding(
+            padding: EdgeInsets.fromLTRB(
               AppSpacing.xs,
               AppSpacing.xs,
               AppSpacing.xs,

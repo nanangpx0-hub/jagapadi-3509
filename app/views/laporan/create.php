@@ -276,10 +276,10 @@ window.__wilayahAwal = {
                             </div>
                         </div>
                         <div class="col-md-6">
-                            <div class="form-group">
-                                <label>OPT <span class="text-danger">*</span></label>
-                                <input type="search" id="optSearch" class="form-control mb-2" placeholder="Ketik nama nasional, lokal, atau ilmiah...">
-                                <select name="master_opt_id" id="masterOptSelect" class="form-control">
+                            <div class="form-group opt-dropdown-wrap">
+                                <label for="masterOptSelect">OPT <span class="text-danger">*</span></label>
+                                <input type="search" id="optSearch" class="form-control mb-2" placeholder="Ketik nama nasional, lokal, atau ilmiah..." autocomplete="off">
+                                <select name="master_opt_id" id="masterOptSelect" class="form-control" data-opt-dropdown>
                                     <option value="">-- Pilih OPT --</option>
                                     <?php foreach($data_opt as $opt): ?>
                                     <option value="<?= $opt['id'] ?>"
@@ -288,6 +288,13 @@ window.__wilayahAwal = {
                                             data-photo="<?= htmlspecialchars($opt['foto_url'] ?? '') ?>"><?= htmlspecialchars($opt['nama_opt']) ?><?= !empty($opt['nama_lokal']) ? ' (' . htmlspecialchars($opt['nama_lokal']) . ')' : '' ?></option>
                                     <?php endforeach; ?>
                                 </select>
+                                <div class="opt-dropdown-error" data-opt-error style="display:none"></div>
+                                <div class="jenis-dropdown-toolbar">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary btn-refresh" data-opt-refresh>
+                                        <i class="fas fa-sync-alt"></i> Muat Ulang OPT
+                                    </button>
+                                    <small class="text-muted">Daftar OPT dimuat otomatis tanpa reload.</small>
+                                </div>
                                 <div id="optPreview" class="mt-2"></div>
                                 <button type="button" class="btn btn-link px-0" id="toggleNewOpt">Hama tidak ditemukan? Ajukan nama hama baru</button>
                                 <div id="newOptFields" class="border rounded p-3" style="display:none">
@@ -623,8 +630,23 @@ window.__wilayahAwal = {
 document.addEventListener('DOMContentLoaded', function () {
     const search = document.getElementById('optSearch');
     const select = document.getElementById('masterOptSelect');
-    const originalOptions = Array.from(select.options).map(option => option.cloneNode(true));
+    // Pencarian didelegasikan ke BAGIAN OPT (window.OPT.OptDropdown.filter)
+    // agar tetap kompatibel dengan pengisian dinamis tanpa reload.
+    // Fallback lokal hanya dipakai bila modul belum termuat.
+    let originalOptions = Array.from(select.options).map(option => option.cloneNode(true));
+    const resyncSnapshot = function () {
+        originalOptions = Array.from(select.options).map(option => option.cloneNode(true));
+    };
+    try {
+        if (window.OPT && window.OPT.OptDropdown) {
+            window.OPT.OptDropdown.on('load', resyncSnapshot);
+        }
+    } catch (e) { /* abaikan */ }
     search?.addEventListener('input', function () {
+        if (window.OPT && window.OPT.OptDropdown) {
+            window.OPT.OptDropdown.filter(this.value, select);
+            return;
+        }
         const keyword = this.value.trim().toLowerCase();
         const selected = select.value;
         select.replaceChildren(...originalOptions.filter((option, index) => index === 0 || (option.dataset.search || '').includes(keyword)).map(option => option.cloneNode(true)));
@@ -1230,6 +1252,35 @@ document.querySelector('[name="alamat_lengkap"]')?.addEventListener('input', fun
     // ============================================================================
     
     /**
+     * Tombol Aktifkan/Nonaktifkan Interaksi Peta (aksesibilitas mobile).
+     */
+    function enableMapInteractionToggle(leafletMap, container) {
+        if (!leafletMap || !container || !container.parentElement) return;
+        if (container.parentElement.querySelector('[data-map-interaction-toggle]')) return;
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-sm btn-outline-primary mb-2';
+        btn.setAttribute('data-map-interaction-toggle', 'true');
+        btn.setAttribute('aria-pressed', 'false');
+        btn.textContent = 'Aktifkan Interaksi Peta';
+        btn.addEventListener('click', function () {
+            var active = btn.getAttribute('aria-pressed') === 'true';
+            if (active) {
+                leafletMap.dragging.disable();
+                leafletMap.scrollWheelZoom.disable();
+                btn.setAttribute('aria-pressed', 'false');
+                btn.textContent = 'Aktifkan Interaksi Peta';
+            } else {
+                leafletMap.dragging.enable();
+                leafletMap.scrollWheelZoom.enable();
+                btn.setAttribute('aria-pressed', 'true');
+                btn.textContent = 'Nonaktifkan Interaksi Peta';
+            }
+        });
+        container.parentElement.insertBefore(btn, container);
+    }
+
+    /**
      * Initialize Leaflet map
      */
     function initMap() {
@@ -1246,8 +1297,17 @@ document.querySelector('[name="alamat_lengkap"]')?.addEventListener('input', fun
         const mapContainer = document.getElementById('coordinateMap');
         if (!mapContainer) return;
         
-        // Initialize map
-        map = L.map('coordinateMap').setView(jemberCenter, 12);
+        // Initialize map — scroll-zoom dimatikan default agar scroll halaman
+        // tidak terjebak; di mobile, dragging juga dimatikan default.
+        map = L.map('coordinateMap', {
+            scrollWheelZoom: false,
+            dragging: !L.Browser.mobile
+        }).setView(jemberCenter, 12);
+
+        // Tombol toggle interaksi peta untuk perangkat mobile.
+        if (L.Browser.mobile) {
+            enableMapInteractionToggle(map, mapContainer);
+        }
         
         // Add OpenStreetMap tile layer
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -1707,6 +1767,14 @@ async function loadKabupaten() {
     return normalizeKabupatenId(kabupatenSelect.value);
 }
 
+/**
+ * Umumkan perubahan dropdown wilayah ke pembaca layar (live region).
+ */
+function announceWilayah(message) {
+    var announcer = document.getElementById('accessibility-announcer');
+    if (announcer) announcer.textContent = message;
+}
+
 async function loadKecamatan(kabupatenId) {
     const kecamatanSelect = document.getElementById('kecamatanSelect');
     const desaSelect = document.getElementById('desaSelect');
@@ -1756,13 +1824,16 @@ async function loadKecamatan(kabupatenId) {
                 count: data.data.length,
                 options: kecamatanSelect.options.length
             });
+            announceWilayah('Data kecamatan berhasil dimuat.');
         } else {
             resetSelectOptions(kecamatanSelect, '-- Pilih Kecamatan --');
             console.warn('Tidak ada data kecamatan untuk kabupaten ini:', data.message || 'Empty data');
+            announceWilayah('Data kecamatan tidak tersedia untuk kabupaten ini.');
         }
     } catch (error) {
         console.error('Error loading kecamatan:', error);
         resetSelectOptions(kecamatanSelect, '-- Pilih Kecamatan --');
+        announceWilayah('Gagal memuat data kecamatan.');
     } finally {
         kecamatanSelect.disabled = false;
         syncSelectPlugin(kecamatanSelect);
@@ -1810,13 +1881,16 @@ async function loadDesa(kecamatanId) {
                 count: data.data.length,
                 options: desaSelect.options.length
             });
+            announceWilayah('Data desa berhasil dimuat.');
         } else {
             resetSelectOptions(desaSelect, '-- Pilih Desa --');
             console.warn('Tidak ada data desa untuk kecamatan ini:', data.message || 'Empty data');
+            announceWilayah('Data desa tidak tersedia untuk kecamatan ini.');
         }
     } catch (error) {
         console.error('Error loading desa:', error);
         resetSelectOptions(desaSelect, '-- Pilih Desa --');
+        announceWilayah('Gagal memuat data desa.');
     } finally {
         desaSelect.disabled = false;
         syncSelectPlugin(desaSelect);
@@ -2118,6 +2192,35 @@ scheduleDefaultKabupatenJemberEnforcement();
     // ============================================================================
     
     /**
+     * Tombol Aktifkan/Nonaktifkan Interaksi Peta (aksesibilitas mobile).
+     */
+    function enableMapInteractionToggle(leafletMap, container) {
+        if (!leafletMap || !container || !container.parentElement) return;
+        if (container.parentElement.querySelector('[data-map-interaction-toggle]')) return;
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-sm btn-outline-primary mb-2';
+        btn.setAttribute('data-map-interaction-toggle', 'true');
+        btn.setAttribute('aria-pressed', 'false');
+        btn.textContent = 'Aktifkan Interaksi Peta';
+        btn.addEventListener('click', function () {
+            var active = btn.getAttribute('aria-pressed') === 'true';
+            if (active) {
+                leafletMap.dragging.disable();
+                leafletMap.scrollWheelZoom.disable();
+                btn.setAttribute('aria-pressed', 'false');
+                btn.textContent = 'Aktifkan Interaksi Peta';
+            } else {
+                leafletMap.dragging.enable();
+                leafletMap.scrollWheelZoom.enable();
+                btn.setAttribute('aria-pressed', 'true');
+                btn.textContent = 'Nonaktifkan Interaksi Peta';
+            }
+        });
+        container.parentElement.insertBefore(btn, container);
+    }
+
+    /**
      * Initialize Leaflet map
      */
     function initMap() {
@@ -2135,8 +2238,17 @@ scheduleDefaultKabupatenJemberEnforcement();
         const mapContainer = document.getElementById('coordinateMap');
         if (!mapContainer) return;
         
-        // Initialize map
-        map = L.map('coordinateMap').setView(jemberCenter, 12);
+        // Initialize map — scroll-zoom dimatikan default agar scroll halaman
+        // tidak terjebak; di mobile, dragging juga dimatikan default.
+        map = L.map('coordinateMap', {
+            scrollWheelZoom: false,
+            dragging: !L.Browser.mobile
+        }).setView(jemberCenter, 12);
+
+        // Tombol toggle interaksi peta untuk perangkat mobile.
+        if (L.Browser.mobile) {
+            enableMapInteractionToggle(map, mapContainer);
+        }
         
         // Add OpenStreetMap tile layer
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -2495,4 +2607,68 @@ scheduleDefaultKabupatenJemberEnforcement();
 <!-- Phase 3: Draft Auto-Save and Offline Mode -->
 <script src="<?= BASE_URL ?>public/js/draft-autosave.js?v=2.1.0"></script>
 <script src="<?= BASE_URL ?>public/js/offline-laporan.js"></script>
+<link rel="stylesheet" href="<?= BASE_URL ?>public/css/jenis-laporan-dropdown.css">
+<script>
+window.JAGAPADI_BASE_URL = <?= json_encode(BASE_URL) ?>;
+window.JAGAPADI_CSRF_TOKEN = <?= json_encode($_SESSION['csrf_token'] ?? '') ?>;
+</script>
+<script src="<?= BASE_URL ?>public/js/jenis-laporan-dropdown.js?v=1.2.0"></script>
+<script>
+// ============================================================================
+// BAGIAN OPT — inisialisasi dropdown dinamis OPT (realtime, tanpa reload).
+// Seluruh operasi data OPT didelegasikan ke window.OPT.OptDropdown.
+// ============================================================================
+document.addEventListener('DOMContentLoaded', function () {
+    if (!window.OPT || !window.OPT.OptDropdown) return;
+    var OptDropdown = window.OPT.OptDropdown;
+    var select = document.getElementById('masterOptSelect');
+    var preview = document.getElementById('optPreview');
+    if (!select) return;
+
+    function escapeText(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function renderOptPreview(detail) {
+        if (!preview) return;
+        if (!detail || !detail.value) {
+            preview.innerHTML = '';
+            return;
+        }
+        var option = select.options[select.selectedIndex];
+        var photo = option ? option.getAttribute('data-photo') : '';
+        var label = option ? option.textContent : detail.value;
+        var html = '<div class="alert alert-info mb-0"><i class="fas fa-bug"></i> <strong>'
+            + escapeText(label.trim()) + '</strong></div>';
+        if (photo) {
+            html += '<img src="<?= BASE_URL ?>' + escapeText(photo).replace(/^\/+/, '')
+                + '" alt="Foto OPT" class="img-thumbnail mt-2" style="max-width:220px;max-height:150px;"'
+                + ' onerror="this.style.display=\'none\'">';
+        }
+        preview.innerHTML = html;
+    }
+
+    OptDropdown.on('change', renderOptPreview);
+
+    OptDropdown.bind(select, {
+        searchId: 'optSearch',
+        onChange: renderOptPreview,
+        autoLoad: true,
+    });
+
+    var refreshBtn = document.querySelector('[data-opt-refresh]');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', function () {
+            OptDropdown.refresh({ select: select }).catch(function () {});
+        });
+    }
+
+    // Tampilkan preview awal bila old input sudah memilih OPT.
+    if (select.value) {
+        renderOptPreview({ value: select.value });
+    }
+});
+</script>
 

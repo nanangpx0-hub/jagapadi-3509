@@ -186,6 +186,11 @@ createForm.addEventListener('submit', function(event) {
     }
 });
 
+function announceWilayah(message) {
+    var announcer = document.getElementById('accessibility-announcer');
+    if (announcer) announcer.textContent = message;
+}
+
 function loadKecamatan(kabupatenId) {
     const kecSelect = document.getElementById('kecamatan_id');
     const desaSelect = document.getElementById('desa_id');
@@ -208,9 +213,11 @@ function loadKecamatan(kabupatenId) {
             const sel = '<?= \App\Core\Security::e($oldInput["kecamatan_id"] ?? "") ?>' == k.id ? 'selected' : '';
             kecSelect.innerHTML += '<option value="' + k.id + '" ' + sel + '>' + k.nama_kecamatan + '</option>';
         });
+        announceWilayah('Data kecamatan berhasil dimuat.');
     })
     .catch(() => {
         kecSelect.innerHTML = '<option value="">Gagal memuat data</option>';
+        announceWilayah('Gagal memuat data kecamatan.');
     });
 }
 
@@ -234,9 +241,11 @@ function loadDesa(kecamatanId) {
             const sel = '<?= \App\Core\Security::e($oldInput["desa_id"] ?? "") ?>' == d.id ? 'selected' : '';
             desaSelect.innerHTML += '<option value="' + d.id + '" ' + sel + '>' + d.nama_desa + '</option>';
         });
+        announceWilayah('Data desa berhasil dimuat.');
     })
     .catch(() => {
         desaSelect.innerHTML = '<option value="">Gagal memuat data</option>';
+        announceWilayah('Gagal memuat data desa.');
     });
 }
 

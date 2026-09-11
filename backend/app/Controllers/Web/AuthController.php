@@ -70,6 +70,7 @@ class AuthController extends Controller
         $_SESSION['nama_lengkap'] = $user['nama_lengkap'];
         $_SESSION['must_change_password'] = (bool) ($user['must_change_password'] ?? false);
         $_SESSION['login_at'] = time();
+        $_SESSION['_last_activity'] = time();
 
         ActivityLog::log((int) $user['id'], 'login_success', 'users', (int) $user['id'], 'Login web berhasil');
 
@@ -87,12 +88,21 @@ class AuthController extends Controller
 
     public function logout(): void
     {
+        if (Request::method() !== 'POST') {
+            http_response_code(405);
+            header('Allow: POST');
+            echo 'Method Not Allowed — logout requires POST';
+            return;
+        }
         $userId = $_SESSION['user_id'] ?? null;
         ActivityLog::log($userId, 'logout', null, null, 'Logout web');
 
         Security::destroySession();
 
-        header('Location: /login');
+        // Use validated base URL for redirect, fallback to relative
+        $base = Request::validatedRedirectBase();
+        $location = $base !== '' ? $base . '/login' : '/login';
+        header('Location: ' . $location);
         exit;
     }
 }

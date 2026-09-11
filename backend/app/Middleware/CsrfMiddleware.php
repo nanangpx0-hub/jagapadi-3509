@@ -10,7 +10,6 @@ use App\Core\Request;
 class CsrfMiddleware
 {
     private const EXEMPT_PATHS = [
-        '/logout',
     ];
 
     public function handle(array $route, array $params): bool
@@ -30,7 +29,7 @@ class CsrfMiddleware
             return $isExempt;
         }
 
-        $token = Request::input('_csrf_token');
+        $token = Request::input('_csrf_token') ?? Request::input('csrf_token');
 
         if ($token === null) {
             $headerToken = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
@@ -40,13 +39,22 @@ class CsrfMiddleware
         }
 
         if (!Security::validateCsrfToken($token)) {
-            http_response_code(419);
-            $_SESSION['flash_error'] = 'CSRF token tidak valid. Silakan coba lagi.';
-            $redirect = $_SERVER['HTTP_REFERER'] ?? '/login';
-            if (!preg_match('#^/[a-z0-9/_-]*$#', $redirect)) {
-                $redirect = '/login';
+            http_response_code(403);
+            $accept = $_SERVER['HTTP_ACCEPT'] ?? '';
+            $requestedWith = $_SERVER['HTTP_X_REQUESTED_WITH'] ?? '';
+            if (stripos($accept, 'application/json') !== false || strtolower($requestedWith) === 'xmlhttprequest') {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode([
+                    'success' => false,
+                    'error' => 'Forbidden',
+                    'message' => 'CSRF token tidak valid. Silakan muat ulang halaman dan coba lagi.',
+                ]);
+            } else {
+                header('Content-Type: text/html; charset=utf-8');
+                echo '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><title>403 Forbidden</title></head>'
+                    . '<body><h1>403 Forbidden</h1>'
+                    . '<p>CSRF token tidak valid. Silakan kembali, muat ulang halaman, dan coba lagi.</p></body></html>';
             }
-            header("Location: $redirect");
             return false;
         }
 

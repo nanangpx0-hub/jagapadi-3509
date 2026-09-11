@@ -47,8 +47,8 @@ class _LoginScreenState extends State<LoginScreen> {
     if (ok && mounted) {
       if (auth.offlineMode) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text(
+          const SnackBar(
+            content: Text(
               'Mode offline aktif. Draf akan disinkronkan saat server tersedia.',
             ),
           ),
@@ -98,18 +98,18 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: Semantics(
                           container: true,
                           label: 'Mode offline aktif. Hanya bisa login menggunakan akun yang sebelumnya berhasil login online di perangkat ini.',
-                          child: Row(
+                          child: const Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Padding(
-                                padding: const EdgeInsets.only(top: 2),
+                                padding: EdgeInsets.only(top: 2),
                                 child: Icon(
                                   Icons.wifi_off,
                                   color: AppTheme.onWarningContainer,
                                   size: 22,
                                 ),
                               ),
-                              const SizedBox(width: AppSpacing.sm),
+                              SizedBox(width: AppSpacing.sm),
                               Expanded(
                                 child: Text(
                                   'Mode offline: gunakan akun yang sebelumnya pernah berhasil login online di perangkat ini.',
@@ -259,9 +259,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         autocorrect: false,
                         enableSuggestions: false,
                         textInputAction: TextInputAction.next,
-                        decoration: InputDecoration(
+                        decoration: const InputDecoration(
                           labelText: 'Username',
-                          prefixIcon: const Icon(Icons.person_outline),
+                          prefixIcon: Icon(Icons.person_outline),
                         ),
                         validator: (v) =>
                             v == null || v.trim().isEmpty ? 'Username wajib diisi' : null,

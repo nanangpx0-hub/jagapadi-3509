@@ -25,14 +25,20 @@ class Jwt
 
         $payload['iat'] = $payload['iat'] ?? time();
         $payload['exp'] = $payload['exp'] ?? time() + (int) Env::get('JWT_EXPIRY', '3600');
+        // iss/aud dari env bila tersedia (untuk kompatibilitas transisi, tidak wajib bila belum dikonfigurasi)
+        $payload['iss'] = $payload['iss'] ?? Env::get('JWT_ISS', Env::get('APP_BASE_URL', 'jagapadi'));
+        $payload['aud'] = $payload['aud'] ?? Env::get('JWT_AUD', 'jagapadi-mobile');
+        if (!isset($payload['nbf']) && Env::get('JWT_NBF_ENABLED', 'false') === 'true') {
+            $payload['nbf'] = time();
+        }
 
         if (!isset($payload['jti']) || $payload['jti'] === '' || $payload['jti'] === null) {
             $payload['jti'] = bin2hex(random_bytes(16));
         }
 
         $segments = [];
-        $segments[] = self::base64UrlEncode(json_encode($header));
-        $segments[] = self::base64UrlEncode(json_encode($payload));
+        $segments[] = self::base64UrlEncode((string) json_encode($header));
+        $segments[] = self::base64UrlEncode((string) json_encode($payload));
         $signature = hash_hmac('sha256', implode('.', $segments), self::getSecret(), true);
         $segments[] = self::base64UrlEncode($signature);
 
@@ -83,12 +89,41 @@ class Jwt
         }
 
         // `iat` tidak boleh dari masa depan (toleransi 60 detik untuk clock skew).
-        if (isset($payload['iat']) && is_numeric($payload['iat']) && (int) $payload['iat'] > time() + 60) {
+        $skew = (int) Env::get('JWT_CLOCK_SKEW', '60');
+        if (isset($payload['iat']) && is_numeric($payload['iat']) && (int) $payload['iat'] > time() + $skew) {
+            return null;
+        }
+
+        // `nbf` jika ada, tidak boleh di masa depan (skew tolerant)
+        if (isset($payload['nbf']) && is_numeric($payload['nbf']) && (int) $payload['nbf'] > time() + $skew) {
             return null;
         }
 
         // `jti` wajib non-kosong (dasar blacklist/revokasi & deteksi replay).
         if (!isset($payload['jti']) || !is_string($payload['jti']) || trim($payload['jti']) === '') {
+            return null;
+        }
+
+        // `iss` validasi bila env mengharuskan (transisi kompatibel: skip bila env kosong)
+        $expectedIss = Env::get('JWT_ISS', '');
+        if ($expectedIss !== '' && isset($payload['iss']) && $payload['iss'] !== $expectedIss) {
+            return null;
+        }
+        $expectedAud = Env::get('JWT_AUD', '');
+        if ($expectedAud !== '' && isset($payload['aud']) && $payload['aud'] !== $expectedAud) {
+            // Aud bisa string atau array; support keduanya
+            $aud = $payload['aud'];
+            if (is_array($aud) && !in_array($expectedAud, $aud, true)) {
+                return null;
+            }
+            if (is_string($aud) && $aud !== $expectedAud) {
+                return null;
+            }
+        }
+
+        // `ver` token_version sudah divalidasi di ApiAuthMiddleware terhadap DB, tapi juga
+        // pastikan numerik bila ada.
+        if (isset($payload['ver']) && !is_numeric($payload['ver'])) {
             return null;
         }
 

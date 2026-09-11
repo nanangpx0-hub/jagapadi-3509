@@ -77,6 +77,19 @@ test.describe('Statistisi — Dashboard', () => {
     await expect(page.locator('a[href="/wilayah"]')).toHaveCount(0);
     await expect(page.locator('a[href="/opt"]')).toHaveCount(0);
   });
+
+  test('statistisi sees analytics navigation and evaluation is read-only', async ({ page }) => {
+    await page.goto(`${BASE}/dashboard`);
+    await expect(page.getByRole('link', { name: 'Evaluasi Akurasi' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Data Storytelling' })).toBeVisible();
+
+    await page.goto(`${BASE}/evaluasi`);
+    await expect(page).toHaveURL(/\/evaluasi/);
+    await expect(page.getByText('Mode baca Statistisi')).toBeVisible();
+    await expect(page.getByRole('button', { name: /Tambah Data/i })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Import Excel/i })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Generate Snapshot/i })).toHaveCount(0);
+  });
 });
 
 // ─────────────────────────────────────────────────────

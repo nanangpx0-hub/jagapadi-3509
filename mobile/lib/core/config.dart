@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
 /// Konfigurasi terpusat JAGAPADI Mobile.
 ///
 /// ## Cara mengatur URL server
@@ -13,8 +15,10 @@ import 'dart:io';
 /// Laragon default port 80 — tanpa nomor port:
 ///   flutter run --dart-define=API_BASE_URL=http://192.168.10.5/jagapadi-3509/api/v1
 ///
-/// ### Server produksi
-///   flutter build apk --dart-define=API_BASE_URL=https://jagapadi.example.go.id/api/v1
+/// ### Server produksi (Cloudflare Tunnel → https://jagapadi.my.id)
+///   flutter build apk --dart-define=API_BASE_URL=https://jagapadi.my.id/api/v1
+///   # Tunnel localhost: cloudflared tunnel --url http://localhost:8080
+///   # Dashboard web: https://jagapadi.my.id/dashboard
 ///
 /// ## Catatan port Laragon
 /// Laragon default: Apache di port 80, Nginx di port 80.
@@ -27,13 +31,62 @@ class AppConfig {
   ///   1. dart-define API_BASE_URL (saat build/run)
   ///   2. 10.0.2.2/jagapadi-3509  — emulator Android (AVD), Laragon port 80
   ///   3. localhost/jagapadi-3509  — iOS Simulator / macOS
+  /// Validates URL for the current build mode. Throws StateError with clear
+  /// message if release requirements are not met. Used by [baseUrl] and tests.
+  static void validateBaseUrl(String url, {bool isRelease = kReleaseMode}) {
+    if (!isRelease) return;
+    if (url.isEmpty) {
+      throw StateError(
+        'API_BASE_URL tidak boleh kosong pada release build. '
+        'Build dengan: flutter build apk --release --dart-define=API_BASE_URL=https://<host>/api/v1  '
+        '(wajib HTTPS Backend v1, contoh https://jagapadi.my.id/api/v1)',
+      );
+    }
+    if (!url.startsWith('https://')) {
+      throw StateError(
+        'API_BASE_URL release harus memakai HTTPS: $url  '
+        '(diterima hanya https://<host>/api/v1, ditolak http://)',
+      );
+    }
+    if (url.contains('/jagapadi-3509')) {
+      throw StateError(
+        'API_BASE_URL release menunjuk runtime root/integrated yang salah: $url  '
+        '(gunakan Backend v1 canonical /api/v1, contoh https://jagapadi.my.id/api/v1)',
+      );
+    }
+    final uri = Uri.tryParse(url);
+    if (uri == null || !uri.path.contains('/api/v1')) {
+      throw StateError(
+        'API_BASE_URL release harus mengandung /api/v1 (Backend v1 canonical): $url',
+      );
+    }
+    if (uri.host == '10.0.2.2' || uri.host == 'localhost' || uri.host == '127.0.0.1') {
+      throw StateError(
+        'API_BASE_URL release tidak boleh menunjuk emulator/localhost ($url). '
+        'Gunakan host produksi HTTPS.',
+      );
+    }
+  }
+
   static String get baseUrl {
-    const defined = String.fromEnvironment('API_BASE_URL');
-    if (defined.isNotEmpty) return defined;
-    // Laragon default berjalan di port 80 (bukan 8080)
-    // Struktur: http://HOST/jagapadi-3509/api/v1
-    if (Platform.isAndroid) return 'http://10.0.2.2/jagapadi-3509/api/v1';
-    return 'http://localhost/jagapadi-3509/api/v1';
+    const defined = String.fromEnvironment('API_BASE_URL', defaultValue: '');
+    final String url;
+    if (defined.isNotEmpty) {
+      url = defined;
+    } else {
+      // Development fallback (emulator / simulator) — hanya untuk debug/profile
+      if (kReleaseMode) {
+        // Fail build dengan pesan jelas — cegah release tanpa dart-define
+        validateBaseUrl('');
+      }
+      if (Platform.isAndroid) {
+        url = 'http://10.0.2.2/jagapadi-3509/api/v1';
+      } else {
+        url = 'http://localhost/jagapadi-3509/api/v1';
+      }
+    }
+    validateBaseUrl(url);
+    return url;
   }
 
   // ── Timeout (ms) ─────────────────────────────────────────────────────────

@@ -36,7 +36,7 @@
                 </h3>
             </div>
             <form action="<?= BASE_URL ?>laporan-lainnya/update/<?= $laporan['id'] ?>" method="POST" enctype="multipart/form-data" id="formEditLaporan">
-                <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
+                <?= Security::getCsrfField() ?>
                 <input type="hidden" name="jenis_id" value="<?= $laporan['jenis_id'] ?>">
                 <div class="card-body">
                     <div class="row">

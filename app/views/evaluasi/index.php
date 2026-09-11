@@ -13,6 +13,7 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
         <h1 class="h3 mb-0 text-gray-800">
             <i class="fas fa-chart-line text-primary"></i> Evaluasi Akurasi Data
         </h1>
+        <?php if ($canManageEvaluation): ?>
         <div class="d-flex">
             <button type="button" class="btn btn-primary btn-sm mr-2" data-toggle="modal" data-target="#modalAddData">
                 <i class="fas fa-plus"></i> Tambah Data
@@ -30,6 +31,9 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
             </button>
             <?php endif; ?>
         </div>
+        <?php else: ?>
+        <span class="badge badge-info p-2"><i class="fas fa-eye mr-1"></i> Mode baca Statistisi</span>
+        <?php endif; ?>
     </div>
 
     <!-- Info Alert -->
@@ -211,13 +215,13 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                             <th class="text-right">Deviasi (+/-)</th>
                             <th class="text-right">% Bias</th>
                             <th class="text-center">Status</th>
-                            <th class="text-center">Aksi</th>
+                            <?php if ($canManageEvaluation): ?><th class="text-center">Aksi</th><?php endif; ?>
                         </tr>
                     </thead>
                     <tbody>
                         <?php if (empty($data)): ?>
                         <tr>
-                            <td colspan="8" class="text-center text-muted">
+                            <td colspan="<?= $canManageEvaluation ? 8 : 7 ?>" class="text-center text-muted">
                                 <i class="fas fa-inbox fa-2x mb-2"></i><br>
                                 Belum ada data evaluasi. Klik "Generate Snapshot" untuk membuat data estimasi.
                             </td>
@@ -264,6 +268,7 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                                     <span class="text-muted">-</span>
                                 <?php endif; ?>
                             </td>
+                            <?php if ($canManageEvaluation): ?>
                             <td class="text-center">
                                 <?php if ($row['status_akurasi']): ?>
                                     <?php 
@@ -277,6 +282,7 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                                     <span class="badge badge-secondary">Menunggu Rilis</span>
                                 <?php endif; ?>
                             </td>
+                            <?php endif; ?>
                             <td class="text-center">
                                 <button type="button" class="btn btn-sm btn-warning btn-edit" 
                                         data-id="<?= $row['id'] ?>"

@@ -29,18 +29,18 @@ void main() {
     );
   });
 
-  late Directory _tempDir;
-  late String _dbPath;
+  late Directory tempDir;
+  late String dbPath;
 
   setUp(() {
-    _tempDir = Directory.systemTemp.createTempSync('jagapadi_db_test');
-    _dbPath = p.join(_tempDir.path, 'test.db');
-    LocalDb.testDbPath = _dbPath;
+    tempDir = Directory.systemTemp.createTempSync('jagapadi_db_test');
+    dbPath = p.join(tempDir.path, 'test.db');
+    LocalDb.testDbPath = dbPath;
   });
 
   tearDown(() async {
     await LocalDb.resetForTesting();
-    _tempDir.deleteSync(recursive: true);
+    tempDir.deleteSync(recursive: true);
   });
 
   group('LocalDb — insert & get', () {
@@ -237,7 +237,7 @@ void main() {
         () async {
       // Buat DB skema v1 (hanya kolom awal) dengan versi 1, lalu tutup.
       final v1 = await databaseFactory.openDatabase(
-        _dbPath,
+        dbPath,
         options: OpenDatabaseOptions(
           version: 1,
           onCreate: (db, version) async {

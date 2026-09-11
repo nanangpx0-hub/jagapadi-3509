@@ -2,7 +2,7 @@ const { test, expect } = require('@playwright/test');
 const { BASE } = require('../base-url');
 
 const ADMIN_USER = 'admin';
-const ADMIN_PASS = 'Jember3509';
+const ADMIN_PASS = 'Jember3509*';
 
 async function loginAs(page, username, password) {
     await page.goto(`${BASE}/auth/login`);

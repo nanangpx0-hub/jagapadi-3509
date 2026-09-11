@@ -153,6 +153,44 @@ class LaporanLainnyaController extends Controller {
         ]);
     }
 
+    /**
+     * JSON daftar jenis laporan aktif untuk dropdown dinamis.
+     * GET /laporan-lainnya/jenis-list (runtime root, session).
+     *
+     * Dipakai browser agar tidak bergantung pada /api/* yang pada sebagian
+     * deployment dilayani runtime Backend v1 (tanpa route ini). Envelope
+     * mengikuti pola web JSON: {status, data|message}.
+     * Role mirror create(): admin/operator/petugas.
+     */
+    public function jenisList(): void {
+        if (empty($_SESSION['user_id'])) {
+            $this->json(['status' => 'error', 'message' => 'Unauthorized', 'data' => []], 401);
+        }
+        if (!in_array($_SESSION['role'] ?? '', ['admin', 'operator', 'petugas'], true)) {
+            $this->json(['status' => 'error', 'message' => 'Forbidden', 'data' => []], 403);
+        }
+        try {
+            $rows = $this->cache->remember(
+                'jenis_laporan:active',
+                fn() => $this->jenisModel->findAllActive(),
+                3600
+            );
+            $data = array_map(static function ($row): array {
+                $row = is_array($row) ? $row : [];
+                return [
+                    'id' => (string) ($row['id'] ?? ''),
+                    'kode' => (string) ($row['kode'] ?? ''),
+                    'nama' => (string) ($row['nama'] ?? ''),
+                    'fields_json' => (string) ($row['fields_json'] ?? '[]'),
+                ];
+            }, is_array($rows) ? $rows : []);
+            $this->json(['status' => 'success', 'data' => $data]);
+        } catch (Throwable $e) {
+            error_log('[LaporanLainnya::jenisList] gagal mengambil jenis laporan');
+            $this->json(['status' => 'error', 'message' => 'Gagal mengambil data jenis laporan', 'data' => []], 500);
+        }
+    }
+
     public function store() {
         $this->checkRole(
             ['admin', 'operator', 'petugas'],

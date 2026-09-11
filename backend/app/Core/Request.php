@@ -108,14 +108,47 @@ class Request
 
     public static function isSecure(): bool
     {
-        return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-            || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
+        if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
+            return true;
+        }
+        if (isset($_SERVER['SERVER_PORT']) && (int) $_SERVER['SERVER_PORT'] === 443) {
+            return true;
+        }
+        // Trusted proxy: X-Forwarded-Proto
+        $trustedProxies = self::trustedProxyIps();
+        $remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '';
+        if ($trustedProxies !== [] && in_array($remoteAddr, $trustedProxies, true)) {
+            $forwardedProto = $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '';
+            if (strtolower(trim($forwardedProto)) === 'https') {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static function baseUrl(): string
     {
+        // Prefer validated APP_BASE_URL; fallback to relative path to avoid Host injection.
+        $appBase = Env::get('APP_BASE_URL', Env::get('APP_URL', ''));
+        if (is_string($appBase) && trim($appBase) !== '' && filter_var(trim($appBase), FILTER_VALIDATE_URL)) {
+            return rtrim(trim($appBase), '/');
+        }
+        // Return path-only fallback; caller should use relative redirect.
         $scheme = self::isSecure() ? 'https' : 'http';
+        // Validate HTTP_HOST strictly to prevent injection if APP_BASE_URL missing
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        if (!preg_match('/^[a-z0-9.-]+(?::\d+)?$/i', $host)) {
+            $host = 'localhost';
+        }
         return "$scheme://$host";
+    }
+
+    public static function validatedRedirectBase(): string
+    {
+        $appBase = Env::get('APP_BASE_URL', Env::get('APP_URL', ''));
+        if (is_string($appBase) && trim($appBase) !== '' && filter_var(trim($appBase), FILTER_VALIDATE_URL)) {
+            return rtrim(trim($appBase), '/');
+        }
+        return '';
     }
 }

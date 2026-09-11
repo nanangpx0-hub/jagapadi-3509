@@ -16,6 +16,15 @@ class HargaKomoditasScraper
     private string $logFile;
     private array $locations = [];
 
+    /** Rincian kegagalan request per (tanggal, komoditas) pada fetch terakhir. */
+    private array $lastFailedDetails = [];
+
+    /** Error request SISKAPERBAPO terakhir (null bila request terakhir sukses). */
+    private ?string $lastRequestError = null;
+
+    /** HTTP code request SISKAPERBAPO terakhir. */
+    private int $lastHttpCode = 0;
+
     private const PRICE_RANGES = [
         'gabah_kering_panen' => ['min' => 5000, 'max' => 6500],
         'gabah_kering_giling' => ['min' => 6000, 'max' => 7500],
@@ -165,6 +174,9 @@ class HargaKomoditasScraper
             return [];
         }
 
+        // Reset pelacakan kegagalan untuk pemanggilan ini.
+        $this->lastFailedDetails = [];
+
         $records = [];
         $commodityMap = [
             'beras_medium' => 4,
@@ -176,6 +188,16 @@ class HargaKomoditasScraper
             foreach ($commodityMap as $commodity => $commodityId) {
                 $payload = $this->requestSiskaperbapo($date, $commodityId);
                 if ($payload === null) {
+                    // Hanya catat bila request-nya gagal; ketiadaan data
+                    // Jember pada payload sukses bukan kegagalan.
+                    if ($this->lastRequestError !== null) {
+                        $this->lastFailedDetails[] = [
+                            'tanggal' => $date,
+                            'komoditas' => $commodity,
+                            'error' => $this->lastRequestError,
+                            'http_code' => $this->lastHttpCode,
+                        ];
+                    }
                     continue;
                 }
                 $provinceAverage = isset($payload['avg']) && is_numeric($payload['avg'])
@@ -265,6 +287,8 @@ class HargaKomoditasScraper
 
     private function requestSiskaperbapo(string $date, int $commodityId): ?array
     {
+        $this->lastRequestError = null;
+        $this->lastHttpCode = 0;
         $url = 'https://siskaperbapo.jatimprov.go.id/home2/getDataMap/?' . http_build_query([
             'tanggal' => $date,
             'komoditas' => $commodityId,
@@ -290,16 +314,24 @@ class HargaKomoditasScraper
         curl_close($ch);
 
         if ($response === false || $httpCode < 200 || $httpCode >= 300) {
+            $this->lastHttpCode = $httpCode;
+            $this->lastRequestError = $response === false
+                ? "cURL gagal: {$curlError}"
+                : "HTTP status {$httpCode}";
             $this->log(sprintf('SISKAPERBAPO request failed (%s, HTTP %d): %s', $date, $httpCode, $curlError), 'WARNING');
             return null;
         }
         try {
             $payload = json_decode((string) $response, true, 512, JSON_THROW_ON_ERROR);
         } catch (JsonException $e) {
+            $this->lastHttpCode = $httpCode;
+            $this->lastRequestError = 'Format JSON tidak valid';
             $this->log("Invalid SISKAPERBAPO JSON for {$date}: {$e->getMessage()}", 'WARNING');
             return null;
         }
         if (!is_array($payload) || !isset($payload['data']) || !is_array($payload['data'])) {
+            $this->lastHttpCode = $httpCode;
+            $this->lastRequestError = 'Struktur respons tidak dikenal';
             $this->log("Unexpected SISKAPERBAPO response for {$date}", 'WARNING');
             return null;
         }
@@ -419,6 +451,281 @@ class HargaKomoditasScraper
         if ($this->debug) {
             echo $entry;
         }
+    }
+
+    /**
+     * Rincian kegagalan request per (tanggal, komoditas) pada fetch terakhir.
+     *
+     * @return array [['tanggal'=>string,'komoditas'=>string,'error'=>string,'http_code'=>int], ...]
+     */
+    public function getLastFailedDetails(): array
+    {
+        return $this->lastFailedDetails;
+    }
+
+    /**
+     * Validasi rentang tahun batch (2020 hingga tahun berjalan).
+     *
+     * @return string[] daftar pesan error; kosong berarti valid.
+     */
+    public static function validateRange($startYear, $endYear): array
+    {
+        $errors = [];
+        $startYear = (int)$startYear;
+        $endYear = (int)$endYear;
+        $currentYear = (int)date('Y');
+        if ($startYear < 2020) {
+            $errors[] = 'Tahun awal minimal 2020.';
+        }
+        if ($endYear > $currentYear) {
+            $errors[] = "Tahun akhir maksimal {$currentYear}.";
+        }
+        if ($startYear > $endYear) {
+            $errors[] = 'Tahun awal tidak boleh melebihi tahun akhir.';
+        }
+        return $errors;
+    }
+
+    /**
+     * Jalankan scrape+upsert untuk SATU bulan (idempoten via UPSERT).
+     * Mencatat log per bulan ke harga_komoditas_logs (success/partial/failed).
+     */
+    public function runSingleMonth($year, $month, string $source = 'siskaperbapo'): array
+    {
+        $startedAt = microtime(true);
+        $year = (int)$year;
+        $month = (int)$month;
+        $source = strtolower(trim($source)) === 'simulation' ? 'simulation' : 'siskaperbapo';
+
+        $rangeErrors = self::validateRange($year, $year);
+        if ($rangeErrors !== []) {
+            throw new InvalidArgumentException(implode(' ', $rangeErrors));
+        }
+        if ($month < 1 || $month > 12) {
+            throw new InvalidArgumentException('Bulan harus antara 1 dan 12.');
+        }
+        if ($year === (int)date('Y') && $month > (int)date('n')) {
+            throw new InvalidArgumentException('Periode masa depan tidak dapat diambil.');
+        }
+
+        $data = $source === 'siskaperbapo'
+            ? $this->fetchSiskaperbapoData($year, $month)
+            : $this->generateSimulatedData($year, $month);
+
+        $saved = 0;
+        $failed = 0;
+        $failures = [];
+        $fetchFailed = count($this->getLastFailedDetails());
+        foreach ($this->getLastFailedDetails() as $detail) {
+            $failures[] = [
+                'year' => $year,
+                'month' => $month,
+                'tanggal' => $detail['tanggal'] ?? null,
+                'komoditas' => $detail['komoditas'] ?? null,
+                'kecamatan' => 'Jember',
+                'error' => $detail['error'],
+                'http_code' => $detail['http_code'] ?? 0,
+            ];
+        }
+
+        $affectedCommodities = [];
+        foreach ($data as $record) {
+            try {
+                $this->model->upsert($record, false);
+                $saved++;
+                $affectedCommodities[$record['jenis_komoditas']] = true;
+            } catch (Throwable $e) {
+                $failed++;
+                $failures[] = [
+                    'year' => $year,
+                    'month' => $month,
+                    'tanggal' => $record['tanggal'] ?? null,
+                    'komoditas' => $record['jenis_komoditas'] ?? null,
+                    'kecamatan' => 'Jember',
+                    'error' => $e->getMessage(),
+                    'http_code' => 0,
+                ];
+                $this->log('Failed to save record: ' . $e->getMessage(), 'ERROR');
+            }
+        }
+        // Total gagal = gagal simpan record + gagal fetch request.
+        $failed = $failed + $fetchFailed;
+
+        foreach (array_keys($affectedCommodities) as $commodity) {
+            try {
+                $this->model->rebuildAlerts($commodity);
+            } catch (Throwable $e) {
+                $this->log('rebuildAlerts failed: ' . $e->getMessage(), 'ERROR');
+            }
+        }
+        $status = 'success';
+        if ($saved === 0 && ($failed > 0 || $data === [])) {
+            $status = ($data === [] && $failed === 0) ? 'success' : 'failed';
+        } elseif ($failed > 0) {
+            $status = 'partial';
+        }
+
+        $summary = "Scrape harga {$year}-" . str_pad((string)$month, 2, '0', STR_PAD_LEFT)
+            . ": {$saved} tersimpan, {$failed} gagal";
+        $execTime = round(microtime(true) - $startedAt, 4);
+        try {
+            $this->model->logActivity('scrape_month', $status, $summary, [
+                'year' => $year,
+                'month' => $month,
+                'source' => $source,
+                'processed' => count($data) + $fetchFailed,
+                'success' => $saved,
+                'failed' => $failed,
+                'failures' => $failures,
+                'execution_time' => $execTime,
+            ]);
+        } catch (Throwable $e) {
+            error_log('runSingleMonth harga logActivity failed: ' . $e->getMessage());
+        }
+
+        return [
+            'year' => $year,
+            'month' => $month,
+            'status' => $status,
+            'records' => $saved,
+            'failed' => $failed,
+            'skipped' => 0,
+            'failures' => $failures,
+            'execution_time' => $execTime,
+        ];
+    }
+
+    /**
+     * Jalankan scrape+upsert untuk RENTANG tahun (mis. 2020–2026).
+     * Granularitas per bulan; bulan masa depan dilewati sebagai skipped.
+     * Bulan/tahun yang gagal tidak menghentikan periode berikutnya.
+     *
+     * @param callable|null $progressCallback fn(int $year, int $month, array $result, int $done, int $total)
+     */
+    public function runBatchRange($startYear, $endYear, string $source = 'siskaperbapo', $progressCallback = null): array
+    {
+        $t0 = microtime(true);
+        $startYear = (int)$startYear;
+        $endYear = (int)$endYear;
+        $rangeErrors = self::validateRange($startYear, $endYear);
+        if ($rangeErrors !== []) {
+            throw new InvalidArgumentException(implode(' ', $rangeErrors));
+        }
+
+        // Hitung total bulan valid (lewati masa depan) untuk progres akurat.
+        $periods = [];
+        $currentYear = (int)date('Y');
+        $currentMonth = (int)date('n');
+        $skippedFuture = 0;
+        foreach (range($startYear, $endYear) as $year) {
+            for ($month = 1; $month <= 12; $month++) {
+                if ($year === $currentYear && $month > $currentMonth) {
+                    $skippedFuture++;
+                    continue;
+                }
+                $periods[] = [$year, $month];
+            }
+        }
+
+        $total = count($periods);
+        $done = 0;
+        $totalSaved = 0;
+        $totalFailed = 0;
+        $yearsSummary = [];
+        $allFailures = [];
+        foreach (range($startYear, $endYear) as $year) {
+            $yearsSummary[$year] = ['status' => 'success', 'records' => 0, 'failed' => 0];
+        }
+
+        foreach ($periods as [$year, $month]) {
+            try {
+                $result = $this->runSingleMonth($year, $month, $source);
+            } catch (Throwable $e) {
+                error_log("runBatchRange harga {$year}-{$month} failed: " . $e->getMessage());
+                $result = [
+                    'year' => $year,
+                    'month' => $month,
+                    'status' => 'failed',
+                    'records' => 0,
+                    'failed' => 1,
+                    'skipped' => 0,
+                    'failures' => [
+                        ['year' => $year, 'month' => $month, 'kecamatan' => 'Jember', 'error' => $e->getMessage(), 'http_code' => 0],
+                    ],
+                    'execution_time' => 0.0,
+                ];
+                try {
+                    $this->model->logActivity('scrape_month', 'failed', "Scrape harga {$year}-{$month} gagal: {$e->getMessage()}", [
+                        'year' => $year,
+                        'month' => $month,
+                        'source' => $source,
+                        'processed' => 0,
+                        'success' => 0,
+                        'failed' => 1,
+                        'failures' => $result['failures'],
+                        'execution_time' => 0,
+                    ]);
+                } catch (Throwable $logError) {
+                    error_log('runBatchRange harga logActivity failed: ' . $logError->getMessage());
+                }
+            }
+
+            $done++;
+            $totalSaved += (int)$result['records'];
+            $totalFailed += (int)$result['failed'];
+            $ys = &$yearsSummary[$year];
+            $ys['records'] += (int)$result['records'];
+            $ys['failed'] += (int)$result['failed'];
+            $ys['status'] = $ys['failed'] > 0 ? ($ys['records'] > 0 ? 'partial' : 'failed') : 'success';
+            unset($ys);
+            foreach ($result['failures'] as $failure) {
+                $allFailures[] = $failure;
+            }
+
+            if (is_callable($progressCallback)) {
+                try {
+                    $progressCallback($year, $month, $result, $done, $total);
+                } catch (Throwable $e) {
+                    error_log('runBatchRange harga progressCallback failed: ' . $e->getMessage());
+                }
+            }
+        }
+
+        if ($skippedFuture > 0) {
+            $ys = &$yearsSummary[$endYear];
+            $ys['skipped'] = $skippedFuture;
+            unset($ys);
+        }
+
+        $finalStatus = $totalFailed === 0 ? 'success' : ($totalSaved > 0 ? 'partial' : 'failed');
+        $execTime = round(microtime(true) - $t0, 4);
+        $summary = "Scrape harga rentang {$startYear}-{$endYear}: {$totalSaved} tersimpan, {$totalFailed} gagal, {$skippedFuture} dilewati (masa depan)";
+        try {
+            $this->model->logActivity('scrape_range', $finalStatus, $summary, [
+                'start_year' => $startYear,
+                'end_year' => $endYear,
+                'source' => $source,
+                'processed' => $totalSaved + $totalFailed,
+                'success' => $totalSaved,
+                'failed' => $totalFailed,
+                'failures' => $allFailures,
+                'execution_time' => $execTime,
+            ]);
+        } catch (Throwable $e) {
+            error_log('runBatchRange harga summary logActivity failed: ' . $e->getMessage());
+        }
+
+        return [
+            'success' => $totalFailed === 0,
+            'start_year' => $startYear,
+            'end_year' => $endYear,
+            'total_records_saved' => $totalSaved,
+            'total_records_failed' => $totalFailed,
+            'total_skipped_future' => $skippedFuture,
+            'years_summary' => $yearsSummary,
+            'failures' => $allFailures,
+            'execution_time' => $execTime,
+        ];
     }
 
     public function setDebug(bool $enabled): void

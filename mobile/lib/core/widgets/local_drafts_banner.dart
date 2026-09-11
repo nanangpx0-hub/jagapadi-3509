@@ -119,7 +119,7 @@ class _LocalDraftsBannerState extends State<LocalDraftsBanner> {
             children: [
               Row(
                 children: [
-                  Icon(
+                  const Icon(
                     Icons.cloud_off,
                     color: AppTheme.onWarningContainer,
                   ),
@@ -127,7 +127,7 @@ class _LocalDraftsBannerState extends State<LocalDraftsBanner> {
                   Expanded(
                     child: Text(
                       '${_unsyncedList.length} draf lokal belum tersinkronisasi',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontWeight: FontWeight.w700,
                         color: AppTheme.onWarningContainer,
                       ),
@@ -180,7 +180,7 @@ class _LocalDraftsBannerState extends State<LocalDraftsBanner> {
                             label: 'Draf $title, tanggal $dateStr',
                             child: Text(
                               '$title ($dateStr)',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 12,
                                 color: AppTheme.onWarningContainer,
                               ),

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Core\Model;
+use App\Policies\ReportAuthorizationPolicy;
 use PDO;
 
 class LaporanIrigasi extends Model
@@ -30,14 +31,12 @@ class LaporanIrigasi extends Model
                 LEFT JOIN `master_desa` md ON md.id = li.desa_id
                 WHERE li.id = ?";
 
-        if ($currentUser['role'] === 'petugas') {
-            $sql .= " AND li.user_id = ?";
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute([$id, (int) $currentUser['id']]);
-        } else {
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute([$id]);
+        [$clause, $scopeParams] = ReportAuthorizationPolicy::accessibleCondition('li', $currentUser);
+        if ($clause !== '') {
+            $sql .= ' AND ' . $clause;
         }
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$id, ...$scopeParams]);
 
         $result = $stmt->fetch();
         return $result ?: null;

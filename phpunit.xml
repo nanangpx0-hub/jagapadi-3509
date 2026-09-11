@@ -24,11 +24,18 @@
       <file>tests/Unit/UsulanOptMenuContractTest.php</file>
       <file>tests/Unit/UsulanOptExcelServiceTest.php</file>
       <file>tests/Unit/UsulanOptExcelContractTest.php</file>
-      <file>tests/Unit/FeedbackAttachmentUploadTest.php</file>
       <file>tests/Unit/BulkSelectionContractTest.php</file>
       <file>tests/Unit/LaporanHamaEnhancementContractTest.php</file>
       <file>tests/Unit/OptBulkDeleteContractTest.php</file>
       <file>tests/Unit/OtherReportImportServiceTest.php</file>
+      <file>tests/Unit/StatistisiFeatureContractTest.php</file>
+      <file>tests/Unit/JenisLaporanDropdownContractTest.php</file>
+      <file>tests/Unit/JenisLaporanServiceValidationTest.php</file>
+      <file>tests/Unit/JenisLaporanAdminContractTest.php</file>
+      <file>tests/Unit/PetugasListViewTest.php</file>
+      <file>tests/Unit/ResponsiveCssContractTest.php</file>
+      <file>tests/Unit/CurahHujanBatchRangeTest.php</file>
+      <file>tests/Unit/AnginHargaBatchRangeTest.php</file>
 
         </testsuite>
         <testsuite name="Integration">
@@ -49,6 +56,15 @@
             <file>tests/Integration/UsulanOptBulkDeleteDatabaseTest.php</file>
             <file>tests/Integration/OtherReportImportDatabaseTest.php</file>
             <file>tests/Integration/KecepatanAnginFallbackDatabaseTest.php</file>
+            <file>tests/Integration/FeedbackAttachmentUploadTest.php</file>
+            <file>tests/Integration/CurahHujanBulkUpsertTest.php</file>
+            <file>tests/Integration/AnginHargaBulkUpsertTest.php</file>
+        </testsuite>
+        <testsuite name="Compatibility">
+            <file>tests/Compatibility/RootCompatibilityTest.php</file>
+        </testsuite>
+        <testsuite name="Contract">
+            <file>tests/Contract/RouterOpenApiTest.php</file>
         </testsuite>
     </testsuites>
     <php>

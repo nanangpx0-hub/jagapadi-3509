@@ -123,4 +123,20 @@ class DashboardAccessSecurityTest extends TestCase
         $sAdmin = new DashboardService('admin', 1, 2026);
         $this->assertNull($refUserId->getValue($sAdmin));
     }
+
+    public function testStatistisiUsesGlobalOfficialDataWithoutDraft(): void
+    {
+        $service = new DashboardService('statistisi', 7, 2026, true);
+        $ref = new \ReflectionClass(DashboardService::class);
+
+        $refUserId = $ref->getProperty('userId');
+        $refUserId->setAccessible(true);
+        $refIncludeDraft = $ref->getProperty('includeDraft');
+        $refIncludeDraft->setAccessible(true);
+
+        $this->assertNull($refUserId->getValue($service));
+        $this->assertFalse($refIncludeDraft->getValue($service));
+        $this->assertSame('all_data', DashboardService::scopeForRole('statistisi'));
+        $this->assertSame('own_data', DashboardService::scopeForRole('petugas'));
+    }
 }

@@ -1,0 +1,28 @@
+# Cloudflare Tunnel config untuk JAGAPADI Petugas
+# File: %USERPROFILE%\.cloudflared\config.yml  (Windows)
+# Atau: ~/.cloudflared/config.yml (Linux/macOS)
+# Domain: https://jagapadi.my.id  -> http://localhost:8080 (backend/public)
+# Dashboard: https://jagapadi.my.id/dashboard
+# API Mobile: https://jagapadi.my.id/api/v1
+
+tunnel: jagapadi-3509
+credentials-file: C:\Users\IPDS\.cloudflared\jagapadi-3509.json
+
+ingress:
+  - hostname: jagapadi.my.id
+    service: http://localhost:8080
+    originRequest:
+      noTLSVerify: false
+  - hostname: www.jagapadi.my.id
+    service: http://localhost:8080
+  - service: http_status:404
+
+# Cara pakai quick tunnel (tanpa login, untuk testing):
+# cloudflared tunnel --url http://localhost:8080
+# Akan dapat URL acak https://xxx.trycloudflare.com -> ganti API_BASE_URL sesuai URL tersebut untuk test.
+
+# Cara pakai named tunnel (produksi, butuh cloudflare login):
+# 1. cloudflared tunnel login
+# 2. cloudflared tunnel create jagapadi-3509
+# 3. cloudflared tunnel route dns jagapadi-3509 jagapadi.my.id
+# 4. cloudflared tunnel run jagapadi-3509

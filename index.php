@@ -298,6 +298,7 @@ $stateChangingMethods = [
     'resubmit',
     'requestrevision',
     'delete_draft',
+    'toggle',
 ];
 
 $methodLower = strtolower($method);

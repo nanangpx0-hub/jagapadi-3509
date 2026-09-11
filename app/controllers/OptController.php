@@ -66,6 +66,50 @@ class OptController extends Controller {
     }
     
     /**
+     * JSON daftar OPT untuk dropdown dinamis form laporan.
+     * GET /opt/list-json (runtime root, session).
+     *
+     * Dipakai browser agar tidak bergantung pada /api/* yang pada sebagian
+     * deployment dilayani runtime Backend v1. Set data paritas dengan
+     * create(): seluruh master OPT (server yang memfilter tampilan).
+     * Akses mirror index(): semua role terautentikasi (petugas read-only
+     * ditegakkan di halaman, bukan di daftar master global).
+     * Filter opsional: ?search= & ?jenis=hama|penyakit|gulma (allowlist).
+     */
+    public function listJson(): void {
+        if (empty($_SESSION['user_id'])) {
+            $this->json(['status' => 'error', 'message' => 'Unauthorized', 'data' => []], 401);
+        }
+        try {
+            $search = trim((string) ($_GET['search'] ?? ($_GET['q'] ?? '')));
+            $jenis = strtolower(trim((string) ($_GET['jenis'] ?? '')));
+            if ($jenis !== '' && !in_array($jenis, ['hama', 'penyakit', 'gulma'], true)) {
+                $this->json(['status' => 'error', 'message' => 'Jenis OPT tidak valid', 'data' => []], 422);
+            }
+
+            $rows = ($search !== '' || $jenis !== '')
+                ? $this->optModel->search($search !== '' ? $search : '%', $jenis !== '' ? $jenis : null)
+                : $this->optModel->all();
+
+            $data = array_map(static function ($row): array {
+                $row = is_array($row) ? $row : [];
+                return [
+                    'id' => (string) ($row['id'] ?? ''),
+                    'nama_opt' => (string) ($row['nama_opt'] ?? ''),
+                    'nama_lokal' => (string) ($row['nama_lokal'] ?? ''),
+                    'nama_ilmiah' => (string) ($row['nama_ilmiah'] ?? ''),
+                    'jenis' => (string) ($row['jenis'] ?? ''),
+                    'foto_url' => (string) ($row['foto_url'] ?? ''),
+                ];
+            }, is_array($rows) ? $rows : []);
+            $this->json(['status' => 'success', 'data' => $data]);
+        } catch (Throwable $e) {
+            error_log('[Opt::listJson] gagal mengambil data OPT');
+            $this->json(['status' => 'error', 'message' => 'Gagal mengambil data OPT', 'data' => []], 500);
+        }
+    }
+
+    /**
      * Create new OPT
      */
     public function create() {

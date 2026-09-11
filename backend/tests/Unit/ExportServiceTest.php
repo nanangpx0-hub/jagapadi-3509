@@ -192,6 +192,19 @@ class ExportServiceTest extends TestCase
         $this->assertIsInt($default);
     }
 
+    public function testStatistisiCannotEnableDraftExport(): void
+    {
+        if (!$this->dbAvailable) {
+            $this->markTestSkipped('Database tidak tersedia');
+        }
+
+        $official = $this->makeService('statistisi')->countHama([]);
+        $requestedDraft = $this->makeService('statistisi', 999999, true)->countHama([]);
+
+        $this->assertSame($official, $requestedDraft);
+        $this->assertSame(0, $this->makeService('statistisi', 999999, true)->countHama(['status' => 'Draf']));
+    }
+
     public function testCountHamaStatusFilter(): void
     {
         if (!$this->dbAvailable) {

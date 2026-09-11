@@ -32,18 +32,18 @@ void main() {
     );
   });
 
-  late Directory _tempDir;
-  late String _dbPath;
+  late Directory tempDir;
+  late String dbPath;
 
   setUp(() {
-    _tempDir = Directory.systemTemp.createTempSync('jagapadi_sync_test');
-    _dbPath = p.join(_tempDir.path, 'test.db');
-    LocalDb.testDbPath = _dbPath;
+    tempDir = Directory.systemTemp.createTempSync('jagapadi_sync_test');
+    dbPath = p.join(tempDir.path, 'test.db');
+    LocalDb.testDbPath = dbPath;
   });
 
   tearDown(() async {
     await LocalDb.resetForTesting();
-    _tempDir.deleteSync(recursive: true);
+    tempDir.deleteSync(recursive: true);
   });
 
   group('SyncService', () {
@@ -58,7 +58,7 @@ void main() {
         onPost: (path, data, headers) async {
           capturedPath = path;
           capturedHeaders = headers;
-          return ApiResponse(
+          return const ApiResponse(
             success: true,
             statusCode: 201,
             data: {'id': 42},
@@ -87,9 +87,9 @@ void main() {
       );
       final api = _StubSyncApi(
         onPost: (path, data, headers) async =>
-            ApiResponse(success: true, statusCode: 201, data: {'id': 7}),
+            const ApiResponse(success: true, statusCode: 201, data: {'id': 7}),
         onUploadFoto: (path, filePath) async =>
-            ApiResponse(success: true, statusCode: 200, data: {}),
+            const ApiResponse(success: true, statusCode: 200, data: {}),
       );
 
       final result = await SyncService.syncPendingDrafts(api);
@@ -106,7 +106,7 @@ void main() {
       final id = await LocalDb.instance
           .insertDraft(type: 'hama', payload: {'tanggal': '2026-08-16'});
       final api = _StubSyncApi(
-        onPost: (path, data, headers) async => ApiResponse(
+        onPost: (path, data, headers) async => const ApiResponse(
           success: false,
           statusCode: 422,
           message: 'Validasi gagal',
@@ -130,7 +130,7 @@ void main() {
       final id = await LocalDb.instance
           .insertDraft(type: 'pupuk', payload: {'tanggal': '2026-08-16'});
       final api = _StubSyncApi(
-        onPost: (path, data, headers) async => ApiResponse(
+        onPost: (path, data, headers) async => const ApiResponse(
           success: false,
           statusCode: 409,
           message: 'Duplikat',
@@ -180,7 +180,7 @@ void main() {
       final api = _StubSyncApi(
         onPut: (path, data, headers) async {
           capturedHeaders = headers;
-          return ApiResponse(success: true, statusCode: 200, data: {});
+          return const ApiResponse(success: true, statusCode: 200, data: {});
         },
       );
 
@@ -209,7 +209,7 @@ void main() {
       final id = await LocalDb.instance
           .insertDraft(type: 'cuaca', payload: {'tanggal': '2026-08-16'});
       final api = _StubSyncApi(
-        onPost: (path, data, headers) async => ApiResponse(
+        onPost: (path, data, headers) async => const ApiResponse(
           success: false,
           statusCode: 0,
           message: 'Tidak ada koneksi',
@@ -232,7 +232,7 @@ void main() {
       final api = _StubSyncApi(
         onPost: (path, data, headers) async {
           await gate.future;
-          return ApiResponse(success: true, statusCode: 201, data: {'id': 1});
+          return const ApiResponse(success: true, statusCode: 201, data: {'id': 1});
         },
       );
 
@@ -288,7 +288,7 @@ class _StubSyncApi extends ApiClient {
     if (callback != null) {
       return callback(path, data, headers);
     }
-    return ApiResponse(
+    return const ApiResponse(
       success: false,
       message: 'Stub tidak dikonfigurasi',
       statusCode: 500,
@@ -307,7 +307,7 @@ class _StubSyncApi extends ApiClient {
     if (callback != null) {
       return callback(path, data, headers);
     }
-    return ApiResponse(
+    return const ApiResponse(
       success: false,
       message: 'Stub tidak dikonfigurasi',
       statusCode: 500,
@@ -327,7 +327,7 @@ class _StubSyncApi extends ApiClient {
     if (callback != null) {
       return callback(path, filePath);
     }
-    return ApiResponse(
+    return const ApiResponse(
       success: false,
       message: 'Stub tidak dikonfigurasi',
       statusCode: 500,

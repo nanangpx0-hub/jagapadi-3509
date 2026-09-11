@@ -37,7 +37,6 @@ class _UsulanOptFormScreenState extends State<UsulanOptFormScreen> {
   String _jenis = 'hama';
   String? _keyakinan;
   int? _kabId, _kecId, _desaId;
-  bool _loading = false;
   int? _loadedId;
 
   @override
@@ -199,7 +198,7 @@ class _UsulanOptFormScreenState extends State<UsulanOptFormScreen> {
                   DropdownButtonFormField<String>(
                     decoration: const InputDecoration(
                         labelText: 'Jenis Usulan *'),
-                    value: _jenis,
+                    initialValue: _jenis,
                     items: const [
                       DropdownMenuItem(value: 'hama', child: Text('Hama')),
                       DropdownMenuItem(
@@ -346,7 +345,7 @@ class _UsulanOptFormScreenState extends State<UsulanOptFormScreen> {
                   DropdownButtonFormField<String>(
                     decoration: const InputDecoration(
                         labelText: 'Tingkat Keyakinan (opsional)'),
-                    value: _keyakinan,
+                    initialValue: _keyakinan,
                     items: const [
                       DropdownMenuItem(value: 'Rendah', child: Text('Rendah')),
                       DropdownMenuItem(

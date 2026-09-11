@@ -66,8 +66,11 @@ class DashboardController extends BaseApiController
             $service = new DashboardService($currentUser['role'], (int) $currentUser['id'], $tahun, $includeDraft);
             $data = $service->getStats();
 
-            $scope = $currentUser['role'] === 'admin' ? 'all_data' : 'own_data';
-            $this->logDashboardAccess((int) $currentUser['id'], $currentUser['role'], 'api_dashboard_stats', $scope, ['tahun' => $tahun, 'include_draft' => $includeDraft]);
+            $scope = DashboardService::scopeForRole($currentUser['role']);
+            $this->logDashboardAccess((int) $currentUser['id'], $currentUser['role'], 'api_dashboard_stats', $scope, [
+                'tahun' => $tahun,
+                'include_draft' => $includeDraft && in_array($currentUser['role'], ['admin', 'petugas'], true),
+            ]);
 
             $this->success($data['hama'] !== [] || $data['irigasi'] !== [] ? $data : $data, 'Dashboard stats');
         } catch (\DomainException $e) {
@@ -123,7 +126,7 @@ class DashboardController extends BaseApiController
             $service = new DashboardService($currentUser['role'], (int) $currentUser['id'], $tahun, $includeDraft);
             $data = $service->getMapHama($status, $limit, $masterOptId, $kecamatanId, $desaId);
 
-            $scope = $currentUser['role'] === 'admin' ? 'all_data' : 'own_data';
+            $scope = DashboardService::scopeForRole($currentUser['role']);
             $this->logDashboardAccess((int) $currentUser['id'], $currentUser['role'], 'api_dashboard_map_hama', $scope, [
                 'tahun' => $tahun,
                 'status' => $status,
@@ -154,7 +157,7 @@ class DashboardController extends BaseApiController
             $service = new DashboardService($currentUser['role'], (int) $currentUser['id'], $tahun, $includeDraft);
             $data = $service->getMapIrigasi($status, $limit, $kecamatanId, $desaId, $kondisiFisik);
 
-            $scope = $currentUser['role'] === 'admin' ? 'all_data' : 'own_data';
+            $scope = DashboardService::scopeForRole($currentUser['role']);
             $this->logDashboardAccess((int) $currentUser['id'], $currentUser['role'], 'api_dashboard_map_irigasi', $scope, [
                 'tahun' => $tahun,
                 'status' => $status,

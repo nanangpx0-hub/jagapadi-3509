@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Harga Komoditas Controller
  * Controller untuk dashboard dan API harga gabah dan beras
@@ -511,6 +512,266 @@ class HargaKomoditasController extends Controller {
             ]);
         }
         exit;
+    }
+
+    /**
+     * Eksekusi scrape harga satu bulan (idempoten via UPSERT).
+     * POST year, month, source — dipakai loop client agar progres real-time.
+     */
+    public function runMonthScraper() {
+        $this->checkAuth();
+        $this->checkAdmin();
+
+        ob_start();
+        header('Content-Type: application/json; charset=utf-8');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            ob_end_clean();
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Method not allowed']);
+            exit;
+        }
+
+        if (!isset($_POST['csrf_token']) || !Security::validateCsrfToken($_POST['csrf_token'])) {
+            ob_end_clean();
+            echo json_encode(['success' => false, 'error' => 'Token keamanan tidak valid']);
+            exit;
+        }
+
+        try {
+            require_once ROOT_PATH . '/app/services/HargaKomoditasScraper.php';
+            $year = isset($_POST['year']) ? (int)$_POST['year'] : (int)date('Y');
+            $month = isset($_POST['month']) ? (int)$_POST['month'] : (int)date('n');
+            $source = strtolower(trim((string)($_POST['source'] ?? $_POST['data_source'] ?? 'siskaperbapo')));
+            if (!in_array($source, ['siskaperbapo', 'simulation'], true)) {
+                throw new InvalidArgumentException('Sumber hanya boleh SISKAPERBAPO atau simulasi eksplisit');
+            }
+
+            @set_time_limit(180);
+            $scraper = new HargaKomoditasScraper();
+            $result = $scraper->runSingleMonth($year, $month, $source);
+
+            if ($result['records'] > 0) {
+                $this->invalidateStatsCache(['stats_harga_komoditas_']);
+            }
+
+            $jsonOutput = json_encode([
+                'success' => $result['status'] !== 'failed',
+                'status' => $result['status'],
+                'message' => "Periode {$year}-" . str_pad((string)$month, 2, '0', STR_PAD_LEFT)
+                    . ": {$result['records']} tersimpan, {$result['failed']} gagal",
+                'source' => $source === 'simulation' ? 'Simulasi eksplisit' : 'SISKAPERBAPO Jatim',
+                'records_success' => $result['records'],
+                'records_failed' => $result['failed'],
+                'failures' => $result['failures'],
+                'execution_time' => $result['execution_time'],
+            ]);
+
+            if (ob_get_length()) {
+                ob_end_clean();
+            }
+            echo $jsonOutput;
+        } catch (Throwable $e) {
+            error_log('HargaKomoditasController::runMonthScraper failed: ' . $e->getMessage());
+            try {
+                $this->model->logActivity('scrape_month', 'failed', $e->getMessage(), ['processed' => 0, 'failed' => 1]);
+            } catch (Throwable $logError) {
+                error_log('HargaKomoditasController::runMonthScraper log failed: ' . $logError->getMessage());
+            }
+            if (ob_get_length()) {
+                ob_end_clean();
+            }
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    /**
+     * Eksekusi scrape harga rentang multi-tahun (mis. 2020–2026).
+     * POST start_year, end_year, source — berjalan server-side penuh.
+     */
+    public function runRangeScraper() {
+        $this->checkAuth();
+        $this->checkAdmin();
+
+        ob_start();
+        header('Content-Type: application/json; charset=utf-8');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            ob_end_clean();
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Method not allowed']);
+            exit;
+        }
+
+        if (!isset($_POST['csrf_token']) || !Security::validateCsrfToken($_POST['csrf_token'])) {
+            ob_end_clean();
+            echo json_encode(['success' => false, 'error' => 'Token keamanan tidak valid']);
+            exit;
+        }
+
+        try {
+            require_once ROOT_PATH . '/app/services/HargaKomoditasScraper.php';
+            $startYear = isset($_POST['start_year']) ? (int)$_POST['start_year'] : 2020;
+            $endYear = isset($_POST['end_year']) ? (int)$_POST['end_year'] : (int)date('Y');
+            $source = strtolower(trim((string)($_POST['source'] ?? $_POST['data_source'] ?? 'siskaperbapo')));
+            if (!in_array($source, ['siskaperbapo', 'simulation'], true)) {
+                throw new InvalidArgumentException('Sumber hanya boleh SISKAPERBAPO atau simulasi eksplisit');
+            }
+            $rangeErrors = HargaKomoditasScraper::validateRange($startYear, $endYear);
+            if ($rangeErrors !== []) {
+                throw new InvalidArgumentException(implode(' ', $rangeErrors));
+            }
+
+            @set_time_limit(0);
+            $scraper = new HargaKomoditasScraper();
+            $report = $scraper->runBatchRange($startYear, $endYear, $source);
+
+            if ($report['total_records_saved'] > 0) {
+                $this->invalidateStatsCache(['stats_harga_komoditas_']);
+            }
+
+            $jsonOutput = json_encode([
+                'success' => $report['success'],
+                'message' => "Rentang {$startYear}-{$endYear}: {$report['total_records_saved']} tersimpan, "
+                    . "{$report['total_records_failed']} gagal, {$report['total_skipped_future']} dilewati",
+                'source' => $source === 'simulation' ? 'Simulasi eksplisit' : 'SISKAPERBAPO Jatim',
+                'report' => $report,
+            ]);
+
+            if (ob_get_length()) {
+                ob_end_clean();
+            }
+            echo $jsonOutput;
+        } catch (Throwable $e) {
+            error_log('HargaKomoditasController::runRangeScraper failed: ' . $e->getMessage());
+            try {
+                $this->model->logActivity('scrape_range', 'failed', $e->getMessage(), ['processed' => 0, 'failed' => 1]);
+            } catch (Throwable $logError) {
+                error_log('HargaKomoditasController::runRangeScraper log failed: ' . $logError->getMessage());
+            }
+            if (ob_get_length()) {
+                ob_end_clean();
+            }
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    /**
+     * Daftar kegagalan scrape harga terbaru (JSON untuk modal UI).
+     * GET — Admin only.
+     */
+    public function getFailureReport() {
+        $this->checkAuth();
+        $this->checkAdmin();
+        header('Content-Type: application/json; charset=utf-8');
+
+        try {
+            $limit = isset($_GET['limit']) ? max(1, min(200, (int)$_GET['limit'])) : 50;
+            $logs = $this->model->getFailedLogs($limit);
+            $data = [];
+            foreach ($logs as $log) {
+                $details = json_decode((string)($log['details'] ?? ''), true);
+                $failures = is_array($details) && isset($details['failures']) && is_array($details['failures'])
+                    ? array_values(array_filter($details['failures'], 'is_array'))
+                    : [];
+                $data[] = [
+                    'id' => (int)($log['id'] ?? 0),
+                    'created_at' => $log['created_at'] ?? null,
+                    'action' => $log['action'] ?? '',
+                    'status' => $log['status'] ?? '',
+                    'summary' => (string)($log['message'] ?? ''),
+                    'failures' => $failures,
+                    'records_success' => isset($details['success']) ? (int)$details['success'] : 0,
+                    'records_failed' => isset($details['failed']) ? (int)$details['failed'] : 0,
+                ];
+            }
+            echo json_encode(['success' => true, 'data' => $data]);
+        } catch (Throwable $e) {
+            error_log('HargaKomoditasController::getFailureReport failed: ' . $e->getMessage());
+            echo json_encode(['success' => false, 'error' => 'Gagal mengambil laporan kegagalan']);
+        }
+        exit;
+    }
+
+    /**
+     * Unduh CSV laporan kegagalan scrape harga.
+     * GET — Admin only.
+     */
+    public function exportFailureLog() {
+        $this->checkAuth();
+        $this->checkAdmin();
+
+        try {
+            $logs = $this->model->getFailedLogs(500);
+
+            $rows = [];
+            foreach ($logs as $log) {
+                $details = json_decode((string)($log['details'] ?? ''), true);
+                $failures = is_array($details) && isset($details['failures']) && is_array($details['failures'])
+                    ? $details['failures']
+                    : [];
+                if ($failures === []) {
+                    $rows[] = [
+                        $log['created_at'] ?? '', $log['action'] ?? '', $log['status'] ?? '',
+                        '', '', '', '', '', (string)($log['message'] ?? ''),
+                    ];
+                    continue;
+                }
+                foreach ($failures as $failure) {
+                    if (!is_array($failure)) {
+                        continue;
+                    }
+                    $rows[] = [
+                        $log['created_at'] ?? '',
+                        $log['action'] ?? '',
+                        $log['status'] ?? '',
+                        isset($failure['year']) ? (string)$failure['year'] : '',
+                        isset($failure['month']) && $failure['month'] !== null ? (string)$failure['month'] : '',
+                        isset($failure['tanggal']) ? (string)$failure['tanggal'] : '',
+                        isset($failure['komoditas']) ? (string)$failure['komoditas'] : '',
+                        isset($failure['kecamatan']) ? (string)$failure['kecamatan'] : '',
+                        isset($failure['http_code']) ? (string)$failure['http_code'] : '',
+                        isset($failure['error']) ? (string)$failure['error'] : '',
+                    ];
+                }
+            }
+
+            $filename = 'laporan-kegagalan-harga-' . date('Ymd-His') . '.csv';
+            header('Content-Type: text/csv; charset=UTF-8');
+            header('Content-Disposition: attachment; filename="' . $filename . '"');
+            header('Cache-Control: no-store, no-cache, must-revalidate');
+            header('Pragma: no-cache');
+
+            $output = fopen('php://output', 'w');
+            if ($output === false) {
+                throw new RuntimeException('Tidak dapat membuka stream unduhan');
+            }
+            fwrite($output, "\xEF\xBB\xBF");
+            fputcsv($output, ['Waktu', 'Aksi', 'Status', 'Tahun', 'Bulan', 'Tanggal', 'Komoditas', 'Kecamatan', 'HTTP', 'Alasan Gagal']);
+            foreach ($rows as $row) {
+                fputcsv($output, array_map([$this, 'sanitizeCsvCell'], $row));
+            }
+            fclose($output);
+        } catch (Throwable $e) {
+            error_log('HargaKomoditasController::exportFailureLog failed: ' . $e->getMessage());
+            http_response_code(500);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'error' => 'Gagal mengekspor laporan kegagalan']);
+        }
+        exit;
+    }
+
+    /**
+     * Cegah formula injection pada sel CSV.
+     */
+    private function sanitizeCsvCell($cell): string {
+        $value = (string)$cell;
+        if ($value !== '' && str_contains('=+-@' . "\t\r", mb_substr($value, 0, 1))) {
+            return "'" . $value;
+        }
+        return $value;
     }
     
     /**
