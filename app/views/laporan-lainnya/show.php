@@ -16,14 +16,6 @@
                         <i class="fas fa-edit"></i> Edit
                     </a>
                     <?php endif; ?>
-                    <?php if($_SESSION['role'] === 'admin' && in_array($laporan['status'], ['submitted', 'verified', 'rejected'], true)): ?>
-                    <form method="POST" action="<?= BASE_URL ?>laporan-lainnya/archive/<?= (int)$laporan['id'] ?>" class="d-inline" onsubmit="return confirm('Arsipkan laporan ini?');">
-                        <?= Security::getCsrfField() ?>
-                        <button type="submit" class="btn btn-sm btn-dark">
-                            <i class="fas fa-archive"></i> Arsipkan
-                        </button>
-                    </form>
-                    <?php endif; ?>
                 </div>
             </div>
             <div class="card-body">

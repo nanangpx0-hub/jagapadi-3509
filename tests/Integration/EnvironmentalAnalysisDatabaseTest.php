@@ -144,8 +144,8 @@ final class EnvironmentalAnalysisDatabaseTest extends TestCase
         $zero = $model->insert([
             'periode_bulan' => 1,
             'periode_tahun' => 2097,
-            'wilayah_id' => 999999,
-            'nama_wilayah' => 'Fixture Zero',
+            'wilayah_id' => 3509,
+            'nama_wilayah' => 'Jember',
             'luas_estimasi_daerah' => 100,
             'luas_rilis_bps' => 0,
         ]);

@@ -10,8 +10,6 @@ class LaporanHama extends Model {
         'verified' => 'Diverifikasi',
         'ditolak' => 'Ditolak',
         'rejected' => 'Ditolak',
-        'diarsipkan' => 'Diarsipkan',
-        'archived' => 'Diarsipkan',
         'aktif' => 'Aktif',
         'active' => 'Aktif',
     ];
@@ -569,8 +567,6 @@ protected $fillable = [
         }
     }
 
-
-
     /**
      * Verify report using QueryBuilder
      * Only allows verification of Submitted reports (business rule: Draf cannot be verified)
@@ -614,99 +610,6 @@ protected $fillable = [
     /** Hook pasca-simpan: standardisasi invalidasi cache dashboard. */
     public function afterSave(): void {
         if (class_exists('DashboardCacheBust')) { DashboardCacheBust::clear(); }
-    }
-
-    public function archive(
-        int $id,
-        int $changedBy,
-        string $comment = 'Laporan diarsipkan',
-        string $ipAddress = '',
-        string $userAgent = ''
-    ): bool {
-        if ($id <= 0 || $changedBy <= 0) {
-            throw new InvalidArgumentException('ID laporan dan pengguna harus valid');
-        }
-
-        $ownsTransaction = !$this->db->inTransaction();
-        if ($ownsTransaction) {
-            $this->db->beginTransaction();
-        }
-
-        try {
-            $select = $this->db->prepare(
-                'SELECT status FROM laporan_hama WHERE id = ? AND deleted_at IS NULL FOR UPDATE'
-            );
-            $select->execute([$id]);
-            $status = $select->fetchColumn();
-
-            if ($status === false) {
-                throw new RuntimeException('Laporan tidak ditemukan');
-            }
-
-            if ($status === 'Diarsipkan') {
-                if ($ownsTransaction) {
-                    $this->db->commit();
-                }
-                return false;
-            }
-
-            // Alur web legacy membuat laporan langsung aktif sebagai Submitted.
-            // Data lama Diverifikasi tetap dapat diarsipkan untuk kompatibilitas.
-            if (!in_array($status, ['Submitted', 'Diverifikasi'], true)) {
-                throw new LogicException(
-                    "Laporan berstatus {$status} tidak dapat diarsipkan"
-                );
-            }
-
-            $update = $this->db->prepare(
-                "UPDATE laporan_hama
-                 SET status = 'Diarsipkan'
-                 WHERE id = ? AND status = ?"
-            );
-            $update->execute([$id, $status]);
-            if ($update->rowCount() !== 1) {
-                throw new RuntimeException('Status laporan berubah selama proses pengarsipan');
-            }
-
-            $history = $this->db->prepare(
-                'INSERT INTO laporan_status_history
-                    (laporan_id, old_status, new_status, changed_by, komentar)
-                 VALUES (?, ?, ?, ?, ?)'
-            );
-            $history->execute([
-                $id,
-                $status,
-                'Diarsipkan',
-                $changedBy,
-                mb_substr(trim($comment), 0, 2000),
-            ]);
-
-            $activity = $this->db->prepare(
-                'INSERT INTO activity_log
-                    (user_id, action, table_name, record_id, description, ip_address, user_agent)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)'
-            );
-            $activity->execute([
-                $changedBy,
-                'laporan_hama_archived',
-                'laporan_hama',
-                $id,
-                'Laporan hama diarsipkan dari status ' . $status,
-                mb_substr($ipAddress, 0, 45),
-                mb_substr($userAgent, 0, 500),
-            ]);
-
-            if ($ownsTransaction) {
-                $this->db->commit();
-            }
-
-            return true;
-        } catch (Throwable $e) {
-            if ($ownsTransaction && $this->db->inTransaction()) {
-                $this->db->rollBack();
-            }
-            throw $e;
-        }
     }
 
     /**

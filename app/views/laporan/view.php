@@ -10,17 +10,6 @@
                     <a href="<?= BASE_URL ?>laporan/edit/<?= $laporan['id'] ?>" class="btn btn-warning btn-sm">
                         <i class="fas fa-edit"></i> Edit
                     </a>
-                    <?php if(
-                        in_array($_SESSION['role'] ?? '', ['admin', 'operator'], true)
-                        && in_array($laporan['status'] ?? '', ['Submitted', 'Diverifikasi'], true)
-                    ): ?>
-                    <form action="<?= BASE_URL ?>laporan/archive/<?= $laporan['id'] ?>" method="POST" class="d-inline">
-                        <?= Security::getCsrfField() ?>
-                        <button type="submit" class="btn btn-secondary btn-sm" onclick="return confirm('Arsipkan laporan ini? Laporan tidak lagi dihitung sebagai laporan aktif.')">
-                            <i class="fas fa-archive"></i> Arsipkan
-                        </button>
-                    </form>
-                    <?php endif; ?>
                     <?php endif; ?>
                     <a href="<?= BASE_URL ?>laporan" class="btn btn-secondary btn-sm">
                         <i class="fas fa-arrow-left"></i> Kembali
@@ -134,8 +123,7 @@
                         <td>
                             <span class="badge badge-lg badge-<?= 
                             in_array($laporan['status'], ['Submitted', 'Diverifikasi']) ? 'success' : 
-                            ($laporan['status'] == 'Diarsipkan' ? 'dark' :
-                            ($laporan['status'] == 'Ditolak' ? 'danger' : 'secondary'))
+                            ($laporan['status'] == 'Ditolak' ? 'danger' : 'secondary')
                             ?>">
                                 <?= in_array($laporan['status'], ['Submitted', 'Diverifikasi']) ? 'Aktif' : $laporan['status'] ?>
                             </span>

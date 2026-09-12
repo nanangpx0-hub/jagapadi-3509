@@ -208,12 +208,10 @@ $router->post('/laporan-hama/delete/{id}', [WebLaporanHamaController::class, 'de
 $router->post('/laporan-hama/submit/{id}', [WebLaporanHamaController::class, 'submit'], [WebAuthMiddleware::class, PetugasAdminMiddleware::class]);
 $router->post('/laporan-hama/verify/{id}', [WebLaporanHamaController::class, 'verify'], [WebAuthMiddleware::class, AdminMiddleware::class]);
 $router->post('/laporan-hama/reject/{id}', [WebLaporanHamaController::class, 'reject'], [WebAuthMiddleware::class, AdminMiddleware::class]);
-$router->post('/laporan-hama/archive/{id}', [WebLaporanHamaController::class, 'archive'], [WebAuthMiddleware::class, AdminMiddleware::class]);
 $router->post('/laporan-hama/{id}/submit', [WebLaporanHamaController::class, 'submit'], [WebAuthMiddleware::class]);
 $router->post('/laporan-hama/{id}/delete', [WebLaporanHamaController::class, 'delete'], [WebAuthMiddleware::class]);
 $router->post('/laporan-hama/{id}/verifikasi', [WebLaporanHamaController::class, 'verify'], [WebAuthMiddleware::class, AdminMiddleware::class]);
 $router->post('/laporan-hama/{id}/tolak', [WebLaporanHamaController::class, 'reject'], [WebAuthMiddleware::class, AdminMiddleware::class]);
-$router->post('/laporan-hama/{id}/archive', [WebLaporanHamaController::class, 'archive'], [WebAuthMiddleware::class, AdminMiddleware::class]);
 $router->post('/laporan-hama/{id}/resubmit', [WebLaporanHamaController::class, 'resubmit'], [WebAuthMiddleware::class]);
 $router->post('/laporan-hama/{id}/foto/delete', [WebLaporanHamaController::class, 'deleteFoto'], [WebAuthMiddleware::class]);
 $router->post('/laporan-hama/{id}/foto', [WebLaporanHamaController::class, 'uploadFoto'], [WebAuthMiddleware::class]);
@@ -230,7 +228,6 @@ $router->delete('/api/v1/laporan-hama/{id}', [ApiLaporanHamaController::class, '
 $router->post('/api/v1/laporan-hama/{id}/submit', [ApiLaporanHamaController::class, 'submit'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-hama/{id}/verifikasi', [ApiLaporanHamaController::class, 'verify'], [ApiAuthMiddleware::class, AdminMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-hama/{id}/tolak', [ApiLaporanHamaController::class, 'reject'], [ApiAuthMiddleware::class, AdminMiddleware::class, IdempotencyMiddleware::class]);
-$router->post('/api/v1/laporan-hama/{id}/archive', [ApiLaporanHamaController::class, 'archive'], [ApiAuthMiddleware::class, AdminMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-hama/{id}/resubmit', [ApiLaporanHamaController::class, 'resubmit'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-hama/{id}/foto/delete', [ApiLaporanHamaController::class, 'deleteFoto'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-hama/{id}/foto', [ApiLaporanHamaController::class, 'uploadFoto'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
@@ -259,12 +256,10 @@ $router->post('/laporan-irigasi/delete/{id}', [WebLaporanIrigasiController::clas
 $router->post('/laporan-irigasi/submit/{id}', [WebLaporanIrigasiController::class, 'submit'], [WebAuthMiddleware::class, PetugasAdminMiddleware::class]);
 $router->post('/laporan-irigasi/verify/{id}', [WebLaporanIrigasiController::class, 'verify'], [WebAuthMiddleware::class, AdminMiddleware::class]);
 $router->post('/laporan-irigasi/reject/{id}', [WebLaporanIrigasiController::class, 'reject'], [WebAuthMiddleware::class, AdminMiddleware::class]);
-$router->post('/laporan-irigasi/archive/{id}', [WebLaporanIrigasiController::class, 'archive'], [WebAuthMiddleware::class, AdminMiddleware::class]);
 $router->post('/laporan-irigasi/{id}/submit', [WebLaporanIrigasiController::class, 'submit'], [WebAuthMiddleware::class]);
 $router->post('/laporan-irigasi/{id}/delete', [WebLaporanIrigasiController::class, 'delete'], [WebAuthMiddleware::class]);
 $router->post('/laporan-irigasi/{id}/verifikasi', [WebLaporanIrigasiController::class, 'verify'], [WebAuthMiddleware::class, AdminMiddleware::class]);
 $router->post('/laporan-irigasi/{id}/tolak', [WebLaporanIrigasiController::class, 'reject'], [WebAuthMiddleware::class, AdminMiddleware::class]);
-$router->post('/laporan-irigasi/{id}/archive', [WebLaporanIrigasiController::class, 'archive'], [WebAuthMiddleware::class, AdminMiddleware::class]);
 $router->post('/laporan-irigasi/{id}/resubmit', [WebLaporanIrigasiController::class, 'resubmit'], [WebAuthMiddleware::class]);
 $router->post('/laporan-irigasi/{id}/foto/delete', [WebLaporanIrigasiController::class, 'deleteFoto'], [WebAuthMiddleware::class]);
 $router->post('/laporan-irigasi/{id}/foto', [WebLaporanIrigasiController::class, 'uploadFoto'], [WebAuthMiddleware::class]);
@@ -280,7 +275,6 @@ $router->delete('/api/v1/laporan-irigasi/{id}', [ApiLaporanIrigasiController::cl
 $router->post('/api/v1/laporan-irigasi/{id}/submit', [ApiLaporanIrigasiController::class, 'submit'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-irigasi/{id}/verifikasi', [ApiLaporanIrigasiController::class, 'verify'], [ApiAuthMiddleware::class, AdminMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-irigasi/{id}/tolak', [ApiLaporanIrigasiController::class, 'reject'], [ApiAuthMiddleware::class, AdminMiddleware::class, IdempotencyMiddleware::class]);
-$router->post('/api/v1/laporan-irigasi/{id}/archive', [ApiLaporanIrigasiController::class, 'archive'], [ApiAuthMiddleware::class, AdminMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-irigasi/{id}/resubmit', [ApiLaporanIrigasiController::class, 'resubmit'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-irigasi/{id}/foto/delete', [ApiLaporanIrigasiController::class, 'deleteFoto'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-irigasi/{id}/foto', [ApiLaporanIrigasiController::class, 'uploadFoto'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
@@ -296,7 +290,6 @@ $router->delete('/api/v1/laporan-pupuk/{id}', [ApiLaporanPupukController::class,
 $router->post('/api/v1/laporan-pupuk/{id}/submit', [ApiLaporanPupukController::class, 'submit'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-pupuk/{id}/verifikasi', [ApiLaporanPupukController::class, 'verify'], [ApiAuthMiddleware::class, AdminMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-pupuk/{id}/tolak', [ApiLaporanPupukController::class, 'reject'], [ApiAuthMiddleware::class, AdminMiddleware::class, IdempotencyMiddleware::class]);
-$router->post('/api/v1/laporan-pupuk/{id}/archive', [ApiLaporanPupukController::class, 'archive'], [ApiAuthMiddleware::class, AdminMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-pupuk/{id}/resubmit', [ApiLaporanPupukController::class, 'resubmit'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-pupuk/{id}/foto/delete', [ApiLaporanPupukController::class, 'deleteFoto'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-pupuk/{id}/foto', [ApiLaporanPupukController::class, 'uploadFoto'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
@@ -312,7 +305,6 @@ $router->delete('/api/v1/laporan-panen/{id}', [ApiLaporanPanenController::class,
 $router->post('/api/v1/laporan-panen/{id}/submit', [ApiLaporanPanenController::class, 'submit'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-panen/{id}/verifikasi', [ApiLaporanPanenController::class, 'verify'], [ApiAuthMiddleware::class, AdminMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-panen/{id}/tolak', [ApiLaporanPanenController::class, 'reject'], [ApiAuthMiddleware::class, AdminMiddleware::class, IdempotencyMiddleware::class]);
-$router->post('/api/v1/laporan-panen/{id}/archive', [ApiLaporanPanenController::class, 'archive'], [ApiAuthMiddleware::class, AdminMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-panen/{id}/resubmit', [ApiLaporanPanenController::class, 'resubmit'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-panen/{id}/foto/delete', [ApiLaporanPanenController::class, 'deleteFoto'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-panen/{id}/foto', [ApiLaporanPanenController::class, 'uploadFoto'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
@@ -328,7 +320,6 @@ $router->delete('/api/v1/laporan-cuaca/{id}', [ApiLaporanCuacaController::class,
 $router->post('/api/v1/laporan-cuaca/{id}/submit', [ApiLaporanCuacaController::class, 'submit'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-cuaca/{id}/verifikasi', [ApiLaporanCuacaController::class, 'verify'], [ApiAuthMiddleware::class, AdminMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-cuaca/{id}/tolak', [ApiLaporanCuacaController::class, 'reject'], [ApiAuthMiddleware::class, AdminMiddleware::class, IdempotencyMiddleware::class]);
-$router->post('/api/v1/laporan-cuaca/{id}/archive', [ApiLaporanCuacaController::class, 'archive'], [ApiAuthMiddleware::class, AdminMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-cuaca/{id}/resubmit', [ApiLaporanCuacaController::class, 'resubmit'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-cuaca/{id}/foto/delete', [ApiLaporanCuacaController::class, 'deleteFoto'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-cuaca/{id}/foto', [ApiLaporanCuacaController::class, 'uploadFoto'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
@@ -344,7 +335,6 @@ $router->delete('/api/v1/laporan-alat-sarana/{id}', [ApiLaporanAlatSaranaControl
 $router->post('/api/v1/laporan-alat-sarana/{id}/submit', [ApiLaporanAlatSaranaController::class, 'submit'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-alat-sarana/{id}/verifikasi', [ApiLaporanAlatSaranaController::class, 'verify'], [ApiAuthMiddleware::class, AdminMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-alat-sarana/{id}/tolak', [ApiLaporanAlatSaranaController::class, 'reject'], [ApiAuthMiddleware::class, AdminMiddleware::class, IdempotencyMiddleware::class]);
-$router->post('/api/v1/laporan-alat-sarana/{id}/archive', [ApiLaporanAlatSaranaController::class, 'archive'], [ApiAuthMiddleware::class, AdminMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-alat-sarana/{id}/resubmit', [ApiLaporanAlatSaranaController::class, 'resubmit'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-alat-sarana/{id}/foto/delete', [ApiLaporanAlatSaranaController::class, 'deleteFoto'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);
 $router->post('/api/v1/laporan-alat-sarana/{id}/foto', [ApiLaporanAlatSaranaController::class, 'uploadFoto'], [ApiAuthMiddleware::class, IdempotencyMiddleware::class]);

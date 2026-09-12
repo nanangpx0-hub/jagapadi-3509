@@ -36,6 +36,7 @@
       <file>tests/Unit/ResponsiveCssContractTest.php</file>
       <file>tests/Unit/CurahHujanBatchRangeTest.php</file>
       <file>tests/Unit/AnginHargaBatchRangeTest.php</file>
+      <file>tests/Unit/EvaluasiAkurasiContractTest.php</file>
 
         </testsuite>
         <testsuite name="Integration">
@@ -46,7 +47,6 @@
             <file>tests/Integration/HargaKomoditasDatabaseTest.php</file>
             <file>tests/Integration/EnvironmentalAnalysisDatabaseTest.php</file>
             <file>tests/Integration/DashboardReportIntegrityDatabaseTest.php</file>
-            <file>tests/Integration/LaporanHamaArchiveDatabaseTest.php</file>
             <file>tests/Integration/LaporanHamaFilterDatabaseTest.php</file>
             <file>tests/Integration/LaporanLainnyaStoreDatabaseTest.php</file>
 <file>tests/Integration/PetugasNavigationAndSummaryTest.php</file>
@@ -59,6 +59,7 @@
             <file>tests/Integration/FeedbackAttachmentUploadTest.php</file>
             <file>tests/Integration/CurahHujanBulkUpsertTest.php</file>
             <file>tests/Integration/AnginHargaBulkUpsertTest.php</file>
+            <file>tests/Integration/EvaluasiAkurasiDatabaseTest.php</file>
         </testsuite>
         <testsuite name="Compatibility">
             <file>tests/Compatibility/RootCompatibilityTest.php</file>

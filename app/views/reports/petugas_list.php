@@ -36,7 +36,6 @@ $statusStyles = [
     'Submitted' => ['primary', 'Dikirim'],
     'Diverifikasi' => ['success', 'Diverifikasi'],
     'Ditolak' => ['danger', 'Ditolak'],
-    'Diarsipkan' => ['dark', 'Diarsipkan'],
 ];
 // Nomor halaman sliding window: maksimal 7 nomor (halaman 1, terakhir,
 // aktif ±2) dengan pemisah elipsis. "Dikirim" adalah label tampilan

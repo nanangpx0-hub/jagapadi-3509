@@ -1075,37 +1075,6 @@ class LaporanLainnyaController extends Controller {
 
         $this->redirect("laporan-lainnya/show/{$id}");
     }
-
-    public function archive(int $id) {
-        $this->checkRole(['admin'], 'Hanya admin yang dapat mengarsipkan laporan');
-        $this->requireStateChangingRequest();
-
-        $laporan = $this->laporanModel->getById($id);
-        if (!$laporan) {
-            $_SESSION['error'] = 'Laporan tidak ditemukan';
-            $this->redirect('laporan-lainnya');
-            return;
-        }
-
-        if (!in_array($laporan['status'], ['verified', 'submitted', 'rejected'], true)) {
-            $_SESSION['error'] = 'Hanya laporan berstatus Submitted, Diverifikasi, atau Ditolak yang dapat diarsipkan';
-            $this->redirect("laporan-lainnya/show/{$id}");
-            return;
-        }
-
-        $success = $this->laporanModel->archiveReport($id);
-
-        if ($success) {
-            $this->logActivity('Archive', 'laporan_lainnya', $id, 'Laporan lainnya diarsipkan');
-            $this->clearDashboardCache();
-            $_SESSION['success'] = 'Laporan berhasil diarsipkan';
-        } else {
-            $_SESSION['error'] = 'Gagal mengarsipkan laporan';
-        }
-
-        $this->redirect("laporan-lainnya/show/{$id}");
-    }
-
     public function destroy(int $id) {
         $this->checkAuth();
         $this->requireStateChangingRequest();

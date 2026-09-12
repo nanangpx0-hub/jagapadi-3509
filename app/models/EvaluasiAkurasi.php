@@ -26,9 +26,43 @@ class EvaluasiAkurasi {
         10 => 'Oktober', 11 => 'November', 12 => 'Desember'
     ];
     
-    public function __construct() {
-        $this->db = Database::getInstance()->getConnection();
-        $this->createTablesIfNotExist();
+    public function __construct(?PDO $pdo = null) {
+        $this->db = $pdo ?? Database::getInstance()->getConnection();
+        // Skema dikelola via migration append-only
+        // (database/migrations/2026_09_12_create_evaluasi_akurasi_tables.php).
+        // Jangan panggil createTablesIfNotExist() per-request agar tidak
+        // menambah 2 query metadata pada setiap instansiasi model.
+    }
+
+    /**
+     * Daftar wilayah resmi (kode BPS => nama) dari data KSA bulanan.
+     * Dipakai dropdown input manual agar wilayah_id selalu memakai kode BPS
+     * resmi (mis. 3509 Jember) dan tidak memakai hash CRC32 acak.
+     *
+     * @return array<int, array{kode: int, nama: string}>
+     */
+    public function getWilayahOptions(): array {
+        try {
+            $stmt = $this->db->query(
+                "SELECT DISTINCT kode_wilayah, kabupaten_kota AS nama_wilayah "
+                . "FROM {$this->sourceTable} ORDER BY kabupaten_kota"
+            );
+            $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+        } catch (Exception $e) {
+            $rows = [];
+        }
+
+        $options = [];
+        foreach ($rows as $row) {
+            $digits = preg_replace('/\D+/', '', (string) ($row['kode_wilayah'] ?? ''));
+            $kode = (int) $digits;
+            $nama = trim((string) ($row['nama_wilayah'] ?? ''));
+            if ($kode > 0 && $nama !== '') {
+                $options[$kode] = ['kode' => $kode, 'nama' => $nama];
+            }
+        }
+
+        return array_values($options);
     }
     
     /**
@@ -92,45 +126,133 @@ class EvaluasiAkurasi {
     }
     
     /**
+     * Normalisasi nama wilayah untuk pencocokan fleksibel.
+     * "Kab. Jember", "Kabupaten Jember", "jember" => "jember".
+     */
+    private function normalizeWilayahName(string $nama): string {
+        $nama = strtolower(trim($nama));
+        $nama = (string) preg_replace('/^(kab\.?|kabupaten|kota)\s+/i', '', $nama);
+        $nama = (string) preg_replace('/\s+/', ' ', $nama);
+        return trim($nama);
+    }
+
+    /**
+     * Resolusi wilayah_id/nama_wilayah ke kode BPS resmi.
+     * Menolak wilayah tak dikenal (return null) agar tidak tercipta duplikat
+     * via hash CRC32 seperti perilaku lama.
+     *
+     * @return array{wilayah_id: int, nama_wilayah: string}|null
+     */
+    public function resolveWilayah(mixed $wilayahId, mixed $namaWilayah): ?array {
+        $map = [];
+        foreach ($this->getWilayahOptions() as $opt) {
+            $map[(int) $opt['kode']] = $opt['nama'];
+        }
+        if (empty($map)) {
+            return null;
+        }
+
+        $kodeInput = (int) preg_replace('/\D+/', '', (string) ($wilayahId ?? ''));
+        if ($kodeInput > 0 && isset($map[$kodeInput])) {
+            return ['wilayah_id' => $kodeInput, 'nama_wilayah' => $map[$kodeInput]];
+        }
+
+        $namaNorm = $this->normalizeWilayahName((string) ($namaWilayah ?? ''));
+        if ($namaNorm !== '') {
+            foreach ($map as $kode => $namaResmi) {
+                if ($this->normalizeWilayahName($namaResmi) === $namaNorm) {
+                    return ['wilayah_id' => $kode, 'nama_wilayah' => $namaResmi];
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Hitung deviasi/bias/status di memori (tanpa query tambahan).
+     *
+     * @return array{deviasi_absolut: float|null, persentase_bias: float|null, status_akurasi: string|null}
+     */
+    private function calculateDeviation(float $estimasi, mixed $rilis): array {
+        if ($rilis === null || $rilis === '') {
+            return ['deviasi_absolut' => null, 'persentase_bias' => null, 'status_akurasi' => null];
+        }
+
+        $rilisFloat = (float) $rilis;
+        $deviasi = $estimasi - $rilisFloat;
+        if ($rilisFloat == 0.0) {
+            return ['deviasi_absolut' => $deviasi, 'persentase_bias' => null, 'status_akurasi' => null];
+        }
+
+        $bias = round((($estimasi - $rilisFloat) / $rilisFloat) * 100, 2);
+        return [
+            'deviasi_absolut' => $deviasi,
+            'persentase_bias' => $bias,
+            'status_akurasi' => $this->determineStatus(abs($bias)),
+        ];
+    }
+
+    /**
+     * Sanitasi nilai teks terhadap CSV formula injection (=,+,-,@,TAB,CR).
+     */
+    private function sanitizeFormulaValue(mixed $value): mixed {
+        if (is_string($value) && $value !== '' && in_array($value[0], ['=', '+', '-', '@', "\t", "\r"], true)) {
+            return "'" . $value;
+        }
+        return $value;
+    }
+
+    /**
      * Insert new evaluasi record
      */
     public function insert($data) {
         try {
-            $sql = "INSERT INTO {$this->table} 
-                    (periode_bulan, periode_tahun, wilayah_id, nama_wilayah, 
-                     luas_estimasi_daerah, luas_rilis_bps, catatan_analisis, 
-                     snapshot_date, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, CURDATE(), CURRENT_TIMESTAMP)";
-            
-            $wilayahId = !empty($data['wilayah_id'])
-                ? (int) $data['wilayah_id']
-                : (int) (sprintf('%u', crc32(strtolower(trim((string) $data['nama_wilayah'])))) % 2147483647);
+            $resolved = $this->resolveWilayah($data['wilayah_id'] ?? null, $data['nama_wilayah'] ?? null);
+            if ($resolved === null) {
+                return ['success' => false, 'message' => 'Wilayah tidak dikenal. Pilih kabupaten/kota resmi Jawa Timur (kode BPS 3501-3529, 3571-3579).'];
+            }
+
+            $estimasi = (float) ($data['luas_estimasi_daerah'] ?? 0);
+            $rilisRaw = $data['luas_rilis_bps'] ?? null;
+            $rilis = ($rilisRaw !== null && $rilisRaw !== '')
+                ? (float) $rilisRaw
+                : null;
+            $dev = $this->calculateDeviation($estimasi, $rilis);
+            $catatan = $this->sanitizeFormulaValue($data['catatan_analisis'] ?? null);
+            $createdBy = $_SESSION['user_id'] ?? null;
+
+            $sql = "INSERT INTO {$this->table}
+                    (periode_bulan, periode_tahun, wilayah_id, nama_wilayah,
+                     luas_estimasi_daerah, luas_rilis_bps, deviasi_absolut,
+                     persentase_bias, status_akurasi, catatan_analisis,
+                     snapshot_date, created_by, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), ?, CURRENT_TIMESTAMP)";
 
             $stmt = $this->db->prepare($sql);
             $result = $stmt->execute([
                 $data['periode_bulan'],
                 $data['periode_tahun'],
-                $wilayahId,
-                $data['nama_wilayah'],
-                $data['luas_estimasi_daerah'] ?? 0,
-                $data['luas_rilis_bps'] ?? null,
-                $data['catatan_analisis'] ?? null
+                $resolved['wilayah_id'],
+                $resolved['nama_wilayah'],
+                $estimasi,
+                $rilis,
+                $dev['deviasi_absolut'],
+                $dev['persentase_bias'],
+                $dev['status_akurasi'],
+                $catatan,
+                $createdBy,
             ]);
-            
+
             if ($result) {
                 $id = $this->db->lastInsertId();
-                
-                // Calculate deviation if both values present
-                if (array_key_exists('luas_rilis_bps', $data) && $data['luas_rilis_bps'] !== null) {
-                    $this->hitungDeviasi($id);
-                }
-                
+
                 $this->logActivity('insert', 'success', "Data evaluasi baru ditambahkan", ['id' => $id]);
                 return ['success' => true, 'id' => $id, 'message' => 'Data berhasil ditambahkan'];
             }
-            
+
             return ['success' => false, 'message' => 'Gagal menambahkan data'];
-            
+
         } catch (Exception $e) {
             $this->logActivity('insert', 'failed', $e->getMessage());
             return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
@@ -146,37 +268,51 @@ class EvaluasiAkurasi {
             if (!$existing) {
                 return ['success' => false, 'message' => 'Data tidak ditemukan'];
             }
-            
-            $sql = "UPDATE {$this->table} SET 
+
+            $estimasi = (float) ($data['luas_estimasi_daerah'] ?? $existing['luas_estimasi_daerah']);
+            $rilis = array_key_exists('luas_rilis_bps', $data)
+                ? ($data['luas_rilis_bps'] !== null && $data['luas_rilis_bps'] !== '' ? (float) $data['luas_rilis_bps'] : null)
+                : ($existing['luas_rilis_bps'] !== null ? (float) $existing['luas_rilis_bps'] : null);
+            $dev = $this->calculateDeviation($estimasi, $rilis);
+            $catatan = $this->sanitizeFormulaValue($data['catatan_analisis'] ?? $existing['catatan_analisis']);
+            $updatedBy = $_SESSION['user_id'] ?? null;
+
+            $sql = "UPDATE {$this->table} SET
                         periode_bulan = ?,
                         periode_tahun = ?,
                         nama_wilayah = ?,
                         luas_estimasi_daerah = ?,
                         luas_rilis_bps = ?,
+                        deviasi_absolut = ?,
+                        persentase_bias = ?,
+                        status_akurasi = ?,
                         catatan_analisis = ?,
+                        updated_by = ?,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?";
-            
+
             $stmt = $this->db->prepare($sql);
             $result = $stmt->execute([
                 $data['periode_bulan'] ?? $existing['periode_bulan'],
                 $data['periode_tahun'] ?? $existing['periode_tahun'],
                 $data['nama_wilayah'] ?? $existing['nama_wilayah'],
-                $data['luas_estimasi_daerah'] ?? $existing['luas_estimasi_daerah'],
-                $data['luas_rilis_bps'] ?? $existing['luas_rilis_bps'],
-                $data['catatan_analisis'] ?? $existing['catatan_analisis'],
+                $estimasi,
+                $rilis,
+                $dev['deviasi_absolut'],
+                $dev['persentase_bias'],
+                $dev['status_akurasi'],
+                $catatan,
+                $updatedBy,
                 $id
             ]);
-            
+
             if ($result) {
-                // Recalculate deviation
-                $this->hitungDeviasi($id);
                 $this->logActivity('update', 'success', "Data evaluasi ID {$id} diupdate", []);
                 return ['success' => true, 'message' => 'Data berhasil diupdate'];
             }
-            
+
             return ['success' => false, 'message' => 'Gagal mengupdate data'];
-            
+
         } catch (Exception $e) {
             $this->logActivity('update', 'failed', $e->getMessage());
             return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
@@ -249,16 +385,22 @@ class EvaluasiAkurasi {
     public function snapshotEstimasi($bulan, $tahun) {
         // Date restriction removed per user request: "Snapshot process can be performed at any time"
         // if ($tahun == $currentYear && $bulan == $currentMonth && $today > 10) { ... }
-        
+
+        $bulan = (int) $bulan;
+        $tahun = (int) $tahun;
+        if ($bulan < 1 || $bulan > 12 || $tahun < 2000 || $tahun > ((int) date('Y') + 1)) {
+            return ['success' => false, 'message' => 'Periode snapshot tidak valid'];
+        }
+
         $ownsTransaction = !$this->db->inTransaction();
         try {
             if ($ownsTransaction) {
                 $this->db->beginTransaction();
             }
-            
+
             // Use the monthly KSA source. Annual aggregates must never be copied
             // into an arbitrary month because that multiplies the estimate.
-            $sql = "SELECT 
+            $sql = "SELECT
                         kode_wilayah,
                         kabupaten_kota as nama_wilayah,
                         luas_panen as total_luas_panen,
@@ -266,11 +408,11 @@ class EvaluasiAkurasi {
                     FROM {$this->sourceTable}
                     WHERE tahun = ? AND bulan = ? AND luas_panen IS NOT NULL
                     ORDER BY kabupaten_kota";
-            
+
             $stmt = $this->db->prepare($sql);
             $stmt->execute([$tahun, $bulan]);
             $sourceData = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
+
             if (empty($sourceData)) {
                 if ($ownsTransaction && $this->db->inTransaction()) {
                     $this->db->rollBack();
@@ -280,57 +422,80 @@ class EvaluasiAkurasi {
                     'message' => "Tidak ada data KSA bulanan untuk periode {$bulan}/{$tahun}"
                 ];
             }
-            
-            $insertedCount = 0;
-            $updatedCount = 0;
+
+            // Ambil status existing dalam 1 query (hindari pola N+1).
+            $existingStmt = $this->db->prepare(
+                "SELECT wilayah_id, snapshot_locked FROM {$this->table} "
+                . "WHERE periode_bulan = ? AND periode_tahun = ?"
+            );
+            $existingStmt->execute([$bulan, $tahun]);
+            $existingMap = [];
+            foreach ($existingStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $existingMap[(int) $row['wilayah_id']] = (int) ($row['snapshot_locked'] ?? 0);
+            }
+
+            $rows = [];
             $skippedCount = 0;
-            
             foreach ($sourceData as $data) {
                 $digits = preg_replace('/\D+/', '', (string) $data['kode_wilayah']);
                 $wilayahId = (int) $digits;
                 if ($wilayahId <= 0) {
-                    $wilayahId = (int) (sprintf('%u', crc32((string) $data['kode_wilayah'])) % 2147483647);
+                    continue;
                 }
-                
-                // Check if record already exists and is locked
-                $existing = $this->getByPeriodeWilayah($bulan, $tahun, $wilayahId);
-                
-                if ($existing && $existing['snapshot_locked']) {
+
+                if (isset($existingMap[$wilayahId]) && $existingMap[$wilayahId] === 1) {
                     $skippedCount++;
                     continue;
                 }
-                
-                if ($existing) {
-                    // Update existing record
-                    $updateSql = "UPDATE {$this->table} SET 
-                                    luas_estimasi_daerah = ?,
-                                    nama_wilayah = ?,
-                                    snapshot_date = CURDATE(),
-                                    updated_at = CURRENT_TIMESTAMP
-                                  WHERE id = ?";
-                    $updateStmt = $this->db->prepare($updateSql);
-                    $updateStmt->execute([
-                        $data['total_luas_panen'],
-                        $data['nama_wilayah'],
-                        $existing['id']
-                    ]);
+
+                $rows[] = [
+                    $bulan,
+                    $tahun,
+                    $wilayahId,
+                    $data['nama_wilayah'],
+                    $data['total_luas_panen'],
+                ];
+            }
+
+            $insertedCount = 0;
+            $updatedCount = 0;
+            foreach ($rows as $row) {
+                if (isset($existingMap[(int) $row[2]])) {
                     $updatedCount++;
                 } else {
-                    // Insert new record
-                    $insertSql = "INSERT INTO {$this->table} 
-                                    (periode_bulan, periode_tahun, wilayah_id, nama_wilayah, 
-                                     luas_estimasi_daerah, snapshot_date, created_at)
-                                  VALUES (?, ?, ?, ?, ?, CURDATE(), CURRENT_TIMESTAMP)";
-                    $insertStmt = $this->db->prepare($insertSql);
-                    $insertStmt->execute([
-                        $bulan,
-                        $tahun,
-                        $wilayahId,
-                        $data['nama_wilayah'],
-                        $data['total_luas_panen']
-                    ]);
                     $insertedCount++;
                 }
+            }
+
+            if (!empty($rows)) {
+                // Single bulk upsert: 1 round-trip untuk seluruh wilayah.
+                $actorId = $_SESSION['user_id'] ?? null;
+                $placeholders = [];
+                $params = [];
+                foreach ($rows as $row) {
+                    $placeholders[] = "(?, ?, ?, ?, ?, CURDATE(), ?, ?, CURRENT_TIMESTAMP)";
+                    $params[] = $row[0];
+                    $params[] = $row[1];
+                    $params[] = $row[2];
+                    $params[] = $row[3];
+                    $params[] = $row[4];
+                    $params[] = $actorId;
+                    $params[] = $actorId;
+                }
+
+                $bulkSql = "INSERT INTO {$this->table}
+                                (periode_bulan, periode_tahun, wilayah_id, nama_wilayah,
+                                 luas_estimasi_daerah, snapshot_date, created_by, updated_by, created_at)
+                                VALUES " . implode(', ', $placeholders)
+                            . " ON DUPLICATE KEY UPDATE
+                                 luas_estimasi_daerah = VALUES(luas_estimasi_daerah),
+                                 nama_wilayah = VALUES(nama_wilayah),
+                                 snapshot_date = CURDATE(),
+                                 updated_by = VALUES(updated_by),
+                                 created_by = COALESCE(created_by, VALUES(created_by)),
+                                 updated_at = CURRENT_TIMESTAMP";
+                $bulkStmt = $this->db->prepare($bulkSql);
+                $bulkStmt->execute($params);
             }
             
             // Lock logic removed per user request
@@ -393,18 +558,32 @@ class EvaluasiAkurasi {
                     'message' => 'Data tidak ditemukan'
                 ];
             }
-            
-            $sql = "UPDATE {$this->table} SET 
+
+            $estimasi = (float) $existing['luas_estimasi_daerah'];
+            $dev = $this->calculateDeviation($estimasi, (float) $nilaiRilis);
+            $catatanBersih = $this->sanitizeFormulaValue($catatan);
+            $updatedBy = $_SESSION['user_id'] ?? null;
+
+            $sql = "UPDATE {$this->table} SET
                         luas_rilis_bps = ?,
                         catatan_analisis = ?,
+                        deviasi_absolut = ?,
+                        persentase_bias = ?,
+                        status_akurasi = ?,
+                        updated_by = ?,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?";
-            
+
             $stmt = $this->db->prepare($sql);
-            $stmt->execute([$nilaiRilis, $catatan, $id]);
-            
-            // Calculate deviation after update
-            $this->hitungDeviasi($id);
+            $stmt->execute([
+                $nilaiRilis,
+                $catatanBersih,
+                $dev['deviasi_absolut'],
+                $dev['persentase_bias'],
+                $dev['status_akurasi'],
+                $updatedBy,
+                $id,
+            ]);
             
             // Log activity
             $this->logActivity('update_rilis', 'success', 
@@ -492,9 +671,11 @@ class EvaluasiAkurasi {
      * Get chart data for trend comparison
      */
     public function getChartData($tahun) {
-        $sql = "SELECT 
+        // Estimasi selalu diagregat penuh 12 bulan; garis estimasi tidak boleh
+        // hilang hanya karena rilis BPS periode berjalan belum diumumkan.
+        $sql = "SELECT
                     periode_bulan,
-                    SUM(CASE WHEN luas_rilis_bps IS NOT NULL THEN luas_estimasi_daerah END) as total_estimasi,
+                    SUM(luas_estimasi_daerah) as total_estimasi,
                     SUM(luas_rilis_bps) as total_rilis,
                     COUNT(luas_rilis_bps) as jumlah_sudah_rilis,
                     COUNT(*) as jumlah_total
@@ -629,6 +810,8 @@ class EvaluasiAkurasi {
     
     /**
      * Create tables if not exist
+     * @deprecated Dipakai hanya oleh migration 2026_09_12 dan skrip
+     * pemeliharaan; JANGAN dipanggil dari constructor per-request.
      */
     public function createTablesIfNotExist() {
         // Main table

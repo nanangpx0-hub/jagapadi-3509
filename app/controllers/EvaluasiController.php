@@ -66,6 +66,7 @@ class EvaluasiController extends Controller {
         $statistics = $this->model->getStatistics($tahun);
         $chartData = $this->model->getChartData($tahun);
         $availableYears = $this->model->getAvailableYears();
+        $wilayahOptions = $this->model->getWilayahOptions();
         
         // Can snapshot for current month?
         $currentMonth = (int) date('n');
@@ -80,6 +81,7 @@ class EvaluasiController extends Controller {
             'statistics' => $statistics,
             'chartData' => $chartData,
             'availableYears' => $availableYears,
+            'wilayahOptions' => $wilayahOptions,
             'tahun' => $tahun,
             'bulan' => $bulan,
             'canSnapshot' => $canSnapshot,
@@ -284,12 +286,25 @@ class EvaluasiController extends Controller {
         }
         
         $this->validateCsrfToken();
-        
+
+        // wilayah_id wajib memakai kode BPS resmi dari dropdown; nama
+        // diselesaikan ulang di model agar tidak tercipta duplikat CRC32.
+        $wilayahIdRaw = $_POST['wilayah_id'] ?? null;
+        $wilayahId = is_numeric($wilayahIdRaw) ? (int) $wilayahIdRaw : null;
+        if ($wilayahId === null || $wilayahId <= 0) {
+            $this->json(['success' => false, 'message' => 'Wilayah harus dipilih dari daftar resmi'], 400);
+        }
+
+        $resolved = $this->model->resolveWilayah($wilayahId, $_POST['nama_wilayah'] ?? null);
+        if ($resolved === null || $resolved['wilayah_id'] !== $wilayahId) {
+            $this->json(['success' => false, 'message' => 'Kode wilayah tidak dikenal'], 400);
+        }
+
         $data = [
             'periode_bulan' => $_POST['periode_bulan'] ?? null,
             'periode_tahun' => $_POST['periode_tahun'] ?? null,
-            'nama_wilayah' => $_POST['nama_wilayah'] ?? null,
-            'wilayah_id' => $_POST['wilayah_id'] ?? null,
+            'nama_wilayah' => $resolved['nama_wilayah'],
+            'wilayah_id' => $resolved['wilayah_id'],
             'luas_estimasi_daerah' => floatval($_POST['luas_estimasi_daerah'] ?? 0),
             'luas_rilis_bps' => isset($_POST['luas_rilis_bps']) && $_POST['luas_rilis_bps'] !== ''
                 ? floatval($_POST['luas_rilis_bps'])
@@ -383,103 +398,132 @@ class EvaluasiController extends Controller {
      */
     public function importExcel() {
         $this->checkAdmin();
-        
+
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             $this->json(['success' => false, 'message' => 'Invalid request method'], 405);
         }
-        
+
         $this->validateCsrfToken();
-        
+
+        $tempFile = null;
         try {
-            if (!isset($_FILES['excel_file']) || $_FILES['excel_file']['error'] !== UPLOAD_ERR_OK) {
-                throw new Exception('Tidak ada file yang diupload');
-            }
-            
-            $file = $_FILES['excel_file'];
-            $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-            
-            if (!in_array($extension, ['xlsx', 'xls', 'csv'])) {
-                throw new Exception('Format file tidak didukung. Gunakan xlsx, xls, atau csv');
-            }
-            
-            $uploadDir = ROOT_PATH . '/storage/uploads/temp/';
-            if (!is_dir($uploadDir)) {
-                mkdir($uploadDir, 0755, true);
-            }
-            
-            $tempFile = $uploadDir . uniqid('import_evaluasi_') . '.' . $extension;
-            
-            if (!move_uploaded_file($file['tmp_name'], $tempFile)) {
-                throw new Exception('Gagal memindahkan file upload');
-            }
-            
+            $validated = $this->validateEvaluasiUpload($_FILES['excel_file'] ?? null);
+            $tempFile = $this->moveEvaluasiUpload($validated['file'], 'import_evaluasi_');
+
             require_once ROOT_PATH . '/app/services/ExcelImportService.php';
             $importService = new ExcelImportService();
             $result = $importService->import($tempFile, 'evaluasi_akurasi');
-            
-            if (file_exists($tempFile)) {
-                unlink($tempFile);
-            }
-            
+
             $this->json($result);
-            
+
         } catch (Exception $e) {
             $this->json([
                 'success' => false,
                 'error' => $e->getMessage()
             ], 400);
+        } finally {
+            if (is_string($tempFile) && $tempFile !== '' && file_exists($tempFile)) {
+                unlink($tempFile);
+            }
         }
     }
-    
+
     /**
      * Preview Import - API endpoint
      */
     public function previewImport() {
         $this->checkAdmin();
-        
+
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             $this->json(['success' => false, 'message' => 'Invalid request method'], 405);
         }
-        
+
+        $this->validateCsrfToken();
+
+        $tempFile = null;
         try {
-            if (!isset($_FILES['excel_file']) || $_FILES['excel_file']['error'] !== UPLOAD_ERR_OK) {
-                throw new Exception('Tidak ada file yang diupload');
-            }
-            
-            $file = $_FILES['excel_file'];
-            $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-            
-            if (!in_array($extension, ['xlsx', 'xls', 'csv'])) {
-                throw new Exception('Format file tidak didukung');
-            }
-            
-            $uploadDir = ROOT_PATH . '/storage/uploads/temp/';
-            if (!is_dir($uploadDir)) {
-                mkdir($uploadDir, 0755, true);
-            }
-            
-            $tempFile = $uploadDir . uniqid('preview_') . '.' . $extension;
-            
-            if (!move_uploaded_file($file['tmp_name'], $tempFile)) {
-                throw new Exception('Gagal memindahkan file');
-            }
-            
+            $validated = $this->validateEvaluasiUpload($_FILES['excel_file'] ?? null);
+            $tempFile = $this->moveEvaluasiUpload($validated['file'], 'preview_');
+
             require_once ROOT_PATH . '/app/services/ExcelImportService.php';
             $importService = new ExcelImportService();
             $preview = $importService->generatePreview($tempFile, 10);
-            
-            if (file_exists($tempFile)) {
-                unlink($tempFile);
-            }
-            
+
             $this->json($preview);
-            
+
         } catch (Exception $e) {
             $this->json([
                 'success' => false,
                 'error' => $e->getMessage()
             ], 400);
+        } finally {
+            if (is_string($tempFile) && $tempFile !== '' && file_exists($tempFile)) {
+                unlink($tempFile);
+            }
         }
+    }
+
+    /**
+     * Validasi upload evaluasi: error, ukuran 5MB, ekstensi xlsx/csv,
+     * MIME via finfo, dan traversal pada nama file.
+     *
+     * @return array{file: array, extension: string}
+     */
+    private function validateEvaluasiUpload(mixed $file): array {
+        if (!is_array($file) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            throw new Exception('Tidak ada file yang diupload');
+        }
+
+        $maxBytes = 5 * 1024 * 1024;
+        if (($file['size'] ?? 0) > $maxBytes) {
+            throw new Exception('Ukuran file maksimal 5 MB');
+        }
+
+        $originalName = (string) ($file['name'] ?? '');
+        if (str_contains($originalName, '..') || str_contains($originalName, '/') || str_contains($originalName, '\\')) {
+            throw new Exception('Nama file tidak valid');
+        }
+
+        $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+        if (!in_array($extension, ['xlsx', 'csv'], true)) {
+            throw new Exception('Format file tidak didukung. Gunakan xlsx atau csv');
+        }
+
+        $tmpName = (string) ($file['tmp_name'] ?? '');
+        if ($tmpName === '' || !is_uploaded_file($tmpName)) {
+            throw new Exception('File upload tidak valid');
+        }
+
+        $finfo = new finfo(FILEINFO_MIME_TYPE);
+        $mime = $finfo->file($tmpName) ?: '';
+        $allowed = $extension === 'csv'
+            ? ['text/plain', 'text/csv', 'application/csv', 'application/vnd.ms-excel', 'text/x-csv']
+            : ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/zip', 'application/octet-stream'];
+        if (!in_array($mime, $allowed, true)) {
+            throw new Exception('Tipe file tidak valid (' . $mime . ')');
+        }
+
+        return ['file' => $file, 'extension' => $extension];
+    }
+
+    /**
+     * Pindahkan upload ke direktori temp non-executable dengan nama acak.
+     */
+    private function moveEvaluasiUpload(array $file, string $prefix): string {
+        $extension = strtolower(pathinfo((string) $file['name'], PATHINFO_EXTENSION));
+        $uploadDir = ROOT_PATH . '/storage/uploads/temp/';
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0755, true);
+        }
+
+        $random = bin2hex(random_bytes(8));
+        $tempFile = $uploadDir . $prefix . $random . '.' . $extension;
+
+        if (!move_uploaded_file((string) $file['tmp_name'], $tempFile)) {
+            throw new Exception('Gagal memindahkan file upload');
+        }
+
+        return $tempFile;
     }
     
     /**

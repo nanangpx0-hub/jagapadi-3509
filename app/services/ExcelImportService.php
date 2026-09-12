@@ -57,6 +57,8 @@ class ExcelImportService {
         'periode_tahun' => 'periode_tahun',
         'nama_wilayah' => 'nama_wilayah',
         'wilayah' => 'nama_wilayah',
+        'wilayah_id' => 'wilayah_id',
+        'kode_wilayah' => 'wilayah_id',
         'luas_estimasi_daerah' => 'luas_estimasi_daerah',
         'estimasi' => 'luas_estimasi_daerah',
         'luas_estimasi' => 'luas_estimasi_daerah',
@@ -938,9 +940,21 @@ class ExcelImportService {
             $validated['luas_rilis_bps'] = null;
         }
         
-        $validated['catatan_analisis'] = $data['catatan_analisis'] ?? null;
-        
+        $validated['catatan_analisis'] = $this->sanitizeFormulaCell($data['catatan_analisis'] ?? null);
+        $validated['nama_wilayah'] = $this->sanitizeFormulaCell($validated['nama_wilayah']);
+
         return $validated;
+    }
+
+    /**
+     * Mitigasi CSV formula injection: sel dengan awalan =,+,-,@,TAB,CR
+     * diberi prefix apostrof agar tidak dieksekusi sebagai formula Excel.
+     */
+    private function sanitizeFormulaCell(mixed $value): mixed {
+        if (is_string($value) && $value !== '' && in_array($value[0], ['=', '+', '-', '@', "\t", "\r"], true)) {
+            return "'" . $value;
+        }
+        return $value;
     }
     
     /**
@@ -1126,11 +1140,11 @@ class ExcelImportService {
                 ];
                 break;
             case 'evaluasi_akurasi':
-                $headers = ['periode_bulan', 'periode_tahun', 'nama_wilayah', 'luas_estimasi_daerah', 'luas_rilis_bps', 'catatan_analisis'];
+                $headers = ['periode_bulan', 'periode_tahun', 'wilayah_id', 'nama_wilayah', 'luas_estimasi_daerah', 'luas_rilis_bps', 'catatan_analisis'];
                 $sampleData = [
-                    ['1', '2026', 'Kab. Jember', '150000', '148500', 'Contoh data Januari'],
-                    ['1', '2026', 'Kab. Banyuwangi', '120000', '', ''],
-                    ['2', '2026', 'Kab. Jember', '145000', '144200', '']
+                    ['1', '2026', '3509', 'Jember', '150000', '148500', 'Contoh data Januari'],
+                    ['1', '2026', '3510', 'Banyuwangi', '120000', '', ''],
+                    ['2', '2026', '3509', 'Jember', '145000', '144200', '']
                 ];
                 break;
         }

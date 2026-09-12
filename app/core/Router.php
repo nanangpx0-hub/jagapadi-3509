@@ -74,7 +74,6 @@ class Router {
         $this->get('/api/laporan-hama/{id}', 'Api\LaporanHamaController@show', ['auth']);
         $this->post('/api/laporan-hama', 'Api\LaporanHamaController@store', ['auth']);
         $this->post('/api/laporan-hama/{id}/submit', 'Api\LaporanHamaController@submit', ['auth']);
-        $this->post('/api/laporan-hama/{id}/archive', 'Api\LaporanHamaController@archive', ['auth', 'operator']);
         $this->put('/api/laporan-hama/{id}', 'Api\LaporanHamaController@update', ['auth']);
         $this->delete('/api/laporan-hama/{id}', 'Api\LaporanHamaController@destroy', ['auth', 'admin']);
 
@@ -219,7 +218,6 @@ class Router {
         $this->post('/laporan-lainnya/{id}/submit', 'LaporanLainnyaController@submit', ['auth']);
         $this->post('/laporan-lainnya/verify/{id}', 'LaporanLainnyaController@verify', ['auth', 'admin']);
         $this->post('/laporan-lainnya/reject/{id}', 'LaporanLainnyaController@reject', ['auth', 'admin']);
-        $this->post('/laporan-lainnya/archive/{id}', 'LaporanLainnyaController@archive', ['auth', 'admin']);
         $this->delete('/laporan-lainnya/{id}', 'LaporanLainnyaController@destroy', ['auth', 'admin']);
         $this->get('/laporan-lainnya/summary', 'LaporanLainnyaController@summary', ['auth', 'petugas']);
         $this->post('/laporan-lainnya/export', 'LaporanLainnyaController@export', ['auth', 'petugas']);

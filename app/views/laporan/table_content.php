@@ -91,9 +91,9 @@
                         <?php
                         $isActiveReport = in_array($row['status'], ['Submitted', 'Diverifikasi']);
                         $statusLabel = $isActiveReport ? 'Aktif' : $row['status'];
-                        $statusClass = $isActiveReport ? 'success' : ($row['status'] == 'Diarsipkan' ? 'dark' : ($row['status'] == 'Ditolak' ? 'danger' : 'secondary'));
-                        $statusIcon = $isActiveReport ? 'check-circle' : ($row['status'] == 'Diarsipkan' ? 'archive' : ($row['status'] == 'Ditolak' ? 'exclamation-circle' : 'file'));
-                        $statusTitle = $isActiveReport ? 'Laporan aktif/masuk' : ($row['status'] == 'Diarsipkan' ? 'Laporan diarsipkan' : ($row['status'] == 'Ditolak' ? 'Status lama: ditolak' : 'Draf belum resmi'));
+                        $statusClass = $isActiveReport ? 'success' : ($row['status'] == 'Ditolak' ? 'danger' : 'secondary');
+                        $statusIcon = $isActiveReport ? 'check-circle' : ($row['status'] == 'Ditolak' ? 'exclamation-circle' : 'file');
+                        $statusTitle = $isActiveReport ? 'Laporan aktif/masuk' : ($row['status'] == 'Ditolak' ? 'Status lama: ditolak' : 'Draf belum resmi');
                         ?>
                         <span class="badge badge-<?= 
                             $statusClass
@@ -171,21 +171,6 @@
                             </a>
                             <?php endif; ?>
 
-                            <?php if(
-                                in_array($_SESSION['role'] ?? '', ['admin', 'operator'], true)
-                                && in_array($row['status'] ?? '', ['Submitted', 'Diverifikasi'], true)
-                            ): ?>
-                            <form action="<?= BASE_URL ?>laporan/archive/<?= $row['id'] ?>" method="POST" class="d-inline">
-                                <?= Security::getCsrfField() ?>
-                                <button type="submit"
-                                        class="btn-action btn-action-secondary"
-                                        data-action="archive"
-                                        onclick="return confirm('Arsipkan laporan ini? Laporan tidak lagi dihitung sebagai laporan aktif.')"
-                                        title="Arsipkan Laporan">
-                                    <i class="fas fa-archive"></i>
-                                </button>
-                            </form>
-                            <?php endif; ?>
                             
                             <?php 
                             // LOGIKA HAK AKSES DELETE

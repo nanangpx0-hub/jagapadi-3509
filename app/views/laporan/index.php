@@ -888,7 +888,6 @@ tbody tr:hover {
             return `<span class="badge badge-success" title="Laporan aktif/masuk"><i class="fas fa-check-circle"></i> Aktif</span>`;
         }
         const map = {
-            Diarsipkan:   { cls:'dark',     icon:'archive' },
             Ditolak:      { cls:'danger',   icon:'times-circle' },
             Draf:         { cls:'secondary',icon:'file' },
         };
@@ -925,13 +924,6 @@ tbody tr:hover {
         const etlWarn = (r.etl_acuan > 0 && r.populasi > r.etl_acuan) ? '<i class="fas fa-exclamation-triangle text-danger ms-1" title="Melampaui ETL"></i>' : '';
 
         const editBtn = canEdit ? `<a href="${BASE_URL}laporan/edit/${r.id}" class="btn-action btn-action-warning" title="Edit"><i class="fas fa-edit"></i></a>` : '';
-        const archiveBtn = (isAdmin || isOperator) && ['Submitted', 'Diverifikasi'].includes(r.status) ? `
-            <form action="${BASE_URL}laporan/archive/${r.id}" method="POST" class="d-inline">
-                <?= Security::getCsrfField() ?>
-                <button type="submit" class="btn-action btn-action-secondary" onclick="return confirm('Arsipkan laporan ini? Laporan tidak lagi dihitung sebagai laporan aktif.')" title="Arsipkan">
-                    <i class="fas fa-archive"></i>
-                </button>
-            </form>` : '';
 
         const verifyBtns = (isAdmin || isOperator) && r.status === 'Submitted' ? `
             <button type="button" class="btn-action btn-action-success" data-toggle="modal" data-target="#verifyModal${r.id}" title="Verifikasi"><i class="fas fa-check"></i></button>
@@ -969,7 +961,6 @@ tbody tr:hover {
                     <a href="${BASE_URL}laporan/detail/${r.id}" class="btn-action btn-action-info" title="Lihat"><i class="fas fa-eye"></i></a>
                     ${editBtn}
                     ${verifyBtns}
-                    ${archiveBtn}
                     ${deleteBtn}
                 </div>
             </td>

@@ -279,13 +279,6 @@ public function getById(int $id): ?array {
         ]);
     }
 
-    public function archiveReport(int $id): bool {
-        $this->assertStatus($id, ['submitted', 'verified', 'rejected']);
-        return $this->update($id, [
-            'status' => 'archived',
-        ]);
-    }
-
     public function isOwner(int $id, int $userId): bool {
         $report = $this->find($id);
         return $report !== null && (int) $report['user_id'] === $userId;

@@ -243,7 +243,7 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                                 <strong><?= $namaBulan[$row['periode_bulan']] ?? '-' ?></strong>
                                 <br><small class="text-muted"><?= $row['periode_tahun'] ?></small>
                             </td>
-                            <td><?= htmlspecialchars($row['nama_wilayah'] ?? '-') ?></td>
+                            <td><?= htmlspecialchars((string) ($row['nama_wilayah'] ?? '-'), ENT_QUOTES, 'UTF-8') ?></td>
                             <td class="text-right"><?= number_format($row['luas_estimasi_daerah'], 2, ',', '.') ?></td>
                             <td class="text-right">
                                 <?php if ($row['luas_rilis_bps'] !== null): ?>
@@ -268,31 +268,30 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                                     <span class="text-muted">-</span>
                                 <?php endif; ?>
                             </td>
-                            <?php if ($canManageEvaluation): ?>
                             <td class="text-center">
                                 <?php if ($row['status_akurasi']): ?>
-                                    <?php 
+                                    <?php
                                     $badgeClass = 'secondary';
                                     if ($row['status_akurasi'] === 'Sangat Akurat') $badgeClass = 'success';
                                     elseif ($row['status_akurasi'] === 'Perlu Perhatian') $badgeClass = 'warning';
                                     elseif ($row['status_akurasi'] === 'Bias Tinggi') $badgeClass = 'danger';
                                     ?>
-                                    <span class="badge badge-<?= $badgeClass ?>"><?= $row['status_akurasi'] ?></span>
+                                    <span class="badge badge-<?= $badgeClass ?>"><?= htmlspecialchars((string) $row['status_akurasi'], ENT_QUOTES, 'UTF-8') ?></span>
                                 <?php else: ?>
                                     <span class="badge badge-secondary">Menunggu Rilis</span>
                                 <?php endif; ?>
                             </td>
-                            <?php endif; ?>
+                            <?php if ($canManageEvaluation): ?>
                             <td class="text-center">
                                 <button type="button" class="btn btn-sm btn-warning btn-edit" 
-                                        data-id="<?= $row['id'] ?>"
-                                        data-wilayah="<?= htmlspecialchars($row['nama_wilayah']) ?>"
-                                        data-wilayah-id="<?= $row['wilayah_id'] ?>"
-                                        data-bulan="<?= $row['periode_bulan'] ?>"
-                                        data-tahun="<?= $row['periode_tahun'] ?>"
-                                        data-estimasi="<?= $row['luas_estimasi_daerah'] ?>"
-                                        data-rilis="<?= $row['luas_rilis_bps'] ?>"
-                                        data-catatan="<?= htmlspecialchars($row['catatan_analisis'] ?? '') ?>"
+                                        data-id="<?= (int) $row['id'] ?>"
+                                        data-wilayah="<?= htmlspecialchars((string) $row['nama_wilayah'], ENT_QUOTES, 'UTF-8') ?>"
+                                        data-wilayah-id="<?= (int) $row['wilayah_id'] ?>"
+                                        data-bulan="<?= (int) $row['periode_bulan'] ?>"
+                                        data-tahun="<?= (int) $row['periode_tahun'] ?>"
+                                        data-estimasi="<?= htmlspecialchars((string) $row['luas_estimasi_daerah'], ENT_QUOTES, 'UTF-8') ?>"
+                                        data-rilis="<?= htmlspecialchars((string) ($row['luas_rilis_bps'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                        data-catatan="<?= htmlspecialchars((string) ($row['catatan_analisis'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                                         title="Edit Data">
                                     <i class="fas fa-edit"></i>
                                 </button>
@@ -302,6 +301,7 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </td>
+                            <?php endif; ?>
                         </tr>
                         <?php endforeach; ?>
                         <?php endif; ?>
@@ -345,8 +345,14 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                     </div>
                     
                     <div class="form-group">
-                        <label class="font-weight-bold">Nama Wilayah (Kab/Kota) <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" name="nama_wilayah" required placeholder="Contoh: Kab. Jember">
+                        <label class="font-weight-bold">Wilayah (Kab/Kota Jatim) <span class="text-danger">*</span></label>
+                        <select class="form-control" name="wilayah_id" required>
+                            <option value="">Pilih Kabupaten/Kota</option>
+                            <?php foreach (($wilayahOptions ?? []) as $opt): ?>
+                            <option value="<?= (int) $opt['kode'] ?>"><?= htmlspecialchars((string) $opt['nama'], ENT_QUOTES, 'UTF-8') ?> (<?= (int) $opt['kode'] ?>)</option>
+                            <?php endforeach; ?>
+                        </select>
+                        <small class="text-muted">Kode BPS resmi dipakai sebagai kunci unik periode; entri manual di luar daftar ditolak.</small>
                     </div>
                     
                     <div class="row">
@@ -585,7 +591,7 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
 <script>
 const BASE_URL = '<?= BASE_URL ?>';
 const csrfToken = '<?= $csrfToken ?>';
-const chartData = <?= json_encode($chartData) ?>;
+const chartData = <?= json_encode($chartData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
 
 // ========== COMPARISON CHART ==========
 const chartCtx = document.getElementById('comparisonChart');

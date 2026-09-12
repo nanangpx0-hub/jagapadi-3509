@@ -269,6 +269,54 @@ prioritas, status, lampiran, catatan Admin, pemroses, dan timestamp. Tabel
 Index: `user_id`, `jenis_feedback`, `prioritas`, `status`, `processed_by`,
 `created_at` (semua MUL).
 
+### 15. `evaluasi_akurasi_panen` (runtime root/integrated, web session)
+
+Perbandingan estimasi daerah (snapshot KSA bulanan) vs rilis resmi BPS.
+Hak baca: `admin` + `statistisi`; mutasi (snapshot, tambah, ubah, hapus,
+rilis, impor): khusus `admin` dengan CSRF + validasi method POST.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | INT AI PK | |
+| periode_bulan | INT(2) | 1–12 |
+| periode_tahun | YEAR | 2000–tahun berjalan +1 |
+| wilayah_id | INT | **Kode BPS resmi** (3501–3529, 3571–3579); entri manual di luar daftar ditolak |
+| nama_wilayah | VARCHAR(100) | Nama resmi dari `data_ksa_bulanan` (diselesaikan server) |
+| luas_estimasi_daerah | DECIMAL(10,2) | Snapshot KSA; selalu diagregat penuh di chart walau rilis NULL |
+| luas_rilis_bps | DECIMAL(10,2) NULL | Input Admin; NULL = belum dirilis |
+| deviasi_absolut | DECIMAL(10,2) NULL | `estimasi - rilis`; dihitung di memori sebelum tulis |
+| persentase_bias | DECIMAL(5,2) NULL | `(estimasi-rilis)/rilis*100`; NULL bila rilis 0/NULL |
+| status_akurasi | ENUM(`Sangat Akurat`,`Perlu Perhatian`,`Bias Tinggi`) NULL | `<5%`, `5–10%`, `>10%`; NULL bila bias NULL |
+| catatan_analisis | TEXT NULL | Disanitasi formula injection (`=,+,-,@`) |
+| snapshot_locked | TINYINT(1) | 1 = dilewati snapshot berikutnya |
+| snapshot_date | DATE NULL | |
+| created_by / updated_by | INT NULL | `users.id` dari session (tidak dari client) |
+| created_at / updated_at | TIMESTAMP | |
+
+Unique: `unique_periode_wilayah (periode_bulan, periode_tahun, wilayah_id)`.
+Index: `idx_tahun (periode_tahun)`, `idx_status (status_akurasi)`.
+Snapshot memakai **satu bulk** `INSERT ... ON DUPLICATE KEY UPDATE`
+(3 query: sumber + existing + upsert) dan menghormati `snapshot_locked`.
+
+### 16. `evaluasi_akurasi_logs`
+
+Audit trail modul evaluasi (`snapshot`, `insert`, `update`, `delete`,
+`update_rilis`, `snapshot_backup`).
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | INT AI PK | |
+| action | VARCHAR(50) | |
+| status | ENUM(`success`,`failed`,`partial`) | |
+| message | TEXT | Tanpa secret/token |
+| details | JSON NULL | Ringkasan (inserted/updated/skipped, id) |
+| user_id | INT NULL | Session user |
+| created_at | TIMESTAMP | Index `idx_created_at` |
+
+Migration baseline: `database/migrations/2026_09_12_create_evaluasi_akurasi_tables.php`
+(`CREATE TABLE IF NOT EXISTS`, idempoten). Auto-DDL per-request dihapus
+dari constructor model untuk menghilangkan overhead metadata.
+
 Data global hanya dibaca Admin. Query daftar Petugas selalu diberi filter
 `feedback.user_id` dari session dan tidak mempercayai `user_id` dari request.
 Penulisan `feedback` + `feedback_status_history` dibungkus transaksi database

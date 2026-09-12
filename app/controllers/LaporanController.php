@@ -77,8 +77,7 @@ class LaporanController extends Controller {
             $countAll = $this->laporanModel->getCountByStatus('Draf', $userId)
                 + $this->laporanModel->getCountByStatus('Submitted', $userId)
                 + $this->laporanModel->getCountByStatus('Diverifikasi', $userId)
-                + $this->laporanModel->getCountByStatus('Ditolak', $userId)
-                + $this->laporanModel->getCountByStatus('Diarsipkan', $userId);
+                + $this->laporanModel->getCountByStatus('Ditolak', $userId);
         } else {
             $countAll = $this->laporanModel->count();
         }
@@ -1125,38 +1124,6 @@ class LaporanController extends Controller {
         $this->redirect('laporan');
     }
 
-    public function archive($id) {
-        $this->checkRole(
-            ['admin', 'operator'],
-            'Anda tidak memiliki akses untuk mengarsipkan laporan hama.'
-        );
-
-        $this->requireStateChangingRequest(['POST']);
-
-        $laporan = $this->laporanModel->find($id);
-        if (!$laporan) {
-            $_SESSION['error'] = 'Laporan tidak ditemukan';
-            $this->redirect('laporan');
-        }
-
-        if (($laporan['status'] ?? '') === 'Diarsipkan') {
-            $_SESSION['info'] = 'Laporan sudah diarsipkan';
-            $this->redirect('laporan');
-        }
-
-        try {
-            $this->laporanModel->archive((int)$id);
-            $this->logStatusHistory($id, $laporan['status'] ?? null, 'Diarsipkan', $this->getCurrentUser()['id'], 'Laporan diarsipkan');
-            $this->clearDashboardCache();
-            $_SESSION['success'] = 'Laporan berhasil diarsipkan';
-        } catch (Exception $e) {
-            error_log('Failed to archive laporan hama: ' . $e->getMessage());
-            $_SESSION['error'] = 'Gagal mengarsipkan laporan. Pastikan migration status arsip sudah dijalankan.';
-        }
-
-        $this->redirect('laporan');
-    }
-
     public function bulkDelete() {
         $this->checkRole(['admin']);
 
@@ -1488,8 +1455,6 @@ class LaporanController extends Controller {
                 'verified' => 'Diverifikasi',
                 'ditolak' => 'Ditolak',
                 'rejected' => 'Ditolak',
-                'diarsipkan' => 'Diarsipkan',
-                'archived' => 'Diarsipkan',
             ];
             if ($status !== '' && isset($statusMap[strtolower($status)])) {
                 $status = $statusMap[strtolower($status)];
