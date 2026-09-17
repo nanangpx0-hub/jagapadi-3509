@@ -58,40 +58,49 @@ class DashboardMapApiController extends BaseApiController {
         try {
             $layers = [
                 [
-                    'id' => 'hama',
-                    'name' => 'Sebaran Hama/OPT',
+                    'id'          => 'hama',
+                    'name'        => 'Sebaran Hama/OPT',
                     'description' => 'Lokasi laporan serangan hama dan OPT',
-                    'icon' => 'bug',
-                    'color' => '#dc3545',
-                    'enabled' => true,
-                    'scope' => 'user'
+                    'icon'        => 'bug',
+                    'color'       => '#dc3545',
+                    'enabled'     => true,
+                    'scope'       => 'user'
                 ],
                 [
-                    'id' => 'irigasi',
-                    'name' => 'Infrastruktur Irigasi',
-                    'description' => 'Daerah irigasi dan debit air',
-                    'icon' => 'water',
-                    'color' => '#0d6efd',
-                    'enabled' => true,
-                    'scope' => 'kabupaten'
+                    'id'          => 'irigasi',
+                    'name'        => 'Irigasi (Data Sensor)',
+                    'description' => 'Debit air daerah irigasi dari data sensor',
+                    'icon'        => 'water',
+                    'color'       => '#0d6efd',
+                    'enabled'     => true,
+                    'scope'       => 'kabupaten'
                 ],
                 [
-                    'id' => 'rainfall',
-                    'name' => 'Curah Hujan',
+                    'id'          => 'irigasiLaporan',
+                    'name'        => 'Irigasi (Laporan Petugas)',
+                    'description' => 'Laporan kondisi irigasi dari Petugas di lapangan',
+                    'icon'        => 'clipboard-check',
+                    'color'       => '#0a8c4d',
+                    'enabled'     => true,
+                    'scope'       => 'kabupaten'
+                ],
+                [
+                    'id'          => 'rainfall',
+                    'name'        => 'Curah Hujan',
                     'description' => 'Data curah hujan per kecamatan',
-                    'icon' => 'cloud-rain',
-                    'color' => '#198754',
-                    'enabled' => true,
-                    'scope' => 'kabupaten'
+                    'icon'        => 'cloud-rain',
+                    'color'       => '#198754',
+                    'enabled'     => true,
+                    'scope'       => 'kabupaten'
                 ],
                 [
-                    'id' => 'wind',
-                    'name' => 'Kecepatan Angin',
+                    'id'          => 'wind',
+                    'name'        => 'Kecepatan Angin',
                     'description' => 'Data kecepatan angin',
-                    'icon' => 'wind',
-                    'color' => '#6f42c1',
-                    'enabled' => true,
-                    'scope' => 'kabupaten'
+                    'icon'        => 'wind',
+                    'color'       => '#6f42c1',
+                    'enabled'     => true,
+                    'scope'       => 'kabupaten'
                 ]
             ];
             
@@ -152,24 +161,47 @@ class DashboardMapApiController extends BaseApiController {
     // =========================================
     
     /**
-     * Get irrigation data for map
+     * Get irrigation data for map (data scraped per daerah irigasi)
      * GET /api/dashboard/map/irigasi
      */
     public function irigasi() {
         $this->assertAuthenticated();
-        
+
         try {
             $data = $this->aggregator->getIrrigationByArea();
-            
+
             $this->jsonResponse([
-                'success' => true,
-                'data' => $data,
-                'count' => count($data),
-                'scope' => 'kabupaten',
+                'success'   => true,
+                'data'      => $data,
+                'count'     => count($data),
+                'scope'     => 'kabupaten',
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
         } catch (Exception $e) {
             $this->errorResponse('Gagal memuat data irigasi');
+        }
+    }
+
+    /**
+     * Get laporan irigasi dari Petugas yang punya koordinat GPS.
+     * GET /api/dashboard/map/irigasiLaporan
+     */
+    public function irigasiLaporan() {
+        $this->assertAuthenticated();
+
+        try {
+            $data    = $this->aggregator->getLaporanIrigasiMapData();
+            $geojson = $this->toGeoJSON($data, 'irigasi_laporan');
+
+            $this->jsonResponse([
+                'success'   => true,
+                'data'      => $geojson,
+                'count'     => count($data),
+                'scope'     => 'kabupaten',
+                'timestamp' => date('Y-m-d H:i:s')
+            ]);
+        } catch (Exception $e) {
+            $this->errorResponse('Gagal memuat data laporan irigasi');
         }
     }
     

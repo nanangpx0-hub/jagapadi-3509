@@ -14,7 +14,6 @@ class LaporanStatusTest extends TestCase
         return [
             'admin verifikasi' => ['Submitted', 'Diverifikasi', 'admin'],
             'admin tolak' => ['Submitted', 'Ditolak', 'admin'],
-            'admin arsip' => ['Diverifikasi', 'Diarsipkan', 'admin'],
             'petugas resubmit' => ['Ditolak', 'Submitted', 'petugas'],
             'petugas kembali ke Draf' => ['Ditolak', 'Draf', 'petugas'],
         ];
@@ -28,6 +27,7 @@ class LaporanStatusTest extends TestCase
             'admin resubmit' => ['Ditolak', 'Submitted', 'admin', 'role conflict'],
             'verifikasi Draf' => ['Draf', 'Diverifikasi', 'admin', 'invalid from'],
             'tolak Draf' => ['Draf', 'Ditolak', 'admin', 'invalid from'],
+            'arsip Diverifikasi' => ['Diverifikasi', 'Diarsipkan', 'admin', 'status diarsipkan dihapus'],
             'arsip Submitted' => ['Submitted', 'Diarsipkan', 'admin', 'invalid from'],
             'resubmit Submitted' => ['Submitted', 'Submitted', 'petugas', 'invalid from'],
             'arsip Ditolak' => ['Ditolak', 'Diarsipkan', 'admin', 'invalid from'],
@@ -59,7 +59,7 @@ class LaporanStatusTest extends TestCase
         $this->assertTrue(LaporanStatus::isValid('Submitted'));
         $this->assertTrue(LaporanStatus::isValid('Diverifikasi'));
         $this->assertTrue(LaporanStatus::isValid('Ditolak'));
-        $this->assertTrue(LaporanStatus::isValid('Diarsipkan'));
+        $this->assertFalse(LaporanStatus::isValid('Diarsipkan'));
         $this->assertFalse(LaporanStatus::isValid('InvalidStatus'));
     }
 
@@ -87,8 +87,9 @@ class LaporanStatusTest extends TestCase
 
     public function testIsArchivable(): void
     {
-        $this->assertTrue(LaporanStatus::isArchivable('Diverifikasi'));
+        $this->assertFalse(LaporanStatus::isArchivable('Diverifikasi'));
         $this->assertFalse(LaporanStatus::isArchivable('Submitted'));
+        $this->assertFalse(LaporanStatus::isArchivable('Diarsipkan'));
     }
 
     public function testIsResubmittable(): void

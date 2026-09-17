@@ -1,0 +1,69 @@
+# ==============================================================================
+# JAGAPADI — Template Konfigurasi Rclone (Solusi 1: Pull Model Backup Media)
+# ==============================================================================
+# File ini merupakan template profil koneksi rclone untuk sinkronisasi/backup
+# folder media uploads JAGAPADI dari cPanel hosting (jagapadi.bpsjember.my.id)
+# ke server lokal Laragon Windows.
+#
+# PETUNJUK SETUP CEPAT:
+# 1. Pastikan rclone terpasang di sistem (jalankan 'scripts/ensure_rclone.ps1'
+#    atau unduh ke C:\laragon\bin\rclone.exe).
+# 2. Salin template ini ke 'config/rclone.conf':
+#    PowerShell: Copy-Item config\rclone.conf.example config\rclone.conf
+# 3. Enkripsi password akun hosting Anda dengan command:
+#    rclone obscure "PasswordAndaYangSebenarnya"
+#    Lalu paste hasilnya pada baris 'pass = ...' di bawah.
+# 4. Sesuaikan host, user, dan port sesuai kredensial cPanel.
+# 5. PERINGATAN KEAMANAN:
+#    Jangan pernah commit file 'config/rclone.conf' ke repository Git!
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Profil 1: SFTP (SSH File Transfer Protocol) — SANGAT DIREKOMENDASIKAN
+# ------------------------------------------------------------------------------
+# SFTP berjalan melalui protokol SSH (port 22) dengan enkripsi penuh end-to-end.
+# Memiliki integritas data dan kecepatan transfer yang lebih tinggi daripada FTP biasa.
+#
+# Penentuan Remote Path cPanel untuk SFTP:
+# - Format absolute: /home/{cpanel_user}/public_html/public/uploads
+#   Contoh: /home/jagapadi/public_html/public/uploads
+# - Atau format relative terhadap home: public_html/public/uploads
+# ------------------------------------------------------------------------------
+[cpanel_sftp]
+type = sftp
+host = jagapadi.bpsjember.my.id
+user = cpanel_username
+port = 22
+pass = OBSCURED_PASSWORD_HERE
+# Jika menggunakan autentikasi SSH Key pair (opsional):
+# key_file = C:/Users/USERNAME/.ssh/id_rsa
+# key_file_pass = OBSCURED_KEY_PASSPHRASE
+use_insecure_cipher = false
+md5sum_command = md5sum
+sha1sum_command = sha1sum
+shell_type = unix
+
+# ------------------------------------------------------------------------------
+# Profil 2: FTP / FTPS (Explicit TLS) — ALTERNATIF JIKA SFTP TIDAK TERSEDIA
+# ------------------------------------------------------------------------------
+# Gunakan FTPS jika cPanel hosting Anda tidak mengaktifkan akses SSH/SFTP.
+# Wajib menggunakan 'tls = true' dan 'explicit_tls = true' agar data foto/dokumen
+# tidak dikirimkan dalam bentuk plaintext di jaringan publik.
+#
+# Penentuan Remote Path cPanel untuk FTP:
+# - Jika akun FTP memiliki root direktori '/home/{user}':
+#   /public_html/public/uploads
+# - Jika akun FTP khusus dibuat dengan root direktori '/home/{user}/public_html':
+#   /public/uploads
+# ------------------------------------------------------------------------------
+[cpanel_ftp]
+type = ftp
+host = jagapadi.bpsjember.my.id
+user = cpanel_ftp_user@jagapadi.bpsjember.my.id
+port = 21
+pass = OBSCURED_PASSWORD_HERE
+tls = true
+explicit_tls = true
+concurrency = 4
+close_timeout = 1m
+idle_timeout = 15m

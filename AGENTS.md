@@ -58,7 +58,7 @@ relevan, bukan sebagai pengganti audit implementasi aktual.
 
 | Aturan | Ketentuan |
 |---|---|
-| Status resmi | `Draf`, `Submitted`, `Diverifikasi`, `Ditolak`, `Diarsipkan` |
+| Status resmi | `Draf`, `Submitted`, `Diverifikasi`, `Ditolak` (Status `Diarsipkan` telah dihapus) |
 | Label UI | `Dikirim` boleh menjadi label tampilan untuk `Submitted`; nilai DB/API/query/test tetap `Submitted` |
 | Draf | Disimpan di server saat koneksi tersedia; dapat tampil sebagai pekerjaan Petugas |
 | Agregat resmi | Statistik, grafik, peta, analisis, dan ekspor default tidak memasukkan Draf |
@@ -66,13 +66,13 @@ relevan, bukan sebagai pengganti audit implementasi aktual.
 | Nomor laporan | Dibuat atomik saat pertama kali menjadi `Submitted`, bukan saat `Draf` |
 | Resubmit | Laporan `Ditolak` kembali ke `Submitted` tanpa mengganti nomor yang sudah ada |
 | Verifikasi | Hanya Admin; hanya laporan `Submitted` dapat diverifikasi atau ditolak |
-| Arsip Backend v1 | Hanya Admin; transisi resmi `Diverifikasi` → `Diarsipkan` |
+| Arsip Laporan | Dihapus / Deprecated; status `Diarsipkan` telah dihapus dari alur kerja resmi |
 | Draf | Tidak boleh diverifikasi |
 
-Workflow resmi Backend v1:
+Workflow resmi:
 
 ```text
-Draf → Submitted → Diverifikasi → Diarsipkan
+Draf → Submitted → Diverifikasi
               └→ Ditolak → Draf
                          └→ Submitted (resubmit pemilik)
 ```

@@ -620,25 +620,35 @@ class DashboardDataAggregator {
      * Get irrigation data by area
      */
     public function getIrrigationByArea() {
-        $latestDate = $this->getLatestIrrigationDate();
-        $sql = "SELECT 
+        // Ambil data 30 hari mundur dari tanggal TERBARU yang ada di data_irigasi,
+        // bukan dari hari ini — agar tetap menampilkan data meski scraping terhenti sementara.
+        $sql = "SELECT
                     di.daerah_irigasi,
                     di.kecamatan,
-                    AVG(di.debit_air) as avg_debit,
-                    MAX(di.debit_air) as max_debit,
-                    MIN(di.debit_air) as min_debit,
-                    COUNT(*) as total_records,
-                    AVG(mk.latitude) as latitude,
-                    AVG(mk.longitude) as longitude
+                    AVG(di.debit_air) AS avg_debit,
+                    MAX(di.debit_air) AS max_debit,
+                    MIN(di.debit_air) AS min_debit,
+                    COUNT(*) AS total_records,
+                    MAX(di.tanggal) AS tanggal_terbaru,
+                    AVG(mk.latitude) AS latitude,
+                    AVG(mk.longitude) AS longitude
                 FROM data_irigasi di
                 LEFT JOIN master_kecamatan mk ON di.kecamatan = mk.nama_kecamatan
-                WHERE di.tanggal >= DATE_SUB(:latest_date, INTERVAL 29 DAY)
+                WHERE di.tanggal >= DATE_SUB(
+                    (SELECT COALESCE(MAX(di2.tanggal), CURDATE()) FROM data_irigasi di2),
+                    INTERVAL 30 DAY
+                )
                 GROUP BY di.daerah_irigasi, di.kecamatan
                 ORDER BY avg_debit DESC";
 
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([':latest_date' => $latestDate]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        try {
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            error_log('DashboardDataAggregator::getIrrigationByArea - ' . $e->getMessage());
+            return [];
+        }
     }
 
     /**
@@ -988,12 +998,48 @@ class DashboardDataAggregator {
     }
     
     /**
-     * Get irrigation map data
+     * Get irrigation map data.
+     * Menggabungkan dua sumber:
+     *  1. data_irigasi  — data scraped/sensor per daerah irigasi (digroup per kecamatan)
+     *  2. laporan_irigasi — laporan langsung dari Petugas yang sudah punya koordinat GPS
      */
     public function getIrrigationMapData($filters = []) {
-        // For now, return aggregated data by irrigation area
-        // Can be expanded with actual coordinates later
         return $this->getIrrigationByArea();
+    }
+
+    /**
+     * Get laporan_irigasi markers (laporan Petugas dengan koordinat GPS).
+     * Hanya status Submitted dan Diverifikasi yang dikembalikan.
+     */
+    public function getLaporanIrigasiMapData(): array {
+        $sql = "SELECT
+                    li.id,
+                    li.tanggal,
+                    li.nama_saluran,
+                    li.daerah_irigasi,
+                    li.kondisi_fisik,
+                    li.debit_air,
+                    li.latitude,
+                    li.longitude,
+                    mk.nama_kecamatan,
+                    md.nama_desa
+                FROM laporan_irigasi li
+                LEFT JOIN master_kecamatan mk ON li.kecamatan_id = mk.id
+                LEFT JOIN master_desa md ON li.desa_id = md.id
+                WHERE li.deleted_at IS NULL
+                  AND li.latitude IS NOT NULL
+                  AND li.longitude IS NOT NULL
+                  AND li.status IN ('Submitted', 'Diverifikasi')
+                ORDER BY li.tanggal DESC";
+
+        try {
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            error_log('DashboardDataAggregator::getLaporanIrigasiMapData - ' . $e->getMessage());
+            return [];
+        }
     }
     
     /**
@@ -1037,18 +1083,19 @@ class DashboardDataAggregator {
      */
     public function getWindMapData($filters = []) {
         $days = $this->normalizeDays($filters['days'] ?? 30);
-        $sql = "SELECT 
-                    TRIM(SUBSTRING_INDEX(k.lokasi, ',', 1)) as kecamatan,
-                    k.lokasi as lokasi,
-                    AVG(k.kecepatan_angin) as avg_wind_speed,
-                    MAX(k.kecepatan_angin) as max_wind_speed,
-                    MIN(k.kecepatan_angin) as min_wind_speed,
-                    COUNT(*) as total_records,
+        // Kolom kecepatan_angin.lokasi berisi nama kecamatan langsung (bukan "Nama, Jember")
+        // sehingga SUBSTRING_INDEX tidak diperlukan. Gunakan LEFT JOIN agar kecamatan tanpa
+        // pasangan di master_kecamatan tetap muncul (dengan koordinat NULL yang HAVING saring).
+        $sql = "SELECT
+                    k.lokasi AS kecamatan,
+                    AVG(k.kecepatan_angin) AS avg_wind_speed,
+                    MAX(k.kecepatan_angin) AS max_wind_speed,
+                    MIN(k.kecepatan_angin) AS min_wind_speed,
+                    COUNT(*) AS total_records,
                     mk.latitude,
                     mk.longitude
                 FROM kecepatan_angin k
-                INNER JOIN master_kecamatan mk
-                    ON TRIM(SUBSTRING_INDEX(k.lokasi, ',', 1)) = mk.nama_kecamatan
+                LEFT JOIN master_kecamatan mk ON k.lokasi = mk.nama_kecamatan
                 WHERE k.tanggal >= DATE_SUB(
                     (SELECT MAX(k2.tanggal) FROM kecepatan_angin k2
                      WHERE k2.sumber_data NOT LIKE 'Simulasi%'),
@@ -1056,7 +1103,8 @@ class DashboardDataAggregator {
                 )
                 AND k.kecepatan_angin IS NOT NULL
                 AND k.sumber_data NOT LIKE 'Simulasi%'
-                GROUP BY TRIM(SUBSTRING_INDEX(k.lokasi, ',', 1)), k.lokasi, mk.latitude, mk.longitude
+                GROUP BY k.lokasi, mk.latitude, mk.longitude
+                HAVING mk.latitude IS NOT NULL AND mk.longitude IS NOT NULL
                 ORDER BY avg_wind_speed DESC";
         
         try {

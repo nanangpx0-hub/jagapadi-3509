@@ -502,7 +502,7 @@ diterima dari request body.
 Status laporan (hama & irigasi) mengikuti state machine berikut:
 
 ```
-Draf → Submitted → Diverifikasi → Diarsipkan
+Draf → Submitted → Diverifikasi
                 ↘ Ditolak → Submitted (resubmit)
 ```
 
@@ -510,13 +510,13 @@ Draf → Submitted → Diverifikasi → Diarsipkan
 |----------|--------|------|
 | Submitted → Diverifikasi | Admin | 200 |
 | Submitted → Ditolak | Admin | 200 |
-| Diverifikasi → Diarsipkan | Admin | 200 |
 | Ditolak → Submitted (resubmit) | Petugas (owner) | 200 |
 | Ditolak → Draf (revisi) | Petugas (owner) | 200 |
 
 **Aturan:**
+- Status `Diarsipkan` telah dihapus dari alur kerja resmi; laporan berstatus `Diverifikasi` merupakan status akhir approved.
 - Alasan tolak wajib minimal 10 karakter, maksimal 2000 karakter
-- Catatan verifikasi opsional untuk verify/archive
+- Catatan verifikasi opsional untuk verify
 - Resubmit TIDAK mengubah nomor laporan (tetap pakai nomor yang sudah ada)
 - Resubmit mereset `verified_by`, `verified_at`, `catatan_verifikasi` ke NULL
 - Transisi ilegal → 409 Conflict
@@ -833,7 +833,7 @@ Menghapus `video_url` laporan beserta berkasnya. Respon sukses:
 | Parameter | Tipe | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `format` | string | No | `csv` | Format file: `csv` atau `xlsx` |
-| `status` | string | No | (all) | Filter status, comma-separated: `Draf,Submitted,Diverifikasi,Ditolak,Diarsipkan` |
+| `status` | string | No | (all) | Filter status, comma-separated: `Draf,Submitted,Diverifikasi,Ditolak` |
 | `kabupaten_id` | int | No | (all) | Filter kabupaten |
 | `kecamatan_id` | int | No | (all) | Filter kecamatan |
 | `desa_id` | int | No | (all) | Filter desa |
@@ -962,7 +962,7 @@ curl -c cookies.txt -b cookies.txt \
 | Maks baris | 10.000 |
 | Maks rentang tanggal | 366 hari |
 | Format valid | `csv`, `xlsx` |
-| Status valid | `Draf`, `Submitted`, `Diverifikasi`, `Ditolak`, `Diarsipkan` |
+| Status valid | `Draf`, `Submitted`, `Diverifikasi`, `Ditolak` |
 | Role admin | Export semua data |
 | Role petugas | Export data sendiri (`user_id` scope) |
 | Temp file | XLSX: `storage/tmp/export_{random}.xlsx`, dihapus setelah download |

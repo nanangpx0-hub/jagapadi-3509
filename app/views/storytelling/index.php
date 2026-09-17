@@ -215,11 +215,20 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                         <input id="analysis-parameter" type="number" class="form-control" value="3" min="1" max="12" step="0.1">
                         <small id="analysis-parameter-help" class="text-muted">Window moving average</small>
                     </div>
-                    <div class="col-lg-3 col-md-6 mb-3" id="analysis-variable-wrapper" style="display:none">
+                    <div class="col-lg-2 col-md-6 mb-3" id="analysis-variable-wrapper" style="display:none">
                         <label for="analysis-variable" class="font-weight-bold">Variabel pembanding</label>
                         <select id="analysis-variable" class="form-control">
                             <option value="rain">Curah hujan</option>
                             <option value="pest">Laporan OPT</option>
+                            <option value="irrigation">Debit irigasi</option>
+                            <option value="wind">Kecepatan angin</option>
+                        </select>
+                    </div>
+                    <div class="col-lg-2 col-md-6 mb-3" id="analysis-coefficient-wrapper" style="display:none">
+                        <label for="analysis-coefficient" class="font-weight-bold">Koefisien</label>
+                        <select id="analysis-coefficient" class="form-control">
+                            <option value="pearson">Pearson (Linier)</option>
+                            <option value="spearman">Spearman (Peringkat)</option>
                         </select>
                     </div>
                     <div class="col-lg-2 col-md-6 mb-3 ml-auto">
@@ -370,9 +379,17 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                             <button class="btn btn-success btn-block mb-2" id="btn-save-analysis" disabled>
                                 <i class="fas fa-save mr-2"></i> Simpan Analisis
                             </button>
-                            <button class="btn btn-info btn-block text-white" id="btn-preview" disabled>
-                                <i class="fas fa-print mr-2"></i> Preview & Cetak
+                            <button class="btn btn-info btn-block text-white mb-2" id="btn-preview" disabled>
+                                <i class="fas fa-eye mr-2"></i> Preview Narasi
                             </button>
+                            <div class="btn-group w-100 mb-2">
+                                <button class="btn btn-outline-secondary btn-sm" id="btn-export-csv" disabled title="Download CSV Runtun Waktu 5 Sektor">
+                                    <i class="fas fa-file-csv mr-1"></i> Export CSV
+                                </button>
+                                <button class="btn btn-outline-primary btn-sm" id="btn-export-dossier" disabled title="Buka Berkas Dossier Eksekutif Resmi (Cetak / Simpan PDF)">
+                                    <i class="fas fa-file-pdf mr-1"></i> Dossier Eksekutif
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

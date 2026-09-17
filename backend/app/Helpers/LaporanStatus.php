@@ -10,9 +10,12 @@ class LaporanStatus
     public const SUBMITTED = 'Submitted';
     public const DIVERIFIKASI = 'Diverifikasi';
     public const DITOLAK = 'Ditolak';
+    /**
+     * @deprecated Status 'Diarsipkan' telah dihapus dari alur kerja resmi laporan.
+     */
     public const DIARSIPKAN = 'Diarsipkan';
 
-    private const ALLOWED = [self::DRAF, self::SUBMITTED, self::DIVERIFIKASI, self::DITOLAK, self::DIARSIPKAN];
+    private const ALLOWED = [self::DRAF, self::SUBMITTED, self::DIVERIFIKASI, self::DITOLAK];
 
     private const TRANSITIONS = [
         self::DRAF => [
@@ -21,9 +24,6 @@ class LaporanStatus
         self::SUBMITTED => [
             self::DIVERIFIKASI => 'admin',
             self::DITOLAK => 'admin',
-        ],
-        self::DIVERIFIKASI => [
-            self::DIARSIPKAN => 'admin',
         ],
         self::DITOLAK => [
             self::SUBMITTED => 'petugas',
@@ -100,7 +100,7 @@ class LaporanStatus
 
     public static function isArchivable(string $status): bool
     {
-        return $status === self::DIVERIFIKASI;
+        return false;
     }
 
     public static function isResubmittable(string $status): bool

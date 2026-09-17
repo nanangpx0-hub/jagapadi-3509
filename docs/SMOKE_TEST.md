@@ -94,10 +94,25 @@ curl -sS -X POST https://jagapadi.example.go.id/api/v1/laporan-hama \
 
 ```bash
 curl -sS https://jagapadi.example.go.id/api/v1/notifications/unread-count \
-  -H "Authorization: Bearer $TOKEN" | jq '.data.unread'
+  -H "Authorization: Bearer $TOKEN" | jq '.data.count'
 ```
 
-**Expected:** Integer (0 or more)
+**Expected:** Integer (0 or more), sesuai kontrak `data.count` di `docs/API.md`.
+Jumlah agregat tersedia di `meta.unread` pada endpoint list `/api/v1/notifications`.
+
+**Smoke otomatis (lokal):**
+
+```bash
+php e2e/smoke-notification.php
+```
+
+Script ini membuat fixture user sementara (`petugas` A, `petugas` B, `admin`) di
+database lokal, menguji login, unread-count, list, mark-read, penurunan unread,
+read-all, dan isolasi ownership (notifikasi user lain wajib `404`), lalu
+membersihkan datanya. Prasyarat: `APP_ENV=local` (atau `testing`) pada
+`backend/.env` dan server Backend v1 aktif (`cd backend; php -S localhost:8080 -t public`).
+Base URL dapat dialihkan dengan `API_BASE_URL`. Script me-reset counter rate limit
+loopback agar smoke idempoten; jangan dijalankan terhadap target non-lokal.
 
 ---
 

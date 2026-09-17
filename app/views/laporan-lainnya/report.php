@@ -166,7 +166,6 @@
                                                 <option value="submitted">Dikirim</option>
                                                 <option value="verified">Diverifikasi</option>
                                                 <option value="rejected">Ditolak</option>
-                                                <option value="archived">Diarsipkan</option>
                                             </select>
                                         </div>
                                         <div class="col-md-3">

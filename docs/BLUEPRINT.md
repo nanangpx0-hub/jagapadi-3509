@@ -76,22 +76,20 @@ dashboard, grafik, peta, ekspor, dan detail resource.
 ## 6. Workflow Laporan
 
 ```text
-Draf → Submitted → Diverifikasi → Diarsipkan
+Draf → Submitted → Diverifikasi
               └→ Ditolak → Draf
                          └→ Submitted (resubmit oleh pemilik)
 ```
 
-Nilai internal resmi adalah `Draf`, `Submitted`, `Diverifikasi`, `Ditolak`, dan
-`Diarsipkan`. UI boleh menampilkan label `Dikirim` untuk `Submitted`, tetapi DB,
+Nilai internal resmi adalah `Draf`, `Submitted`, `Diverifikasi`, dan `Ditolak`
+(status `Diarsipkan` telah dihapus). UI boleh menampilkan label `Dikirim` untuk `Submitted`, tetapi DB,
 API, query, filter, controller, dan test tetap memakai `Submitted`.
 
 - Nomor laporan dibuat atomik ketika laporan pertama kali menjadi `Submitted`.
 - Resubmit laporan `Ditolak` mempertahankan nomor laporan yang sudah ada.
 - Petugas hanya mengedit miliknya yang `Draf` atau `Ditolak` sesuai policy modul.
-- Hanya Admin dapat memverifikasi atau menolak laporan `Submitted`.
+- Hanya Admin dapat memverifikasi atau menolak laporan `Submitted`. Laporan yang telah diverifikasi adalah status final.
 - Draf tidak dapat diverifikasi.
-- Pada workflow resmi Backend v1, hanya laporan `Diverifikasi` dapat diarsipkan.
-  Jalur kompatibilitas root yang berbeda harus didokumentasikan terpisah.
 
 ## 7. Kebijakan Draf dan Agregat
 

@@ -102,12 +102,17 @@
  <div class="legend-panel" id="legendPanel">
  <div class="legend-title">Legenda</div>
  <div id="legendContent">
- <div class="legend-item"><div class="legend-color" style="background:#dc3545"></div><span>Serangan Hama Berat</span></div>
- <div class="legend-item"><div class="legend-color" style="background:#ffc107"></div><span>Serangan Hama Sedang</span></div>
- <div class="legend-item"><div class="legend-color" style="background:#198754"></div><span>Serangan Hama Ringan</span></div>
- <div class="legend-item"><div class="legend-color" style="background:#0d6efd"></div><span>Infrastruktur Irigasi</span></div>
-  <div class="legend-item"><div class="legend-color" style="background:#17a2b8"></div><span>Stasiun Curah Hujan</span></div>
-  <div class="legend-item"><div class="legend-color" style="background:#6f42c1"></div><span>Kecepatan Angin</span></div>
+ <div class="legend-item"><div class="legend-color" style="background:#dc3545"></div><span>Hama Berat</span></div>
+ <div class="legend-item"><div class="legend-color" style="background:#ffc107"></div><span>Hama Sedang</span></div>
+ <div class="legend-item"><div class="legend-color" style="background:#198754"></div><span>Hama Ringan</span></div>
+ <div class="legend-item"><div class="legend-color" style="background:#0d6efd"></div><span>Irigasi (Sensor)</span></div>
+ <div class="legend-item"><div class="legend-color" style="background:#0a8c4d"></div><span>Irigasi (Laporan)</span></div>
+ <div class="legend-item" style="margin-left:16px"><div class="legend-color" style="background:#198754;width:10px;height:10px;border-radius:2px"></div><span style="font-size:10px">Bagus</span></div>
+ <div class="legend-item" style="margin-left:16px"><div class="legend-color" style="background:#ffc107;width:10px;height:10px;border-radius:2px"></div><span style="font-size:10px">Sedang</span></div>
+ <div class="legend-item" style="margin-left:16px"><div class="legend-color" style="background:#fd7e14;width:10px;height:10px;border-radius:2px"></div><span style="font-size:10px">Tidak Bagus</span></div>
+ <div class="legend-item" style="margin-left:16px"><div class="legend-color" style="background:#dc3545;width:10px;height:10px;border-radius:2px"></div><span style="font-size:10px">Rusak</span></div>
+ <div class="legend-item"><div class="legend-color" style="background:#17a2b8"></div><span>Stasiun Curah Hujan</span></div>
+ <div class="legend-item"><div class="legend-color" style="background:#6f42c1"></div><span>Kecepatan Angin</span></div>
  </div>
  </div>
  <div class="info-panel" id="infoPanel">
@@ -184,10 +189,11 @@ function initMap() {
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
-  layers.hama = L.markerClusterGroup({ chunkedLoading: true, spiderfyOnMaxZoom: true, maxClusterRadius: 50 });
-  layers.irigasi = L.layerGroup();
-  layers.rainfall = L.layerGroup();
-  layers.wind = L.layerGroup();
+  layers.hama           = L.markerClusterGroup({ chunkedLoading: true, spiderfyOnMaxZoom: true, maxClusterRadius: 50 });
+  layers.irigasi        = L.layerGroup();
+  layers.irigasiLaporan = L.layerGroup();
+  layers.rainfall       = L.layerGroup();
+  layers.wind           = L.layerGroup();
   map.addLayer(layers.hama);
 }
 
@@ -230,6 +236,7 @@ function loadLayerData(layerId) {
   var status = activeFilters.status;
   if (layerId === 'hama') { loadHamaData(year, status); }
   else if (layerId === 'irigasi') { loadIrigasiData(); }
+  else if (layerId === 'irigasiLaporan') { loadIrigasiLaporanData(); }
   else if (layerId === 'rainfall') { loadWeatherData(); }
   else if (layerId === 'wind') { loadWindData(); }
 }
@@ -315,7 +322,8 @@ function renderIrigasiMarkers(data) {
     var popupHtml = '<div style="min-width:220px;"><h6 class="mb-2">' + kecamatan + '</h6><table class="table table-sm table-borderless mb-0">';
     var sliced = group.items.slice(0, 5);
     sliced.forEach(function(item) {
-      popupHtml += '<tr><td><strong>' + escapeHtml(item.daerah_irigasi || '-') + ':</strong></td><td>' + parseFloat(item.avg_debit || 0).toFixed(1) + ' L/det (rata-rata)</td></tr>';
+      var terbaru = item.tanggal_terbaru ? ' <small class="text-muted">(' + escapeHtml(item.tanggal_terbaru) + ')</small>' : '';
+      popupHtml += '<tr><td><strong>' + escapeHtml(item.daerah_irigasi || '-') + ':</strong></td><td>' + parseFloat(item.avg_debit || 0).toFixed(1) + ' L/det' + terbaru + '</td></tr>';
     });
     if (group.items.length > 5) {
       popupHtml += '<tr><td colspan="2"><em>...dan ' + (group.items.length - 5) + ' daerah lainnya</em></td></tr>';
@@ -325,9 +333,60 @@ function renderIrigasiMarkers(data) {
     popupHtml += '</table></div>';
     marker.bindPopup(popupHtml);
     marker.on('click', function() {
-      showInfoPanel('Irigasi - ' + kecamatanKey, { 'Kecamatan': kecamatanKey, 'Jumlah Daerah': group.items.length, 'Rata-rata Debit': avgDebit.toFixed(1) + ' L/det', 'Periode': '30 hari hingga data terbaru' });
+      showInfoPanel('Irigasi - ' + kecamatanKey, { 'Kecamatan': kecamatanKey, 'Jumlah Daerah': group.items.length, 'Rata-rata Debit': avgDebit.toFixed(1) + ' L/det', 'Periode': '30 hari' });
     });
     layers.irigasi.addLayer(marker);
+  });
+}
+
+function loadIrigasiLaporanData() {
+  fetch('<?= BASE_URL ?>api/dashboard/map/irigasiLaporan')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.success) {
+        var el = document.getElementById('count-irigasiLaporan');
+        if (el) { el.textContent = (data.count || 0) + ' laporan'; }
+        renderIrigasiLaporanMarkers(data.data);
+      }
+    })
+    .catch(function() {});
+}
+
+function renderIrigasiLaporanMarkers(geojson) {
+  layers.irigasiLaporan.clearLayers();
+  if (!geojson || !geojson.features || geojson.features.length === 0) { return; }
+  var colorMap = { 'Bagus': '#198754', 'Sedang': '#ffc107', 'Tidak Bagus': '#fd7e14', 'Rusak': '#dc3545' };
+  geojson.features.forEach(function(feature) {
+    var coords  = feature.geometry.coordinates;
+    var props   = feature.properties || {};
+    var color   = colorMap[props.kondisi_fisik] || '#0d6efd';
+    var marker  = L.circleMarker([coords[1], coords[0]], {
+      radius: 9, fillColor: color, color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.85
+    });
+    var namaRaw    = props.nama_saluran || props.daerah_irigasi || '-';
+    var kecRaw     = props.nama_kecamatan || '-';
+    var desaRaw    = props.nama_desa || '-';
+    var kondisiRaw = props.kondisi_fisik || '-';
+    var debitRaw   = props.debit_air || '-';
+    var tglRaw     = props.tanggal || '-';
+    marker.bindPopup(
+      '<div style="min-width:200px;">' +
+      '<h6 class="mb-2"><i class="fas fa-water text-primary"></i> ' + escapeHtml(namaRaw) + '</h6>' +
+      '<table class="table table-sm table-borderless mb-0">' +
+      '<tr><td><strong>Tanggal:</strong></td><td>' + escapeHtml(tglRaw) + '</td></tr>' +
+      '<tr><td><strong>Kecamatan:</strong></td><td>' + escapeHtml(kecRaw) + '</td></tr>' +
+      '<tr><td><strong>Desa:</strong></td><td>' + escapeHtml(desaRaw) + '</td></tr>' +
+      '<tr><td><strong>Kondisi:</strong></td><td>' + escapeHtml(kondisiRaw) + '</td></tr>' +
+      '<tr><td><strong>Debit Air:</strong></td><td>' + escapeHtml(debitRaw) + '</td></tr>' +
+      '</table></div>'
+    );
+    marker.on('click', function() {
+      showInfoPanel('Laporan Irigasi', {
+        'Saluran': namaRaw, 'Tanggal': tglRaw, 'Kecamatan': kecRaw,
+        'Desa': desaRaw, 'Kondisi': kondisiRaw, 'Debit': debitRaw
+      });
+    });
+    layers.irigasiLaporan.addLayer(marker);
   });
 }
 

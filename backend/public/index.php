@@ -136,21 +136,5 @@ if (file_exists($routesPath)) {
     require $routesPath;
 }
 
-$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-$uri = $_SERVER['REQUEST_URI'] ?? '/';
-
-$pos = strpos($uri, '?');
-if ($pos !== false) {
-    $uri = substr($uri, 0, $pos);
-}
-
-// Normalisasi base path jika diakses melalui subfolder di web server (e.g. /jagapadi-3509/backend/public)
-$scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? ''));
-if ($scriptDir !== '/' && $scriptDir !== '.' && $scriptDir !== '' && str_starts_with($uri, $scriptDir)) {
-    $uri = substr($uri, strlen($scriptDir));
-    if (!str_starts_with($uri, '/')) {
-        $uri = '/' . $uri;
-    }
-}
-
-$router->dispatch($method, $uri);
+// Routing and middleware must use the same normalized application-relative URI.
+$router->dispatch(Request::method(), Request::uri());

@@ -131,18 +131,10 @@ class LaporanVerificationServiceTest extends TestCase
         $this->assertEquals(422, $result['code']);
     }
 
-    public function testArchiveDiverifikasiSetsDiarsipkan(): void
+    public function testArchiveDiverifikasiReturnsConflictBecauseStatusDiarsipkanIsRemoved(): void
     {
         $id = $this->insertLaporan('Diverifikasi');
         $this->createdIds = [$id];
-
-        $pdo = Database::connect();
-        $verifiedAt = '2026-08-01 10:00:00';
-        $pdo->prepare(
-            'UPDATE laporan_hama
-             SET verified_by = ?, verified_at = ?, catatan_verifikasi = ?
-             WHERE id = ?'
-        )->execute([self::ADMIN_ID, $verifiedAt, 'Catatan verifikasi awal', $id]);
 
         $result = LaporanHamaService::archive(
             $id,
@@ -152,33 +144,10 @@ class LaporanVerificationServiceTest extends TestCase
             'test'
         );
 
-        $this->assertTrue($result['success']);
+        $this->assertFalse($result['success']);
+        $this->assertEquals(409, $result['code']);
         $laporan = LaporanHama::find($id);
-        $this->assertEquals('Diarsipkan', $laporan['status']);
-        $this->assertEquals(self::ADMIN_ID, $laporan['verified_by']);
-        $this->assertEquals($verifiedAt, $laporan['verified_at']);
-        $this->assertEquals('Catatan verifikasi awal', $laporan['catatan_verifikasi']);
-
-        $history = $pdo->prepare(
-            'SELECT old_status, new_status, changed_by, komentar
-             FROM laporan_status_history WHERE laporan_id = ?'
-        );
-        $history->execute([$id]);
-        $this->assertEquals([
-            'old_status' => 'Diverifikasi',
-            'new_status' => 'Diarsipkan',
-            'changed_by' => self::ADMIN_ID,
-            'komentar' => 'Catatan arsip',
-        ], $history->fetch());
-
-        $activity = $pdo->prepare(
-            "SELECT COUNT(*) FROM activity_log
-             WHERE table_name = 'laporan_hama'
-               AND record_id = ?
-               AND action = 'laporan_hama_archived'"
-        );
-        $activity->execute([$id]);
-        $this->assertEquals(1, (int) $activity->fetchColumn());
+        $this->assertEquals('Diverifikasi', $laporan['status']);
     }
 
     public function testArchiveSubmittedReturnsConflictWithoutWrites(): void
@@ -216,12 +185,10 @@ class LaporanVerificationServiceTest extends TestCase
         $id = $this->insertLaporan('Diverifikasi');
         $this->createdIds = [$id];
 
-        try {
-            LaporanHamaService::archive($id, 999999999, null, '127.0.0.1', 'test');
-            $this->fail('Foreign key audit seharusnya gagal');
-        } catch (\PDOException) {
-            $this->assertEquals('Diverifikasi', LaporanHama::find($id)['status']);
-        }
+        $result = LaporanHamaService::archive($id, 999999999, null, '127.0.0.1', 'test');
+        $this->assertFalse($result['success']);
+        $this->assertEquals(409, $result['code']);
+        $this->assertEquals('Diverifikasi', LaporanHama::find($id)['status']);
     }
 
     public function testResubmitFromDitolakPreservesNomor(): void

@@ -142,18 +142,14 @@ class DashboardController extends Controller {
     
     public function map() {
         $this->checkAuth();
-        
-        $filterUserId = $this->getFilterUserId();
-        $this->logDataAccess('dashboard/map', $filterUserId);
-        
-        $mapData = $this->laporanModel->getMapData($filterUserId);
-        
-        $data = [
-            'title' => 'Peta Sebaran Hama',
-            'mapData' => $mapData
-        ];
-        
-        $this->view('dashboard/map', $data);
+
+        $this->logDataAccess('dashboard/map', null);
+
+        // Data peta dimuat seluruhnya via API endpoint /api/dashboard/map/*
+        // yang dipanggil oleh JavaScript di view. Tidak ada pre-fetch di sini.
+        $this->view('dashboard/map', [
+            'title' => 'Peta Sebaran Data',
+        ]);
     }
     
     public function charts() {

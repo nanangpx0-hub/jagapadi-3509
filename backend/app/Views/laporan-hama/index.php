@@ -47,7 +47,6 @@
             <option value="Submitted" <?= ($filters['status'] ?? '') === 'Submitted' ? 'selected' : '' ?>>Submitted</option>
             <option value="Diverifikasi" <?= ($filters['status'] ?? '') === 'Diverifikasi' ? 'selected' : '' ?>>Diverifikasi</option>
             <option value="Ditolak" <?= ($filters['status'] ?? '') === 'Ditolak' ? 'selected' : '' ?>>Ditolak</option>
-            <option value="Diarsipkan" <?= ($filters['status'] ?? '') === 'Diarsipkan' ? 'selected' : '' ?>>Diarsipkan</option>
         </select>
     </div>
     <div>
