@@ -20,6 +20,8 @@ RewriteCond %{HTTPS} off
 RewriteCond %{HTTP:X-Forwarded-Proto} !https [NC]
 RewriteCond %{HTTP_HOST} !^localhost$ [NC]
 RewriteCond %{HTTP_HOST} !^127\.0\.0\.1$ [NC]
+RewriteCond %{HTTP_HOST} !^jagapadi\.test$ [NC]
+RewriteCond %{HTTP_HOST} !^www\.jagapadi\.test$ [NC]
 RewriteCond %{HTTP_HOST} !^10\. [NC]
 RewriteCond %{HTTP_HOST} !^192\.168\. [NC]
 RewriteCond %{HTTP_HOST} !^172\.(1[6-9]|2[0-9]|3[0-1])\. [NC]
