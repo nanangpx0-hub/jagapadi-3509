@@ -1435,7 +1435,7 @@ dari kontrak JWT mobile `/api/v1`.
 | POST | `/api/storytelling/generate` | Membuat indikasi hubungan dari `bulan`, `tahun`, `wilayah_id` |
 | POST | `/api/storytelling/save` | Rekalkulasi server-side lalu create/update draft |
 | POST | `/api/storytelling/publish/{id}` | Publikasi analisis yang memiliki narasi final |
-| GET | `/api/storytelling/chart-data` | Tiga seri set-based untuk 1-24 bulan |
+| GET | `/api/storytelling/chart-data` | Lima seri set-based (produksi, hujan lag-1, OPT lag-1, irigasi, angin) untuk 1-24 bulan |
 | GET | `/api/storytelling/stats` | Statistik draft/published/archived per tahun |
 
 Input minimum generate:

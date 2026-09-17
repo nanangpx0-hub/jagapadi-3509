@@ -26,7 +26,8 @@ const StorytellingDashboard = (function() {
         analysisKey: null,
         filterDirty: false,
         chartRequestId: 0,
-        isAnalyzing: false
+        isAnalyzing: false,
+        lastMethodResult: null
     };
     
     // DOM elements
@@ -38,6 +39,8 @@ const StorytellingDashboard = (function() {
         btnReset: null,
         btnSaveAnalysis: null,
         btnPreview: null,
+        btnExportCsv: null,
+        btnExportDossier: null,
         
         // KPI Cards
         kpiLuasPanen: null,
@@ -151,6 +154,8 @@ const StorytellingDashboard = (function() {
         elements.btnReset = document.getElementById('btn-reset');
         elements.btnSaveAnalysis = document.getElementById('btn-save-analysis');
         elements.btnPreview = document.getElementById('btn-preview');
+        elements.btnExportCsv = document.getElementById('btn-export-csv');
+        elements.btnExportDossier = document.getElementById('btn-export-dossier');
         
         // KPI Cards
         elements.kpiLuasPanen = document.getElementById('kpi-luas-panen');
@@ -181,6 +186,8 @@ const StorytellingDashboard = (function() {
         elements.analysisParameterHelp = document.getElementById('analysis-parameter-help');
         elements.analysisVariable = document.getElementById('analysis-variable');
         elements.analysisVariableWrapper = document.getElementById('analysis-variable-wrapper');
+        elements.analysisCoefficient = document.getElementById('analysis-coefficient');
+        elements.analysisCoefficientWrapper = document.getElementById('analysis-coefficient-wrapper');
         elements.btnRunMethod = document.getElementById('btn-run-method');
         elements.methodResult = document.getElementById('method-analysis-result');
         elements.methodTitle = document.getElementById('method-analysis-title');
@@ -204,6 +211,14 @@ const StorytellingDashboard = (function() {
         
         // Preview button
         elements.btnPreview.addEventListener('click', handlePreview);
+
+        // Export buttons
+        if (elements.btnExportCsv) {
+            elements.btnExportCsv.addEventListener('click', handleExportCsv);
+        }
+        if (elements.btnExportDossier) {
+            elements.btnExportDossier.addEventListener('click', handleExportDossier);
+        }
         
         // Auto-copy narasi otomatis to narasi final when analysis is generated
         elements.narasiOtomatis.addEventListener('input', function() {
@@ -239,6 +254,9 @@ const StorytellingDashboard = (function() {
         elements.analysisParameter.step = setting.step;
         elements.analysisParameterHelp.textContent = setting.help;
         elements.analysisVariableWrapper.style.display = method === 'correlation' ? 'block' : 'none';
+        if (elements.analysisCoefficientWrapper) {
+            elements.analysisCoefficientWrapper.style.display = method === 'correlation' ? 'block' : 'none';
+        }
     }
 
     async function handleRunMethod() {
@@ -254,7 +272,10 @@ const StorytellingDashboard = (function() {
         const method = elements.analysisMethod.value;
         const parameter = Number(elements.analysisParameter.value);
         const parameters = method === 'trend' ? {window: parameter}
-            : method === 'correlation' ? {variable: elements.analysisVariable.value}
+            : method === 'correlation' ? {
+                variable: elements.analysisVariable.value,
+                coefficient: elements.analysisCoefficient ? elements.analysisCoefficient.value : 'pearson'
+            }
             : method === 'predictive' ? {horizon: parameter}
             : method === 'clustering' ? {clusters: parameter}
             : {threshold: parameter};
@@ -275,6 +296,14 @@ const StorytellingDashboard = (function() {
             const result = await response.json();
             if (!result.success) throw new Error(result.error || 'Analisis gagal dijalankan.');
             const data = result.data;
+            state.lastMethodResult = {
+                method: method,
+                parameters: parameters,
+                summary: data.summary,
+                metrics: data.metrics,
+                algorithm_version: data.algorithm_version,
+                sample_size: data.sample_size
+            };
             elements.methodTitle.textContent = elements.analysisMethod.options[elements.analysisMethod.selectedIndex].text;
             elements.methodSummary.textContent = data.summary;
             elements.methodMetrics.textContent = JSON.stringify(data.metrics, null, 2);
@@ -329,6 +358,28 @@ const StorytellingDashboard = (function() {
                         fill: false,
                         yAxisID: 'y2',
                         tension: 0.4
+                    },
+                    {
+                        label: 'Debit Irigasi (m³/s)',
+                        type: 'line',
+                        data: [],
+                        backgroundColor: 'rgba(32, 201, 151, 0.2)',
+                        borderColor: 'rgba(32, 201, 151, 1)',
+                        borderWidth: 2,
+                        fill: false,
+                        yAxisID: 'y1',
+                        tension: 0.4
+                    },
+                    {
+                        label: 'Kecepatan Angin (km/j)',
+                        type: 'line',
+                        data: [],
+                        backgroundColor: 'rgba(111, 66, 193, 0.2)',
+                        borderColor: 'rgba(111, 66, 193, 1)',
+                        borderWidth: 2,
+                        fill: false,
+                        yAxisID: 'y1',
+                        tension: 0.4
                     }
                 ]
             },
@@ -342,7 +393,7 @@ const StorytellingDashboard = (function() {
                 plugins: {
                     title: {
                         display: true,
-                        text: 'Perbandingan Produksi Bulanan dan Indikator Lag-1'
+                        text: 'Perbandingan Produksi Bulanan dan Indikator Multi-Sektor (Lag-1)'
                     },
                     legend: {
                         position: 'top',
@@ -353,9 +404,13 @@ const StorytellingDashboard = (function() {
                                 if (context.datasetIndex === 0) {
                                     return 'Sumbu Y: Kiri (Ha)';
                                 } else if (context.datasetIndex === 1) {
-                                    return 'Sumbu Y: Kanan (mm) - Data Bulan Sebelumnya';
+                                    return 'Curah Hujan (mm) - Lag-1';
+                                } else if (context.datasetIndex === 2) {
+                                    return 'Insidensi OPT (Laporan) - Lag-1';
+                                } else if (context.datasetIndex === 3) {
+                                    return 'Debit Irigasi (m³/s) - Lag-1';
                                 } else {
-                                    return 'Sumbu Y: Kanan (Laporan) - Data Bulan Sebelumnya';
+                                    return 'Kecepatan Angin (km/j) - Lag-1';
                                 }
                             }
                         }
@@ -506,6 +561,8 @@ async function handleAnalyze() {
         if (elements.staleWarning) elements.staleWarning.style.display = 'none';
         elements.btnSaveAnalysis.disabled = false;
         elements.btnPreview.disabled = false;
+        if (elements.btnExportCsv) elements.btnExportCsv.disabled = false;
+        if (elements.btnExportDossier) elements.btnExportDossier.disabled = false;
         renderDataQuality(result.data_quality);
     }
     
@@ -597,10 +654,15 @@ async function handleAnalyze() {
     function updateChart(chartData) {
         if (!state.correlationChart || !chartData) return;
         
-        state.correlationChart.data.labels = chartData.labels;
-        state.correlationChart.data.datasets[0].data = chartData.datasets[0].data;
-        state.correlationChart.data.datasets[1].data = chartData.datasets[1].data;
-        state.correlationChart.data.datasets[2].data = chartData.datasets[2].data;
+        state.correlationChart.data.labels = chartData.labels || [];
+        const datasets = chartData.datasets || [];
+        for (let i = 0; i < state.correlationChart.data.datasets.length; i++) {
+            if (datasets[i] && Array.isArray(datasets[i].data)) {
+                state.correlationChart.data.datasets[i].data = datasets[i].data;
+            } else {
+                state.correlationChart.data.datasets[i].data = [];
+            }
+        }
         
         state.correlationChart.update('active');
     }
@@ -619,7 +681,8 @@ async function handleAnalyze() {
             const saveData = {
                 periode: state.currentAnalysis.periode,
                 narasi_final: elements.narasiFinal.value.trim(),
-                faktor_penyebab_override: elements.faktorPenyebab.value
+                faktor_penyebab_override: elements.faktorPenyebab.value,
+                advanced_analysis: state.lastMethodResult || null
             };
             
             const response = await apiFetch(endpoint('storytelling/store'), {
@@ -675,6 +738,52 @@ async function handleAnalyze() {
         
         showPreviewModal(previewData);
     }
+
+    /**
+     * Handle CSV export functionality
+     */
+    function handleExportCsv() {
+        const bulan = elements.filterBulan.value;
+        const tahun = elements.filterTahun.value;
+        const wilayahId = elements.filterKecamatan.value;
+
+        if (wilayahId === '' || wilayahId === null || wilayahId === undefined) {
+            showAlert('Pilih kecamatan terlebih dahulu', 'warning');
+            return;
+        }
+
+        const query = new URLSearchParams({
+            bulan: String(bulan),
+            tahun: String(tahun),
+            wilayah_id: String(wilayahId),
+            months: '12'
+        });
+        window.location.href = endpoint(`storytelling/exportCsv?${query.toString()}`);
+    }
+
+    /**
+     * Handle executive dossier report functionality
+     */
+    function handleExportDossier() {
+        const bulan = elements.filterBulan.value;
+        const tahun = elements.filterTahun.value;
+        const wilayahId = elements.filterKecamatan.value;
+
+        if (wilayahId === '' || wilayahId === null || wilayahId === undefined) {
+            showAlert('Pilih kecamatan terlebih dahulu', 'warning');
+            return;
+        }
+
+        const query = new URLSearchParams({
+            bulan: String(bulan),
+            tahun: String(tahun),
+            wilayah_id: String(wilayahId)
+        });
+        if (state.currentAnalysis && state.currentAnalysis.existing_analysis && state.currentAnalysis.existing_analysis.id) {
+            query.set('id', String(state.currentAnalysis.existing_analysis.id));
+        }
+        window.open(endpoint(`storytelling/exportDossier?${query.toString()}`), '_blank');
+    }
     
     /**
      * Handle reset functionality
@@ -688,6 +797,7 @@ async function handleAnalyze() {
         state.currentAnalysis = null;
         state.analysisKey = null;
         state.filterDirty = false;
+        state.lastMethodResult = null;
         
         // Reset UI
         elements.analysisResult.style.display = 'none';
@@ -697,6 +807,8 @@ async function handleAnalyze() {
         if (elements.dataQuality) elements.dataQuality.textContent = '-';
         elements.btnSaveAnalysis.disabled = true;
         elements.btnPreview.disabled = true;
+        if (elements.btnExportCsv) elements.btnExportCsv.disabled = true;
+        if (elements.btnExportDossier) elements.btnExportDossier.disabled = true;
         
         // Reset KPI cards
         elements.kpiLuasPanen.textContent = '-';
@@ -728,6 +840,8 @@ async function handleAnalyze() {
             if (elements.staleWarning) elements.staleWarning.style.display = 'block';
             elements.btnSaveAnalysis.disabled = true;
             elements.btnPreview.disabled = true;
+            if (elements.btnExportCsv) elements.btnExportCsv.disabled = true;
+            if (elements.btnExportDossier) elements.btnExportDossier.disabled = true;
         }
         
         if (bulan && tahun && (wilayahId !== '' && wilayahId !== null && wilayahId !== undefined)) {
@@ -1073,7 +1187,9 @@ function showLoading(show) {
         analyze: handleAnalyze,
         reset: handleReset,
         save: handleSaveAnalysis,
-        preview: handlePreview
+        preview: handlePreview,
+        exportCsv: handleExportCsv,
+        exportDossier: handleExportDossier
     };
     
 })();

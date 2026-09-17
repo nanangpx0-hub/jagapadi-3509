@@ -37,6 +37,8 @@
       <file>tests/Unit/CurahHujanBatchRangeTest.php</file>
       <file>tests/Unit/AnginHargaBatchRangeTest.php</file>
       <file>tests/Unit/EvaluasiAkurasiContractTest.php</file>
+      <file>tests/Unit/StorytellingPValueRegressionTest.php</file>
+      <file>tests/Unit/StorytellingContractTest.php</file>
 
         </testsuite>
         <testsuite name="Integration">
@@ -60,6 +62,7 @@
             <file>tests/Integration/CurahHujanBulkUpsertTest.php</file>
             <file>tests/Integration/AnginHargaBulkUpsertTest.php</file>
             <file>tests/Integration/EvaluasiAkurasiDatabaseTest.php</file>
+            <file>tests/Integration/StorytellingEcosystemRegressionTest.php</file>
         </testsuite>
         <testsuite name="Compatibility">
             <file>tests/Compatibility/RootCompatibilityTest.php</file>

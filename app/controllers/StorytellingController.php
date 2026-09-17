@@ -261,6 +261,152 @@ class StorytellingController extends Controller
         }
     }
 
+    public function exportCsv(): void
+    {
+        $this->checkAuth();
+        $this->checkStorytellingAccess();
+
+        try {
+            [$bulan, $tahun, $wilayahId] = $this->validatedFilter($_GET);
+            $this->assertKecamatanExists($wilayahId);
+            $months = max(1, min(24, (int) ($_GET['months'] ?? 12)));
+
+            $chartData = $this->dataStoryService->getChartData($bulan, $tahun, $wilayahId, $months);
+            $wilayahName = 'Kabupaten_Jember';
+            if ($wilayahId > 0) {
+                $kec = $this->wilayahModel->getById($wilayahId);
+                if ($kec && !empty($kec['nama_kecamatan'])) {
+                    $wilayahName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $kec['nama_kecamatan']);
+                }
+            }
+
+            $filename = sprintf('storytelling_timeseries_%s_%04d_%02d.csv', $wilayahName, $tahun, $bulan);
+
+            header('Content-Type: text/csv; charset=UTF-8');
+            header('Content-Disposition: attachment; filename="' . $filename . '"');
+            header('Pragma: no-cache');
+            header('Expires: 0');
+
+            $output = fopen('php://output', 'w');
+            if ($output === false) {
+                throw new RuntimeException('Gagal membuka stream output.');
+            }
+
+            // UTF-8 BOM for Excel compatibility
+            fprintf($output, chr(0xEF) . chr(0xBB) . chr(0xBF));
+
+            // CSV Header
+            fputcsv($output, [
+                'Periode',
+                'Luas Panen (Ha)',
+                'Curah Hujan Lag-1 (mm)',
+                'Serangan Hama Lag-1 (Laporan)',
+                'Debit Irigasi Lag-1 (m3/s)',
+                'Kecepatan Angin Lag-1 (km/jam)',
+            ]);
+
+            $labels = $chartData['labels'] ?? [];
+            $datasets = $chartData['datasets'] ?? [];
+            $harvestSeries = $datasets[0]['data'] ?? [];
+            $rainSeries = $datasets[1]['data'] ?? [];
+            $pestSeries = $datasets[2]['data'] ?? [];
+            $irrigationSeries = $datasets[3]['data'] ?? [];
+            $windSeries = $datasets[4]['data'] ?? [];
+
+            $rowCount = count($labels);
+            for ($i = 0; $i < $rowCount; $i++) {
+                fputcsv($output, [
+                    $labels[$i] ?? '',
+                    $harvestSeries[$i] ?? 0,
+                    $rainSeries[$i] ?? 0,
+                    $pestSeries[$i] ?? 0,
+                    $irrigationSeries[$i] ?? 0,
+                    $windSeries[$i] ?? 0,
+                ]);
+            }
+
+            fclose($output);
+            exit;
+        } catch (Throwable $e) {
+            error_log('[STORYTELLING] exportCsv error: ' . $e->getMessage());
+            http_response_code(400);
+            echo 'Gagal mengekspor data CSV: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8');
+            exit;
+        }
+    }
+
+    public function exportDossier(): void
+    {
+        $this->checkAuth();
+        $this->checkStorytellingAccess();
+
+        try {
+            $analysisId = (int) ($_GET['id'] ?? 0);
+            $analysis = null;
+
+            if ($analysisId > 0) {
+                $analysis = $this->dataStoryService->getAnalysisById($analysisId);
+            }
+
+            if ($analysis !== null) {
+                $bulan = (int) $analysis['periode_bulan'];
+                $tahun = (int) $analysis['periode_tahun'];
+                $wilayahId = (int) $analysis['wilayah_id'];
+                $kecamatanName = $analysis['nama_kecamatan'] ?? 'Kabupaten Jember';
+                $narasi = $analysis['narasi_final'] ?: $analysis['narasi_otomatis'];
+                $faktorPenyebab = $analysis['faktor_penyebab_utama'];
+                $statusDoc = strtoupper((string) ($analysis['status_analisis'] ?? 'DRAFT'));
+                $skorRisiko = [
+                    'skor_risiko_cuaca' => $analysis['skor_risiko_cuaca'] ?? null,
+                    'skor_risiko_hama' => $analysis['skor_risiko_hama'] ?? null,
+                    'skor_risiko_total' => $analysis['skor_risiko_total'] ?? null,
+                ];
+                $advancedAnalysis = $analysis['advanced_analysis'] ?? null;
+                $createdBy = $analysis['created_by_name'] ?? ($_SESSION['nama_lengkap'] ?? 'Statistisi Analis');
+                $updatedAt = $analysis['updated_at'] ?? date('Y-m-d H:i:s');
+            } else {
+                [$bulan, $tahun, $wilayahId] = $this->validatedFilter($_GET);
+                $this->assertKecamatanExists($wilayahId);
+                $analysisResult = $this->dataStoryService->analyzeCauses($bulan, $tahun, $wilayahId);
+                if (!$analysisResult['success']) {
+                    throw new DomainException($analysisResult['error'] ?? 'Data tidak mencukupi untuk membuat berkas dossier.');
+                }
+                $kec = $wilayahId > 0 ? $this->wilayahModel->getById($wilayahId) : null;
+                $kecamatanName = $kec['nama_kecamatan'] ?? 'Kabupaten Jember (Seluruh Kecamatan)';
+                $narasi = $analysisResult['narasi_otomatis'];
+                $faktorPenyebab = $analysisResult['faktor_penyebab_utama'];
+                $statusDoc = 'DRAFT (PRE-RELEASE)';
+                $skorRisiko = $analysisResult['skor_risiko'];
+                $advancedAnalysis = null;
+                $createdBy = $_SESSION['nama_lengkap'] ?? 'Statistisi Analis';
+                $updatedAt = date('Y-m-d H:i:s');
+            }
+
+            $chartData = $this->dataStoryService->getChartData($bulan, $tahun, $wilayahId, 12);
+
+            $this->view('storytelling/dossier', [
+                'title' => 'Berkas Dossier Eksekutif Storytelling Pertanian',
+                'bulan' => $bulan,
+                'tahun' => $tahun,
+                'wilayah_id' => $wilayahId,
+                'kecamatan_name' => $kecamatanName,
+                'narasi' => $narasi,
+                'faktor_penyebab' => $faktorPenyebab,
+                'status_doc' => $statusDoc,
+                'skor_risiko' => $skorRisiko,
+                'chart_data' => $chartData,
+                'advanced_analysis' => $advancedAnalysis,
+                'created_by' => $createdBy,
+                'updated_at' => $updatedAt,
+                'user_role' => $_SESSION['role'] ?? 'statistisi',
+            ]);
+        } catch (Throwable $e) {
+            error_log('[STORYTELLING] exportDossier error: ' . $e->getMessage());
+            $_SESSION['error'] = 'Gagal membuat berkas dossier: ' . $e->getMessage();
+            $this->redirect('storytelling');
+        }
+    }
+
     protected function checkStorytellingAccess(): void
     {
         $allowedRoles = ['admin', 'operator', 'statistisi'];
