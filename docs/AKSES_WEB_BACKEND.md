@@ -162,6 +162,16 @@ Produksi harus memakai:
 - DB connection failed: cek `backend/.env` dan MySQL
 - 500 blank: cek `APP_DEBUG`, periksa log di `backend/storage/logs`
 - Login loop / CSRF 403: cek `APP_BASE_URL`, session, dan cookie browser
+- Login CSRF 403 padahal web login normal: jangan akses Backend v1 lewat subfolder
+  (`/jagapadi-3509/backend/public/...`). Routing dan middleware memakai path
+  relatif aplikasi (`Request::uri()` menormalkan prefix subfolder), sehingga
+  pemakaian subfolder bergantung pada kesesuaian `SCRIPT_NAME`; gunakan Opsi A
+  (virtual host) atau Opsi B (`php -S localhost:8080 -t public`) di §3.6.
+- `/api/v1/*` mengembalikan 429 `TooManyRequests`: `RateLimitMiddleware` membatasi
+  `login` 5x/15 menit dan `api_guest` 20x/menit per IP. Untuk pengujian lokal,
+  tunggu window decay, atau jalankan `php e2e/smoke-notification.php` yang
+  mereset counter loopback secara otomatis. Jangan menaikkan limit produksi hanya
+  untuk meloloskan smoke test.
 - Assets CSS/JS hilang: cek base URL / path asset
 - Upload gagal: cek permission folder `backend/public/assets/uploads`
 

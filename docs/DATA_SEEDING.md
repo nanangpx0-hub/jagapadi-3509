@@ -42,6 +42,20 @@ Notes for QA
 - Ensure seed data adheres to validation rules and does not collide with production datasets.
 - Validate performance improvements via exported metrics (SQL plan, timing, etc.).
 
+Storytelling dummy 2025-2026 (matriks klasifikasi + metode lanjutan)
+- Script: `php scripts/seed_storytelling_dummy_2026.php` — idempoten, hanya `APP_ENV=local|development|testing`.
+- Mengisi indikator lag-1 (hama, irigasi, laporan lainnya, debit irigasi) selaras periode produksi
+  terverifikasi 2025-09 s.d. 2026-08: `Serangan OPT` (target 2026-05 Kec 2), `Kombinasi Cuaca & OPT`
+  (target 2026-07 Kec 2), `Normal` (target 2026-05 Kec 5), `Cuaca Ekstrem` (target 2026-08 Kec 2),
+  agregat kabupaten (target 2026-08 wilayah 0), plus sebaran hama 2025-10 s.d. 2026-08 untuk jendela
+  6-24 bulan (trend, correlation, predictive, clustering, outlier).
+- Jalankan: `APP_ENV=local php scripts/seed_storytelling_dummy_2026.php --confirm-local-seed`
+  (`APP_ENV` eksplisit dan flag konfirmasi wajib; CLI saja).
+- Verifikasi: buka `/storytelling` sebagai statistisi, atau jalankan
+  `e2e/tests/storytelling-dummy.spec.ts` via `e2e/playwright.storytelling.config.js` (Edge/Chromium)
+  dengan kredensial lewat env `E2E_STAT_USER`/`E2E_STAT_PASS`, `E2E_OPERATOR_USER`/`E2E_OPERATOR_PASS`,
+  `E2E_PETUGAS_USER`/`E2E_PETUGAS_PASS` (tanpa kredensial tes di-skip; jangan hard-code).
+
 Appendix: Data Model Assumptions
 - Users: id, username, password, email, nama_lengkap, role, aktif
 - Laporan Hama: user_id, master_opt_id, lokasi, tanggal, jenis_hama, tingkat_keparahan, luas_serangan, jenis_tanggulangan, hasil_tanggulangan, status, catatan

@@ -115,7 +115,6 @@
                                 <option value="submitted" <?= ($status ?? '') === 'submitted' ? 'selected' : '' ?>>Dikirim</option>
                                 <option value="verified" <?= ($status ?? '') === 'verified' ? 'selected' : '' ?>>Diverifikasi</option>
                                 <option value="rejected" <?= ($status ?? '') === 'rejected' ? 'selected' : '' ?>>Ditolak</option>
-                                <option value="archived" <?= ($status ?? '') === 'archived' ? 'selected' : '' ?>>Diarsipkan</option>
                             </select>
                         </div>
                         <div class="col-md-2">

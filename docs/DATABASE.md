@@ -144,7 +144,7 @@ Laporan serangan hama/OPT.
 | foto_url | VARCHAR(300) NULL | |
 | video_url | VARCHAR(300) NULL | Video pendukung MP4, opsional |
 | catatan | TEXT NULL | |
-| status | ENUM('Draf','Submitted','Diverifikasi','Ditolak','Diarsipkan') | Default 'Draf' |
+| status | ENUM('Draf','Submitted','Diverifikasi','Ditolak') | Default 'Draf' |
 | verified_by | INT UNSIGNED FK NULL | Admin verifikator |
 | verified_at | TIMESTAMP NULL | |
 | catatan_verifikasi | TEXT NULL | |
@@ -172,7 +172,7 @@ Laporan kondisi irigasi.
 | debit_air | ENUM('Cukup','Kurang','Kering') NULL | |
 | foto_url | VARCHAR(300) NULL | |
 | catatan | TEXT NULL | |
-| status | ENUM('Draf','Submitted','Diverifikasi','Ditolak','Diarsipkan') | Default 'Draf' |
+| status | ENUM('Draf','Submitted','Diverifikasi','Ditolak') | Default 'Draf' |
 | verified_by | INT UNSIGNED FK NULL | |
 | verified_at | TIMESTAMP NULL | |
 | catatan_verifikasi | TEXT NULL | |
@@ -335,7 +335,7 @@ ditolak HTTP 400. Direktori upload `public/uploads/feedback/` dilindungi
 | `Submitted` | Dikirim petugas, menunggu verifikasi | Ya | Ya |
 | `Diverifikasi` | Disetujui admin | N/A | Ya |
 | `Ditolak` | Ditolak admin | N/A | Tidak |
-| `Diarsipkan` | Diarsipkan (read-only) | N/A | Tidak |
+| *Catatan* | Status `Diarsipkan` telah dihapus dari alur kerja resmi | N/A | N/A |
 
 ---
 

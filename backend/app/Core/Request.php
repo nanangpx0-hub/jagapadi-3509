@@ -18,6 +18,16 @@ class Request
         if ($pos !== false) {
             $uri = substr($uri, 0, $pos);
         }
+        // Use the same application-relative path for routing and middleware.
+        $scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? ''));
+        if ($scriptDir !== '/' && $scriptDir !== '.' && $scriptDir !== '') {
+            if ($uri === $scriptDir) {
+                $uri = '/';
+            } elseif (str_starts_with($uri, $scriptDir . '/')) {
+                $uri = substr($uri, strlen($scriptDir));
+            }
+        }
+
         return '/' . trim($uri, '/');
     }
 

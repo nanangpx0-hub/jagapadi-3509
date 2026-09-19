@@ -20,6 +20,7 @@ $kecamatanMenuActive = SidebarState::matches($sidebarRoute, 'adminWilayah/kecama
 $desaMenuActive = SidebarState::matches($sidebarRoute, 'adminWilayah/desa');
 $jenisMenuActive = SidebarState::matches($sidebarRoute, 'jenis-laporan');
 $recycleBinMenuActive = SidebarState::matches($sidebarRoute, 'recycle-bin');
+$earlyWarningMenuActive = SidebarState::matches($sidebarRoute, 'earlyWarning') || SidebarState::matches($sidebarRoute, 'early-warning');
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -244,7 +245,11 @@ $recycleBinMenuActive = SidebarState::matches($sidebarRoute, 'recycle-bin');
             <li class="nav-item d-none d-sm-inline-block">
                 <a href="<?= BASE_URL ?>" class="nav-link">Home</a>
             </li>
-            
+            <li class="nav-item d-none d-sm-inline-block">
+                <a href="<?= BASE_URL ?>earlyWarning" class="nav-link font-weight-bold <?= $earlyWarningMenuActive ? 'active' : '' ?>">
+                    <i class="fas fa-shield-virus text-warning mr-1"></i> Early Warning (EWS)
+                </a>
+            </li>
         </ul>
 
         <!-- Right navbar links -->
@@ -333,6 +338,18 @@ $recycleBinMenuActive = SidebarState::matches($sidebarRoute, 'recycle-bin');
                            <?= $laporanHamaMenuActive ? 'aria-current="page"' : '' ?>>
                             <i class="nav-icon fas fa-file-alt"></i>
                             <p>Laporan Hama</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="<?= BASE_URL ?>earlyWarning"
+                           class="nav-link <?= $earlyWarningMenuActive ? 'active' : '' ?>"
+                           data-sidebar-menu="early-warning"
+                           <?= $earlyWarningMenuActive ? 'aria-current="page"' : '' ?>>
+                            <i class="nav-icon fas fa-shield-virus text-warning"></i>
+                            <p>
+                                Early Warning Hama
+                                <span class="right badge badge-danger">EWS</span>
+                            </p>
                         </a>
                     </li>
                     <li class="nav-item">

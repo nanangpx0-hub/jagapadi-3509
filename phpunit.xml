@@ -17,27 +17,35 @@
             <file>tests/Unit/HargaKomoditasScraperLogicTest.php</file>
             <file>tests/Unit/EnvironmentalAnalysisLogicTest.php</file>
             <file>tests/Unit/SidebarStateTest.php</file>
-      <file>tests/Unit/DraftAutosaveIsolationTest.php</file>
-      <file>tests/Unit/DashboardWeatherAlertsTest.php</file>
-      <file>tests/Unit/MasterOptServiceValidationTest.php</file>
-      <file>tests/Unit/UsulanOptServicePayloadTest.php</file>
-      <file>tests/Unit/UsulanOptMenuContractTest.php</file>
-      <file>tests/Unit/UsulanOptExcelServiceTest.php</file>
-      <file>tests/Unit/UsulanOptExcelContractTest.php</file>
-      <file>tests/Unit/BulkSelectionContractTest.php</file>
-      <file>tests/Unit/LaporanHamaEnhancementContractTest.php</file>
-      <file>tests/Unit/OptBulkDeleteContractTest.php</file>
-      <file>tests/Unit/OtherReportImportServiceTest.php</file>
-      <file>tests/Unit/StatistisiFeatureContractTest.php</file>
-      <file>tests/Unit/JenisLaporanDropdownContractTest.php</file>
-      <file>tests/Unit/JenisLaporanServiceValidationTest.php</file>
-      <file>tests/Unit/JenisLaporanAdminContractTest.php</file>
-      <file>tests/Unit/PetugasListViewTest.php</file>
-      <file>tests/Unit/ResponsiveCssContractTest.php</file>
-      <file>tests/Unit/CurahHujanBatchRangeTest.php</file>
-      <file>tests/Unit/AnginHargaBatchRangeTest.php</file>
-      <file>tests/Unit/EvaluasiAkurasiContractTest.php</file>
-
+            <file>tests/Unit/DraftAutosaveIsolationTest.php</file>
+            <file>tests/Unit/DashboardWeatherAlertsTest.php</file>
+            <file>tests/Unit/MasterOptServiceValidationTest.php</file>
+            <file>tests/Unit/UsulanOptServicePayloadTest.php</file>
+            <file>tests/Unit/UsulanOptMenuContractTest.php</file>
+            <file>tests/Unit/UsulanOptExcelServiceTest.php</file>
+            <file>tests/Unit/UsulanOptExcelContractTest.php</file>
+            <file>tests/Unit/BulkSelectionContractTest.php</file>
+            <file>tests/Unit/LaporanHamaEnhancementContractTest.php</file>
+            <file>tests/Unit/OptBulkDeleteContractTest.php</file>
+            <file>tests/Unit/OtherReportImportServiceTest.php</file>
+            <file>tests/Unit/StatistisiFeatureContractTest.php</file>
+            <file>tests/Unit/JenisLaporanDropdownContractTest.php</file>
+            <file>tests/Unit/JenisLaporanServiceValidationTest.php</file>
+            <file>tests/Unit/JenisLaporanAdminContractTest.php</file>
+            <file>tests/Unit/PetugasListViewTest.php</file>
+            <file>tests/Unit/ResponsiveCssContractTest.php</file>
+            <file>tests/Unit/CurahHujanBatchRangeTest.php</file>
+            <file>tests/Unit/AnginHargaBatchRangeTest.php</file>
+            <file>tests/Unit/EvaluasiAkurasiContractTest.php</file>
+            <file>tests/Unit/StorytellingPValueRegressionTest.php</file>
+            <file>tests/Unit/StorytellingContractTest.php</file>
+            <file>tests/Unit/MediaSyncServiceTest.php</file>
+            <file>tests/Unit/PestDataCollectorTest.php</file>
+            <file>tests/Unit/PestVisionAndPredictiveServiceTest.php</file>
+            <file>tests/Unit/PestRiskAssessmentTest.php</file>
+            <file>tests/Unit/EarlyWarningOrchestrationTest.php</file>
+            <file>tests/Unit/EarlyWarningNavigationContractTest.php</file>
+            <file>tests/Unit/EarlyWarningViewRenderingTest.php</file>
         </testsuite>
         <testsuite name="Integration">
             <file>tests/Integration/DataStoryServiceDatabaseTest.php</file>
@@ -49,7 +57,7 @@
             <file>tests/Integration/DashboardReportIntegrityDatabaseTest.php</file>
             <file>tests/Integration/LaporanHamaFilterDatabaseTest.php</file>
             <file>tests/Integration/LaporanLainnyaStoreDatabaseTest.php</file>
-<file>tests/Integration/PetugasNavigationAndSummaryTest.php</file>
+            <file>tests/Integration/PetugasNavigationAndSummaryTest.php</file>
             <file>tests/Integration/FeedbackSecurityDatabaseTest.php</file>
             <file>tests/Integration/UsulanOptReviewDatabaseTest.php</file>
             <file>tests/Integration/UsulanOptWorkflowDatabaseTest.php</file>
@@ -60,6 +68,7 @@
             <file>tests/Integration/CurahHujanBulkUpsertTest.php</file>
             <file>tests/Integration/AnginHargaBulkUpsertTest.php</file>
             <file>tests/Integration/EvaluasiAkurasiDatabaseTest.php</file>
+            <file>tests/Integration/StorytellingEcosystemRegressionTest.php</file>
         </testsuite>
         <testsuite name="Compatibility">
             <file>tests/Compatibility/RootCompatibilityTest.php</file>

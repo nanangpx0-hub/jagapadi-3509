@@ -25,8 +25,9 @@ final class LaporanHamaStatusTest extends TestCase {
         $status = $data['status'] ?? 'Submitted';
         self::assertSame('Submitted', $status);
 
-        $allowedStatuses = ['Submitted', 'Diverifikasi', 'Ditolak', 'Diarsipkan'];
+        $allowedStatuses = ['Submitted', 'Diverifikasi', 'Ditolak'];
         self::assertContains($status, $allowedStatuses);
+        self::assertNotContains('Diarsipkan', $allowedStatuses);
     }
 
     public function testRejectInitialDraftStatus(): void {

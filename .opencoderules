@@ -1,0 +1,16 @@
+# .opencoderules — Panduan Eksekusi Otomatis Open Code untuk JAGAPADI
+
+Instruksi ini dipatuhi oleh Open Code dalam mengelola berkas dan eksekusi skrip di proyek JAGAPADI:
+
+1. **Arsitektur Dual Runtime**:
+   - `root`: Web app server-rendered (`index.php`). File `config/web_routes.php` dikunci pada 136 rute (`tests/Compatibility/RootCompatibilityTest.php`).
+   - `backend/`: Canonical REST API v1 (`backend/public/index.php`) dengan JWT auth dan migration terpisah.
+2. **Integritas Database & Mutasi Data**:
+   - Prepared statements PDO wajib digunakan untuk menghindari SQL injection.
+   - Perubahan skema hanya boleh menggunakan migration append-only (`database/migrations`).
+3. **Workflow & Otorisasi**:
+   - Status laporan: `Draf`, `Submitted`, `Diverifikasi`, `Ditolak` (status `Diarsipkan` telah dihapus).
+   - Data `Draf` dikecualikan dari kalkulasi agregat publik/dashboard/ekspor.
+   - Petugas dibatasi hanya pada datanya sendiri (`ownership enforcement`).
+4. **Verifikasi Test**:
+   - Eksekusi `php vendor/bin/phpunit` secara rutin untuk validasi kode.

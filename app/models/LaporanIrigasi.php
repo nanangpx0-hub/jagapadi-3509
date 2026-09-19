@@ -179,7 +179,7 @@ class LaporanIrigasi extends Model {
             $where[] = 'li.user_id = ?';
             $params[] = $userId;
         }
-        if (!empty($filters['status']) && in_array($filters['status'], ['Draf', 'Submitted', 'Diverifikasi', 'Ditolak', 'Diarsipkan'], true)) {
+        if (!empty($filters['status']) && in_array($filters['status'], ['Draf', 'Submitted', 'Diverifikasi', 'Ditolak'], true)) {
             $where[] = 'li.status = ?';
             $params[] = $filters['status'];
         }

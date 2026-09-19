@@ -152,20 +152,23 @@ Contoh respons gagal:
 - Menghitung persentase perubahan observasi awal ke akhir.
 - Moving average `null` sampai observasi memenuhi window.
 
-### 5.2 Korelasi Pearson — `correlation`
+### 5.2 Korelasi Pearson/Spearman — `correlation`
 
 ```json
-{"parameters":{"variable":"rain"}}
+{"parameters":{"variable":"rain","coefficient":"pearson"}}
 ```
 
-- `variable`: `rain` atau `pest`.
+- `variable`: `rain`, `pest`, `irrigation`, atau `wind`.
+- `coefficient`: `pearson` (default) atau `spearman` (peringkat).
 - Minimum tiga pasangan observasi lengkap.
 - Koefisien berada pada -1 sampai 1.
 - Kekuatan: `sangat_kuat` ≥0,8; `kuat` ≥0,6; `sedang` ≥0,4;
   `lemah` ≥0,2; selainnya `sangat_lemah`.
+- `p_value` dihitung dari statistik t dua sisi (aproksimasi normal pada
+  `df >= 30`, fungsi beta tidak lengkap di bawahnya) dengan `is_significant`
+  pada ambang `p < 0,05`.
 
-Korelasi tidak membuktikan hubungan sebab-akibat. Versi ini belum menghitung
-p-value atau confidence interval.
+Korelasi tidak membuktikan hubungan sebab-akibat.
 
 ### 5.3 Prediksi baseline — `predictive`
 

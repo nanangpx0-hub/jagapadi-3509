@@ -133,13 +133,14 @@ class Router {
         $this->get('/api/dashboard/alerts', 'Api\DashboardController@getAlerts', ['auth']);
 
         // Dashboard Map API Routes (NEW)
-        $this->get('/api/dashboard/map/layers', 'Api\DashboardMapApiController@layers', ['auth']);
-        $this->get('/api/dashboard/map/hama', 'Api\DashboardMapApiController@hama', ['auth']);
-        $this->get('/api/dashboard/map/irigasi', 'Api\DashboardMapApiController@irigasi', ['auth']);
-        $this->get('/api/dashboard/map/weather', 'Api\DashboardMapApiController@weather', ['auth']);
-        $this->get('/api/dashboard/map/wind', 'Api\DashboardMapApiController@wind', ['auth']);
-        $this->get('/api/dashboard/map/all', 'Api\DashboardMapApiController@all', ['auth']);
-        $this->get('/api/dashboard/map/hamaSummary', 'Api\DashboardMapApiController@hamaSummary', ['auth']);
+        $this->get('/api/dashboard/map/layers',          'Api\DashboardMapApiController@layers',          ['auth']);
+        $this->get('/api/dashboard/map/hama',            'Api\DashboardMapApiController@hama',            ['auth']);
+        $this->get('/api/dashboard/map/irigasi',         'Api\DashboardMapApiController@irigasi',         ['auth']);
+        $this->get('/api/dashboard/map/irigasiLaporan',  'Api\DashboardMapApiController@irigasiLaporan',  ['auth']);
+        $this->get('/api/dashboard/map/weather',         'Api\DashboardMapApiController@weather',         ['auth']);
+        $this->get('/api/dashboard/map/wind',            'Api\DashboardMapApiController@wind',            ['auth']);
+        $this->get('/api/dashboard/map/all',             'Api\DashboardMapApiController@all',             ['auth']);
+        $this->get('/api/dashboard/map/hamaSummary',     'Api\DashboardMapApiController@hamaSummary',     ['auth']);
 
         // Dashboard Charts API Routes (NEW)
         $this->get('/api/dashboard/charts/rainfall', 'Api\DashboardChartsApiController@rainfall', ['auth']);

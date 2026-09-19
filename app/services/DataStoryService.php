@@ -131,7 +131,7 @@ class DataStoryService
     }
 
     /**
-     * Mengambil seluruh seri grafik dalam tiga query set-based.
+     * Mengambil seluruh seri grafik dalam query set-based multi-indikator.
      */
     public function getChartData(
         int $bulan,
@@ -157,10 +157,14 @@ class DataStoryService
 
         $rainRows = $this->fetchRainSeries($lagStart, $lagEnd, $wilayahId);
         $pestRows = $this->fetchPestSeries($lagStart, $lagEnd, $wilayahId);
+        $irrigationRows = $this->fetchIrrigationSeries($lagStart, $lagEnd, $wilayahId);
+        $windRows = $this->fetchWindSeries($lagStart, $lagEnd);
 
         $productionMap = $this->indexSeries($productionRows, 'luas_panen');
         $rainMap = $this->indexSeries($rainRows, 'total_curah_hujan');
         $pestMap = $this->indexSeries($pestRows, 'total_laporan');
+        $irrigationMap = $this->indexSeries($irrigationRows, 'avg_debit');
+        $windMap = $this->indexSeries($windRows, 'avg_kecepatan');
 
         $chartData = [
             'labels' => [],
@@ -191,6 +195,26 @@ class DataStoryService
                     'yAxisID' => 'y2',
                     'fill' => false,
                 ],
+                [
+                    'label' => 'Debit Irigasi Lag-1 (L/det)',
+                    'type' => 'line',
+                    'data' => [],
+                    'backgroundColor' => 'rgba(75, 192, 192, 0.2)',
+                    'borderColor' => 'rgba(75, 192, 192, 1)',
+                    'yAxisID' => 'y1',
+                    'fill' => false,
+                    'hidden' => true,
+                ],
+                [
+                    'label' => 'Kecepatan Angin Lag-1 (km/h)',
+                    'type' => 'line',
+                    'data' => [],
+                    'backgroundColor' => 'rgba(153, 102, 255, 0.2)',
+                    'borderColor' => 'rgba(153, 102, 255, 1)',
+                    'yAxisID' => 'y1',
+                    'fill' => false,
+                    'hidden' => true,
+                ],
             ],
         ];
 
@@ -204,6 +228,8 @@ class DataStoryService
             $chartData['datasets'][0]['data'][] = $productionMap[$targetKey] ?? null;
             $chartData['datasets'][1]['data'][] = $rainMap[$lagKey] ?? null;
             $chartData['datasets'][2]['data'][] = $pestMap[$lagKey] ?? null;
+            $chartData['datasets'][3]['data'][] = $irrigationMap[$lagKey] ?? null;
+            $chartData['datasets'][4]['data'][] = $windMap[$lagKey] ?? null;
         }
 
         return $chartData;
@@ -259,6 +285,11 @@ class DataStoryService
         $analysisData['narasi_final'] = $narasiFinal !== ''
             ? $narasiFinal
             : $analysisData['narasi_otomatis'];
+
+        $advancedAnalysis = is_array($requestData['advanced_analysis'] ?? null)
+            ? $requestData['advanced_analysis']
+            : null;
+        $analysisData['advanced_analysis'] = $advancedAnalysis;
 
         $ownsTransaction = !$this->db->inTransaction();
         if ($ownsTransaction) {
@@ -353,6 +384,7 @@ class DataStoryService
 
         $result['data_quality'] = $this->decodeJsonObject($result['data_quality_json'] ?? null);
         $result['source_snapshot'] = $this->decodeJsonObject($result['source_snapshot_json'] ?? null);
+        $result['advanced_analysis'] = $this->decodeJsonObject($result['advanced_analysis_json'] ?? null);
 
         return $result;
     }
@@ -465,6 +497,25 @@ class DataStoryService
                 $lag['tahun'],
                 $wilayahId
             ),
+            'irigasi' => $this->getIrigasiLag(
+                $lag['bulan'],
+                $lag['tahun'],
+                $wilayahId
+            ),
+            'angin' => $this->getAnginLag(
+                $lag['bulan'],
+                $lag['tahun'],
+                $wilayahId
+            ),
+            'laporan_lainnya' => $this->getLaporanLainnyaLag(
+                $lag['bulan'],
+                $lag['tahun'],
+                $wilayahId
+            ),
+            'macro_benchmark' => $this->getMacroBenchmark(
+                $bulan,
+                $tahun
+            ),
         ];
     }
 
@@ -505,7 +556,6 @@ class DataStoryService
 
         return [
             'total_curah_hujan' => $totalRain,
-            // Alias sementara untuk kompatibilitas client/persistence lama.
             'avg_curah_hujan' => $totalRain,
             'avg_harian' => $hasValue ? (float) $result['avg_harian'] : null,
             'min_harian' => $hasValue ? (float) $result['min_harian'] : null,
@@ -569,16 +619,216 @@ class DataStoryService
                 $total,
                 (int) ($result['laporan_hama_berat'] ?? 0)
             ),
-            // Nol laporan tidak otomatis berarti nol serangan; coverage pelaporan tidak tersedia.
             'has_data' => $total > 0,
             'coverage_known' => false,
         ];
+    }
+
+    private function getIrigasiLag(int $bulan, int $tahun, int $wilayahId): array
+    {
+        $start = $this->periodStart($bulan, $tahun);
+        $end = $start->modify('+1 month');
+
+        $whereKecamatan = $wilayahId === 0 ? '' : 'AND li.kecamatan_id = ?';
+        $params = $wilayahId === 0
+            ? [$start->format('Y-m-d'), $end->format('Y-m-d')]
+            : [$start->format('Y-m-d'), $end->format('Y-m-d'), $wilayahId];
+
+        try {
+            $stmt = $this->db->prepare(
+                "SELECT COUNT(*) AS total_laporan,
+                        SUM(li.debit_air = 'Cukup') AS debit_cukup_count,
+                        SUM(li.debit_air = 'Kurang') AS debit_kurang_count,
+                        SUM(li.debit_air = 'Kering') AS debit_kering_count
+                 FROM laporan_irigasi li
+                 WHERE li.tanggal >= ? AND li.tanggal < ? {$whereKecamatan}
+                   AND li.deleted_at IS NULL
+                   AND li.status IN ('Submitted', 'Diverifikasi')"
+            );
+            $stmt->execute($params);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+            $total = (int) ($row['total_laporan'] ?? 0);
+
+            $debitStmt = $this->db->prepare(
+                "SELECT AVG(debit_air) AS avg_debit
+                 FROM data_irigasi
+                 WHERE tanggal >= ? AND tanggal < ?"
+            );
+            $debitStmt->execute([$start->format('Y-m-d'), $end->format('Y-m-d')]);
+            $debitRow = $debitStmt->fetch(PDO::FETCH_ASSOC);
+            $avgDebit = ($debitRow && $debitRow['avg_debit'] !== null) ? round((float) $debitRow['avg_debit'], 2) : null;
+
+            $statusAir = 'Tidak Ada Data';
+            if ($total > 0) {
+                $cukup = (int) ($row['debit_cukup_count'] ?? 0);
+                $kering = (int) ($row['debit_kering_count'] ?? 0);
+                if ($kering > 0) {
+                    $statusAir = 'Kering';
+                } elseif ($cukup >= ($total / 2)) {
+                    $statusAir = 'Cukup';
+                } else {
+                    $statusAir = 'Kurang';
+                }
+            } elseif ($avgDebit !== null) {
+                $statusAir = $avgDebit >= 150 ? 'Cukup' : ($avgDebit >= 50 ? 'Kurang' : 'Kering');
+            }
+
+            return [
+                'total_laporan' => $total,
+                'avg_debit' => $avgDebit,
+                'status_air' => $statusAir,
+                'has_data' => $total > 0 || $avgDebit !== null,
+            ];
+        } catch (Throwable) {
+            return [
+                'total_laporan' => 0,
+                'avg_debit' => null,
+                'status_air' => 'Tidak Tersedia',
+                'has_data' => false,
+            ];
+        }
+    }
+
+    private function getAnginLag(int $bulan, int $tahun, int $wilayahId): array
+    {
+        $start = $this->periodStart($bulan, $tahun);
+        $end = $start->modify('+1 month');
+
+        try {
+            $stmt = $this->db->prepare(
+                "SELECT AVG(kecepatan_angin) AS avg_kecepatan,
+                        MAX(kecepatan_max) AS max_kecepatan,
+                        COUNT(*) AS total_hari,
+                        SUM(kecepatan_angin >= 25.0) AS hari_angin_kencang,
+                        MAX(arah_angin_desc) AS arah_angin_desc /* deterministik utk ONLY_FULL_GROUP_BY */
+                 FROM kecepatan_angin
+                 WHERE tanggal >= ? AND tanggal < ?
+                 GROUP BY tanggal
+                 ORDER BY tanggal"
+            );
+            $stmt->execute([$start->format('Y-m-d'), $end->format('Y-m-d')]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            if (empty($rows)) {
+                return [
+                    'avg_kecepatan' => null,
+                    'max_kecepatan' => null,
+                    'hari_angin_kencang' => 0,
+                    'arah_dominan' => null,
+                    'has_data' => false,
+                ];
+            }
+
+            $speeds = array_column($rows, 'avg_kecepatan');
+            $maxSpeeds = array_filter(array_column($rows, 'max_kecepatan'), static fn ($v): bool => $v !== null);
+            $highWindDays = array_sum(array_column($rows, 'hari_angin_kencang'));
+
+            $directions = array_filter(array_column($rows, 'arah_angin_desc'), static fn ($d): bool => !empty($d));
+            $dominantDir = null;
+            if (!empty($directions)) {
+                $dirCounts = array_count_values($directions);
+                arsort($dirCounts);
+                $dominantDir = array_key_first($dirCounts);
+            }
+
+            $avgSpeed = count($speeds) > 0 ? round(array_sum($speeds) / count($speeds), 2) : null;
+            $maxSpeed = !empty($maxSpeeds) ? (float) max($maxSpeeds) : null;
+
+            return [
+                'avg_kecepatan' => $avgSpeed,
+                'max_kecepatan' => $maxSpeed,
+                'hari_angin_kencang' => (int) $highWindDays,
+                'arah_dominan' => $dominantDir,
+                'has_data' => $avgSpeed !== null,
+                'unit' => 'km/h',
+            ];
+        } catch (Throwable) {
+            return [
+                'avg_kecepatan' => null,
+                'max_kecepatan' => null,
+                'hari_angin_kencang' => 0,
+                'arah_dominan' => null,
+                'has_data' => false,
+            ];
+        }
+    }
+
+    private function getLaporanLainnyaLag(int $bulan, int $tahun, int $wilayahId): array
+    {
+        $start = $this->periodStart($bulan, $tahun);
+        $end = $start->modify('+1 month');
+        $whereKecamatan = $wilayahId === 0 ? '' : 'AND ll.kecamatan_id = ?';
+        $params = $wilayahId === 0
+            ? [$start->format('Y-m-d'), $end->format('Y-m-d')]
+            : [$start->format('Y-m-d'), $end->format('Y-m-d'), $wilayahId];
+
+        try {
+            $stmt = $this->db->prepare(
+                "SELECT COUNT(*) AS total_laporan,
+                        mjl.kode AS jenis_kode,
+                        mjl.nama AS jenis_nama
+                 FROM laporan_lainnya ll
+                 LEFT JOIN master_jenis_laporan mjl ON ll.jenis_id = mjl.id
+                 WHERE ll.tanggal_kejadian >= ? AND ll.tanggal_kejadian < ? {$whereKecamatan}
+                   AND ll.deleted_at IS NULL
+                   AND ll.status IN ('submitted', 'verified')
+                 GROUP BY mjl.kode, mjl.nama"
+            );
+            $stmt->execute($params);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            $total = 0;
+            $categories = [];
+            foreach ($rows as $row) {
+                $count = (int) ($row['total_laporan'] ?? 0);
+                $total += $count;
+                $categories[] = ($row['jenis_nama'] ?? $row['jenis_kode']) . " ({$count})";
+            }
+
+            return [
+                'total_laporan' => $total,
+                'kategori_list' => implode(', ', $categories),
+                'has_data' => $total > 0,
+            ];
+        } catch (Throwable) {
+            return [
+                'total_laporan' => 0,
+                'kategori_list' => '',
+                'has_data' => false,
+            ];
+        }
+    }
+
+    private function getMacroBenchmark(int $bulan, int $tahun): ?array
+    {
+        try {
+            $stmt = $this->db->prepare(
+                "SELECT luas_panen, produksi_gabah, produktivitas, status_data
+                 FROM data_ksa_bulanan
+                 WHERE tahun = ? AND bulan = ? AND kabupaten_kota LIKE '%Jember%'
+                 LIMIT 1"
+            );
+            $stmt->execute([$tahun, $bulan]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$row) {
+                return null;
+            }
+            return [
+                'luas_panen_ksa' => (float) ($row['luas_panen'] ?? 0),
+                'produksi_gabah_ksa' => (float) ($row['produksi_gabah'] ?? 0),
+                'produktivitas_ksa' => (float) ($row['produktivitas'] ?? 0),
+                'status_data' => (string) ($row['status_data'] ?? 'potensi'),
+            ];
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     private function calculateRiskScores(array $lagData, array $produksiData = []): array
     {
         $rain = $lagData['curah_hujan'] ?? [];
         $pest = $lagData['hama'] ?? [];
+        $irigasi = $lagData['irigasi'] ?? [];
 
         $weatherScore = null;
         if (($rain['has_data'] ?? false) && isset($rain['total_curah_hujan'])) {
@@ -589,6 +839,10 @@ class DataStoryService
                     ((self::RAIN_IDEAL - $totalRain)
                         / (self::RAIN_IDEAL - self::RAIN_DRY_CRITICAL)) * 70.0
                 );
+                // Mitigasi kekeringan oleh irigasi teknis jika debit air memadai
+                if (($irigasi['has_data'] ?? false) && (($irigasi['status_air'] ?? '') === 'Cukup' || ($irigasi['avg_debit'] ?? 0) >= 5.0)) {
+                    $weatherScore = $weatherScore * 0.65;
+                }
             } else {
                 $weatherScore = min(
                     100.0,
@@ -706,6 +960,28 @@ class DataStoryService
             $narrative .= 'Tidak ada laporan OPT yang memenuhi filter; kondisi ini tidak membuktikan nihil serangan. ';
         }
 
+        $irigasi = $lagData['irigasi'] ?? [];
+        if ($irigasi['has_data'] ?? false) {
+            $statusAir = $irigasi['status_air'] ?? 'Tercatat';
+            $narrative .= "Pasokan irigasi bulan lag berstatus {$statusAir}";
+            if (isset($irigasi['avg_debit']) && $irigasi['avg_debit'] !== null) {
+                $narrative .= " dengan debit rata-rata " . number_format((float) $irigasi['avg_debit'], 1, ',', '.') . " L/det. ";
+            } else {
+                $narrative .= ". ";
+            }
+        }
+
+        $angin = $lagData['angin'] ?? [];
+        if (($angin['has_data'] ?? false) && ($angin['hari_angin_kencang'] ?? 0) > 3) {
+            $narrative .= "Terdeteksi {$angin['hari_angin_kencang']} hari angin kencang (kecepatan rata-rata "
+                . number_format((float) $angin['avg_kecepatan'], 1, ',', '.') . " km/jam) arah {$angin['arah_dominan']}. ";
+        }
+
+        $lainnya = $lagData['laporan_lainnya'] ?? [];
+        if (($lainnya['has_data'] ?? false) && !empty($lainnya['kategori_list'])) {
+            $narrative .= "Tercatat laporan pendukung: {$lainnya['kategori_list']}. ";
+        }
+
         $totalScore = $scores['skor_risiko_total'];
         $scoreLabel = $totalScore === null ? 'tidak tersedia' : $totalScore . '/100';
         $narrative .= "Indikasi faktor terkait: {$factor}, dengan skor risiko {$scoreLabel}. ";
@@ -755,8 +1031,10 @@ class DataStoryService
                 faktor_penyebab_utama, skor_risiko_cuaca, skor_risiko_hama,
                 skor_risiko_total, avg_curah_hujan_lag1, total_laporan_hama_lag1,
                 laporan_hama_berat_lag1, narasi_otomatis, narasi_final,
-                data_quality_json, source_snapshot_json, algorithm_version, created_by
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                data_quality_json, source_snapshot_json, algorithm_version,
+                advanced_analysis_json, avg_debit_irigasi_lag1, avg_kecepatan_angin_lag1,
+                created_by
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
         $stmt->execute($this->analysisStatementValues($data, $userId));
         $analysisId = (int) $this->db->lastInsertId();
@@ -792,13 +1070,14 @@ class DataStoryService
                 avg_curah_hujan_lag1 = ?, total_laporan_hama_lag1 = ?,
                 laporan_hama_berat_lag1 = ?, narasi_otomatis = ?, narasi_final = ?,
                 data_quality_json = ?, source_snapshot_json = ?, algorithm_version = ?,
+                advanced_analysis_json = ?, avg_debit_irigasi_lag1 = ?, avg_kecepatan_angin_lag1 = ?,
                 status_analisis = 'draft', published_by = NULL, published_at = NULL
              WHERE id = ?"
         );
 
         $values = $this->analysisStatementValues($data, $userId);
-        // Remove immutable period, region, and created_by values.
-        $updateValues = array_slice($values, 3, 16);
+        // Remove immutable period (0,1,2) and created_by (last index)
+        $updateValues = array_slice($values, 3, 19);
         $updateValues[] = $analysisId;
         $stmt->execute($updateValues);
 
@@ -844,6 +1123,11 @@ class DataStoryService
                 'lagging_indicators' => $data['lagging_indicators'],
             ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
             $data['algorithm_version'],
+            isset($data['advanced_analysis']) && !empty($data['advanced_analysis'])
+                ? json_encode($data['advanced_analysis'], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)
+                : null,
+            $data['lagging_indicators']['irigasi']['avg_debit'] ?? null,
+            $data['lagging_indicators']['angin']['avg_kecepatan'] ?? null,
             $userId,
         ];
     }
@@ -928,6 +1212,65 @@ class DataStoryService
         );
         $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    private function fetchIrrigationSeries(
+        DateTimeImmutable $start,
+        DateTimeImmutable $end,
+        int $wilayahId
+    ): array {
+        try {
+            $stmt = $this->db->prepare(
+                "SELECT YEAR(tanggal) AS tahun, MONTH(tanggal) AS bulan,
+                        AVG(debit_air) AS avg_debit
+                 FROM data_irigasi
+                 WHERE tanggal >= ? AND tanggal < ?
+                 GROUP BY YEAR(tanggal), MONTH(tanggal)"
+            );
+            $stmt->execute([$start->format('Y-m-d'), $end->format('Y-m-d')]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            if (!empty($rows)) {
+                return $rows;
+            }
+
+            $whereKecamatan = $wilayahId === 0 ? '' : 'AND li.kecamatan_id = ?';
+            $params = $wilayahId === 0
+                ? [$start->format('Y-m-d'), $end->format('Y-m-d')]
+                : [$start->format('Y-m-d'), $end->format('Y-m-d'), $wilayahId];
+
+            $stmt2 = $this->db->prepare(
+                "SELECT YEAR(tanggal) AS tahun, MONTH(tanggal) AS bulan,
+                        COUNT(*) AS avg_debit
+                 FROM laporan_irigasi li
+                 WHERE li.tanggal >= ? AND li.tanggal < ? {$whereKecamatan}
+                   AND li.deleted_at IS NULL
+                   AND li.status IN ('Submitted', 'Diverifikasi')
+                 GROUP BY YEAR(tanggal), MONTH(tanggal)"
+            );
+            $stmt2->execute($params);
+            return $stmt2->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    private function fetchWindSeries(
+        DateTimeImmutable $start,
+        DateTimeImmutable $end
+    ): array {
+        try {
+            $stmt = $this->db->prepare(
+                "SELECT YEAR(tanggal) AS tahun, MONTH(tanggal) AS bulan,
+                        ROUND(AVG(kecepatan_angin), 2) AS avg_kecepatan
+                 FROM kecepatan_angin
+                 WHERE tanggal >= ? AND tanggal < ?
+                 GROUP BY YEAR(tanggal), MONTH(tanggal)"
+            );
+            $stmt->execute([$start->format('Y-m-d'), $end->format('Y-m-d')]);
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable) {
+            return [];
+        }
     }
 
     private function indexSeries(array $rows, string $valueField): array

@@ -12,10 +12,8 @@ import '../models/notification_item.dart';
 /// - Mencegah drain baterai akibat HTTP polling 60s yang terus berjalan
 ///   di background.
 ///
-/// Perbaikan BUG-M6:
-/// - [_unreadCount] hanya diperbarui dari satu sumber: method [load()]
-///   yang menghitung dari list lokal. Method [_loadUnreadCount()] tetap ada
-///   untuk fetch ringan tanpa memuat seluruh list.
+/// Badge memakai total unread dari metadata server, bukan jumlah pada halaman
+/// lokal. Polling ringan mengambil total yang sama melalui unread-count.
 class NotificationProvider extends ChangeNotifier with WidgetsBindingObserver {
   final ApiClient api;
 
@@ -24,6 +22,8 @@ class NotificationProvider extends ChangeNotifier with WidgetsBindingObserver {
   String? _error;
   int _unreadCount = 0;
   Timer? _pollTimer;
+  bool _disposed = false;
+  int _sessionGeneration = 0;
 
   /// True jika polling sedang aktif (foreground).
   bool _pollingActive = false;
@@ -35,11 +35,11 @@ class NotificationProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   // ── Getters ───────────────────────────────────────────────────────────────
 
-  List<NotificationItem> get list        => _list;
-  bool                   get loading     => _loading;
-  String?                get error       => _error;
-  int                    get unreadCount => _unreadCount;
-  bool                   get hasUnread   => _unreadCount > 0;
+  List<NotificationItem> get list => _list;
+  bool get loading => _loading;
+  String? get error => _error;
+  int get unreadCount => _unreadCount;
+  bool get hasUnread => _unreadCount > 0;
 
   // ── Lifecycle observer ───────────────────────────────────────────────────
 
@@ -80,18 +80,33 @@ class NotificationProvider extends ChangeNotifier with WidgetsBindingObserver {
     _stopTimer();
   }
 
-  /// Muat semua notifikasi (untuk halaman notifikasi).
+  /// Batalkan hasil request sesi lama tanpa menghapus data server.
+  void reset() {
+    _sessionGeneration++;
+    stopPolling();
+    _list = [];
+    _unreadCount = 0;
+    _loading = false;
+    _error = null;
+    notifyListeners();
+  }
+
+  /// Muat halaman pertama; badge menggunakan total unread dari server.
   Future<void> load() async {
+    final generation = _sessionGeneration;
     _loading = true;
-    _error   = null;
+    _error = null;
     notifyListeners();
 
     final res = await api.get('/notifications', queryParams: {'limit': 50});
+    if (_disposed || generation != _sessionGeneration) return;
     if (res.success && res.data != null) {
       final raw = res.data!['data'] as List<dynamic>? ?? [];
-      _list        = raw.map((e) => NotificationItem.fromJson({'data': e})).toList();
-      // BUG-M6 fix: satu sumber kebenaran — hitung dari list lokal.
-      _unreadCount = _list.where((n) => !n.isRead).length;
+      _list = raw.map((e) => NotificationItem.fromJson({'data': e})).toList();
+      final meta = res.data!['meta'];
+      final unread = meta is Map ? meta['unread'] : null;
+      _unreadCount =
+          unread is num ? unread.toInt() : _list.where((n) => !n.isRead).length;
     } else {
       _error = res.message;
     }
@@ -100,34 +115,59 @@ class NotificationProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
-  /// Tandai satu notifikasi sudah dibaca.
+  /// Ubah state hanya setelah server mengonfirmasi pembacaan.
   Future<void> markRead(int id) async {
-    // Optimistic update
-    _list = _list.map((n) => n.id == id
-        ? NotificationItem(
-            id: n.id, title: n.title, body: n.body,
-            isRead: true, createdAt: n.createdAt,
-            entity: n.entity, laporanId: n.laporanId,
-          )
-        : n).toList();
-    _unreadCount = _list.where((n) => !n.isRead).length;
+    final generation = _sessionGeneration;
+    final res = await api.post('/notifications/$id/read');
+    if (_disposed || generation != _sessionGeneration) return;
+    if (!res.success) {
+      _error = res.message ?? 'Gagal menandai notifikasi dibaca.';
+      notifyListeners();
+      return;
+    }
+    _error = null;
+    final wasUnread = _list.any((n) => n.id == id && !n.isRead);
+    _list = _list
+        .map((n) => n.id == id
+            ? NotificationItem(
+                id: n.id,
+                title: n.title,
+                body: n.body,
+                isRead: true,
+                createdAt: n.createdAt,
+                entity: n.entity,
+                laporanId: n.laporanId,
+              )
+            : n)
+        .toList();
+    if (wasUnread && _unreadCount > 0) _unreadCount--;
     notifyListeners();
-
-    await api.post('/notifications/$id/read');
   }
 
   /// Tandai semua notifikasi sudah dibaca.
   Future<void> markAllRead() async {
-    // Optimistic update
-    _list = _list.map((n) => NotificationItem(
-      id: n.id, title: n.title, body: n.body,
-      isRead: true, createdAt: n.createdAt,
-      entity: n.entity, laporanId: n.laporanId,
-    )).toList();
+    final generation = _sessionGeneration;
+    final res = await api.post('/notifications/read-all');
+    if (_disposed || generation != _sessionGeneration) return;
+    if (!res.success) {
+      _error = res.message ?? 'Gagal menandai semua notifikasi dibaca.';
+      notifyListeners();
+      return;
+    }
+    _error = null;
+    _list = _list
+        .map((n) => NotificationItem(
+              id: n.id,
+              title: n.title,
+              body: n.body,
+              isRead: true,
+              createdAt: n.createdAt,
+              entity: n.entity,
+              laporanId: n.laporanId,
+            ))
+        .toList();
     _unreadCount = 0;
     notifyListeners();
-
-    await api.post('/notifications/mark-all-read');
   }
 
   // ── Internal ──────────────────────────────────────────────────────────────
@@ -148,7 +188,11 @@ class NotificationProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// Fetch ringan: hanya jumlah unread untuk badge AppBar.
   /// Tidak memuat seluruh list — hemat bandwidth.
   Future<void> _loadUnreadCount() async {
+    final generation = _sessionGeneration;
     final res = await api.get('/notifications/unread-count');
+    if (_disposed || generation != _sessionGeneration || !_pollingActive) {
+      return;
+    }
     if (res.success && res.data != null) {
       final count = res.data!['count'] as int? ?? 0;
       if (_unreadCount != count) {
@@ -160,6 +204,7 @@ class NotificationProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _disposed = true;
     _stopTimer();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();

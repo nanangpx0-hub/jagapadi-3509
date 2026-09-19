@@ -36,7 +36,7 @@
             <label>Status</label>
             <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:4px">
                 <?php
-                $statuses = ['Draf', 'Submitted', 'Diverifikasi', 'Ditolak', 'Diarsipkan'];
+                $statuses = ['Draf', 'Submitted', 'Diverifikasi', 'Ditolak'];
                 foreach ($statuses as $s):
                 ?>
                 <label style="font-weight:400;display:flex;align-items:center;gap:4px;cursor:pointer">

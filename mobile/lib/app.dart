@@ -54,19 +54,16 @@ class _JagapadiAppState extends State<JagapadiApp> with WidgetsBindingObserver {
       if (_connectivity.isOnline) {
         SyncService.syncPendingDrafts(_apiClient);
       }
-      // Daftarkan logout callback setelah semua provider tersedia di tree.
-      _registerLogoutCallback();
     });
   }
 
-  /// Daftarkan callback ke AuthProvider untuk membersihkan cache saat logout.
-  /// Dilakukan setelah tree siap agar context.read() bisa digunakan.
-  void _registerLogoutCallback() {
+  /// Gunakan context di bawah MultiProvider untuk mendaftarkan cleanup sesi.
+  void _registerLogoutCallback(BuildContext context) {
     final auth = context.read<AuthProvider>();
     auth.onLogoutCallback = () {
       context.read<WilayahProvider>().clearCache();
       context.read<LaporanHamaProvider>().clearOptCache();
-      context.read<NotificationProvider>().stopPolling();
+      context.read<NotificationProvider>().reset();
       // Dashboard: reset agar data user lama tidak tampil kepada user baru.
       context.read<DashboardProvider>().reset();
     };
@@ -157,6 +154,10 @@ class _JagapadiAppState extends State<JagapadiApp> with WidgetsBindingObserver {
           create: (_) => WilayahProvider(_apiClient),
         ),
       ],
+      builder: (context, child) {
+        _registerLogoutCallback(context);
+        return child!;
+      },
       child: MaterialApp.router(
         title: 'JAGAPADI',
         theme: AppTheme.light,

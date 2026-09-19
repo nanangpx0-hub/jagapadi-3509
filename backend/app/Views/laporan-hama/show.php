@@ -158,12 +158,7 @@
             </div>
         <?php endif; ?>
 
-        <?php if ($laporan['status'] === 'Diverifikasi' && $currentUser['role'] === 'admin'): ?>
-            <form method="POST" action="/laporan-hama/<?= (int) $laporan['id'] ?>/archive" style="display:inline">
-                <?= \App\Core\Security::csrfField() ?>
-                <button type="submit" class="btn btn-secondary" onclick="return confirm('Arsipkan laporan ini?')">Arsipkan</button>
-            </form>
-        <?php endif; ?>
+
 
         <?php if ($laporan['status'] === 'Ditolak' && $currentUser['role'] === 'petugas' && (int) $laporan['user_id'] === (int) $currentUser['id']): ?>
             <a href="/laporan-hama/<?= (int) $laporan['id'] ?>/edit" class="btn btn-primary">Edit &amp; Perbaiki</a>

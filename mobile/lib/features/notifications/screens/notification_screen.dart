@@ -98,10 +98,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
     if (!n.isRead) {
       await context.read<NotificationProvider>().markRead(n.id);
     }
-    if (n.entity != null && n.laporanId != null && mounted) {
-      final route = n.entity == 'hama'
-          ? '/hama/${n.laporanId}'
-          : '/irigasi/${n.laporanId}';
+    final route = n.reportRoute;
+    if (route != null && mounted) {
       context.push(route);
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -381,112 +379,115 @@ class _NotificationTile extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppRadius.md),
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (stripColor != null) Container(width: 4, color: stripColor),
-            Expanded(
-              child: Card(
-                margin: EdgeInsets.zero,
-                color: unread
-                    ? scheme.primaryContainer.withValues(alpha: 0.12)
-                    : null,
-                child: InkWell(
-                  onTap: onTap,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm,
-                      vertical: AppSpacing.sm,
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        CircleAvatar(
-                          radius: 24,
-                          backgroundColor: avatarBg ??
-                              (unread
-                                  ? scheme.primaryContainer
-                                  : scheme.surfaceContainerHighest),
-                          child: Icon(
-                            avatarIcon,
-                            color: avatarFg ??
+        // ListView supplies unbounded height; size the strip to the card.
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (stripColor != null) Container(width: 4, color: stripColor),
+              Expanded(
+                child: Card(
+                  margin: EdgeInsets.zero,
+                  color: unread
+                      ? scheme.primaryContainer.withValues(alpha: 0.12)
+                      : null,
+                  child: InkWell(
+                    onTap: onTap,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm,
+                        vertical: AppSpacing.sm,
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          CircleAvatar(
+                            radius: 24,
+                            backgroundColor: avatarBg ??
                                 (unread
-                                    ? scheme.onPrimaryContainer
-                                    : scheme.onSurfaceVariant),
+                                    ? scheme.primaryContainer
+                                    : scheme.surfaceContainerHighest),
+                            child: Icon(
+                              avatarIcon,
+                              color: avatarFg ??
+                                  (unread
+                                      ? scheme.onPrimaryContainer
+                                      : scheme.onSurfaceVariant),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      n.title,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleSmall
-                                          ?.copyWith(
-                                            fontWeight: unread
-                                                ? FontWeight.w700
-                                                : FontWeight.w500,
-                                            color: scheme.onSurface,
-                                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        n.title,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleSmall
+                                            ?.copyWith(
+                                              fontWeight: unread
+                                                  ? FontWeight.w700
+                                                  : FontWeight.w500,
+                                              color: scheme.onSurface,
+                                            ),
+                                      ),
                                     ),
+                                    if (unread)
+                                      Container(
+                                        width: 8,
+                                        height: 8,
+                                        margin: const EdgeInsets.only(
+                                            left: AppSpacing.xs),
+                                        decoration: BoxDecoration(
+                                          color: scheme.primary,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                if (n.body.isNotEmpty) ...[
+                                  const SizedBox(height: AppSpacing.xxs),
+                                  Text(
+                                    n.body,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: scheme.onSurfaceVariant,
+                                        ),
                                   ),
-                                  if (unread)
-                                    Container(
-                                      width: 8,
-                                      height: 8,
-                                      margin: const EdgeInsets.only(
-                                          left: AppSpacing.xs),
-                                      decoration: BoxDecoration(
-                                        color: scheme.primary,
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
                                 ],
-                              ),
-                              if (n.body.isNotEmpty) ...[
-                                const SizedBox(height: AppSpacing.xxs),
-                                Text(
-                                  n.body,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(
-                                        color: scheme.onSurfaceVariant,
-                                      ),
-                                ),
+                                if (n.createdAt != null) ...[
+                                  const SizedBox(height: AppSpacing.xxs),
+                                  Text(
+                                    _relativeTime(n.createdAt),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: scheme.onSurfaceVariant,
+                                          fontSize: 11,
+                                        ),
+                                  ),
+                                ],
                               ],
-                              if (n.createdAt != null) ...[
-                                const SizedBox(height: AppSpacing.xxs),
-                                Text(
-                                  _relativeTime(n.createdAt),
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(
-                                        color: scheme.onSurfaceVariant,
-                                        fontSize: 11,
-                                      ),
-                                ),
-                              ],
-                            ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

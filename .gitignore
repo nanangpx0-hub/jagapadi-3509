@@ -120,6 +120,8 @@ public/uploads/*/*/*.*
 
 # --- Local config not tracked by design ---
 config/config.php
+config/rclone.conf
+scripts/.env.backup
 
 # --- Playwright session state & debug artifacts ---
 auth/

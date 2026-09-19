@@ -6,6 +6,7 @@ declare(strict_types=1);
 final class StorytellingAnalysisService
 {
     private const METHODS = ['trend', 'correlation', 'predictive', 'clustering', 'outlier'];
+    private const SUPPORTED_VARIABLES = ['rain', 'pest', 'irrigation', 'wind'];
 
     public function analyze(string $method, array $chartData, array $parameters = []): array
     {
@@ -22,7 +23,7 @@ final class StorytellingAnalysisService
         };
         return $result + [
             'method' => $method,
-            'algorithm_version' => '1.0.0',
+            'algorithm_version' => '1.1.0',
             'generated_at' => gmdate(DATE_ATOM),
         ];
     }
@@ -30,6 +31,11 @@ final class StorytellingAnalysisService
     public static function methods(): array
     {
         return self::METHODS;
+    }
+
+    public static function supportedVariables(): array
+    {
+        return self::SUPPORTED_VARIABLES;
     }
 
     private function extractSeries(array $chartData): array
@@ -44,6 +50,8 @@ final class StorytellingAnalysisService
             'production' => array_values($datasets[0]['data'] ?? []),
             'rain' => array_values($datasets[1]['data'] ?? []),
             'pest' => array_values($datasets[2]['data'] ?? []),
+            'irrigation' => array_values($datasets[3]['data'] ?? []),
+            'wind' => array_values($datasets[4]['data'] ?? []),
         ];
     }
 
@@ -78,20 +86,73 @@ final class StorytellingAnalysisService
 
     private function correlation(array $series, array $parameters): array
     {
-        $variable = (string) ($parameters['variable'] ?? 'rain');
-        if (!in_array($variable, ['rain', 'pest'], true)) {
-            throw new InvalidArgumentException('Variabel korelasi harus rain atau pest.');
+        $variable = strtolower(trim((string) ($parameters['variable'] ?? 'rain')));
+        if (!in_array($variable, self::SUPPORTED_VARIABLES, true)) {
+            throw new InvalidArgumentException('Variabel korelasi harus rain, pest, irrigation, atau wind.');
         }
+        $coefficientType = strtolower(trim((string) ($parameters['coefficient'] ?? 'pearson')));
+        if (!in_array($coefficientType, ['pearson', 'spearman'], true)) {
+            $coefficientType = 'pearson';
+        }
+
+        if (empty($series[$variable]) || count($this->numericValues($series[$variable])) === 0) {
+            throw new DomainException("Data variabel {$variable} tidak tersedia dalam deret waktu yang dipilih.");
+        }
+
         [$x, $y, $labels] = $this->paired($series[$variable], $series['production'], $series['labels']);
         if (count($x) < 3) {
             throw new DomainException('Korelasi membutuhkan minimal 3 pasangan data lengkap.');
         }
-        $coefficient = $this->pearson($x, $y);
+
+        $coefficient = $coefficientType === 'spearman'
+            ? $this->spearman($x, $y)
+            : $this->pearson($x, $y);
+
+        $n = count($x);
+        $df = $n - 2;
+        $tStat = null;
+        $pValue = null;
+
+        if ($df > 0) {
+            if (abs($coefficient) >= 0.999999) {
+                $tStat = $coefficient > 0 ? 999.0 : -999.0;
+                $pValue = 0.0001;
+            } else {
+                $tStat = round($coefficient * sqrt($df / (1.0 - ($coefficient ** 2))), 4);
+                $pValue = round($this->calculatePValue(abs($tStat), $df), 4);
+            }
+        }
+
+        $isSignificant = $pValue !== null && $pValue < 0.05;
+        $significanceText = $pValue !== null
+            ? ($isSignificant ? sprintf('signifikan secara statistik (p = %.4f)', $pValue) : sprintf('tidak signifikan (p = %.4f)', $pValue))
+            : 'signifikansi belum terhitung';
+
+        $summary = sprintf(
+            'Korelasi %s %s terhadap produksi adalah %.3f (%s); hasil tidak membuktikan kausalitas.',
+            ucfirst($coefficientType),
+            $variable,
+            $coefficient,
+            $significanceText
+        );
+
         return $this->result(
-            ['variable' => $variable, 'coefficient' => 'pearson'],
-            sprintf('Korelasi Pearson %s terhadap produksi adalah %.3f; hasil tidak membuktikan kausalitas.', $variable, $coefficient),
-            ['pearson_r' => round($coefficient, 6), 'strength' => $this->correlationStrength($coefficient)],
-            ['labels' => $labels, 'series' => ['x' => $x, 'production' => $y]], count($x)
+            ['variable' => $variable, 'coefficient' => $coefficientType],
+            $summary,
+            [
+                'variable' => $variable,
+                'coefficient_type' => $coefficientType,
+                'coefficient_value' => round($coefficient, 6),
+                'correlation_coefficient' => round($coefficient, 6),
+                'pearson_r' => round($coefficient, 6),
+                'strength' => $this->correlationStrength($coefficient),
+                't_statistic' => $tStat,
+                'p_value' => $pValue,
+                'is_significant' => $isSignificant,
+                'degrees_of_freedom' => $df,
+            ],
+            ['labels' => $labels, 'series' => ['x' => $x, 'production' => $y]],
+            $n
         );
     }
 
@@ -102,16 +163,47 @@ final class StorytellingAnalysisService
         if (count($values) < 3) {
             throw new DomainException('Prediksi membutuhkan minimal 3 observasi produksi lengkap.');
         }
-        [$slope, $intercept] = $this->linearRegression(range(0, count($values) - 1), $values);
-        $forecast = [];
-        for ($step = 1; $step <= $horizon; $step++) {
-            $forecast[] = max(0.0, round($intercept + $slope * (count($values) - 1 + $step), 3));
+        $x = range(0, count($values) - 1);
+        [$slope, $intercept] = $this->linearRegression($x, $values);
+
+        // Calculate Root Mean Squared Error (RMSE) of historical fit
+        $sse = 0.0;
+        foreach ($values as $i => $actual) {
+            $predicted = $intercept + $slope * $i;
+            $sse += ($actual - $predicted) ** 2;
         }
+        $rmse = round(sqrt($sse / count($values)), 3);
+
+        $forecast = [];
+        $lowerBound = [];
+        $upperBound = [];
+        for ($step = 1; $step <= $horizon; $step++) {
+            $t = count($values) - 1 + $step;
+            $val = max(0.0, round($intercept + $slope * $t, 3));
+            $forecast[] = $val;
+            $lowerBound[] = max(0.0, round($val - 1.96 * $rmse, 3));
+            $upperBound[] = round($val + 1.96 * $rmse, 3);
+        }
+
         return $this->result(
             ['horizon' => $horizon, 'model' => 'linear_regression_baseline'],
-            'Prediksi baseline menggunakan regresi linear; validasi dengan backtesting sebelum keputusan operasional.',
-            ['slope' => round($slope, 6), 'intercept' => round($intercept, 6)],
-            ['labels' => $series['labels'], 'series' => ['history' => $values, 'forecast' => $forecast]], count($values)
+            'Prediksi baseline menggunakan regresi linear dengan interval kepercayaan 95%; validasi dengan backtesting sebelum keputusan operasional.',
+            [
+                'slope' => round($slope, 6),
+                'intercept' => round($intercept, 6),
+                'rmse' => $rmse,
+                'confidence_level' => '95%',
+            ],
+            [
+                'labels' => $series['labels'],
+                'series' => [
+                    'history' => $values,
+                    'forecast' => $forecast,
+                    'lower_bound' => $lowerBound,
+                    'upper_bound' => $upperBound,
+                ],
+            ],
+            count($values)
         );
     }
 
@@ -138,7 +230,8 @@ final class StorytellingAnalysisService
             ['clusters' => $clusters, 'method' => 'quantile_segmentation'],
             sprintf('%d observasi dibagi menjadi %d segmen produksi-hujan.', count($scores), $clusters),
             ['cluster_counts' => array_count_values($assignments)],
-            ['labels' => $labels, 'series' => ['production' => $production, 'rain' => $rain, 'cluster' => $assignments]], count($scores)
+            ['labels' => $labels, 'series' => ['production' => $production, 'rain' => $rain, 'cluster' => $assignments]],
+            count($scores)
         );
     }
 
@@ -166,7 +259,8 @@ final class StorytellingAnalysisService
             ['threshold' => $threshold, 'method' => 'modified_z_score'],
             sprintf('Ditemukan %d anomali dari %d observasi produksi.', count($outliers), count($values)),
             ['median' => $median, 'mad' => $mad, 'outlier_count' => count($outliers)],
-            ['labels' => $series['labels'], 'series' => ['production' => $values], 'outliers' => $outliers], count($values)
+            ['labels' => $series['labels'], 'series' => ['production' => $values], 'outliers' => $outliers],
+            count($values)
         );
     }
 
@@ -209,8 +303,12 @@ final class StorytellingAnalysisService
 
     private function pearson(array $x, array $y): float
     {
-        $meanX = array_sum($x) / count($x);
-        $meanY = array_sum($y) / count($y);
+        $count = count($x);
+        if ($count === 0) {
+            return 0.0;
+        }
+        $meanX = array_sum($x) / $count;
+        $meanY = array_sum($y) / $count;
         $numerator = $sumX = $sumY = 0.0;
         foreach ($x as $index => $value) {
             $dx = $value - $meanX;
@@ -223,10 +321,149 @@ final class StorytellingAnalysisService
         return $denominator > 0.0 ? $numerator / $denominator : 0.0;
     }
 
+    private function spearman(array $x, array $y): float
+    {
+        $rankX = $this->calculateRanks($x);
+        $rankY = $this->calculateRanks($y);
+        return $this->pearson($rankX, $rankY);
+    }
+
+    private function calculateRanks(array $values): array
+    {
+        $indexed = [];
+        foreach ($values as $i => $v) {
+            $indexed[] = ['index' => $i, 'val' => (float) $v];
+        }
+        usort($indexed, static fn ($a, $b): int => $a['val'] <=> $b['val']);
+
+        $ranks = [];
+        $n = count($indexed);
+        $i = 0;
+        while ($i < $n) {
+            $j = $i;
+            while ($j < $n - 1 && abs($indexed[$j + 1]['val'] - $indexed[$j]['val']) < 0.000001) {
+                $j++;
+            }
+            $avgRank = ($i + 1 + $j + 1) / 2.0;
+            for ($k = $i; $k <= $j; $k++) {
+                $ranks[$indexed[$k]['index']] = $avgRank;
+            }
+            $i = $j + 1;
+        }
+        ksort($ranks);
+        return array_values($ranks);
+    }
+
+    /**
+     * Approximate two-tailed p-value from Student's t distribution.
+     */
+    private function calculatePValue(float $t, int $df): float
+    {
+        if ($df <= 0) {
+            return 1.0;
+        }
+        $t = abs($t);
+        // Standard normal approximation for df >= 30
+        if ($df >= 30) {
+            $z = $t;
+            $p = 2.0 * (1.0 - 0.5 * (1.0 + $this->erf($z / sqrt(2))));
+            return max(0.0001, min(1.0, $p));
+        }
+
+        // Numerical approximation for smaller df
+        $x = $df / ($df + $t * $t);
+        $a = 0.5 * $df;
+        $b = 0.5;
+
+        // Incomplete beta approximation
+        $beta = $this->incompleteBetaApproximation($x, $a, $b);
+        return max(0.0001, min(1.0, $beta));
+    }
+
+    private function erf(float $x): float
+    {
+        $a1 =  0.254829592;
+        $a2 = -0.284496736;
+        $a3 =  1.421413741;
+        $a4 = -1.453152027;
+        $a5 =  1.061405429;
+        $p  =  0.3275911;
+
+        $sign = $x < 0 ? -1 : 1;
+        $x = abs($x);
+
+        $t = 1.0 / (1.0 + $p * $x);
+        $y = 1.0 - ((((($a5 * $t + $a4) * $t) + $a3) * $t + $a2) * $t + $a1) * $t * exp(-$x * $x);
+
+        return $sign * $y;
+    }
+
+    private function incompleteBetaApproximation(float $x, float $a, float $b): float
+    {
+        if ($x <= 0.0) {
+            return 0.0;
+        }
+        if ($x >= 1.0) {
+            return 1.0;
+        }
+        // Simpson integration of beta density function
+        $steps = 60;
+        $h = $x / $steps;
+        $sum = 0.0;
+        for ($i = 0; $i <= $steps; $i++) {
+            $t = $i * $h;
+            if ($t <= 0.0 || $t >= 1.0) {
+                continue;
+            }
+            $weight = ($i === 0 || $i === $steps) ? 1 : (($i % 2 === 1) ? 4 : 2);
+            $density = ($t ** ($a - 1.0)) * ((1.0 - $t) ** ($b - 1.0));
+            $sum += $weight * $density;
+        }
+        $integral = ($h / 3.0) * $sum;
+
+        // Complete beta function B(a, b) = Gamma(a)*Gamma(b)/Gamma(a+b)
+        // NOTE: memakai logGamma() internal agar tidak bergantung pada
+        // ekstensi lgamma() yang tidak tersedia di sebagian build PHP.
+        $logBeta = $this->logGamma($a) + $this->logGamma($b) - $this->logGamma($a + $b);
+        $completeBeta = exp($logBeta);
+
+        return $completeBeta > 0 ? $integral / $completeBeta : 1.0;
+    }
+
+    /**
+     * Aproksimasi Lanczos untuk ln(Gamma(x)), x > 0.
+     * Pengganti mandiri lgamma() agar deterministik lintas build PHP.
+     */
+    private function logGamma(float $x): float
+    {
+        if ($x <= 0.0) {
+            return INF;
+        }
+        $coeff = [
+            0.99999999999980993, 676.5203681218851, -1259.1392167224028,
+            771.32342877765313, -176.61502916214059, 12.507343278686905,
+            -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7,
+        ];
+        if ($x < 0.5) {
+            return log(M_PI / (sin(M_PI * $x) * exp($this->logGamma(1.0 - $x))));
+        }
+        $x -= 1.0;
+        $a = $coeff[0];
+        for ($i = 1; $i < 9; $i++) {
+            $a += $coeff[$i] / ($x + $i);
+        }
+        $t = $x + 7.5;
+        return 0.5 * log(2.0 * M_PI) + ($x + 0.5) * log($t) - $t + log($a);
+    }
+
     private function linearRegression(array $x, array $y): array
     {
-        $meanX = array_sum($x) / count($x);
-        $meanY = array_sum($y) / count($y);
+        $count = count($x);
+        if ($count === 0) {
+            return [0.0, 0.0];
+        }
+        $meanX = array_sum($x) / $count;
+        $meanY = array_sum($y) / $count;
         $numerator = $denominator = 0.0;
         foreach ($x as $index => $value) {
             $numerator += ($value - $meanX) * ($y[$index] - $meanY);

@@ -114,6 +114,27 @@ final class DataStoryServiceTest extends TestCase
         self::assertSame(['bulan' => 12, 'tahun' => 2025], $period);
     }
 
+    public function testIrrigationMitigatesDroughtRisk(): void
+    {
+        // Drought rainfall (< 50mm, e.g. 20mm) without irrigation:
+        $lagWithoutIrrigation = $this->lagData(20.0, true, false);
+        $scoresWithout = $this->riskScores($lagWithoutIrrigation, ['total_luas_panen' => 100.0]);
+
+        // Same drought rainfall but with sufficient technical irrigation (> 5 m3/s):
+        $lagWithIrrigation = $this->lagData(20.0, true, false);
+        $lagWithIrrigation['irigasi'] = [
+            'has_data' => true,
+            'avg_debit' => 6.5,
+        ];
+        $scoresWith = $this->riskScores($lagWithIrrigation, ['total_luas_panen' => 100.0]);
+
+        self::assertGreaterThan(0, $scoresWithout['skor_risiko_cuaca']);
+        self::assertLessThan($scoresWithout['skor_risiko_cuaca'], $scoresWith['skor_risiko_cuaca']);
+        // 35% mitigation discount verified
+        $expectedMitigated = (int) round($scoresWithout['skor_risiko_cuaca'] * 0.65);
+        self::assertSame($expectedMitigated, $scoresWith['skor_risiko_cuaca']);
+    }
+
     private function riskScores(array $lagData, array $production): array
     {
         return $this->invoke('calculateRiskScores', [$lagData, $production]);

@@ -52,15 +52,76 @@ final class StorytellingAnalysisServiceTest extends TestCase
         $this->service->analyze('trend', $this->chart([null, null, null]));
     }
 
-    private function chart(array $production, ?array $rain = null): array
+    public function testSpearmanRankCorrelationMonotonicNonLinear(): void
+    {
+        // Exponential relationship: strictly monotonic (Spearman = 1.0), but non-linear (Pearson < 1.0)
+        $x = [1, 2, 3, 4, 5];
+        $y = [1, 10, 100, 1000, 10000];
+        $result = $this->service->analyze('correlation', $this->chart($x, $y), [
+            'coefficient' => 'spearman',
+        ]);
+
+        self::assertSame('spearman', $result['metrics']['coefficient_type']);
+        self::assertSame(1.0, $result['metrics']['correlation_coefficient']);
+        self::assertSame('sangat_kuat', $result['metrics']['strength']);
+        self::assertArrayHasKey('p_value', $result['metrics']);
+        self::assertArrayHasKey('is_significant', $result['metrics']);
+    }
+
+    public function testCorrelationWithIrrigationVariable(): void
+    {
+        $prod = [10, 20, 30, 40, 50];
+        $irrig = [2, 4, 6, 8, 10];
+        $result = $this->service->analyze('correlation', $this->chart($prod, null, $irrig), [
+            'variable' => 'irrigation',
+            'coefficient' => 'pearson',
+        ]);
+
+        self::assertSame('irrigation', $result['metrics']['variable']);
+        self::assertSame(1.0, $result['metrics']['correlation_coefficient']);
+    }
+
+    public function testCorrelationWithWindVariable(): void
+    {
+        $prod = [50, 40, 30, 20, 10];
+        $wind = [5, 10, 15, 20, 25];
+        $result = $this->service->analyze('correlation', $this->chart($prod, null, null, $wind), [
+            'variable' => 'wind',
+            'coefficient' => 'pearson',
+        ]);
+
+        self::assertSame('wind', $result['metrics']['variable']);
+        self::assertSame(-1.0, $result['metrics']['correlation_coefficient']);
+        self::assertSame('sangat_kuat', $result['metrics']['strength']);
+    }
+
+    public function testPredictiveProvidesRmseAndConfidenceBounds(): void
+    {
+        $result = $this->service->analyze('predictive', $this->chart([10, 20, 30, 40, 50]), [
+            'horizon' => 3,
+        ]);
+
+        self::assertArrayHasKey('rmse', $result['metrics']);
+        self::assertArrayHasKey('confidence_level', $result['metrics']);
+        self::assertArrayHasKey('lower_bound', $result['visualization']['series']);
+        self::assertArrayHasKey('upper_bound', $result['visualization']['series']);
+        self::assertCount(3, $result['visualization']['series']['lower_bound']);
+        self::assertCount(3, $result['visualization']['series']['upper_bound']);
+    }
+
+    private function chart(array $production, ?array $rain = null, ?array $irrigation = null, ?array $wind = null): array
     {
         $rain ??= $production;
+        $irrigation ??= array_fill(0, count($production), 10.0);
+        $wind ??= array_fill(0, count($production), 15.0);
         return [
             'labels' => array_map(static fn (int $index): string => 'P' . ($index + 1), array_keys($production)),
             'datasets' => [
                 ['data' => $production],
                 ['data' => $rain],
                 ['data' => array_fill(0, count($production), 1)],
+                ['data' => $irrigation],
+                ['data' => $wind],
             ],
         ];
     }
