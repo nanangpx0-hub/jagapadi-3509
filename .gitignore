@@ -175,5 +175,9 @@ docs/backup_*.sql
 # --- But keep out analysis output ---
 scripts/hasil_analisis_wind.txt
 
+# Re-ignore local config setelah negasi `!scripts/**` di atas (rule awal di baris 124
+# dibatalkan oleh negasi terakhir yang menang). Pola sama seperti `docs/backup_*.sql`.
+scripts/.env.backup
+
 # --- Database dump for quick setup (exception to SQL exclusion) ---
 !backend/database/jagapadi_local_dump.sql
